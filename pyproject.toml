@@ -19,6 +19,9 @@ dependencies = [
     "flasgger",
 ]
 
+[tool.setuptools.packages.find]
+where = ["app"]
+
 [build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
