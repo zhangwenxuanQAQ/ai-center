@@ -1,6 +1,6 @@
 server:
   host: 0.0.0.0
-  http_port: 9380
+  http_port: 8081
 mysql:
   name: 'ai_center'
   user: 'root'

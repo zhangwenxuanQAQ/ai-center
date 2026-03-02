@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from datetime import datetime
+from typing import Optional
 
 class ChatBase(BaseModel):
     user_id: int
@@ -9,6 +10,12 @@ class ChatBase(BaseModel):
 
 class ChatCreate(ChatBase):
     pass
+
+class ChatUpdate(BaseModel):
+    user_id: Optional[int] = None
+    chatbot_id: Optional[int] = None
+    message: Optional[str] = None
+    response: Optional[str] = None
 
 class Chat(ChatBase):
     id: int

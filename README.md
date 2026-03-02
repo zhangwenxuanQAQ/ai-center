@@ -1,95 +1,66 @@
 # 大模型AI服务中心
 
 ## 项目简介
-大模型AI服务中心是一个前后端分离的应用，用于管理聊天机器人、MCP服务、知识库、模型配置、提示词、用户权限和聊天会话。
-
-## 项目结构
-
-```
-├── backend/         # 后端代码
-│   ├── config.py    # 配置管理
-│   ├── database.py  # 数据库连接
-│   ├── main.py      # 主应用
-│   ├── models/      # 数据库模型
-│   ├── routers/     # API路由
-│   └── schemas/     # 数据验证
-├── web/            # 前端代码
-│   ├── assets/      # 静态资源
-│   ├── pages/       # 页面组件
-│   ├── src/         # 源代码
-│   ├── index.html   # 入口HTML
-│   ├── package.json # 依赖管理
-│   └── vite.config.js # Vite配置
-├── configs/         # 配置文件
-│   └── server_config.yaml # 服务器配置
-├── docker/          # Docker配置
-│   ├── Dockerfile   # Dockerfile
-│   └── docker-compose.yml # Docker Compose配置
-└── README.md        # 项目说明
-```
+大模型AI服务中心是一个集成了多种AI功能的管理系统，包括机器人管理、MCP管理、知识库管理、模型管理、提示词管理、用户管理和聊天记录管理等功能。
 
 ## 技术栈
+- 后端：Python 3.10+, FastAPI, SQLAlchemy, MySQL
+- 前端：React, Ant Design, React Router
 
-### 后端
-- FastAPI - Web框架
-- SQLAlchemy - ORM
-- Pydantic - 数据验证
-- MySQL - 数据库
+## 项目结构
+```
+app/  # 后端应用
+├── configs/        # 配置文件
+├── constants/      # 常量定义
+├── core/           # 核心业务逻辑
+├── database/       # 数据库管理
+├── services/       # API实现
+├── server_run.py   # 开发环境入口
+└── server_wsgi.py  # 生产环境入口
 
-### 前端
-- React - 前端框架
-- Ant Design - UI组件库
-- React Router - 路由管理
-- Vite - 构建工具
+web/  # 前端应用
+├── src/
+│   ├── pages/      # 页面组件
+│   ├── App.tsx     # 应用入口
+│   └── main.tsx    # 渲染入口
+├── index.html
+├── package.json
+└── vite.config.js
+```
 
 ## 快速开始
 
-### 后端
+### 后端服务
 1. 安装依赖
-```bash
-pip install -r backend/requirements.txt
-```
-
-2. 配置数据库
-编辑 `configs/server_config.yaml` 文件，设置数据库连接信息。
-
-3. 启动服务
-```bash
-uvicorn backend.main:app --host 0.0.0.0 --port 9380 --reload
-```
-
-### 前端
-1. 安装依赖
-```bash
-cd web
-npm install
-```
+   ```bash
+   pip install -r requirements.txt
+   ```
 
 2. 启动服务
-```bash
-npm run dev
-```
+   ```bash
+   python -m app.server_run
+   ```
+   后端服务将运行在 http://localhost:8081
 
-### Docker
-1. 构建和启动容器
-```bash
-docker-compose -f docker/docker-compose.yml up -d
-```
+### 前端服务
+1. 安装依赖
+   ```bash
+   cd web && npm install
+   ```
 
-2. 访问应用
-前端：http://localhost:3000
-后端：http://localhost:9380
+2. 启动服务
+   ```bash
+   npm run dev
+   ```
+   前端服务将运行在 http://localhost:8000
 
-## 功能模块
+## API文档
+后端服务提供了Swagger文档，可以通过以下地址访问：
+- Swagger UI: http://localhost:8081/docs
+- ReDoc: http://localhost:8081/redoc
 
-1. **聊天机器人管理** - 管理和配置聊天机器人
-2. **MCP服务管理** - 管理和配置MCP服务
-3. **知识库管理** - 管理和配置知识库
-4. **模型配置** - 管理和配置LLM模型
-5. **提示词管理** - 管理和配置提示词
-6. **用户权限管理** - 管理用户和权限
-7. **用户聊天会话** - 查看和管理用户聊天会话
-
+## 配置说明
+配置文件位于 `configs/server_config.yaml`，可以根据需要修改服务器和数据库配置。
 ## 注意事项
 
 - 确保MySQL服务已经启动
