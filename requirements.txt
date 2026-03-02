@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+sqlalchemy
+pymysql
+pyyaml
+python-dotenv
+pydantic
+pydantic-settings
+slowapi
+flasgger
