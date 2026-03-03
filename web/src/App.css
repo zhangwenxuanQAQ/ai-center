@@ -40,3 +40,57 @@
 .read-the-docs {
   color: #888;
 }
+
+/* 主题样式 */
+.dark-theme {
+  background-color: #121212;
+}
+
+.dark-theme .ant-layout-header {
+  background-color: #1a1a1a;
+}
+
+.dark-theme-sider {
+  background-color: #1e1e1e !important;
+}
+
+.dark-theme-sider .ant-menu {
+  background-color: #1e1e1e !important;
+  color: #ffffff;
+}
+
+.dark-theme-sider .ant-menu-item {
+  color: #ffffff;
+}
+
+.dark-theme-sider .ant-menu-item-selected {
+  background-color: #333333 !important;
+  color: #1890ff !important;
+}
+
+.dark-theme-sider .ant-menu-submenu-title {
+  color: #ffffff;
+}
+
+.light-theme {
+  background-color: #ffffff;
+}
+
+.light-theme .ant-layout-header {
+  background-color: #1890ff;
+}
+
+.light-theme-sider {
+  background-color: #f0f2f5 !important;
+}
+
+/* 内容区域样式 */
+.dark-theme .ant-layout-content {
+  background-color: #1a1a1a;
+  color: #ffffff;
+}
+
+.light-theme .ant-layout-content {
+  background-color: #ffffff;
+  color: #000000;
+}
