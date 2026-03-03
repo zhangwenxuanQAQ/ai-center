@@ -1,30 +1,90 @@
-from fastapi import APIRouter, Depends, HTTPException
-from typing import List
-from app.database.database import get_db
-from app.core.chat.service import ChatService
-from app.core.chat.dto import ChatCreate, ChatUpdate, Chat as ChatSchema
+"""
+聊天控制器，提供聊天相关的API接口
+"""
+
+from fastapi import APIRouter
+from app.services.chat.service import ChatService
+from app.services.chat.dto import ChatCreate, ChatUpdate, Chat as ChatSchema
+from app.utils.response import ResponseUtil, ApiResponse
 
 router = APIRouter()
 
-@router.post("", response_model=ChatSchema)
-def create_chat(chat: ChatCreate, db = Depends(get_db)):
-    return ChatService.create_chat(db, chat)
 
-@router.get("", response_model=List[ChatSchema])
-def get_chats(skip: int = 0, limit: int = 100, db = Depends(get_db)):
-    return ChatService.get_chats(db, skip, limit)
+@router.post("", response_model=ApiResponse)
+def create_chat(chat: ChatCreate):
+    """
+    创建聊天记录
+    
+    Args:
+        chat: 聊天创建DTO
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    db_chat = ChatService.create_chat(chat)
+    return ResponseUtil.created(data=db_chat.__data__, message="聊天记录创建成功")
 
-@router.get("/{chat_id}", response_model=ChatSchema)
-def get_chat(chat_id: int, db = Depends(get_db)):
-    chat = ChatService.get_chat(db, chat_id)
+
+@router.get("", response_model=ApiResponse)
+def get_chats(skip: int = 0, limit: int = 100):
+    """
+    获取聊天记录列表
+    
+    Args:
+        skip: 跳过的记录数
+        limit: 返回的最大记录数
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    chats = ChatService.get_chats(skip, limit)
+    chats_data = [chat.__data__ for chat in chats]
+    return ResponseUtil.success(data=chats_data, message="获取聊天记录列表成功")
+
+
+@router.get("/{chat_id}", response_model=ApiResponse)
+def get_chat(chat_id: int):
+    """
+    获取单个聊天记录
+    
+    Args:
+        chat_id: 聊天ID
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    chat = ChatService.get_chat(chat_id)
     if chat is None:
-        raise HTTPException(status_code=404, detail="Chat not found")
-    return chat
+        return ResponseUtil.not_found(message=f"聊天记录 {chat_id} 不存在")
+    return ResponseUtil.success(data=chat.__data__, message="获取聊天记录成功")
 
-@router.put("/{chat_id}", response_model=ChatSchema)
-def update_chat(chat_id: int, chat: ChatUpdate, db = Depends(get_db)):
-    return ChatService.update_chat(db, chat_id, chat)
 
-@router.delete("/{chat_id}")
-def delete_chat(chat_id: int, db = Depends(get_db)):
-    return ChatService.delete_chat(db, chat_id)
+@router.post("/{chat_id}", response_model=ApiResponse)
+def update_chat(chat_id: int, chat: ChatUpdate):
+    """
+    更新聊天记录
+    
+    Args:
+        chat_id: 聊天ID
+        chat: 聊天更新DTO
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    db_chat = ChatService.update_chat(chat_id, chat)
+    return ResponseUtil.success(data=db_chat.__data__, message="聊天记录更新成功")
+
+
+@router.post("/{chat_id}/delete", response_model=ApiResponse)
+def delete_chat(chat_id: int):
+    """
+    删除聊天记录
+    
+    Args:
+        chat_id: 聊天ID
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    db_chat = ChatService.delete_chat(chat_id)
+    return ResponseUtil.success(data=db_chat.__data__, message="聊天记录删除成功")
