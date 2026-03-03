@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from peewee import MySQLDatabase
 from app.database.models import Chat
 from app.core.chat.dto import ChatCreate, ChatUpdate
 from app.core.db_utils import handle_transaction
@@ -7,46 +7,50 @@ from app.core.exceptions import ResourceNotFoundError
 class ChatService:
     @staticmethod
     @handle_transaction
-    def create_chat(db: Session, chat: ChatCreate):
-        """创建聊天会话"""
+    def create_chat(db: MySQLDatabase, chat: ChatCreate):
+        """创建聊天记录"""
         db_chat = Chat(**chat.model_dump())
-        db.add(db_chat)
-        db.refresh(db_chat)
+        db_chat.save()
         return db_chat
 
     @staticmethod
-    def get_chats(db: Session, skip: int = 0, limit: int = 100):
-        """获取聊天会话列表（只读操作，不需要事务）"""
-        return db.query(Chat).offset(skip).limit(limit).all()
+    def get_chats(db: MySQLDatabase, skip: int = 0, limit: int = 100):
+        """获取聊天记录列表（只读操作，不需要事务）"""
+        return list(Chat.select().offset(skip).limit(limit))
 
     @staticmethod
-    def get_chat(db: Session, chat_id: int):
-        """获取单个聊天会话（只读操作，不需要事务）"""
-        return db.query(Chat).filter(Chat.id == chat_id).first()
+    def get_chat(db: MySQLDatabase, chat_id: int):
+        """获取单个聊天记录（只读操作，不需要事务）"""
+        try:
+            return Chat.get_by_id(chat_id)
+        except Chat.DoesNotExist:
+            return None
 
     @staticmethod
     @handle_transaction
-    def update_chat(db: Session, chat_id: int, chat: ChatUpdate):
-        """更新聊天会话"""
-        db_chat = db.query(Chat).filter(Chat.id == chat_id).first()
-        if not db_chat:
+    def update_chat(db: MySQLDatabase, chat_id: int, chat: ChatUpdate):
+        """更新聊天记录"""
+        try:
+            db_chat = Chat.get_by_id(chat_id)
+        except Chat.DoesNotExist:
             raise ResourceNotFoundError(
-                message=f"聊天会话 {chat_id} 不存在"
+                message=f"聊天记录 {chat_id} 不存在"
             )
         update_data = chat.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(db_chat, field, value)
-        db.refresh(db_chat)
+        db_chat.save()
         return db_chat
 
     @staticmethod
     @handle_transaction
-    def delete_chat(db: Session, chat_id: int):
-        """删除聊天会话"""
-        db_chat = db.query(Chat).filter(Chat.id == chat_id).first()
-        if not db_chat:
+    def delete_chat(db: MySQLDatabase, chat_id: int):
+        """删除聊天记录"""
+        try:
+            db_chat = Chat.get_by_id(chat_id)
+        except Chat.DoesNotExist:
             raise ResourceNotFoundError(
-                message=f"聊天会话 {chat_id} 不存在"
+                message=f"聊天记录 {chat_id} 不存在"
             )
-        db.delete(db_chat)
+        db_chat.delete_instance()
         return db_chat

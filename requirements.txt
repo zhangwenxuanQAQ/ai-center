@@ -1,6 +1,6 @@
 fastapi
 uvicorn
-sqlalchemy
+peewee
 pymysql
 pyyaml
 python-dotenv

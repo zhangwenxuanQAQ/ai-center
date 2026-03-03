@@ -2,8 +2,8 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.configs.config import config
-from app.database.database import engine, Base
-from app.services.api import router
+from app.database.models import create_tables
+from app.api import router
 from app.core.exceptions import (
     BaseServiceError,
     ResourceNotFoundError,
@@ -12,7 +12,7 @@ from app.core.exceptions import (
 )
 
 # 创建数据库表
-Base.metadata.create_all(bind=engine)
+create_tables()
 
 app = FastAPI()
 
@@ -73,7 +73,7 @@ app.add_exception_handler(DuplicateResourceError, duplicate_resource_error_handl
 app.add_exception_handler(DatabaseOperationError, database_operation_error_handler)
 
 # 包含路由
-app.include_router(router)
+app.include_router(router, prefix="/aicenter/v1")
 
 @app.get("/")
 def read_root():
