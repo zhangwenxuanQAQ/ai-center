@@ -180,17 +180,26 @@ const ChatbotManagement: React.FC = () => {
     try {
       const values = await form.validateFields();
       
+      const sourceConfigFields = getSourceConfigFields();
       const chatbotData = {
         ...values,
-        source_config: selectedSourceType ? JSON.stringify(sourceConfig) : undefined
+        source_config: selectedSourceType && sourceConfigFields.length > 0 ? JSON.stringify(sourceConfig) : undefined
       };
       
       console.log('Submitting chatbot:', chatbotData);
+      
+      // 调用后端接口创建机器人
+      await chatbotService.createChatbot(chatbotData);
+      
       message.success('机器人创建成功！');
       setIsModalVisible(false);
+      form.resetFields();
+      setSelectedSourceType('');
+      setSourceConfig({});
       fetchChatbots(selectedCategory);
     } catch (error) {
       console.error('Form validation failed:', error);
+      message.error('创建失败，请重试');
     }
   };
 
@@ -371,45 +380,6 @@ const ChatbotManagement: React.FC = () => {
           </Form.Item>
 
           <Form.Item
-            name="description"
-            label="机器人描述"
-            rules={[{ required: true, message: '请输入机器人描述' }]}
-          >
-            <TextArea rows={3} placeholder="请输入机器人描述" />
-          </Form.Item>
-
-          <Form.Item
-            name="category_id"
-            label="分类"
-            rules={[{ required: true, message: '请选择分类' }]}
-          >
-            <Select placeholder="请选择分类">
-              {categories.map(category => (
-                <Option key={category.id} value={category.id}>
-                  {category.name}
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
-
-          <Form.Item
-            name="avatar"
-            label="头像"
-          >
-            <Upload {...uploadProps} maxCount={1}>
-              <Button icon={<UploadOutlined />}>点击上传</Button>
-            </Upload>
-          </Form.Item>
-
-          <Form.Item
-            name="greeting"
-            label="欢迎语"
-            rules={[{ required: true, message: '请输入欢迎语' }]}
-          >
-            <TextArea rows={2} placeholder="请输入欢迎语" />
-          </Form.Item>
-
-          <Form.Item
             name="source_type"
             label="来源"
             rules={[{ required: true, message: '请选择来源' }]}
@@ -440,6 +410,43 @@ const ChatbotManagement: React.FC = () => {
               />
             </Form.Item>
           ))}
+
+          <Form.Item
+            name="greeting"
+            label="欢迎语"
+            rules={[{ required: true, message: '请输入欢迎语' }]}
+          >
+            <TextArea rows={2} placeholder="请输入欢迎语" />
+          </Form.Item>
+
+          <Form.Item
+            name="avatar"
+            label="头像"
+          >
+            <Upload {...uploadProps} maxCount={1}>
+              <Button icon={<UploadOutlined />}>点击上传</Button>
+            </Upload>
+          </Form.Item>
+
+          <Form.Item
+            name="category_id"
+            label="分类"
+          >
+            <Select placeholder="请选择分类">
+              {categories.map(category => (
+                <Option key={category.id} value={category.id}>
+                  {category.name}
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Form.Item
+            name="description"
+            label="机器人描述"
+          >
+            <TextArea rows={3} placeholder="请输入机器人描述" />
+          </Form.Item>
         </Form>
       </Modal>
     </div>

@@ -1,4 +1,9 @@
-const API_BASE_URL = '/aicenter/v1';
+/**
+ * 聊天机器人服务
+ * 提供聊天机器人相关的API调用
+ */
+
+import http from '../utils/request';
 
 export interface ChatbotCategory {
   id: number;
@@ -26,39 +31,60 @@ export interface Chatbot {
   mcp_ids?: number[];
 }
 
-export interface ApiResponse<T> {
-  code: number;
-  message: string;
-  data: T;
-}
-
-async function fetchApi<T>(url: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(url, {
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    ...options,
-  });
-  
-  const result: ApiResponse<T> = await response.json();
-  return result.data;
-}
-
 export const chatbotService = {
+  /**
+   * 获取聊天机器人分类列表
+   */
   getCategories: async (): Promise<ChatbotCategory[]> => {
-    return fetchApi<ChatbotCategory[]>(`${API_BASE_URL}/chatbot_category`);
+    return http.get<ChatbotCategory[]>('/aicenter/v1/chatbot_category');
   },
 
+  /**
+   * 获取聊天机器人列表
+   * @param categoryId - 分类ID（可选）
+   */
   getChatbots: async (categoryId?: number): Promise<Chatbot[]> => {
     const params = categoryId ? `?category_id=${categoryId}` : '';
-    return fetchApi<Chatbot[]>(`${API_BASE_URL}/chatbot${params}`);
+    return http.get<Chatbot[]>(`/aicenter/v1/chatbot${params}`);
   },
 
+  /**
+   * 获取单个聊天机器人
+   * @param id - 聊天机器人ID
+   */
   getChatbot: async (id: number): Promise<Chatbot> => {
-    return fetchApi<Chatbot>(`${API_BASE_URL}/chatbot/${id}`);
+    return http.get<Chatbot>(`/aicenter/v1/chatbot/${id}`);
   },
 
+  /**
+   * 获取来源类型列表
+   */
   getSourceTypes: async (): Promise<any[]> => {
-    return fetchApi<any[]>(`${API_BASE_URL}/chatbot/source_types`);
-  }
+    return http.get<any[]>('/aicenter/v1/chatbot/source_types');
+  },
+
+  /**
+   * 创建聊天机器人
+   * @param data - 聊天机器人数据
+   */
+  createChatbot: async (data: Partial<Chatbot>): Promise<Chatbot> => {
+    return http.post<Chatbot>('/aicenter/v1/chatbot', data);
+  },
+
+  /**
+   * 更新聊天机器人
+   * @param id - 聊天机器人ID
+   * @param data - 聊天机器人数据
+   */
+  updateChatbot: async (id: number, data: Partial<Chatbot>): Promise<Chatbot> => {
+    return http.post<Chatbot>(`/aicenter/v1/chatbot/${id}`, data);
+  },
+
+  /**
+   * 删除聊天机器人
+   * @param id - 聊天机器人ID
+   */
+  deleteChatbot: async (id: number): Promise<Chatbot> => {
+    return http.post<Chatbot>(`/aicenter/v1/chatbot/${id}/delete`);
+  },
 };

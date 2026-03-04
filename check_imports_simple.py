@@ -8,31 +8,34 @@ import importlib
 # 要检查的模块
 modules_to_check = [
     # API模块
-    "app.api.chat",
     "app.api.chatbot",
+    "app.api.chatbot_category",
     "app.api.knowledge",
     "app.api.llm_model",
     "app.api.mcp",
     "app.api.prompt",
     "app.api.user",
+    "app.api.chat",
     
     # Services模块
-    "app.services.chat.service",
     "app.services.chatbot.service",
+    "app.services.chatbot_category.service",
     "app.services.knowledge.service",
     "app.services.llm_model.service",
     "app.services.mcp.service",
     "app.services.prompt.service",
     "app.services.user.service",
+    "app.services.chat.service",
     
     # DTO模块
-    "app.services.chat.dto",
     "app.services.chatbot.dto",
+    "app.services.chatbot_category.dto",
     "app.services.knowledge.dto",
     "app.services.llm_model.dto",
     "app.services.mcp.dto",
     "app.services.prompt.dto",
     "app.services.user.dto",
+    "app.services.chat.dto",
     
     # Core模块
     "app.core.exceptions",

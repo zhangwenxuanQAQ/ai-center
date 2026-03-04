@@ -1,6 +1,7 @@
 fastapi
 uvicorn
 peewee
+playhouse
 pymysql
 pyyaml
 python-dotenv
@@ -8,3 +9,4 @@ pydantic
 pydantic-settings
 slowapi
 flasgger
+email-validator

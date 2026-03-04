@@ -1,123 +1,179 @@
+"""
+数据库模型定义
+使用Peewee ORM定义所有数据库表模型
+"""
+
 from peewee import Model, CharField, TextField, IntegerField, BooleanField, DateTimeField, ForeignKeyField
 from datetime import datetime
 from .database import db
 
-# 基础模型类
+
 class BaseModel(Model):
+    """
+    基础模型类
+    
+    所有模型类的基类，提供数据库连接配置
+    """
+
+    created_at = DateTimeField(default=datetime.now, verbose_name="创建时间")
+    updated_at = DateTimeField(null=True, verbose_name="更新时间")
+
     class Meta:
         database = db
 
+
 class User(BaseModel):
-    id = IntegerField(primary_key=True)
-    username = CharField(max_length=255, unique=True, index=True)
-    password = CharField(max_length=255)
-    email = CharField(max_length=255, unique=True)
-    is_admin = BooleanField(default=False)
-    created_at = DateTimeField(default=datetime.now)
-    updated_at = DateTimeField(null=True)
+    """
+    用户模型
+    
+    存储用户基本信息
+    """
+    id = IntegerField(primary_key=True, verbose_name="用户ID")
+    username = CharField(max_length=255, unique=True, index=True, verbose_name="用户名")
+    password = CharField(max_length=255, verbose_name="密码")
+    email = CharField(max_length=255, unique=True, verbose_name="邮箱地址")
+    is_admin = BooleanField(default=False, verbose_name="是否为管理员")
 
     class Meta:
         table_name = 'users'
 
+
 class LLMModel(BaseModel):
-    id = IntegerField(primary_key=True)
-    name = CharField(max_length=255, index=True)
-    provider = CharField(max_length=255)
-    api_key = CharField(max_length=255)
-    endpoint = CharField(max_length=512)
-    model_type = CharField(max_length=255)
-    created_at = DateTimeField(default=datetime.now)
-    updated_at = DateTimeField(null=True)
+    """
+    LLM模型配置
+    
+    存储大语言模型的配置信息
+    """
+    id = IntegerField(primary_key=True, verbose_name="模型ID")
+    name = CharField(max_length=255, index=True, verbose_name="模型名称")
+    provider = CharField(max_length=255, verbose_name="提供商")
+    api_key = CharField(max_length=255, verbose_name="API密钥")
+    endpoint = CharField(max_length=512, verbose_name="端点URL")
+    model_type = CharField(max_length=255, verbose_name="模型类型")
 
     class Meta:
         table_name = 'llm_models'
 
+
 class Prompt(BaseModel):
-    id = IntegerField(primary_key=True)
-    name = CharField(max_length=255, index=True)
-    content = TextField()
-    category = CharField(max_length=255)
-    created_at = DateTimeField(default=datetime.now)
-    updated_at = DateTimeField(null=True)
+    """
+    提示词模型
+    
+    存储提示词模板
+    """
+    id = IntegerField(primary_key=True, verbose_name="提示词ID")
+    name = CharField(max_length=255, index=True, verbose_name="提示词名称")
+    content = TextField(verbose_name="提示词内容")
+    category = CharField(max_length=255, verbose_name="提示词分类")
 
     class Meta:
         table_name = 'prompts'
 
+
 class Knowledge(BaseModel):
-    id = IntegerField(primary_key=True)
-    name = CharField(max_length=255, index=True)
-    description = TextField()
-    file_path = CharField(max_length=512)
-    status = BooleanField(default=True)
-    created_at = DateTimeField(default=datetime.now)
-    updated_at = DateTimeField(null=True)
+    """
+    知识库模型
+    
+    存储知识库配置信息
+    """
+    id = IntegerField(primary_key=True, verbose_name="知识库ID")
+    name = CharField(max_length=255, index=True, verbose_name="知识库名称")
+    description = TextField(verbose_name="知识库描述")
+    file_path = CharField(max_length=512, verbose_name="文件路径")
+    status = BooleanField(default=True, verbose_name="状态")
 
     class Meta:
         table_name = 'knowledges'
 
+
 class MCP(BaseModel):
-    id = IntegerField(primary_key=True)
-    name = CharField(max_length=255, index=True)
-    url = CharField(max_length=512)
-    api_key = CharField(max_length=255)
-    status = BooleanField(default=True)
-    created_at = DateTimeField(default=datetime.now)
-    updated_at = DateTimeField(null=True)
+    """
+    MCP模型
+    
+    存储MCP（模型上下文协议）配置
+    """
+    id = IntegerField(primary_key=True, verbose_name="MCP ID")
+    name = CharField(max_length=255, index=True, verbose_name="MCP名称")
+    url = CharField(max_length=512, verbose_name="MCP URL")
+    api_key = CharField(max_length=255, verbose_name="API密钥")
+    status = BooleanField(default=True, verbose_name="状态")
 
     class Meta:
         table_name = 'mcps'
 
+
 class ChatbotCategory(BaseModel):
-    id = IntegerField(primary_key=True)
-    name = CharField(max_length=255, index=True)
-    description = TextField(null=True)
-    is_default = BooleanField(default=False)
-    created_at = DateTimeField(default=datetime.now)
-    updated_at = DateTimeField(null=True)
+    """
+    聊天机器人分类模型
+    
+    存储聊天机器人的分类信息
+    """
+    id = IntegerField(primary_key=True, verbose_name="分类ID")
+    name = CharField(max_length=255, index=True, verbose_name="分类名称")
+    description = TextField(null=True, verbose_name="分类描述")
+    is_default = BooleanField(default=False, verbose_name="是否为默认分类")
 
     class Meta:
         table_name = 'chatbot_categories'
 
+
 class Chatbot(BaseModel):
-    id = IntegerField(primary_key=True)
-    name = CharField(max_length=255, index=True)
-    description = TextField()
-    model_id = ForeignKeyField(LLMModel, backref='chatbots')
-    category_id = ForeignKeyField(ChatbotCategory, backref='chatbots', null=True)
-    avatar = CharField(max_length=512, null=True)
-    greeting = TextField(null=True)
-    prompt_id = ForeignKeyField(Prompt, backref='chatbots', null=True)
-    knowledge_id = ForeignKeyField(Knowledge, backref='chatbots', null=True)
-    source_type = CharField(max_length=255, null=True)
-    source_config = TextField(null=True)
-    created_at = DateTimeField(default=datetime.now)
-    updated_at = DateTimeField(null=True)
+    """
+    聊天机器人模型
+    
+    存储聊天机器人配置信息
+    """
+    id = IntegerField(primary_key=True, verbose_name="聊天机器人ID")
+    name = CharField(max_length=255, index=True, verbose_name="聊天机器人名称")
+    description = TextField(verbose_name="聊天机器人描述")
+    model_id = ForeignKeyField(LLMModel, backref='chatbots', verbose_name="LLM模型ID")
+    category_id = ForeignKeyField(ChatbotCategory, backref='chatbots', null=True, verbose_name="分类ID")
+    avatar = CharField(max_length=512, null=True, verbose_name="头像URL")
+    greeting = TextField(null=True, verbose_name="欢迎语")
+    prompt_id = ForeignKeyField(Prompt, backref='chatbots', null=True, verbose_name="提示词ID")
+    knowledge_id = ForeignKeyField(Knowledge, backref='chatbots', null=True, verbose_name="知识库ID")
+    source_type = CharField(max_length=255, null=True, verbose_name="来源类型")
+    source_config = TextField(null=True, verbose_name="来源配置")
 
     class Meta:
         table_name = 'chatbots'
 
+
 class ChatbotMCP(BaseModel):
-    id = IntegerField(primary_key=True)
-    chatbot_id = ForeignKeyField(Chatbot, backref='chatbot_mcps')
-    mcp_id = ForeignKeyField(MCP, backref='chatbot_mcps')
-    created_at = DateTimeField(default=datetime.now)
+    """
+    聊天机器人与MCP关联模型
+    
+    存储聊天机器人与MCP的多对多关系
+    """
+    id = IntegerField(primary_key=True, verbose_name="关联ID")
+    chatbot_id = ForeignKeyField(Chatbot, backref='chatbot_mcps', verbose_name="聊天机器人ID")
+    mcp_id = ForeignKeyField(MCP, backref='chatbot_mcps', verbose_name="MCP ID")
 
     class Meta:
         table_name = 'chatbot_mcp'
 
+
 class Chat(BaseModel):
-    id = IntegerField(primary_key=True)
-    user_id = ForeignKeyField(User, backref='chats')
-    chatbot_id = ForeignKeyField(Chatbot, backref='chats')
-    message = TextField()
-    response = TextField()
-    created_at = DateTimeField(default=datetime.now)
+    """
+    聊天记录模型
+    
+    存储用户与聊天机器人的对话记录
+    """
+    id = IntegerField(primary_key=True, verbose_name="聊天记录ID")
+    user_id = ForeignKeyField(User, backref='chats', verbose_name="用户ID")
+    chatbot_id = ForeignKeyField(Chatbot, backref='chats', verbose_name="聊天机器人ID")
+    messages = TextField(verbose_name="消息列表")
 
     class Meta:
         table_name = 'chats'
 
-# 创建表
+
 def create_tables():
+    """
+    创建所有数据库表
+    
+    如果表不存在则创建，存在则跳过
+    """
     with db:
         db.create_tables([
             User,
