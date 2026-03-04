@@ -4,10 +4,10 @@ SOURCE_TYPE = {
     "local": "本地"
 }
 
-#配置参数字段
+# 配置参数字段
 SOURCE_CONFIG_FIELDS = {
     "work_weixin": [
-        {"title":"回调地址","name":"callback_url","type":"string"}
+        {"title": "回调地址", "name": "callback_url", "type": "string", "description": "企业微信机器人回调地址", "readonly": True}
     ],
     "local": []
 }

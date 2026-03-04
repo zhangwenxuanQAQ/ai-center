@@ -67,11 +67,23 @@ class MCP(BaseModel):
     class Meta:
         table_name = 'mcps'
 
+class ChatbotCategory(BaseModel):
+    id = IntegerField(primary_key=True)
+    name = CharField(max_length=255, index=True)
+    description = TextField(null=True)
+    is_default = BooleanField(default=False)
+    created_at = DateTimeField(default=datetime.now)
+    updated_at = DateTimeField(null=True)
+
+    class Meta:
+        table_name = 'chatbot_categories'
+
 class Chatbot(BaseModel):
     id = IntegerField(primary_key=True)
     name = CharField(max_length=255, index=True)
     description = TextField()
     model_id = ForeignKeyField(LLMModel, backref='chatbots')
+    category_id = ForeignKeyField(ChatbotCategory, backref='chatbots', null=True)
     avatar = CharField(max_length=512, null=True)
     greeting = TextField(null=True)
     prompt_id = ForeignKeyField(Prompt, backref='chatbots', null=True)
@@ -113,6 +125,7 @@ def create_tables():
             Prompt,
             Knowledge,
             MCP,
+            ChatbotCategory,
             Chatbot,
             ChatbotMCP,
             Chat

@@ -6,8 +6,42 @@ from fastapi import APIRouter
 from app.services.chatbot.service import ChatbotService
 from app.services.chatbot.dto import ChatbotCreate, ChatbotUpdate, Chatbot as ChatbotSchema
 from app.utils.response import ResponseUtil, ApiResponse
+from app.constants.chatbot_constants import SOURCE_TYPE, SOURCE_CONFIG_FIELDS
+from app.configs.config import config
 
 router = APIRouter()
+
+
+@router.get("/source_types", response_model=ApiResponse)
+def get_source_types():
+    """
+    获取支持的机器人来源类型
+    
+    Returns:
+        ApiResponse: 统一格式的响应对象，包含来源类型和配置参数
+    """
+    configs = []
+    for source_type, source_name in SOURCE_TYPE.items():
+        config_fields = SOURCE_CONFIG_FIELDS.get(source_type, [])
+        
+        config_item = {
+            "source_type": source_type,
+            "source_name": source_name,
+            "config_fields": config_fields
+        }
+        
+        if source_type == "work_weixin":
+            server_host = config.server.get('host', '0.0.0.0')
+            server_port = config.server.get('http_port', 8081)
+            callback_url = f"http://{server_host}:{server_port}/aicenter/v1/chat/work_weixin/callback/{{chatbot_id}}"
+            for field in config_fields:
+                if field.get('name') == 'callback_url':
+                    field['default_value'] = callback_url
+                    break
+        
+        configs.append(config_item)
+    
+    return ResponseUtil.success(data=configs, message="获取机器人来源类型成功")
 
 
 @router.post("", response_model=ApiResponse)

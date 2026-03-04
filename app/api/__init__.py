@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from .chatbot import router as chatbot_router
+from .chatbot_category import router as chatbot_category_router
 from .mcp import router as mcp_router
 from .knowledge import router as knowledge_router
 from .llm_model import router as llm_model_router
@@ -10,6 +11,7 @@ from .chat import router as chat_router
 router = APIRouter()
 
 router.include_router(chatbot_router, prefix="/chatbot", tags=["chatbot"])
+router.include_router(chatbot_category_router, prefix="/chatbot_category", tags=["chatbot_category"])
 router.include_router(mcp_router, prefix="/mcp", tags=["mcp"])
 router.include_router(knowledge_router, prefix="/knowledge", tags=["knowledge"])
 router.include_router(llm_model_router, prefix="/llm_model", tags=["llm_model"])

@@ -51,16 +51,17 @@
 }
 
 .dark-theme-sider {
-  background-color: #1e1e1e !important;
+  background-color: #1a1a1a !important;
 }
 
 .dark-theme-sider .ant-menu {
-  background-color: #1e1e1e !important;
+  background-color: #1a1a1a !important;
   color: #ffffff;
 }
 
 .dark-theme-sider .ant-menu-item {
   color: #ffffff;
+  background-color: #1a1a1a !important;
 }
 
 .dark-theme-sider .ant-menu-item-selected {
@@ -70,6 +71,15 @@
 
 .dark-theme-sider .ant-menu-submenu-title {
   color: #ffffff;
+  background-color: #1a1a1a !important;
+}
+
+.dark-theme-sider .ant-menu-sub {
+  background-color: #1a1a1a !important;
+}
+
+.dark-theme-sider .ant-menu-submenu {
+  background-color: #1a1a1a !important;
 }
 
 .light-theme {
@@ -77,11 +87,41 @@
 }
 
 .light-theme .ant-layout-header {
-  background-color: #1890ff;
+  background-color: #ffffff;
+  border-bottom: 1px solid #e8e8e8;
 }
 
 .light-theme-sider {
-  background-color: #f0f2f5 !important;
+  background-color: #ffffff !important;
+  border-right: 1px solid #e8e8e8;
+}
+
+.light-theme-sider .ant-menu {
+  background-color: #ffffff !important;
+  color: #000000;
+}
+
+.light-theme-sider .ant-menu-item {
+  color: #000000;
+  background-color: #ffffff !important;
+}
+
+.light-theme-sider .ant-menu-item-selected {
+  background-color: #e6f7ff !important;
+  color: #1890ff !important;
+}
+
+.light-theme-sider .ant-menu-submenu-title {
+  color: #000000;
+  background-color: #ffffff !important;
+}
+
+.light-theme-sider .ant-menu-sub {
+  background-color: #ffffff !important;
+}
+
+.light-theme-sider .ant-menu-submenu {
+  background-color: #ffffff !important;
 }
 
 /* 内容区域样式 */
@@ -93,4 +133,573 @@
 .light-theme .ant-layout-content {
   background-color: #ffffff;
   color: #000000;
+}
+
+/* 机器人管理页面 - 夜间模式面包屑样式覆盖 */
+body[data-theme="dark"] .chatbot-management .chatbot-header .ant-breadcrumb .ant-breadcrumb-item:last-child {
+  color: #ffffff !important;
+}
+
+body[data-theme="dark"] .chatbot-management .chatbot-header .ant-breadcrumb .ant-breadcrumb-item:last-child span {
+  color: #ffffff !important;
+}
+
+/* 夜间模式空数据文字颜色 */
+body[data-theme="dark"] .chatbot-management .chatbot-content .ant-empty-description {
+  color: #ffffff !important;
+}
+
+body[data-theme="dark"] .chatbot-management .chatbot-content .ant-empty-image svg {
+  fill: rgba(255, 255, 255, 0.5) !important;
+}
+
+/* ==================== 全局弹窗主题样式 ==================== */
+
+/* 夜间模式 Modal 样式 */
+body[data-theme="dark"] .ant-modal-content {
+  background: rgba(26, 26, 46, 0.98) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5) !important;
+  backdrop-filter: blur(20px);
+}
+
+body[data-theme="dark"] .ant-modal-header {
+  background: transparent !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 16px 16px 0 0 !important;
+  padding: 20px 24px !important;
+}
+
+body[data-theme="dark"] .ant-modal-title {
+  color: rgba(255, 255, 255, 0.95) !important;
+  font-size: 18px !important;
+  font-weight: 600 !important;
+}
+
+body[data-theme="dark"] .ant-modal-close {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+
+body[data-theme="dark"] .ant-modal-close:hover {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+body[data-theme="dark"] .ant-modal-body {
+  background: transparent !important;
+  padding: 24px !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+body[data-theme="dark"] .ant-modal-footer {
+  background: transparent !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 0 0 16px 16px !important;
+  padding: 16px 24px !important;
+}
+
+/* 夜间模式 Popconfirm 样式 */
+body[data-theme="dark"] .ant-popover-inner {
+  background: rgba(26, 26, 46, 0.98) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4) !important;
+}
+
+body[data-theme="dark"] .ant-popover-title {
+  color: rgba(255, 255, 255, 0.95) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+body[data-theme="dark"] .ant-popover-inner-content {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+body[data-theme="dark"] .ant-popover-arrow::before {
+  background: rgba(26, 26, 46, 0.98) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* 夜间模式 Message 样式 */
+body[data-theme="dark"] .ant-message-notice-content {
+  background: rgba(26, 26, 46, 0.98) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
+  color: rgba(255, 255, 255, 0.95) !important;
+  padding: 12px 20px !important;
+}
+
+body[data-theme="dark"] .ant-message-success .anticon {
+  color: #52c41a !important;
+}
+
+body[data-theme="dark"] .ant-message-error .anticon {
+  color: #ff4d4f !important;
+}
+
+body[data-theme="dark"] .ant-message-warning .anticon {
+  color: #faad14 !important;
+}
+
+body[data-theme="dark"] .ant-message-info .anticon,
+body[data-theme="dark"] .ant-message-loading .anticon {
+  color: #1890ff !important;
+}
+
+/* 夜间模式 Notification 样式 */
+body[data-theme="dark"] .ant-notification-notice {
+  background: rgba(26, 26, 46, 0.98) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4) !important;
+}
+
+body[data-theme="dark"] .ant-notification-notice-message {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+body[data-theme="dark"] .ant-notification-notice-description {
+  color: rgba(255, 255, 255, 0.75) !important;
+}
+
+body[data-theme="dark"] .ant-notification-notice-close {
+  color: rgba(255, 255, 255, 0.45) !important;
+}
+
+body[data-theme="dark"] .ant-notification-notice-close:hover {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+/* 夜间模式 Drawer 样式 */
+body[data-theme="dark"] .ant-drawer-content {
+  background: rgba(26, 26, 46, 0.98) !important;
+}
+
+body[data-theme="dark"] .ant-drawer-header {
+  background: transparent !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+body[data-theme="dark"] .ant-drawer-title {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+body[data-theme="dark"] .ant-drawer-close {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+
+body[data-theme="dark"] .ant-drawer-close:hover {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+body[data-theme="dark"] .ant-drawer-body {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+body[data-theme="dark"] .ant-drawer-footer {
+  background: transparent !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+/* 夜间模式表单样式 */
+body[data-theme="dark"] .ant-form-item-label > label {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+body[data-theme="dark"] .ant-input,
+body[data-theme="dark"] .ant-input-affix-wrapper,
+body[data-theme="dark"] .ant-textarea {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 8px !important;
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+body[data-theme="dark"] .ant-input::placeholder,
+body[data-theme="dark"] .ant-textarea::placeholder {
+  color: rgba(255, 255, 255, 0.35) !important;
+}
+
+body[data-theme="dark"] .ant-input:hover,
+body[data-theme="dark"] .ant-input-affix-wrapper:hover,
+body[data-theme="dark"] .ant-textarea:hover {
+  border-color: rgba(102, 126, 234, 0.5) !important;
+}
+
+body[data-theme="dark"] .ant-input:focus,
+body[data-theme="dark"] .ant-input-affix-wrapper-focused,
+body[data-theme="dark"] .ant-textarea:focus {
+  border-color: #667eea !important;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2) !important;
+}
+
+body[data-theme="dark"] .ant-input-affix-wrapper > input.ant-input {
+  background: transparent !important;
+}
+
+body[data-theme="dark"] .ant-input-prefix,
+body[data-theme="dark"] .ant-input-suffix {
+  color: rgba(255, 255, 255, 0.45) !important;
+}
+
+/* 夜间模式 Select 样式 */
+body[data-theme="dark"] .ant-select-selector {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 8px !important;
+}
+
+body[data-theme="dark"] .ant-select-selection-item {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+body[data-theme="dark"] .ant-select-selection-placeholder {
+  color: rgba(255, 255, 255, 0.35) !important;
+}
+
+body[data-theme="dark"] .ant-select-arrow {
+  color: rgba(255, 255, 255, 0.45) !important;
+}
+
+body[data-theme="dark"] .ant-select:hover .ant-select-selector {
+  border-color: rgba(102, 126, 234, 0.5) !important;
+}
+
+body[data-theme="dark"] .ant-select-focused .ant-select-selector {
+  border-color: #667eea !important;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2) !important;
+}
+
+/* 夜间模式 Select Dropdown 样式 */
+body[data-theme="dark"] .ant-select-dropdown {
+  background: rgba(26, 26, 46, 0.98) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4) !important;
+  backdrop-filter: blur(20px);
+}
+
+body[data-theme="dark"] .ant-select-item {
+  color: rgba(255, 255, 255, 0.75) !important;
+  border-radius: 6px !important;
+}
+
+body[data-theme="dark"] .ant-select-item-option-selected {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%) !important;
+  color: #fff !important;
+}
+
+body[data-theme="dark"] .ant-select-item-option-active {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #fff !important;
+}
+
+/* 夜间模式按钮样式 */
+body[data-theme="dark"] .ant-btn-default {
+  background: transparent !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+body[data-theme="dark"] .ant-btn-default:hover {
+  border-color: rgba(255, 255, 255, 0.4) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+body[data-theme="dark"] .ant-btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border: none !important;
+}
+
+body[data-theme="dark"] .ant-btn-primary:hover {
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
+}
+
+body[data-theme="dark"] .ant-btn-text {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+body[data-theme="dark"] .ant-btn-text:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* 夜间模式 Upload 样式 */
+body[data-theme="dark"] .ant-upload {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px dashed rgba(255, 255, 255, 0.2) !important;
+  border-radius: 8px !important;
+}
+
+body[data-theme="dark"] .ant-upload:hover {
+  border-color: #667eea !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+body[data-theme="dark"] .ant-upload-text {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+
+body[data-theme="dark"] .ant-upload-hint {
+  color: rgba(255, 255, 255, 0.45) !important;
+}
+
+/* 夜间模式 DatePicker 样式 */
+body[data-theme="dark"] .ant-picker {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 8px !important;
+}
+
+body[data-theme="dark"] .ant-picker-input > input {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+body[data-theme="dark"] .ant-picker-input > input::placeholder {
+  color: rgba(255, 255, 255, 0.35) !important;
+}
+
+body[data-theme="dark"] .ant-picker:hover {
+  border-color: rgba(102, 126, 234, 0.5) !important;
+}
+
+body[data-theme="dark"] .ant-picker-focused {
+  border-color: #667eea !important;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2) !important;
+}
+
+body[data-theme="dark"] .ant-picker-suffix {
+  color: rgba(255, 255, 255, 0.45) !important;
+}
+
+body[data-theme="dark"] .ant-picker-dropdown {
+  background: rgba(26, 26, 46, 0.98) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4) !important;
+}
+
+body[data-theme="dark"] .ant-picker-panel-container {
+  background: transparent !important;
+}
+
+body[data-theme="dark"] .ant-picker-header {
+  color: rgba(255, 255, 255, 0.95) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+body[data-theme="dark"] .ant-picker-body {
+  background: transparent !important;
+}
+
+body[data-theme="dark"] .ant-picker-content th {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+
+body[data-theme="dark"] .ant-picker-cell {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+
+body[data-theme="dark"] .ant-picker-cell:hover:not(.ant-picker-cell-selected):not(.ant-picker-cell-range-start):not(.ant-picker-cell-range-end) > .ant-picker-cell-inner {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+body[data-theme="dark"] .ant-picker-cell-in-view {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+body[data-theme="dark"] .ant-picker-cell-selected > .ant-picker-cell-inner {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+}
+
+body[data-theme="dark"] .ant-picker-today-btn {
+  color: #667eea !important;
+}
+
+/* 夜间模式 Table 样式 */
+body[data-theme="dark"] .ant-table {
+  background: transparent !important;
+}
+
+body[data-theme="dark"] .ant-table-thead > tr > th {
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+body[data-theme="dark"] .ant-table-tbody > tr > td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+body[data-theme="dark"] .ant-table-tbody > tr:hover > td {
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+
+body[data-theme="dark"] .ant-table-placeholder {
+  background: transparent !important;
+}
+
+body[data-theme="dark"] .ant-empty-description {
+  color: rgba(255, 255, 255, 0.45) !important;
+}
+
+/* 夜间模式 Pagination 样式 */
+body[data-theme="dark"] .ant-pagination-item {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+}
+
+body[data-theme="dark"] .ant-pagination-item a {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+body[data-theme="dark"] .ant-pagination-item:hover {
+  border-color: #667eea !important;
+}
+
+body[data-theme="dark"] .ant-pagination-item:hover a {
+  color: #667eea !important;
+}
+
+body[data-theme="dark"] .ant-pagination-item-active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border: none !important;
+}
+
+body[data-theme="dark"] .ant-pagination-item-active a {
+  color: #fff !important;
+}
+
+body[data-theme="dark"] .ant-pagination-prev,
+body[data-theme="dark"] .ant-pagination-next {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+
+body[data-theme="dark"] .ant-pagination-prev:hover .ant-pagination-item-link,
+body[data-theme="dark"] .ant-pagination-next:hover .ant-pagination-item-link {
+  color: #667eea !important;
+}
+
+body[data-theme="dark"] .ant-pagination-item-link {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+
+/* 夜间模式 Switch 样式 */
+body[data-theme="dark"] .ant-switch {
+  background: rgba(255, 255, 255, 0.25) !important;
+}
+
+body[data-theme="dark"] .ant-switch-checked {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+}
+
+/* 夜间模式 Radio 样式 */
+body[data-theme="dark"] .ant-radio-wrapper {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+body[data-theme="dark"] .ant-radio-inner {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+body[data-theme="dark"] .ant-radio-checked .ant-radio-inner {
+  border-color: #667eea !important;
+}
+
+body[data-theme="dark"] .ant-radio-inner::after {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+}
+
+/* 夜间模式 Checkbox 样式 */
+body[data-theme="dark"] .ant-checkbox-wrapper {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+body[data-theme="dark"] .ant-checkbox-inner {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+body[data-theme="dark"] .ant-checkbox-checked .ant-checkbox-inner {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border-color: #667eea !important;
+}
+
+body[data-theme="dark"] .ant-checkbox-indeterminate .ant-checkbox-inner::after {
+  background: #667eea !important;
+}
+
+/* 白天模式弹窗样式优化 */
+body[data-theme="light"] .ant-modal-content {
+  border-radius: 16px !important;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.15) !important;
+}
+
+body[data-theme="light"] .ant-modal-header {
+  border-radius: 16px 16px 0 0 !important;
+}
+
+body[data-theme="light"] .ant-modal-footer {
+  border-radius: 0 0 16px 16px !important;
+}
+
+body[data-theme="light"] .ant-popover-inner {
+  border-radius: 12px !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12) !important;
+}
+
+body[data-theme="light"] .ant-message-notice-content {
+  border-radius: 12px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1) !important;
+}
+
+body[data-theme="light"] .ant-notification-notice {
+  border-radius: 12px !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12) !important;
+}
+
+body[data-theme="light"] .ant-select-dropdown {
+  border-radius: 12px !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12) !important;
+}
+
+body[data-theme="light"] .ant-picker-dropdown {
+  border-radius: 12px !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12) !important;
+}
+
+body[data-theme="light"] .ant-input,
+body[data-theme="light"] .ant-input-affix-wrapper,
+body[data-theme="light"] .ant-textarea {
+  border-radius: 8px !important;
+}
+
+body[data-theme="light"] .ant-input:focus,
+body[data-theme="light"] .ant-input-affix-wrapper-focused,
+body[data-theme="light"] .ant-textarea:focus {
+  border-color: #667eea !important;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1) !important;
+}
+
+body[data-theme="light"] .ant-select-focused .ant-select-selector {
+  border-color: #667eea !important;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1) !important;
+}
+
+body[data-theme="light"] .ant-picker-focused {
+  border-color: #667eea !important;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1) !important;
+}
+
+body[data-theme="light"] .ant-btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border: none !important;
+}
+
+body[data-theme="light"] .ant-btn-primary:hover {
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
 }

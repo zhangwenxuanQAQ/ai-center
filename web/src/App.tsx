@@ -32,8 +32,8 @@ function App() {
 
   return (
     <Router>
-      <Layout style={{ minHeight: '100vh' }} className={theme === 'dark' ? 'dark-theme' : 'light-theme'}>
-        <Header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: theme === 'dark' ? '#1a1a1a' : '#f0f2f5' }}>
+      <Layout style={{ height: '100vh', overflow: 'hidden' }} className={theme === 'dark' ? 'dark-theme' : 'light-theme'}>
+        <Header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: theme === 'dark' ? '#1a1a1a' : '#ffffff', height: 64, flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <img 
               src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=modern%20AI%20logo%20with%20blue%20and%20green%20colors%2C%20simple%20and%20clean%2C%20technology%20theme%2C%20transparent%20background&image_size=square" 
@@ -49,16 +49,17 @@ function App() {
             style={{ color: theme === 'dark' ? 'white' : '#000000' }}
           />
         </Header>
-        <Layout>
+        <Layout style={{ height: 'calc(100vh - 64px)', overflow: 'hidden' }}>
           <Sider 
-            width={215} 
+            width={250} 
             collapsedWidth={80} 
             className={theme === 'dark' ? 'dark-theme-sider' : 'light-theme-sider'}
             collapsed={collapsed}
+            style={{ overflow: 'hidden', height: '100%' }}
           >
             <Menu
               mode="inline"
-              style={{ height: 'calc(100% - 64px)', borderRight: 0, textAlign: 'left' }}
+              style={{ height: 'calc(100% - 48px)', borderRight: 0, textAlign: 'left' }}
               defaultSelectedKeys={['1']}
               defaultOpenKeys={['sub1', 'sub2', 'sub3']}
             >
@@ -93,7 +94,7 @@ function App() {
                 </Menu.Item>
               </Menu.SubMenu>
             </Menu>
-            <div style={{ position: 'absolute', bottom: 0, width: '100%', padding: '16px', textAlign: 'center' }}>
+            <div style={{ position: 'absolute', bottom: 0, width: '100%', padding: '12px', textAlign: 'center' }}>
               <Button 
                 type="text" 
                 icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} 
@@ -102,28 +103,37 @@ function App() {
               />
             </div>
           </Sider>
-          <Layout style={{ padding: '0' }}>
+          <Layout style={{ padding: '0', overflow: 'hidden', height: '100%' }}>
             <Content
               style={{
-                background: theme === 'dark' ? '#1a1a1a' : 'white',
-                padding: 24,
+                background: theme === 'dark' ? '#1a1a1a' : '#f5f5f5',
+                padding: 16,
                 margin: 0,
-                minHeight: 280,
+                height: '100%',
                 color: theme === 'dark' ? '#ffffff' : '#000000',
                 display: 'flex',
-                flexDirection: 'column'
+                flexDirection: 'column',
+                overflow: 'hidden'
               }}
             >
               <Card 
                 style={{ 
-                  background: theme === 'dark' ? '#1e1e1e' : '#f9f9f9',
+                  background: theme === 'dark' ? '#1e1e1e' : '#ffffff',
                   borderColor: theme === 'dark' ? '#333333' : '#e8e8e8',
-                  flex: 1
+                  flex: 1,
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column'
                 }}
                 bodyStyle={{ 
                   background: theme === 'dark' ? '#1e1e1e' : '#ffffff',
                   color: theme === 'dark' ? '#ffffff' : '#000000',
-                  height: '100%'
+                  height: '100%',
+                  overflow: 'hidden',
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  padding: 0
                 }}
               >
                 <Routes>
