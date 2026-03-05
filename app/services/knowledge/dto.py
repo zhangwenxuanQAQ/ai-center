@@ -3,8 +3,8 @@
 """
 
 from pydantic import BaseModel, Field
-from datetime import datetime
 from typing import Optional
+from app.services.base_dto import BaseDTO
 
 
 class KnowledgeBase(BaseModel):
@@ -46,18 +46,12 @@ class KnowledgeUpdate(BaseModel):
     status: Optional[bool] = Field(None, description="状态，True表示启用，False表示禁用")
 
 
-class Knowledge(KnowledgeBase):
+class Knowledge(KnowledgeBase, BaseDTO):
     """
     知识库响应DTO
     
-    Attributes:
-        id: 知识库ID
-        created_at: 创建时间
-        updated_at: 更新时间
+    继承自KnowledgeBase和BaseDTO，包含知识库基本信息和公共字段
     """
-    id: int = Field(..., description="知识库ID")
-    created_at: datetime = Field(..., description="创建时间")
-    updated_at: Optional[datetime] = Field(None, description="更新时间")
     
     class Config:
         from_attributes = True

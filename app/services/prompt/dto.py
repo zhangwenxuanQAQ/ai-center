@@ -3,8 +3,8 @@
 """
 
 from pydantic import BaseModel, Field
-from datetime import datetime
 from typing import Optional
+from app.services.base_dto import BaseDTO
 
 
 class PromptBase(BaseModel):
@@ -42,18 +42,12 @@ class PromptUpdate(BaseModel):
     category: Optional[str] = Field(None, min_length=1, max_length=50, description="提示词分类，长度1-50个字符")
 
 
-class Prompt(PromptBase):
+class Prompt(PromptBase, BaseDTO):
     """
     提示词响应DTO
     
-    Attributes:
-        id: 提示词ID
-        created_at: 创建时间
-        updated_at: 更新时间
+    继承自PromptBase和BaseDTO，包含提示词基本信息和公共字段
     """
-    id: int = Field(..., description="提示词ID")
-    created_at: datetime = Field(..., description="创建时间")
-    updated_at: Optional[datetime] = Field(None, description="更新时间")
     
     class Config:
         from_attributes = True

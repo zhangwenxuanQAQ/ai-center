@@ -1,14 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Layout, Tree, Card, Row, Col, Avatar, Tag, Empty, Spin, Button, Breadcrumb, Modal, Form, Input, Select, Upload, message } from 'antd';
+import { Layout, Tree, Card, Row, Col, Avatar, Tag, Empty, Spin, Button, Breadcrumb, Modal, Form, Input, Select, Upload, message, Dropdown, Popconfirm } from 'antd';
 const { TextArea } = Input;
-import { RobotOutlined, HomeOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons';
+import { RobotOutlined, HomeOutlined, PlusOutlined, UploadOutlined, MoreOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import type { TreeDataNode, TreeProps, UploadProps } from 'antd';
 import { chatbotService, Chatbot, ChatbotCategory } from '../../services/chatbot';
 import './chatbot.less';
 
+import WorkWeixinIcon from '../../assets/svg/企业微信.svg';
+import LocalBotIcon from '../../assets/svg/本地机器人.svg';
+
 const { Sider: LeftSider, Content } = Layout;
 const { Option } = Select;
+
+const sourceTypeIcons: Record<string, string> = {
+  'work_weixin': WorkWeixinIcon,
+  'local': LocalBotIcon,
+};
 
 const ChatbotManagement: React.FC = () => {
   const navigate = useNavigate();
@@ -20,10 +28,16 @@ const ChatbotManagement: React.FC = () => {
   
   // 新增机器人相关状态
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [form] = Form.useForm();
+  const [editForm] = Form.useForm();
   const [sourceTypes, setSourceTypes] = useState<any[]>([]);
   const [selectedSourceType, setSelectedSourceType] = useState<string>('');
+  const [selectedEditSourceType, setSelectedEditSourceType] = useState<string>('');
   const [sourceConfig, setSourceConfig] = useState<Record<string, string>>({});
+  const [editSourceConfig, setEditSourceConfig] = useState<Record<string, string>>({});
+  const [avatarPreview, setAvatarPreview] = useState<string>('');
+  const [editAvatarPreview, setEditAvatarPreview] = useState<string>('');
   
   // 卡片引用
   const cardRefs = useRef<{ [key: number]: HTMLDivElement }>({});
@@ -134,10 +148,13 @@ const ChatbotManagement: React.FC = () => {
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('zh-CN', {
+    return date.toLocaleString('zh-CN', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
     });
   };
 
@@ -159,14 +176,150 @@ const ChatbotManagement: React.FC = () => {
 
   const handleAddChatbot = () => {
     form.resetFields();
-    setSelectedSourceType('');
+    setSelectedSourceType('local');
     setSourceConfig({});
+    setAvatarPreview('');
     setIsModalVisible(true);
+  };
+
+  const handleEditChatbot = (chatbot: Chatbot) => {
+    // 填充编辑表单
+    editForm.setFieldsValue({
+      name: chatbot.name,
+      code: chatbot.code,
+      source_type: chatbot.source_type,
+      greeting: chatbot.greeting,
+      avatar: chatbot.avatar,
+      category_id: chatbot.category_id,
+      description: chatbot.description
+    });
+    setSelectedEditSourceType(chatbot.source_type || 'local');
+    // 处理来源配置
+    if (chatbot.source_config) {
+      try {
+        setEditSourceConfig(JSON.parse(chatbot.source_config));
+      } catch (error) {
+        setEditSourceConfig({});
+      }
+    } else {
+      setEditSourceConfig({});
+    }
+    setEditAvatarPreview(chatbot.avatar || '');
+    setIsEditModalVisible(true);
+  };
+
+  const handleEditSourceTypeChange = (value: string) => {
+    setSelectedEditSourceType(value);
+    // 自动填充默认值
+    const sourceType = sourceTypes.find(st => st.source_type === value);
+    if (sourceType && sourceType.config_fields) {
+      const defaultConfig: Record<string, string> = {};
+      sourceType.config_fields.forEach((field: any) => {
+        if (field.default_value) {
+          // 如果是回调地址，用当前编码替换占位符
+          if (field.name === 'callback_url' && value === 'work_weixin') {
+            const currentCode = editForm.getFieldValue('code') || '';
+            defaultConfig[field.name] = field.default_value.replace('{code}', currentCode);
+          } else {
+            defaultConfig[field.name] = field.default_value;
+          }
+        }
+      });
+      setEditSourceConfig(defaultConfig);
+    } else {
+      setEditSourceConfig({});
+    }
+  };
+
+  const handleEditSourceConfigChange = (field: string, value: string) => {
+    setEditSourceConfig(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleEditSubmit = async () => {
+    try {
+      const values = await editForm.validateFields();
+      
+      const sourceConfigFields = getEditSourceConfigFields();
+      const chatbotData = {
+        ...values,
+        source_config: selectedEditSourceType && sourceConfigFields.length > 0 ? JSON.stringify(editSourceConfig) : undefined
+      };
+      
+      console.log('Submitting edited chatbot:', chatbotData);
+      
+      // 调用后端接口更新机器人
+      // await chatbotService.updateChatbot(chatbotData);
+      
+      message.success('机器人更新成功！');
+      setIsEditModalVisible(false);
+      editForm.resetFields();
+      setSelectedEditSourceType('');
+      setEditSourceConfig({});
+      fetchChatbots(selectedCategory);
+    } catch (error) {
+      console.error('Form validation failed:', error);
+      message.error('更新失败，请重试');
+    }
+  };
+
+  const handleDeleteChatbot = async (chatbotId: number) => {
+    try {
+      // 调用后端接口删除机器人
+      // await chatbotService.deleteChatbot(chatbotId);
+      
+      message.success('机器人删除成功！');
+      fetchChatbots(selectedCategory);
+    } catch (error) {
+      console.error('Delete chatbot failed:', error);
+      message.error('删除失败，请重试');
+    }
+  };
+
+  const getEditSourceConfigFields = () => {
+    const sourceType = sourceTypes.find(st => st.source_type === selectedEditSourceType);
+    if (!sourceType) return [];
+    return sourceType.config_fields || [];
+  };
+
+  const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const code = e.target.value;
+    // 当来源是企业微信时，自动更新回调地址中的编码
+    if (selectedSourceType === 'work_weixin') {
+      const callbackField = getSourceConfigFields().find(f => f.name === 'callback_url');
+      if (callbackField && callbackField.default_value) {
+        const callbackUrl = callbackField.default_value.replace('{code}', code);
+        setSourceConfig(prev => ({
+          ...prev,
+          callback_url: callbackUrl
+        }));
+      }
+    }
   };
 
   const handleSourceTypeChange = (value: string) => {
     setSelectedSourceType(value);
-    setSourceConfig({});
+    // 自动填充默认值
+    const sourceType = sourceTypes.find(st => st.source_type === value);
+    if (sourceType && sourceType.config_fields) {
+      const defaultConfig: Record<string, string> = {};
+      sourceType.config_fields.forEach((field: any) => {
+        if (field.default_value) {
+          // 如果是回调地址，用空编码替换占位符
+          if (field.name === 'callback_url' && value === 'work_weixin') {
+            const currentCode = form.getFieldValue('code') || '';
+            defaultConfig[field.name] = field.default_value.replace('{code}', currentCode);
+          } else {
+            defaultConfig[field.name] = field.default_value;
+          }
+        }
+      });
+      setSourceConfig(defaultConfig);
+    } else {
+      setSourceConfig({});
+    }
   };
 
   const handleSourceConfigChange = (field: string, value: string) => {
@@ -203,23 +356,79 @@ const ChatbotManagement: React.FC = () => {
     }
   };
 
+  const compressImage = (file: File, maxWidth: number = 100, quality: number = 0.5): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (e) => {
+        const img = new window.Image();
+        img.src = e.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+          
+          const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressedBase64);
+        };
+        img.onerror = reject;
+      };
+      reader.onerror = reject;
+    });
+  };
+
+  const handleAvatarChange = async (info: any) => {
+    if (info.file.status === 'done' || info.file.originFileObj) {
+      const file = info.file.originFileObj;
+      if (file) {
+        try {
+          const compressedBase64 = await compressImage(file, 200, 0.7);
+          form.setFieldsValue({ avatar: compressedBase64 });
+          setAvatarPreview(compressedBase64);
+          message.success('头像上传成功');
+        } catch (error) {
+          message.error('头像处理失败');
+        }
+      }
+    }
+  };
+
   const uploadProps: UploadProps = {
     name: 'file',
-    action: 'https://api.example.com/upload',
-    headers: {
-      authorization: 'authorization-text',
-    },
-    onChange(info) {
-      if (info.file.status !== 'uploading') {
-        console.log(info.file, info.fileList);
+    showUploadList: false,
+    accept: 'image/*',
+    beforeUpload: (file) => {
+      const isImage = file.type.startsWith('image/');
+      if (!isImage) {
+        message.error('只能上传图片文件！');
+        return false;
       }
-      if (info.file.status === 'done') {
-        message.success(`${info.file.name} 上传成功`);
-        form.setFieldsValue({ avatar: info.file.response.url });
-      } else if (info.file.status === 'error') {
-        message.error(`${info.file.name} 上传失败`);
+      const isLt5M = file.size / 1024 / 1024 < 5;
+      if (!isLt5M) {
+        message.error('图片大小不能超过 5MB！');
+        return false;
       }
+      return true;
     },
+    customRequest: ({ file, onSuccess }) => {
+      setTimeout(() => {
+        if (onSuccess) {
+          onSuccess({ status: 'done' }, file);
+        }
+      }, 0);
+    },
+    onChange: handleAvatarChange,
   };
 
   const getSourceConfigFields = () => {
@@ -316,37 +525,60 @@ const ChatbotManagement: React.FC = () => {
                     <Card
                       hoverable
                       className={`chatbot-card ${theme === 'dark' ? 'dark' : 'light'}`}
-                      onClick={() => handleCardClick(chatbot.id)}
-                      cover={
-                        <div className="card-avatar-wrapper">
-                          <Avatar
-                            size={80}
-                            icon={<RobotOutlined />}
-                            src={chatbot.avatar}
-                            className="card-avatar"
+                      bodyStyle={{ padding: '16px' }}
+                    >
+                      <div className="card-content">
+                        <div className="card-actions">
+                          <Button 
+                            type="text" 
+                            icon={<EditOutlined />}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditChatbot(chatbot);
+                            }}
+                            className="action-button"
+                            title="编辑"
+                          />
+                          <Button 
+                            type="text" 
+                            icon={<DeleteOutlined />}
+                            danger
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteChatbot(chatbot.id);
+                            }}
+                            className="action-button"
+                            title="删除"
                           />
                         </div>
-                      }
-                    >
-                      <Card.Meta
-                        title={
-                          <div className="card-title">
-                            {chatbot.name}
+                        <div className="card-main" onClick={() => handleCardClick(chatbot.id)}>
+                          <div className="card-avatar-container">
+                            <Avatar
+                              size={72}
+                              icon={<RobotOutlined />}
+                              src={chatbot.avatar}
+                              className="card-avatar"
+                            />
                           </div>
-                        }
-                        description={
-                          <div className="card-description">
-                            <div className="card-info">
-                              <Tag color={getSourceTypeColor(chatbot.source_type)}>
-                                {getSourceTypeLabel(chatbot.source_type)}
-                              </Tag>
+                          <div className="card-title">{chatbot.name}</div>
+                          <div className="card-meta">
+                            <div className="card-source">
+                              <img 
+                                src={sourceTypeIcons[chatbot.source_type || 'local']} 
+                                alt="" 
+                                style={{ 
+                                  width: 16, 
+                                  height: 16,
+                                  marginRight: 8,
+                                  filter: theme === 'dark' ? 'invert(1) brightness(100%)' : 'none'
+                                }} 
+                              />
+                              <span>{getSourceTypeLabel(chatbot.source_type)}</span>
                             </div>
-                            <div className="card-date">
-                              {formatDate(chatbot.created_at)}
-                            </div>
+                            <div className="card-date">{formatDate(chatbot.created_at)}</div>
                           </div>
-                        }
-                      />
+                        </div>
+                      </div>
                     </Card>
                   </div>
                 </Col>
@@ -368,7 +600,8 @@ const ChatbotManagement: React.FC = () => {
           form={form}
           layout="vertical"
           initialValues={{
-            greeting: '你好，请问有什么需要提问的？'
+            greeting: '你好，请问有什么需要提问的？',
+            source_type: 'local'
           }}
         >
           <Form.Item
@@ -377,6 +610,17 @@ const ChatbotManagement: React.FC = () => {
             rules={[{ required: true, message: '请输入机器人名称' }]}
           >
             <Input placeholder="请输入机器人名称" />
+          </Form.Item>
+
+          <Form.Item
+            name="code"
+            label="机器人编码"
+            rules={[
+              { required: true, message: '请输入机器人编码' },
+              { pattern: /^[a-zA-Z0-9_]+$/, message: '编码只能包含字母、数字和下划线' }
+            ]}
+          >
+            <Input placeholder="请输入机器人编码（字母、数字、下划线）" onChange={handleCodeChange} />
           </Form.Item>
 
           <Form.Item
@@ -390,7 +634,18 @@ const ChatbotManagement: React.FC = () => {
             >
               {sourceTypes.map(source => (
                 <Option key={source.source_type} value={source.source_type}>
-                  {source.source_name}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <img 
+                      src={sourceTypeIcons[source.source_type]} 
+                      alt="" 
+                      style={{ 
+                        width: 20, 
+                        height: 20,
+                        filter: theme === 'dark' ? 'invert(1) brightness(100%)' : 'none'
+                      }} 
+                    />
+                    <span>{source.source_name}</span>
+                  </div>
                 </Option>
               ))}
             </Select>
@@ -404,7 +659,6 @@ const ChatbotManagement: React.FC = () => {
             >
               <Input 
                 placeholder={field.description} 
-                disabled={field.readonly}
                 value={sourceConfig[field.name]}
                 onChange={(e) => handleSourceConfigChange(field.name, e.target.value)}
               />
@@ -423,9 +677,152 @@ const ChatbotManagement: React.FC = () => {
             name="avatar"
             label="头像"
           >
-            <Upload {...uploadProps} maxCount={1}>
-              <Button icon={<UploadOutlined />}>点击上传</Button>
-            </Upload>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              {avatarPreview && (
+                <img 
+                  src={avatarPreview} 
+                  alt="头像预览" 
+                  style={{ 
+                    width: 80, 
+                    height: 80, 
+                    borderRadius: '50%', 
+                    objectFit: 'cover',
+                    border: '2px solid #d9d9d9'
+                  }} 
+                />
+              )}
+              <Upload {...uploadProps} maxCount={1}>
+                <Button icon={<UploadOutlined />}>点击上传</Button>
+              </Upload>
+            </div>
+          </Form.Item>
+
+          <Form.Item
+            name="category_id"
+            label="分类"
+          >
+            <Select placeholder="请选择分类">
+              {categories.map(category => (
+                <Option key={category.id} value={category.id}>
+                  {category.name}
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Form.Item
+            name="description"
+            label="机器人描述"
+          >
+            <TextArea rows={3} placeholder="请输入机器人描述" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 编辑机器人模态框 */}
+      <Modal
+        title="编辑机器人"
+        open={isEditModalVisible}
+        onOk={handleEditSubmit}
+        onCancel={() => setIsEditModalVisible(false)}
+        width={600}
+        className={`chatbot-modal ${theme === 'dark' ? 'dark' : 'light'}`}
+      >
+        <Form
+          form={editForm}
+          layout="vertical"
+        >
+          <Form.Item
+            name="name"
+            label="机器人名称"
+            rules={[{ required: true, message: '请输入机器人名称' }]}
+          >
+            <Input placeholder="请输入机器人名称" />
+          </Form.Item>
+
+          <Form.Item
+            name="code"
+            label="机器人编码"
+            rules={[
+              { required: true, message: '请输入机器人编码' },
+              { pattern: /^[a-zA-Z0-9_]+$/, message: '编码只能包含字母、数字和下划线' }
+            ]}
+          >
+            <Input placeholder="请输入机器人编码（字母、数字、下划线）" />
+          </Form.Item>
+
+          <Form.Item
+            name="source_type"
+            label="来源"
+            rules={[{ required: true, message: '请选择来源' }]}
+          >
+            <Select 
+              placeholder="请选择来源" 
+              onChange={handleEditSourceTypeChange}
+            >
+              {sourceTypes.map(source => (
+                <Option key={source.source_type} value={source.source_type}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <img 
+                      src={sourceTypeIcons[source.source_type]} 
+                      alt="" 
+                      style={{ 
+                        width: 20, 
+                        height: 20,
+                        filter: theme === 'dark' ? 'invert(1) brightness(100%)' : 'none'
+                      }} 
+                    />
+                    <span>{source.source_name}</span>
+                  </div>
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          {selectedEditSourceType && getEditSourceConfigFields().map(field => (
+            <Form.Item
+              key={field.name}
+              label={field.title}
+              rules={field.required ? [{ required: true, message: `请输入${field.title}` }] : []}
+            >
+              <Input 
+                placeholder={field.description} 
+                value={editSourceConfig[field.name]}
+                onChange={(e) => handleEditSourceConfigChange(field.name, e.target.value)}
+              />
+            </Form.Item>
+          ))}
+
+          <Form.Item
+            name="greeting"
+            label="欢迎语"
+            rules={[{ required: true, message: '请输入欢迎语' }]}
+          >
+            <TextArea rows={2} placeholder="请输入欢迎语" />
+          </Form.Item>
+
+          <Form.Item
+            name="avatar"
+            label="头像"
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              {editAvatarPreview && (
+                <img 
+                  src={editAvatarPreview} 
+                  alt="头像预览" 
+                  style={{ 
+                    width: 80, 
+                    height: 80, 
+                    borderRadius: '50%', 
+                    objectFit: 'cover',
+                    border: '2px solid #d9d9d9'
+                  }} 
+                />
+              )}
+              <Upload {...uploadProps} maxCount={1}>
+                <Button icon={<UploadOutlined />}>点击上传</Button>
+              </Upload>
+            </div>
           </Form.Item>
 
           <Form.Item

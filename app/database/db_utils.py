@@ -74,11 +74,15 @@ def handle_transaction(func: Callable[..., T]) -> Callable[..., T]:
     """
     def wrapper(*args, **kwargs):
         try:
+            # 开始事务
             db.begin()
+            # 执行函数
             result = func(*args, **kwargs)
+            # 提交事务
             db.commit()
             return result
         except IntegrityError as e:
+            # 回滚事务
             db.rollback()
             if 'Duplicate entry' in str(e) or 'UNIQUE constraint' in str(e):
                 raise DuplicateResourceError(
@@ -96,12 +100,14 @@ def handle_transaction(func: Callable[..., T]) -> Callable[..., T]:
                     detail=str(e)
                 ) from e
         except OperationalError as e:
+            # 回滚事务
             db.rollback()
             raise DatabaseOperationError(
                 message="数据库操作失败",
                 detail=str(e)
             ) from e
         except Exception:
+            # 回滚事务
             db.rollback()
             raise
     

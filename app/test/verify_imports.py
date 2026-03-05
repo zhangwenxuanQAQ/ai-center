@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-简单检查模块导入情况
+验证所有模块导入情况
 """
 
 import importlib
@@ -49,11 +49,19 @@ modules_to_check = [
 if __name__ == "__main__":
     print("检查模块导入情况...\n")
     
+    errors = []
     for module_name in modules_to_check:
         try:
             importlib.import_module(module_name)
             print(f"✓ {module_name}")
         except Exception as e:
             print(f"✗ {module_name}: {e}")
+            errors.append((module_name, str(e)))
     
-    print("\n检查完成！")
+    print("\n" + "="*50)
+    if errors:
+        print(f"发现 {len(errors)} 个错误:")
+        for module_name, error in errors:
+            print(f"  - {module_name}: {error}")
+    else:
+        print("所有模块导入检查通过！")

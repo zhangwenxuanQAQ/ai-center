@@ -47,7 +47,7 @@ app/  #主应用包
 ├── services/       # api实现
 ├── utils/          # 工具包
 ├── api/            # controller层
-├── test/          # 单元测试和集成测试
+├── test/          # 单元测试，集成测试，验证脚本
 ├──server_run.py  #开发环境入口
 ├──server_wsgi.py  #生成环境入口
 ├── README.md

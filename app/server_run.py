@@ -4,6 +4,7 @@ FastAPI应用主入口
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from app.configs.config import config
 from app.database.models import create_tables
 from app.api import router
@@ -45,11 +46,12 @@ async def base_service_error_handler(request: Request, exc: BaseServiceError):
     Returns:
         JSONResponse: 统一格式的响应
     """
-    return ResponseUtil.error(
+    response = ResponseUtil.error(
         code=ResponseCode.INTERNAL_ERROR,
         message=exc.message,
         data={"error_type": exc.__class__.__name__, "detail": exc.detail}
-    ).model_dump()
+    )
+    return JSONResponse(content=response.model_dump(), status_code=response.code)
 
 async def resource_not_found_error_handler(request: Request, exc: ResourceNotFoundError):
     """
@@ -62,9 +64,10 @@ async def resource_not_found_error_handler(request: Request, exc: ResourceNotFou
     Returns:
         JSONResponse: 统一格式的响应
     """
-    return ResponseUtil.not_found(
+    response = ResponseUtil.not_found(
         message=exc.message
-    ).model_dump()
+    )
+    return JSONResponse(content=response.model_dump(), status_code=response.code)
 
 async def duplicate_resource_error_handler(request: Request, exc: DuplicateResourceError):
     """
@@ -77,11 +80,12 @@ async def duplicate_resource_error_handler(request: Request, exc: DuplicateResou
     Returns:
         JSONResponse: 统一格式的响应
     """
-    return ResponseUtil.error(
+    response = ResponseUtil.error(
         code=ResponseCode.BAD_REQUEST,
         message=exc.message,
         data={"error_type": exc.__class__.__name__, "detail": exc.detail}
-    ).model_dump()
+    )
+    return JSONResponse(content=response.model_dump(), status_code=response.code)
 
 async def database_operation_error_handler(request: Request, exc: DatabaseOperationError):
     """
@@ -94,11 +98,12 @@ async def database_operation_error_handler(request: Request, exc: DatabaseOperat
     Returns:
         JSONResponse: 统一格式的响应
     """
-    return ResponseUtil.error(
+    response = ResponseUtil.error(
         code=ResponseCode.INTERNAL_ERROR,
         message=exc.message,
         data={"error_type": exc.__class__.__name__, "detail": exc.detail}
-    ).model_dump()
+    )
+    return JSONResponse(content=response.model_dump(), status_code=response.code)
 
 # 注册异常处理器
 app.add_exception_handler(BaseServiceError, base_service_error_handler)

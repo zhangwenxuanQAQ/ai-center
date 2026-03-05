@@ -3,3 +3,4 @@ web/node_modules/
 app/ai_center.egg-info/
 web/dist/
 web/node_modules/
+.vscode/

@@ -3,8 +3,8 @@ MCP数据传输对象（DTO）
 """
 
 from pydantic import BaseModel, Field
-from datetime import datetime
 from typing import Optional
+from app.services.base_dto import BaseDTO
 
 
 class MCPBase(BaseModel):
@@ -46,18 +46,12 @@ class MCPUpdate(BaseModel):
     status: Optional[bool] = Field(None, description="状态，True表示启用，False表示禁用")
 
 
-class MCP(MCPBase):
+class MCP(MCPBase, BaseDTO):
     """
     MCP响应DTO
     
-    Attributes:
-        id: MCP ID
-        created_at: 创建时间
-        updated_at: 更新时间
+    继承自MCPBase和BaseDTO，包含MCP基本信息和公共字段
     """
-    id: int = Field(..., description="MCP ID")
-    created_at: datetime = Field(..., description="创建时间")
-    updated_at: Optional[datetime] = Field(None, description="更新时间")
     
     class Config:
         from_attributes = True

@@ -3,8 +3,8 @@ LLM模型数据传输对象（DTO）
 """
 
 from pydantic import BaseModel, Field
-from datetime import datetime
 from typing import Optional
+from app.services.base_dto import BaseDTO
 
 
 class LLMModelBase(BaseModel):
@@ -50,18 +50,12 @@ class LLMModelUpdate(BaseModel):
     model_type: Optional[str] = Field(None, min_length=1, max_length=50, description="模型类型，长度1-50个字符")
 
 
-class LLMModel(LLMModelBase):
+class LLMModel(LLMModelBase, BaseDTO):
     """
     LLM模型响应DTO
     
-    Attributes:
-        id: 模型ID
-        created_at: 创建时间
-        updated_at: 更新时间
+    继承自LLMModelBase和BaseDTO，包含LLM模型基本信息和公共字段
     """
-    id: int = Field(..., description="模型ID")
-    created_at: datetime = Field(..., description="创建时间")
-    updated_at: Optional[datetime] = Field(None, description="更新时间")
     
     class Config:
         from_attributes = True

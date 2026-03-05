@@ -2,6 +2,7 @@
 聊天机器人控制器，提供聊天机器人相关的API接口
 """
 
+import socket
 from fastapi import APIRouter
 from app.services.chatbot.service import ChatbotService
 from app.services.chatbot.dto import ChatbotCreate, ChatbotUpdate, Chatbot as ChatbotSchema
@@ -10,6 +11,23 @@ from app.constants.chatbot_constants import SOURCE_TYPE, SOURCE_CONFIG_FIELDS
 from app.configs.config import config
 
 router = APIRouter()
+
+
+def get_local_ip():
+    """
+    获取本机IP地址
+    
+    Returns:
+        str: 本机IP地址
+    """
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(('8.8.8.8', 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return 'localhost'
 
 
 @router.get("/source_types", response_model=ApiResponse)
@@ -31,9 +49,9 @@ def get_source_types():
         }
         
         if source_type == "work_weixin":
-            server_host = config.server.get('host', '0.0.0.0')
+            server_host = get_local_ip()
             server_port = config.server.get('http_port', 8081)
-            callback_url = f"http://{server_host}:{server_port}/aicenter/v1/chat/work_weixin/callback/{{chatbot_id}}"
+            callback_url = f"http://{server_host}:{server_port}/aicenter/v1/chat/work_weixin/callback/{{code}}"
             for field in config_fields:
                 if field.get('name') == 'callback_url':
                     field['default_value'] = callback_url
@@ -76,7 +94,7 @@ def get_chatbots(skip: int = 0, limit: int = 100):
 
 
 @router.get("/{chatbot_id}", response_model=ApiResponse)
-def get_chatbot(chatbot_id: int):
+def get_chatbot(chatbot_id: str):
     """
     获取单个聊天机器人
     
@@ -93,7 +111,7 @@ def get_chatbot(chatbot_id: int):
 
 
 @router.post("/{chatbot_id}", response_model=ApiResponse)
-def update_chatbot(chatbot_id: int, chatbot: ChatbotUpdate):
+def update_chatbot(chatbot_id: str, chatbot: ChatbotUpdate):
     """
     更新聊天机器人
     
@@ -109,7 +127,7 @@ def update_chatbot(chatbot_id: int, chatbot: ChatbotUpdate):
 
 
 @router.post("/{chatbot_id}/delete", response_model=ApiResponse)
-def delete_chatbot(chatbot_id: int):
+def delete_chatbot(chatbot_id: str):
     """
     删除聊天机器人
     

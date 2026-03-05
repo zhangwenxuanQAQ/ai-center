@@ -16,6 +16,7 @@ export interface ChatbotCategory {
 
 export interface Chatbot {
   id: number;
+  code: string;
   name: string;
   description: string;
   model_id: number;

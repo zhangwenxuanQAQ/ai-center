@@ -3,8 +3,8 @@
 """
 
 from pydantic import BaseModel, Field, EmailStr
-from datetime import datetime
 from typing import Optional
+from app.services.base_dto import BaseDTO
 
 
 class UserBase(BaseModel):
@@ -47,18 +47,12 @@ class UserUpdate(BaseModel):
     is_admin: Optional[bool] = Field(None, description="是否为管理员")
 
 
-class User(UserBase):
+class User(UserBase, BaseDTO):
     """
     用户响应DTO
     
-    Attributes:
-        id: 用户ID
-        created_at: 创建时间
-        updated_at: 更新时间
+    继承自UserBase和BaseDTO，包含用户基本信息和公共字段
     """
-    id: int = Field(..., description="用户ID")
-    created_at: datetime = Field(..., description="创建时间")
-    updated_at: Optional[datetime] = Field(None, description="更新时间")
     
     class Config:
         from_attributes = True

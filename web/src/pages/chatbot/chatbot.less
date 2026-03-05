@@ -273,12 +273,12 @@
         flex-shrink: 0;
 
         &.dark {
-          color: rgba(255, 255, 255);
+          color: rgba(255, 255, 255, 0.9);
           border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         &.light {
-          color: rgba(0, 0, 0, 0.6);
+          color: rgba(0, 0, 0, 0.8);
           border-bottom: 1px solid rgba(0, 0, 0, 0.1);
         }
       }
@@ -523,6 +523,9 @@
         position: relative;
         backdrop-filter: blur(20px);
         animation: cardFadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+        height: 240px; /* 卡片高度 */
+        display: flex;
+        flex-direction: column;
 
         @keyframes cardFadeIn {
           from {
@@ -541,7 +544,7 @@
           top: 0;
           left: 0;
           right: 0;
-          height: 3px;
+          height: 4px;
           background: linear-gradient(90deg, #667eea, #764ba2, #f093fb, #f5576c);
           opacity: 0;
           transition: opacity 0.3s ease;
@@ -563,7 +566,7 @@
         &:hover {
           transform: translateY(-8px) scale(1.02);
           box-shadow: 
-            0 20px 40px rgba(0, 0, 0, 0.3),
+            0 20px 40px rgba(0, 0, 0, 0.25),
             0 0 0 1px rgba(102, 126, 234, 0.1),
             inset 0 1px 0 rgba(255, 255, 255, 0.1);
 
@@ -575,34 +578,48 @@
             opacity: 1;
           }
 
-          .card-avatar-wrapper {
-            &::before {
-              animation: rotate 3s linear infinite;
-            }
+          .card-avatar {
+            transform: scale(1.05);
+            box-shadow: 
+              0 8px 20px rgba(102, 126, 234, 0.5),
+              0 0 0 2px rgba(255, 255, 255, 0.1);
+          }
 
-            .card-avatar {
-              transform: scale(1.1) rotate(5deg);
-            }
+          .card-title {
+            transform: translateY(-2px);
           }
         }
 
         &.dark {
-          background: rgba(26, 26, 46, 0.6);
+          background: rgba(26, 26, 46, 0.7);
           border: 1px solid rgba(255, 255, 255, 0.08);
 
           .card-title {
             color: rgba(255, 255, 255, 0.95);
           }
 
-          .card-description {
+          .card-source {
             color: rgba(255, 255, 255, 0.6);
+          }
+
+          .card-date {
+            color: rgba(255, 255, 255, 0.4);
+          }
+
+          .action-button {
+            color: rgba(255, 255, 255, 0.5);
+
+            &:hover {
+              color: rgba(255, 255, 255, 0.8);
+              background: rgba(255, 255, 255, 0.1);
+            }
           }
         }
 
         &.light {
           background: rgba(255, 255, 255, 0.95);
           border: 1px solid rgba(0, 0, 0, 0.08);
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+          box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
 
           &:hover {
             border-color: rgba(102, 126, 234, 0.3);
@@ -615,101 +632,148 @@
             color: rgba(0, 0, 0, 0.9);
           }
 
-          .card-description {
+          .card-source {
             color: rgba(0, 0, 0, 0.6);
+          }
+
+          .card-date {
+            color: rgba(0, 0, 0, 0.4);
+          }
+
+          .action-button {
+            color: rgba(0, 0, 0, 0.4);
+
+            &:hover {
+              color: rgba(0, 0, 0, 0.7);
+              background: rgba(0, 0, 0, 0.05);
+            }
           }
         }
 
-        .card-avatar-wrapper {
+        .card-content {
+          flex: 1;
           display: flex;
-          justify-content: center;
-          align-items: center;
-          padding: 40px 0;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+          flex-direction: column;
           position: relative;
-          overflow: hidden;
+        }
 
-          &::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: conic-gradient(from 0deg, transparent, rgba(255, 255, 255, 0.15), transparent 30%);
-            animation: rotate 8s linear infinite paused;
+        .card-actions {
+          position: absolute;
+          top: 12px;
+          right: 12px;
+          z-index: 10;
+          display: flex;
+          gap: 8px;
+
+          .action-button {
+            opacity: 1;
+            transform: scale(1);
+            transition: all 0.3s ease;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            color: #667eea;
+            background: rgba(255, 255, 255, 0.1);
+
+            &:hover {
+              background: rgba(102, 126, 234, 0.15);
+              transform: scale(1.1);
+            }
+
+            :global {
+              .anticon {
+                font-size: 16px;
+              }
+            }
+
+            &.ant-btn-dangerous {
+              color: #ff4d4f !important;
+
+              &:hover {
+                background: rgba(255, 77, 79, 0.15) !important;
+                color: #ff4d4f !important;
+              }
+            }
+          }
+        }
+
+        .card-main {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          padding: 16px 12px;
+
+          &:hover {
+            opacity: 0.9;
           }
 
-          @keyframes rotate {
-            from {
-              transform: rotate(0deg);
-            }
-            to {
-              transform: rotate(360deg);
-            }
+          .card-avatar-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 4px;
           }
 
           .card-avatar {
-            position: relative;
-            z-index: 1;
-            background: rgba(255, 255, 255, 0.95);
-            color: #667eea;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
             box-shadow: 
-              0 8px 32px rgba(0, 0, 0, 0.2),
-              0 0 0 4px rgba(255, 255, 255, 0.1);
+              0 6px 16px rgba(102, 126, 234, 0.4),
+              0 0 0 2px rgba(255, 255, 255, 0.1);
             transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 
             :global {
               .anticon {
-                font-size: 36px;
-              }
-            }
-          }
-        }
-
-        .card-title {
-          font-size: 16px;
-          font-weight: 600;
-          text-align: center;
-          margin: 20px 16px 12px;
-          transition: all 0.3s ease;
-          letter-spacing: 0.3px;
-        }
-
-        .card-description {
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-          margin: 0 16px 20px;
-
-          .card-info {
-            display: flex;
-            justify-content: center;
-
-            :global {
-              .ant-tag {
-                font-size: 12px;
-                padding: 4px 12px;
-                border-radius: 12px;
-                border: none;
-                background: rgba(102, 126, 234, 0.15);
-                color: #a78bfa;
-                font-weight: 500;
-                transition: all 0.3s ease;
-
-                &:hover {
-                  background: rgba(102, 126, 234, 0.25);
-                  transform: scale(1.05);
-                }
+                font-size: 32px;
               }
             }
           }
 
-          .card-date {
+          .card-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin: 0;
+            transition: all 0.3s ease;
+            letter-spacing: 0.3px;
             text-align: center;
-            font-size: 12px;
-            opacity: 0.7;
-            font-weight: 400;
+            line-height: 1.2;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+
+          .card-meta {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            width: 100%;
+            margin-top: 4px;
+
+            .card-source {
+              display: flex;
+              align-items: center;
+              font-size: 13px;
+              font-weight: 500;
+              transition: all 0.3s ease;
+            }
+
+            .card-date {
+              font-size: 12px;
+              font-weight: 400;
+              transition: all 0.3s ease;
+              text-align: center;
+            }
           }
         }
       }
