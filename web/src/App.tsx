@@ -1,8 +1,11 @@
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { Layout, Menu, Button, Card } from 'antd';
+import { Layout, Menu, Button, Card, ConfigProvider, theme as antTheme } from 'antd';
 import { HomeOutlined, MessageOutlined, SettingOutlined, LogoutOutlined, RobotOutlined, BookOutlined, DatabaseOutlined, CommentOutlined, MoonOutlined, SunOutlined, MenuFoldOutlined, MenuUnfoldOutlined, HistoryOutlined } from '@ant-design/icons';
 import { useState, useEffect } from 'react';
-import './App.css';
+import './styles/index.css';
+import './styles/common.css';
+import './styles/themes/dark.css';
+import './styles/themes/light.css';
 import Home from './pages/home/home.tsx';
 import Chatbot from './pages/chatbot/chatbot.tsx';
 import MCP from './pages/mcp/mcp.tsx';
@@ -31,9 +34,20 @@ function App() {
   };
 
   return (
+    <ConfigProvider
+      theme={{
+        algorithm: theme === 'dark' ? antTheme.darkAlgorithm : antTheme.defaultAlgorithm,
+        token: {
+          colorPrimary: '#667eea',
+          borderRadius: 8,
+        },
+      }}
+      cssVar={true}
+      hashed={false}
+    >
     <Router>
       <Layout style={{ height: '100vh', overflow: 'hidden' }} className={theme === 'dark' ? 'dark-theme' : 'light-theme'}>
-        <Header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: theme === 'dark' ? '#1a1a1a' : '#ffffff', height: 64, flexShrink: 0 }}>
+        <Header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: theme === 'dark' ? 'rgb(30, 30, 30)' : '#ffffff', height: 64, flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <img 
               src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=modern%20AI%20logo%20with%20blue%20and%20green%20colors%2C%20simple%20and%20clean%2C%20technology%20theme%2C%20transparent%20background&image_size=square" 
@@ -106,7 +120,7 @@ function App() {
           <Layout style={{ padding: '0', overflow: 'hidden', height: '100%' }}>
             <Content
               style={{
-                background: theme === 'dark' ? '#1a1a1a' : '#f5f5f5',
+                background: theme === 'dark' ? '#000000' : '#f5f5f5',
                 padding: 16,
                 margin: 0,
                 height: '100%',
@@ -118,7 +132,7 @@ function App() {
             >
               <Card 
                 style={{ 
-                  background: theme === 'dark' ? '#1e1e1e' : '#ffffff',
+                  background: theme === 'dark' ? '#000000' : '#ffffff',
                   borderColor: theme === 'dark' ? '#333333' : '#e8e8e8',
                   flex: 1,
                   overflow: 'hidden',
@@ -126,7 +140,7 @@ function App() {
                   flexDirection: 'column'
                 }}
                 bodyStyle={{ 
-                  background: theme === 'dark' ? '#1e1e1e' : '#ffffff',
+                  background: theme === 'dark' ? '#000000' : '#ffffff',
                   color: theme === 'dark' ? '#ffffff' : '#000000',
                   height: '100%',
                   overflow: 'hidden',
@@ -152,6 +166,7 @@ function App() {
         </Layout>
       </Layout>
     </Router>
+    </ConfigProvider>
   );
 }
 

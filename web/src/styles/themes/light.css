@@ -1,0 +1,408 @@
+/* ==================== 白天模式主题样式 ==================== */
+
+/* 布局背景色 */
+body[data-theme="light"] {
+  color: #213547;
+  background-color: #ffffff;
+}
+
+body[data-theme="light"] .light-theme {
+  background-color: #ffffff;
+}
+
+body[data-theme="light"] .light-theme .ant-layout-header {
+  background-color: #ffffff;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+body[data-theme="light"] .light-theme-sider {
+  background-color: #ffffff !important;
+  border-right: 1px solid #e8e8e8;
+}
+
+body[data-theme="light"] .light-theme-sider .ant-menu {
+  background-color: #ffffff !important;
+  color: #000000;
+}
+
+body[data-theme="light"] .light-theme-sider .ant-menu-item {
+  color: #000000;
+  background-color: #ffffff !important;
+}
+
+body[data-theme="light"] .light-theme-sider .ant-menu-item-selected {
+  background-color: #e6f7ff !important;
+  color: #1890ff !important;
+}
+
+body[data-theme="light"] .light-theme-sider .ant-menu-submenu-title {
+  color: #000000;
+  background-color: #ffffff !important;
+}
+
+body[data-theme="light"] .light-theme-sider .ant-menu-sub {
+  background-color: #ffffff !important;
+}
+
+body[data-theme="light"] .light-theme-sider .ant-menu-submenu {
+  background-color: #ffffff !important;
+}
+
+/* 内容区域样式 */
+body[data-theme="light"] .light-theme .ant-layout-content {
+  background-color: #ffffff;
+  color: #000000;
+}
+
+body[data-theme="light"] .ant-layout-content {
+  background-color: #ffffff;
+  color: #000000;
+}
+
+/* Card 样式 */
+body[data-theme="light"] .ant-card {
+  background-color: #ffffff !important;
+  border-color: #e8e8e8 !important;
+}
+
+body[data-theme="light"] .ant-card-body {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+
+/* ==================== 白天模式弹窗样式 ==================== */
+
+/* Modal 样式 */
+body[data-theme="light"] .ant-modal-content,
+body[data-theme="light"] div.ant-modal-content {
+  background: #ffffff !important;
+  border: 1px solid #e8e8e8 !important;
+  border-radius: 16px !important;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.15) !important;
+}
+
+body[data-theme="light"] .ant-modal-header,
+body[data-theme="light"] div.ant-modal-header {
+  background: transparent !important;
+  border-bottom: 1px solid #f0f0f0 !important;
+  border-radius: 16px 16px 0 0 !important;
+  padding: 20px 24px !important;
+}
+
+body[data-theme="light"] .ant-modal-title,
+body[data-theme="light"] div.ant-modal-title {
+  color: rgba(0, 0, 0, 0.9) !important;
+  font-size: 18px !important;
+  font-weight: 600 !important;
+}
+
+body[data-theme="light"] .ant-modal-close,
+body[data-theme="light"] button.ant-modal-close {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+body[data-theme="light"] .ant-modal-close:hover,
+body[data-theme="light"] button.ant-modal-close:hover {
+  color: rgba(0, 0, 0, 0.75) !important;
+}
+
+body[data-theme="light"] .ant-modal-body,
+body[data-theme="light"] div.ant-modal-body {
+  background: transparent !important;
+  padding: 24px !important;
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+body[data-theme="light"] .ant-modal-footer,
+body[data-theme="light"] div.ant-modal-footer {
+  background: transparent !important;
+  border-top: 1px solid #f0f0f0 !important;
+  border-radius: 0 0 16px 16px !important;
+  padding: 16px 24px !important;
+}
+
+/* Popconfirm 样式 */
+body[data-theme="light"] .ant-popover-inner,
+body[data-theme="light"] div.ant-popover-inner {
+  background: #ffffff !important;
+  border: 1px solid #e8e8e8 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12) !important;
+}
+
+body[data-theme="light"] .ant-popover-title,
+body[data-theme="light"] div.ant-popover-title {
+  color: rgba(0, 0, 0, 0.9) !important;
+  border-bottom: 1px solid #f0f0f0 !important;
+}
+
+body[data-theme="light"] .ant-popover-inner-content,
+body[data-theme="light"] div.ant-popover-inner-content {
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+/* Message 样式 */
+body[data-theme="light"] .ant-message-notice-content,
+body[data-theme="light"] div.ant-message-notice-content {
+  background: #ffffff !important;
+  border: 1px solid #e8e8e8 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1) !important;
+  color: rgba(0, 0, 0, 0.85) !important;
+  padding: 12px 20px !important;
+}
+
+/* Notification 样式 */
+body[data-theme="light"] .ant-notification-notice,
+body[data-theme="light"] div.ant-notification-notice {
+  background: #ffffff !important;
+  border: 1px solid #e8e8e8 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12) !important;
+}
+
+body[data-theme="light"] .ant-notification-notice-message,
+body[data-theme="light"] div.ant-notification-notice-message {
+  color: rgba(0, 0, 0, 0.9) !important;
+}
+
+body[data-theme="light"] .ant-notification-notice-description,
+body[data-theme="light"] div.ant-notification-notice-description {
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+/* Drawer 样式 */
+body[data-theme="light"] .ant-drawer-content,
+body[data-theme="light"] div.ant-drawer-content {
+  background: #ffffff !important;
+}
+
+body[data-theme="light"] .ant-drawer-header,
+body[data-theme="light"] div.ant-drawer-header {
+  background: transparent !important;
+  border-bottom: 1px solid #f0f0f0 !important;
+}
+
+body[data-theme="light"] .ant-drawer-title,
+body[data-theme="light"] div.ant-drawer-title {
+  color: rgba(0, 0, 0, 0.9) !important;
+}
+
+body[data-theme="light"] .ant-drawer-close,
+body[data-theme="light"] button.ant-drawer-close {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+body[data-theme="light"] .ant-drawer-close:hover,
+body[data-theme="light"] button.ant-drawer-close:hover {
+  color: rgba(0, 0, 0, 0.75) !important;
+}
+
+body[data-theme="light"] .ant-drawer-body,
+body[data-theme="light"] div.ant-drawer-body {
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+body[data-theme="light"] .ant-drawer-footer,
+body[data-theme="light"] div.ant-drawer-footer {
+  background: transparent !important;
+  border-top: 1px solid #f0f0f0 !important;
+}
+
+/* ==================== 白天模式表单样式 ==================== */
+
+body[data-theme="light"] .ant-form-item-label > label,
+body[data-theme="light"] label.ant-form-item-label {
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+body[data-theme="light"] .ant-input,
+body[data-theme="light"] input.ant-input,
+body[data-theme="light"] textarea.ant-input,
+body[data-theme="light"] .ant-input-affix-wrapper,
+body[data-theme="light"] span.ant-input-affix-wrapper,
+body[data-theme="light"] .ant-textarea,
+body[data-theme="light"] textarea.ant-textarea {
+  background: #ffffff !important;
+  border: 1px solid #d9d9d9 !important;
+  border-radius: 8px !important;
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+body[data-theme="light"] .ant-input::placeholder,
+body[data-theme="light"] input.ant-input::placeholder,
+body[data-theme="light"] .ant-textarea::placeholder,
+body[data-theme="light"] textarea.ant-textarea::placeholder {
+  color: rgba(0, 0, 0, 0.35) !important;
+}
+
+body[data-theme="light"] .ant-input:hover,
+body[data-theme="light"] input.ant-input:hover,
+body[data-theme="light"] .ant-input-affix-wrapper:hover,
+body[data-theme="light"] span.ant-input-affix-wrapper:hover,
+body[data-theme="light"] .ant-textarea:hover,
+body[data-theme="light"] textarea.ant-textarea:hover {
+  border-color: #667eea !important;
+}
+
+body[data-theme="light"] .ant-input:focus,
+body[data-theme="light"] input.ant-input:focus,
+body[data-theme="light"] .ant-input-affix-wrapper-focused,
+body[data-theme="light"] span.ant-input-affix-wrapper-focused,
+body[data-theme="light"] .ant-textarea:focus,
+body[data-theme="light"] textarea.ant-textarea:focus {
+  border-color: #667eea !important;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1) !important;
+}
+
+/* Select 样式 */
+body[data-theme="light"] .ant-select-selector,
+body[data-theme="light"] div.ant-select-selector {
+  background: #ffffff !important;
+  border: 1px solid #d9d9d9 !important;
+  border-radius: 8px !important;
+}
+
+body[data-theme="light"] .ant-select:hover .ant-select-selector,
+body[data-theme="light"] div.ant-select:hover div.ant-select-selector {
+  border-color: #667eea !important;
+}
+
+body[data-theme="light"] .ant-select-focused .ant-select-selector,
+body[data-theme="light"] div.ant-select-focused div.ant-select-selector {
+  border-color: #667eea !important;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1) !important;
+}
+
+/* Select Dropdown 样式 */
+body[data-theme="light"] .ant-select-dropdown,
+body[data-theme="light"] div.ant-select-dropdown {
+  background: #ffffff !important;
+  border: 1px solid #e8e8e8 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12) !important;
+}
+
+/* ==================== 白天模式按钮样式 ==================== */
+
+body[data-theme="light"] .ant-btn-primary,
+body[data-theme="light"] button.ant-btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border: none !important;
+}
+
+body[data-theme="light"] .ant-btn-primary:hover,
+body[data-theme="light"] button.ant-btn-primary:hover {
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
+}
+
+/* ==================== 白天模式其他组件样式 ==================== */
+
+/* DatePicker 样式 */
+body[data-theme="light"] .ant-picker,
+body[data-theme="light"] div.ant-picker {
+  background: #ffffff !important;
+  border: 1px solid #d9d9d9 !important;
+  border-radius: 8px !important;
+}
+
+body[data-theme="light"] .ant-picker:hover,
+body[data-theme="light"] div.ant-picker:hover {
+  border-color: #667eea !important;
+}
+
+body[data-theme="light"] .ant-picker-focused,
+body[data-theme="light"] div.ant-picker-focused {
+  border-color: #667eea !important;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1) !important;
+}
+
+body[data-theme="light"] .ant-picker-dropdown,
+body[data-theme="light"] div.ant-picker-dropdown {
+  background: #ffffff !important;
+  border: 1px solid #e8e8e8 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12) !important;
+}
+
+/* Table 样式 */
+body[data-theme="light"] .ant-table,
+body[data-theme="light"] div.ant-table {
+  background: #ffffff !important;
+}
+
+body[data-theme="light"] .ant-table-thead > tr > th,
+body[data-theme="light"] thead.ant-table-thead > tr > th {
+  background: #fafafa !important;
+  color: rgba(0, 0, 0, 0.85) !important;
+  border-bottom: 1px solid #f0f0f0 !important;
+}
+
+body[data-theme="light"] .ant-table-tbody > tr > td,
+body[data-theme="light"] tbody.ant-table-tbody > tr > td {
+  border-bottom: 1px solid #f0f0f0 !important;
+}
+
+body[data-theme="light"] .ant-table-tbody > tr:hover > td,
+body[data-theme="light"] tbody.ant-table-tbody > tr:hover > td {
+  background: #fafafa !important;
+}
+
+/* Pagination 样式 */
+body[data-theme="light"] .ant-pagination-item-active,
+body[data-theme="light"] li.ant-pagination-item-active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border: none !important;
+}
+
+body[data-theme="light"] .ant-pagination-item-active a,
+body[data-theme="light"] li.ant-pagination-item-active a {
+  color: #fff !important;
+}
+
+/* Switch 样式 */
+body[data-theme="light"] .ant-switch-checked,
+body[data-theme="light"] button.ant-switch-checked {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+}
+
+/* Radio 样式 */
+body[data-theme="light"] .ant-radio-checked .ant-radio-inner,
+body[data-theme="light"] span.ant-radio-checked span.ant-radio-inner {
+  border-color: #667eea !important;
+}
+
+body[data-theme="light"] .ant-radio-inner::after,
+body[data-theme="light"] span.ant-radio-inner::after {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+}
+
+/* Checkbox 样式 */
+body[data-theme="light"] .ant-checkbox-checked .ant-checkbox-inner,
+body[data-theme="light"] span.ant-checkbox-checked span.ant-checkbox-inner {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border-color: #667eea !important;
+}
+
+/* Tree 样式 */
+body[data-theme="light"] .ant-tree-node-selected,
+body[data-theme="light"] span.ant-tree-node-selected {
+  background: rgba(102, 126, 234, 0.1) !important;
+}
+
+/* Breadcrumb 样式 */
+body[data-theme="light"] .ant-breadcrumb,
+body[data-theme="light"] nav.ant-breadcrumb {
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+body[data-theme="light"] .ant-breadcrumb-link,
+body[data-theme="light"] span.ant-breadcrumb-link {
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+/* Empty 样式 */
+body[data-theme="light"] .ant-empty,
+body[data-theme="light"] div.ant-empty {
+  color: rgba(0, 0, 0, 0.45) !important;
+}

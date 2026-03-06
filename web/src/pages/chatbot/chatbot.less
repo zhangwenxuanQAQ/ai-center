@@ -1,229 +1,24 @@
-.chatbot-management {
-  height: 100%;
-  max-height: 100%;
+.chatbot-layout {
+  flex: 1;
   display: flex;
-  flex-direction: column;
-  position: relative;
   overflow: hidden;
-  box-sizing: border-box;
+  position: relative;
+  z-index: 1;
+  min-height: 0;
 
-  &.dark {
-    background: rgba(0, 0, 0, 0.88);
-
-    &::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: 
-        radial-gradient(circle at 20% 50%, rgba(120, 119, 198, 0.15) 0%, transparent 50%),
-        radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.1) 0%, transparent 50%),
-        radial-gradient(circle at 40% 80%, rgba(120, 200, 255, 0.1) 0%, transparent 50%);
-      pointer-events: none;
-      animation: backgroundPulse 20s ease-in-out infinite;
-    }
-  }
-
-  &.light {
-    background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 50%, #dde4ed 100%);
-
-    &::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: 
-        radial-gradient(circle at 20% 50%, rgba(102, 126, 234, 0.08) 0%, transparent 50%),
-        radial-gradient(circle at 80% 20%, rgba(118, 75, 162, 0.06) 0%, transparent 50%),
-        radial-gradient(circle at 40% 80%, rgba(102, 126, 234, 0.06) 0%, transparent 50%);
-      pointer-events: none;
-      animation: backgroundPulse 20s ease-in-out infinite;
-    }
-  }
-
-  @keyframes backgroundPulse {
-    0%, 100% { opacity: 0.8; }
-    50% { opacity: 1; }
-  }
-
-  .chatbot-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 24px 32px;
+  .category-sider {
+    width: 260px !important;
+    flex-shrink: 0;
     backdrop-filter: blur(20px);
     position: relative;
-    z-index: 10;
-    animation: slideDown 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-    flex-shrink: 0;
-
-    &.dark {
-      background: rgba(0, 0, 0, 0.88);
-      border-bottom: 0.5px solid rgba(255, 255, 255, 0.2);
-      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
-    }
-
-    &.light {
-      background: rgba(255, 255, 255, 0.95);
-      border-bottom: 0.5px solid rgba(0, 0, 0, 0.2);
-      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
-    }
-
-
-
-    @keyframes slideDown {
-      from {
-        opacity: 0;
-        transform: translateY(-20px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .ant-breadcrumb {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-
-      &.dark {
-        color: #ffffff !important;
-        :global {
-          .ant-breadcrumb,
-          .ant-breadcrumb *,
-          .ant-breadcrumb-separator,
-          .ant-breadcrumb-link,
-          .ant-breadcrumb-link a,
-          .ant-breadcrumb-link span,
-          .ant-breadcrumb-item,
-          .ant-breadcrumb-item span,
-          .ant-breadcrumb-item:last-child,
-          .ant-breadcrumb .ant-breadcrumb-item:last-child,
-          .ant-breadcrumb .ant-breadcrumb-item:last-child span {
-            color: #ffffff !important;
-            font-size: 14px;
-            font-weight: 400;
-            transition: all 0.3s ease;
-          }
-
-          .ant-breadcrumb-link:hover {
-            color: #fff !important;
-            transform: translateY(-1px);
-          }
-        }
-      }
-
-      // Override Ant Design :where() selector with higher specificity
-      &.dark {
-        :global {
-          .ant-breadcrumb-item:last-child,
-          .ant-breadcrumb .ant-breadcrumb-item:last-child {
-            color: #ffffff !important;
-          }
-          
-          .ant-breadcrumb-item:last-child span,
-          .ant-breadcrumb .ant-breadcrumb-item:last-child span {
-            color: #ffffff !important;
-          }
-        }
-      }
-
-      &.light {
-        color: rgba(0, 0, 0, 0.85) !important;
-        :global {
-          .ant-breadcrumb,
-          .ant-breadcrumb *,
-          .ant-breadcrumb-separator,
-          .ant-breadcrumb-link,
-          .ant-breadcrumb-link a,
-          .ant-breadcrumb-link span,
-          .ant-breadcrumb-item,
-          .ant-breadcrumb-item span {
-            color: rgba(0, 0, 0, 0.85) !important;
-            font-size: 14px;
-            font-weight: 400;
-          }
-        }
-      }
-    }
-
-    .ant-btn {
-      height: 36px;
-      padding: 0 20px;
-      border-radius: 18px;
-      font-size: 14px;
-      font-weight: 500;
-      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-      position: relative;
-      overflow: hidden;
-
-      &::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: -100%;
-        width: 100%;
-        height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-        transition: left 0.5s ease;
-      }
-
-      &:hover::before {
-        left: 100%;
-      }
-
-      &.dark {
-        color: #fff;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        background: linear-gradient(135deg, rgba(120, 119, 198, 0.3) 0%, rgba(255, 119, 198, 0.3) 100%);
-
-        &:hover {
-          border-color: rgba(255, 255, 255, 0.4);
-          background: linear-gradient(135deg, rgba(120, 119, 198, 0.5) 0%, rgba(255, 119, 198, 0.5) 100%);
-          transform: translateY(-2px);
-          box-shadow: 0 8px 24px rgba(120, 119, 198, 0.3);
-        }
-      }
-
-      &:not(.dark) {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        border: none;
-        color: white;
-
-        &:hover {
-          background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
-          transform: translateY(-2px);
-          box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
-        }
-      }
-    }
-  }
-
-  .chatbot-layout {
-    flex: 1;
+    animation: slideRight 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
     display: flex;
+    flex-direction: column;
     overflow: hidden;
-    position: relative;
-    z-index: 1;
-    min-height: 0;
-
-    .category-sider {
-      width: 260px !important;
-      flex-shrink: 0;
-      backdrop-filter: blur(20px);
-      position: relative;
-      animation: slideRight 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 
     &.dark {
-      background: rgba(0, 0, 0, 0.88);
+      background: #000000;
       border-right: 1px solid rgba(255, 255, 255, 0.08);
 
       &::after {
@@ -252,190 +47,44 @@
       }
     }
 
-      @keyframes slideRight {
-        from {
-          opacity: 0;
-          transform: translateX(-20px);
-        }
-        to {
-          opacity: 1;
-          transform: translateX(0);
-        }
+    @keyframes slideRight {
+      from {
+        opacity: 0;
+        transform: translateX(-20px);
       }
-
-      .sider-header {
-        padding: 20px 24px 16px;
-        font-size: 13px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        position: relative;
-        flex-shrink: 0;
-
-        &.dark {
-          color: rgba(255, 255, 255, 0.9);
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        &.light {
-          color: rgba(0, 0, 0, 0.8);
-          border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-        }
-      }
-
-      .category-tree {
-        padding: 12px 0;
-        background: transparent;
-        flex: 1;
-        overflow-y: auto;
-        overflow-x: hidden;
-        min-height: 0;
-
-        &::-webkit-scrollbar {
-          display: none;
-        }
-        
-        -ms-overflow-style: none;
-        scrollbar-width: none;
-
-        &.dark {
-          :global {
-            .ant-tree-node-content-wrapper {
-              color: rgba(255, 255, 255, 0.75);
-              padding: 10px 24px;
-              margin: 2px 0;
-              border-radius: 0;
-              transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-              position: relative;
-              font-size: 14px;
-              font-weight: 400;
-
-              &::before {
-                content: '';
-                position: absolute;
-                left: 0;
-                top: 0;
-                bottom: 0;
-                width: 3px;
-                background: transparent;
-                transition: all 0.3s ease;
-              }
-
-              &:hover {
-                color: #fff;
-                background: rgba(255, 255, 255, 0.05);
-
-                &::before {
-                  background: linear-gradient(180deg, #667eea, #764ba2);
-                }
-              }
-            }
-
-            .ant-tree-node-selected {
-              color: #fff;
-              background: linear-gradient(90deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.1) 100%);
-              font-weight: 500;
-
-              &::before {
-                background: linear-gradient(180deg, #667eea, #764ba2);
-                box-shadow: 0 0 12px rgba(102, 126, 234, 0.5);
-              }
-            }
-
-            .ant-tree-treenode {
-              margin: 0;
-              padding: 0;
-            }
-
-            .ant-tree-switcher {
-              color: rgba(255, 255, 255, 0.4);
-            }
-          }
-        }
-
-        &.light {
-          :global {
-            .ant-tree-node-content-wrapper {
-              color: rgba(0, 0, 0, 0.75);
-              padding: 10px 24px;
-              margin: 2px 0;
-              border-radius: 0;
-              transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-              font-size: 14px;
-
-              &::before {
-                content: '';
-                position: absolute;
-                left: 0;
-                top: 0;
-                bottom: 0;
-                width: 3px;
-                background: transparent;
-                transition: all 0.3s ease;
-              }
-
-              &:hover {
-                color: #000;
-                background: rgba(0, 0, 0, 0.04);
-
-                &::before {
-                  background: linear-gradient(180deg, #667eea, #764ba2);
-                }
-              }
-            }
-
-            .ant-tree-node-selected {
-              color: #667eea;
-              background: rgba(102, 126, 234, 0.1);
-              font-weight: 500;
-
-              &::before {
-                background: linear-gradient(180deg, #667eea, #764ba2);
-              }
-            }
-
-            .ant-tree-treenode {
-              margin: 0;
-              padding: 0;
-            }
-          }
-        }
+      to {
+        opacity: 1;
+        transform: translateX(0);
       }
     }
 
-    .chatbot-content {
-      flex: 1;
-      padding: 24px;
-      overflow-y: auto;
-      overflow-x: hidden;
+    .sider-header {
+      padding: 20px 24px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
       position: relative;
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
+      flex-shrink: 0;
 
       &.dark {
-        background: rgba(0, 0, 0, 0.88);
+        color: rgba(255, 255, 255, 0.9);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
       }
 
       &.light {
-        background: #ffffff;
+        color: rgba(0, 0, 0, 0.8);
+        border-bottom: 1px solid rgba(0, 0, 0, 0.1);
       }
+    }
 
-      .content-header {
-        display: flex;
-        align-items: center;
-        margin-bottom: 20px;
-        padding-bottom: 16px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-
-        &.dark {
-          border-bottom-color: rgba(255, 255, 255, 0.1);
-        }
-
-        &.light {
-          border-bottom-color: rgba(0, 0, 0, 0.1);
-        }
-      }
+    .category-tree {
+      padding: 12px 0;
+      background: transparent;
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      min-height: 0;
 
       &::-webkit-scrollbar {
         display: none;
@@ -444,587 +93,778 @@
       -ms-overflow-style: none;
       scrollbar-width: none;
 
-      .loading-container {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        flex: 1;
-        min-height: 0;
-
+      &.dark {
+        color: rgba(255, 255, 255, 0.9);
         :global {
-          .ant-spin-dot-item {
-            background-color: #667eea;
+          .ant-tree {
+            color: rgba(255, 255, 255, 0.9);
           }
-        }
-      }
+          .ant-tree-node-content-wrapper {
+            color: rgba(255, 255, 255, 0.9);
+            padding: 10px 24px;
+            margin: 2px 0;
+            border-radius: 0;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            font-size: 14px;
+            font-weight: 400;
 
-      .empty-container {
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        flex: 1;
-        min-height: 0;
-        animation: fadeIn 0.6s ease;
-
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: scale(0.95);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-
-        &.dark {
-          :global {
-            .ant-empty {
-              color: #ffffff !important;
+            &::before {
+              content: '';
+              position: absolute;
+              left: 0;
+              top: 0;
+              bottom: 0;
+              width: 3px;
+              background: transparent;
+              transition: all 0.3s ease;
             }
 
-            .ant-empty-description {
-              color: #ffffff !important;
-              font-size: 15px;
-            }
+            &:hover {
+              color: #fff;
+              background: rgba(255, 255, 255, 0.05);
 
-            .ant-empty-image svg {
-              fill: rgba(255, 255, 255, 0.5) !important;
-            }
-          }
-        }
-
-        &.light {
-          :global {
-            .ant-empty {
-              color: rgba(0, 0, 0, 0.5) !important;
-            }
-
-            .ant-empty-description {
-              color: rgba(0, 0, 0, 0.5) !important;
-              font-size: 15px;
+              &::before {
+                background: linear-gradient(180deg, #667eea, #764ba2);
+              }
             }
           }
-        }
-      }
 
-      :global {
-        .ant-row {
-          flex: 1;
-          min-height: 0;
-        }
-      }
+          .ant-tree-node-selected {
+            color: #000000 !important;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            font-weight: 600;
 
-      .chatbot-card {
-        border-radius: 16px;
-        overflow: hidden;
-        transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-        position: relative;
-        backdrop-filter: blur(20px);
-        animation: cardFadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
-        height: 240px; /* 卡片高度 */
-        display: flex;
-        flex-direction: column;
-
-        @keyframes cardFadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(20px) scale(0.95);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-
-        &::before {
-          content: '';
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          height: 4px;
-          background: linear-gradient(90deg, #667eea, #764ba2, #f093fb, #f5576c);
-          opacity: 0;
-          transition: opacity 0.3s ease;
-        }
-
-        &::after {
-          content: '';
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: radial-gradient(circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(255, 255, 255, 0.1) 0%, transparent 50%);
-          opacity: 0;
-          transition: opacity 0.3s ease;
-          pointer-events: none;
-        }
-
-        &:hover {
-          transform: translateY(-8px) scale(1.02);
-          box-shadow: 
-            0 20px 40px rgba(0, 0, 0, 0.25),
-            0 0 0 1px rgba(102, 126, 234, 0.1),
-            inset 0 1px 0 rgba(255, 255, 255, 0.1);
-
-          &::before {
-            opacity: 1;
+            &::before {
+              background: linear-gradient(180deg, #667eea, #764ba2);
+              box-shadow: 0 0 12px rgba(102, 126, 234, 0.8);
+            }
           }
 
-          &::after {
-            opacity: 1;
+          .ant-tree-treenode {
+            margin: 0;
+            padding: 0;
           }
 
-          .card-avatar {
-            transform: scale(1.05);
-            box-shadow: 
-              0 8px 20px rgba(102, 126, 234, 0.5),
-              0 0 0 2px rgba(255, 255, 255, 0.1);
-          }
-
-          .card-title {
-            transform: translateY(-2px);
-          }
-        }
-
-        &.dark {
-          background: rgba(26, 26, 46, 0.7);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-
-          .card-title {
-            color: rgba(255, 255, 255, 0.95);
-          }
-
-          .card-source {
+          .ant-tree-switcher {
             color: rgba(255, 255, 255, 0.6);
           }
+        }
+      }
 
-          .card-date {
-            color: rgba(255, 255, 255, 0.4);
-          }
+      &.light {
+        :global {
+          .ant-tree-node-content-wrapper {
+            color: rgba(0, 0, 0, 0.75);
+            padding: 10px 24px;
+            margin: 2px 0;
+            border-radius: 0;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            font-size: 14px;
 
-          .action-button {
-            color: rgba(255, 255, 255, 0.5);
+            &::before {
+              content: '';
+              position: absolute;
+              left: 0;
+              top: 0;
+              bottom: 0;
+              width: 3px;
+              background: transparent;
+              transition: all 0.3s ease;
+            }
 
             &:hover {
-              color: rgba(255, 255, 255, 0.8);
-              background: rgba(255, 255, 255, 0.1);
+              color: #000;
+              background: rgba(0, 0, 0, 0.04);
+
+              &::before {
+                background: linear-gradient(180deg, #667eea, #764ba2);
+              }
             }
           }
-        }
 
-        &.light {
-          background: rgba(255, 255, 255, 0.95);
-          border: 1px solid rgba(0, 0, 0, 0.08);
-          box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
-
-          &:hover {
-            border-color: rgba(102, 126, 234, 0.3);
-            box-shadow: 
-              0 20px 40px rgba(0, 0, 0, 0.15),
-              0 0 0 1px rgba(102, 126, 234, 0.1);
-          }
-
-          .card-title {
-            color: rgba(0, 0, 0, 0.9);
-          }
-
-          .card-source {
-            color: rgba(0, 0, 0, 0.6);
-          }
-
-          .card-date {
-            color: rgba(0, 0, 0, 0.4);
-          }
-
-          .action-button {
-            color: rgba(0, 0, 0, 0.4);
-
-            &:hover {
-              color: rgba(0, 0, 0, 0.7);
-              background: rgba(0, 0, 0, 0.05);
-            }
-          }
-        }
-
-        .card-content {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          position: relative;
-        }
-
-        .card-actions {
-          position: absolute;
-          top: 12px;
-          right: 12px;
-          z-index: 10;
-          display: flex;
-          gap: 8px;
-
-          .action-button {
-            opacity: 1;
-            transform: scale(1);
-            transition: all 0.3s ease;
-            border-radius: 50%;
-            width: 32px;
-            height: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 0;
+          .ant-tree-node-selected {
             color: #667eea;
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(102, 126, 234, 0.1);
+            font-weight: 500;
 
-            &:hover {
-              background: rgba(102, 126, 234, 0.15);
-              transform: scale(1.1);
-            }
-
-            :global {
-              .anticon {
-                font-size: 16px;
-              }
-            }
-
-            &.ant-btn-dangerous {
-              color: #ff4d4f !important;
-
-              &:hover {
-                background: rgba(255, 77, 79, 0.15) !important;
-                color: #ff4d4f !important;
-              }
-            }
-          }
-        }
-
-        .card-main {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 12px;
-          cursor: pointer;
-          transition: all 0.3s ease;
-          padding: 16px 12px;
-
-          &:hover {
-            opacity: 0.9;
-          }
-
-          .card-avatar-container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin-bottom: 4px;
-          }
-
-          .card-avatar {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            box-shadow: 
-              0 6px 16px rgba(102, 126, 234, 0.4),
-              0 0 0 2px rgba(255, 255, 255, 0.1);
-            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-
-            :global {
-              .anticon {
-                font-size: 32px;
-              }
+            &::before {
+              background: linear-gradient(180deg, #667eea, #764ba2);
             }
           }
 
-          .card-title {
-            font-size: 20px;
-            font-weight: 700;
+          .ant-tree-treenode {
             margin: 0;
-            transition: all 0.3s ease;
-            letter-spacing: 0.3px;
-            text-align: center;
-            line-height: 1.2;
-            max-width: 100%;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-          }
-
-          .card-meta {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 6px;
-            width: 100%;
-            margin-top: 4px;
-
-            .card-source {
-              display: flex;
-              align-items: center;
-              font-size: 13px;
-              font-weight: 500;
-              transition: all 0.3s ease;
-            }
-
-            .card-date {
-              font-size: 12px;
-              font-weight: 400;
-              transition: all 0.3s ease;
-              text-align: center;
-            }
+            padding: 0;
           }
         }
       }
     }
   }
 
-  .chatbot-modal {
+  .chatbot-content {
+    flex: 1;
+    padding: 24px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    position: relative;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+
     &.dark {
+      background: #000000;
+    }
+
+    &.light {
+      background: #ffffff;
+    }
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+    
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+
+    .loading-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex: 1;
+      min-height: 0;
+
       :global {
-        .ant-modal-content {
-          background: rgba(26, 26, 46, 0.95);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 20px;
-          box-shadow: 
-            0 24px 80px rgba(0, 0, 0, 0.5),
-            0 0 0 1px rgba(255, 255, 255, 0.05);
-          backdrop-filter: blur(20px);
-          animation: modalSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-
-          @keyframes modalSlideIn {
-            from {
-              opacity: 0;
-              transform: scale(0.9) translateY(20px);
-            }
-            to {
-              opacity: 1;
-              transform: scale(1) translateY(0);
-            }
-          }
+        .ant-spin-dot-item {
+          background-color: #667eea;
         }
+      }
+    }
 
-        .ant-modal-header {
-          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 20px 20px 0 0;
-          padding: 20px 24px;
+    .empty-container {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      flex: 1;
+      min-height: 0;
+      animation: fadeIn 0.6s ease;
 
-          .ant-modal-title {
-            color: rgba(255, 255, 255, 0.95);
-            font-size: 18px;
-            font-weight: 600;
-            letter-spacing: 0.3px;
-          }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: scale(0.95);
         }
-
-        .ant-modal-body {
-          padding: 24px;
+        to {
+          opacity: 1;
+          transform: scale(1);
         }
+      }
 
-        .ant-modal-footer {
-          border-top: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 0 0 20px 20px;
-          padding: 16px 24px;
-        }
-
-        .ant-form-item-label > label {
-          color: rgba(255, 255, 255, 0.85);
-          font-weight: 500;
-          font-size: 14px;
-        }
-
-        .ant-input, .ant-textarea {
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 12px;
-          color: rgba(255, 255, 255, 0.95);
-          font-size: 14px;
-          padding: 10px 16px;
-          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-
-          &::placeholder {
-            color: rgba(255, 255, 255, 0.3);
+      &.dark {
+        :global {
+          .ant-empty {
+            color: #ffffff !important;
           }
 
-          &:hover {
-            border-color: rgba(102, 126, 234, 0.5);
-            background: rgba(255, 255, 255, 0.08);
+          .ant-empty-description {
+            color: #ffffff !important;
+            font-size: 15px;
           }
 
-          &:focus {
-            border-color: #667eea;
-            background: rgba(255, 255, 255, 0.1);
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+          .ant-empty-image svg {
+            fill: rgba(255, 255, 255, 0.5) !important;
           }
         }
+      }
 
-        .ant-select-selector {
-          background: rgba(255, 255, 255, 0.05) !important;
-          border: 1px solid rgba(255, 255, 255, 0.1) !important;
-          border-radius: 12px !important;
-          padding: 8px 16px !important;
-          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-
-          &:hover {
-            border-color: rgba(102, 126, 234, 0.5) !important;
-            background: rgba(255, 255, 255, 0.08) !important;
-          }
-        }
-
-        .ant-select-selection-item {
-          color: rgba(255, 255, 255, 0.95);
-          font-size: 14px;
-        }
-
-        .ant-select-selection-placeholder {
-          color: rgba(255, 255, 255, 0.3);
-        }
-
-        .ant-select-dropdown {
-          background: rgba(26, 26, 46, 0.98);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 12px;
-          box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
-          backdrop-filter: blur(20px);
-
-          .ant-select-item {
-            color: rgba(255, 255, 255, 0.75);
-            border-radius: 8px;
-            padding: 8px 12px;
-            transition: all 0.2s ease;
-
-            &.ant-select-item-option-selected {
-              background: linear-gradient(135deg, rgba(102, 126, 234, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%);
-              color: #fff;
-              font-weight: 500;
-            }
-
-            &:hover {
-              background: rgba(255, 255, 255, 0.08);
-              color: #fff;
-            }
-          }
-        }
-
-        .ant-upload {
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px dashed rgba(255, 255, 255, 0.2);
-          border-radius: 12px;
-          transition: all 0.3s ease;
-
-          &:hover {
-            border-color: #667eea;
-            background: rgba(255, 255, 255, 0.08);
-          }
-        }
-
-        .ant-btn {
-          border-radius: 12px;
-          font-weight: 500;
-          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-
-          &.ant-btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border: none;
-
-            &:hover {
-              transform: translateY(-2px);
-              box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
-            }
+      &.light {
+        :global {
+          .ant-empty {
+            color: rgba(0, 0, 0, 0.5) !important;
           }
 
-          &:not(.ant-btn-primary) {
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            background: transparent;
-            color: rgba(255, 255, 255, 0.85);
-
-            &:hover {
-              border-color: rgba(255, 255, 255, 0.4);
-              background: rgba(255, 255, 255, 0.05);
-            }
+          .ant-empty-description {
+            color: rgba(0, 0, 0, 0.5) !important;
+            font-size: 15px;
           }
         }
       }
     }
 
-    &.light {
-      :global {
-        .ant-modal-content {
-          background: rgba(255, 255, 255, 0.98);
-          border: 1px solid rgba(0, 0, 0, 0.08);
-          border-radius: 20px;
-          box-shadow: 0 24px 80px rgba(0, 0, 0, 0.15);
-          animation: modalSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    :global {
+      .ant-row {
+        flex: 1;
+        min-height: 0;
+      }
+    }
+
+    .chatbot-card {
+      border-radius: 16px;
+      overflow: hidden;
+      transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+      backdrop-filter: blur(20px);
+      animation: cardFadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+      height: 240px;
+      display: flex;
+      flex-direction: column;
+
+      @keyframes cardFadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(20px) scale(0.95);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      &::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, #667eea, #764ba2, #f093fb, #f5576c);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
+
+      &::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: radial-gradient(circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(255, 255, 255, 0.1) 0%, transparent 50%);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        pointer-events: none;
+      }
+
+      &:hover {
+        transform: translateY(-8px) scale(1.02);
+        box-shadow: 
+          0 20px 40px rgba(0, 0, 0, 0.25),
+          0 0 0 1px rgba(102, 126, 234, 0.1),
+          inset 0 1px 0 rgba(255, 255, 255, 0.1);
+
+        &::before {
+          opacity: 1;
         }
 
-        .ant-modal-header {
-          border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-          border-radius: 20px 20px 0 0;
-          padding: 20px 24px;
-
-          .ant-modal-title {
-            color: rgba(0, 0, 0, 0.9);
-            font-size: 18px;
-            font-weight: 600;
-          }
+        &::after {
+          opacity: 1;
         }
 
-        .ant-modal-body {
-          padding: 24px;
+        .card-avatar {
+          transform: scale(1.05);
+          box-shadow: 
+            0 8px 20px rgba(102, 126, 234, 0.5),
+            0 0 0 2px rgba(255, 255, 255, 0.1);
         }
 
-        .ant-modal-footer {
-          border-top: 1px solid rgba(0, 0, 0, 0.06);
-          border-radius: 0 0 20px 20px;
-          padding: 16px 24px;
+        .card-title {
+          transform: translateY(-2px);
+        }
+      }
+
+      &.dark {
+        background: rgba(26, 26, 46, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+
+        .card-title {
+          color: rgba(255, 255, 255, 0.95);
         }
 
-        .ant-form-item-label > label {
-          color: rgba(0, 0, 0, 0.85);
-          font-weight: 500;
-          font-size: 14px;
+        .card-source {
+          color: rgba(255, 255, 255, 0.6);
         }
 
-        .ant-input, .ant-textarea {
-          border-radius: 12px;
-          font-size: 14px;
-          padding: 10px 16px;
-          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        .card-date {
+          color: rgba(255, 255, 255, 0.4);
+        }
+
+        .action-button {
+          color: rgba(255, 255, 255, 0.5);
 
           &:hover {
-            border-color: #667eea;
-          }
-
-          &:focus {
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            color: rgba(255, 255, 255, 0.8);
+            background: rgba(255, 255, 255, 0.1);
           }
         }
+      }
 
-        .ant-select-selector {
-          border-radius: 12px !important;
-          padding: 8px 16px !important;
-          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      &.light {
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+
+        &:hover {
+          border-color: rgba(102, 126, 234, 0.3);
+          box-shadow: 
+            0 20px 40px rgba(0, 0, 0, 0.15),
+            0 0 0 1px rgba(102, 126, 234, 0.1);
+        }
+
+        .card-title {
+          color: rgba(0, 0, 0, 0.9);
+        }
+
+        .card-source {
+          color: rgba(0, 0, 0, 0.6);
+        }
+
+        .card-date {
+          color: rgba(0, 0, 0, 0.4);
+        }
+
+        .action-button {
+          color: rgba(0, 0, 0, 0.4);
 
           &:hover {
-            border-color: #667eea !important;
+            color: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.05);
           }
         }
+      }
 
-        .ant-btn {
-          border-radius: 12px;
-          font-weight: 500;
-          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      .card-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+      }
 
-          &.ant-btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border: none;
+      .card-actions {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        z-index: 10;
+        display: flex;
+        gap: 8px;
+
+        .action-button {
+          opacity: 1;
+          transform: scale(1);
+          transition: all 0.3s ease;
+          border-radius: 50%;
+          width: 32px;
+          height: 32px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0;
+          color: #667eea;
+          background: rgba(255, 255, 255, 0.1);
+
+          &:hover {
+            background: rgba(102, 126, 234, 0.15);
+            transform: scale(1.1);
+          }
+
+          :global {
+            .anticon {
+              font-size: 16px;
+            }
+          }
+
+          &.ant-btn-dangerous {
+            color: #ff4d4f !important;
 
             &:hover {
-              transform: translateY(-2px);
-              box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+              background: rgba(255, 77, 79, 0.15) !important;
+              color: #ff4d4f !important;
             }
+          }
+        }
+      }
+
+      .card-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        padding: 16px 12px;
+
+        &:hover {
+          opacity: 0.9;
+        }
+
+        .card-avatar-container {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          margin-bottom: 4px;
+        }
+
+        .card-avatar {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          box-shadow: 
+            0 6px 16px rgba(102, 126, 234, 0.4),
+            0 0 0 2px rgba(255, 255, 255, 0.1);
+          transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+
+          :global {
+            .anticon {
+              font-size: 32px;
+            }
+          }
+        }
+
+        .card-title {
+          font-size: 20px;
+          font-weight: 700;
+          margin: 0;
+          transition: all 0.3s ease;
+          letter-spacing: 0.3px;
+          text-align: center;
+          line-height: 1.2;
+          max-width: 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .card-meta {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 6px;
+          width: 100%;
+          margin-top: 4px;
+
+          .card-source {
+            display: flex;
+            align-items: center;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+          }
+
+          .card-date {
+            font-size: 12px;
+            font-weight: 400;
+            transition: all 0.3s ease;
+            text-align: center;
+          }
+        }
+      }
+    }
+  }
+}
+
+.chatbot-modal {
+  &.dark {
+    :global {
+      .ant-modal-content {
+        background: rgba(26, 26, 46, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 20px;
+        box-shadow: 
+          0 24px 80px rgba(0, 0, 0, 0.5),
+          0 0 0 1px rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(20px);
+        animation: modalSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+
+        @keyframes modalSlideIn {
+          from {
+            opacity: 0;
+            transform: scale(0.9) translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+          }
+        }
+      }
+
+      .ant-modal-header {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 20px 20px 0 0;
+        padding: 20px 24px;
+
+        .ant-modal-title {
+          color: rgba(255, 255, 255, 0.95);
+          font-size: 18px;
+          font-weight: 600;
+          letter-spacing: 0.3px;
+        }
+      }
+
+      .ant-modal-body {
+        padding: 24px;
+      }
+
+      .ant-modal-footer {
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 0 0 20px 20px;
+        padding: 16px 24px;
+      }
+
+      .ant-form-item-label > label {
+        color: rgba(255, 255, 255, 0.85);
+        font-weight: 500;
+        font-size: 14px;
+      }
+
+      .ant-input, .ant-textarea {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        color: rgba(255, 255, 255, 0.95);
+        font-size: 14px;
+        padding: 10px 16px;
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+
+        &::placeholder {
+          color: rgba(255, 255, 255, 0.3);
+        }
+
+        &:hover {
+          border-color: rgba(102, 126, 234, 0.5);
+          background: rgba(255, 255, 255, 0.08);
+        }
+
+        &:focus {
+          border-color: #667eea;
+          background: rgba(255, 255, 255, 0.1);
+          box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+        }
+      }
+
+      .ant-select-selector {
+        background: rgba(255, 255, 255, 0.05) !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 12px !important;
+        padding: 8px 16px !important;
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+
+        &:hover {
+          border-color: rgba(102, 126, 234, 0.5) !important;
+          background: rgba(255, 255, 255, 0.08) !important;
+        }
+      }
+
+      .ant-popconfirm {
+        .ant-popover-inner {
+          background: rgba(26, 26, 46, 0.95) !important;
+          border: 1px solid rgba(255, 255, 255, 0.1) !important;
+          border-radius: 12px !important;
+          box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4) !important;
+          backdrop-filter: blur(20px) !important;
+        }
+
+        .ant-popconfirm-title {
+          color: #ffffff !important;
+          font-size: 14px !important;
+          font-weight: 600 !important;
+          text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        .ant-popconfirm-description {
+          color: rgba(255, 255, 255, 0.85) !important;
+          font-size: 13px !important;
+          font-weight: 500 !important;
+        }
+
+        .ant-popconfirm-message .ant-popconfirm-description {
+          color: rgba(255, 255, 255, 0.85) !important;
+        }
+
+        .ant-popconfirm-buttons {
+          margin-top: 12px !important;
+
+          .ant-btn {
+            border-radius: 8px !important;
+            font-weight: 500 !important;
+
+            &.ant-btn-primary {
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+              border: none !important;
+              color: white !important;
+
+              &:hover {
+                background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
+              }
+            }
+
+            &:not(.ant-btn-primary) {
+              border: 1px solid rgba(255, 255, 255, 0.2) !important;
+              background: transparent !important;
+              color: rgba(255, 255, 255, 0.85) !important;
+
+              &:hover {
+                border-color: rgba(255, 255, 255, 0.4) !important;
+                background: rgba(255, 255, 255, 0.05) !important;
+              }
+            }
+          }
+        }
+      }
+
+      .ant-select-selection-item {
+        color: rgba(255, 255, 255, 0.95);
+        font-size: 14px;
+      }
+
+      .ant-select-selection-placeholder {
+        color: rgba(255, 255, 255, 0.3);
+      }
+
+      .ant-select-dropdown {
+        background: rgba(26, 26, 46, 0.98);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(20px);
+
+        .ant-select-item {
+          color: rgba(255, 255, 255, 0.75);
+          border-radius: 8px;
+          padding: 8px 12px;
+          transition: all 0.2s ease;
+
+          &.ant-select-item-option-selected {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%);
+            color: #fff;
+            font-weight: 500;
+          }
+
+          &:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+          }
+        }
+      }
+
+      .ant-upload {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px dashed rgba(255, 255, 255, 0.2);
+        border-radius: 12px;
+        transition: all 0.3s ease;
+
+        &:hover {
+          border-color: #667eea;
+          background: rgba(255, 255, 255, 0.08);
+        }
+      }
+
+      .ant-btn {
+        border-radius: 12px;
+        font-weight: 500;
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+
+        &.ant-btn-primary {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          border: none;
+
+          &:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+          }
+        }
+
+        &:not(.ant-btn-primary) {
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          background: transparent;
+          color: rgba(255, 255, 255, 0.85);
+
+          &:hover {
+            border-color: rgba(255, 255, 255, 0.4);
+            background: rgba(255, 255, 255, 0.05);
+          }
+        }
+      }
+    }
+  }
+
+  &.light {
+    :global {
+      .ant-modal-content {
+        background: rgba(255, 255, 255, 0.98);
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: 20px;
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.15);
+        animation: modalSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      .ant-modal-header {
+        border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+        border-radius: 20px 20px 0 0;
+        padding: 20px 24px;
+
+        .ant-modal-title {
+          color: rgba(0, 0, 0, 0.9);
+          font-size: 18px;
+          font-weight: 600;
+        }
+      }
+
+      .ant-modal-body {
+        padding: 24px;
+      }
+
+      .ant-modal-footer {
+        border-top: 1px solid rgba(0, 0, 0, 0.06);
+        border-radius: 0 0 20px 20px;
+        padding: 16px 24px;
+      }
+
+      .ant-form-item-label > label {
+        color: rgba(0, 0, 0, 0.85);
+        font-weight: 500;
+        font-size: 14px;
+      }
+
+      .ant-input, .ant-textarea {
+        border-radius: 12px;
+        font-size: 14px;
+        padding: 10px 16px;
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+
+        &:hover {
+          border-color: #667eea;
+        }
+
+        &:focus {
+          border-color: #667eea;
+          box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+      }
+
+      .ant-select-selector {
+        border-radius: 12px !important;
+        padding: 8px 16px !important;
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+
+        &:hover {
+          border-color: #667eea !important;
+        }
+      }
+
+      .ant-btn {
+        border-radius: 12px;
+        font-weight: 500;
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+
+        &.ant-btn-primary {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          border: none;
+
+          &:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
           }
         }
       }
@@ -1042,27 +882,4 @@
   --bg-primary: #f8f9fa;
   --card-bg: rgba(255, 255, 255, 0.95);
   --border-color: rgba(0, 0, 0, 0.08);
-}
-
-// 夜间模式面包屑和空数据样式覆盖
-.chatbot-management.dark {
-  .chatbot-header {
-    .ant-breadcrumb {
-      .ant-breadcrumb-item:last-child {
-        color: #ffffff !important;
-      }
-      .ant-breadcrumb-item:last-child span {
-        color: #ffffff !important;
-      }
-    }
-  }
-
-  .chatbot-content {
-    .ant-empty-description {
-      color: #ffffff !important;
-    }
-    .ant-empty-image svg {
-      fill: rgba(255, 255, 255, 0.5) !important;
-    }
-  }
 }

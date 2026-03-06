@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Layout, Tree, Card, Row, Col, Avatar, Tag, Empty, Spin, Button, Breadcrumb, Modal, Form, Input, Select, Upload, message, Dropdown, Popconfirm } from 'antd';
+import { Layout, Tree, Card, Row, Col, Avatar, Tag, Empty, Spin, Button, Modal, Form, Input, Select, Upload, message, Dropdown, Popconfirm } from 'antd';
 const { TextArea } = Input;
 import { RobotOutlined, HomeOutlined, PlusOutlined, UploadOutlined, MoreOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import type { TreeDataNode, TreeProps, UploadProps } from 'antd';
 import { chatbotService, Chatbot, ChatbotCategory } from '../../services/chatbot';
+import PageHeader from '../../components/page-header';
+import '../../styles/common.css';
 import './chatbot.less';
 
 import WorkWeixinIcon from '../../assets/svg/企业微信.svg';
@@ -251,7 +253,7 @@ const ChatbotManagement: React.FC = () => {
       console.log('Submitting edited chatbot:', chatbotData);
       
       // 调用后端接口更新机器人
-      // await chatbotService.updateChatbot(chatbotData);
+      await chatbotService.updateChatbot(chatbotData);
       
       message.success('机器人更新成功！');
       setIsEditModalVisible(false);
@@ -267,8 +269,8 @@ const ChatbotManagement: React.FC = () => {
 
   const handleDeleteChatbot = async (chatbotId: number) => {
     try {
-      // 调用后端接口删除机器人
-      // await chatbotService.deleteChatbot(chatbotId);
+      // 调用后端接口删除机器人（逻辑删除）
+      await chatbotService.deleteChatbot(chatbotId);
       
       message.success('机器人删除成功！');
       fetchChatbots(selectedCategory);
@@ -404,6 +406,22 @@ const ChatbotManagement: React.FC = () => {
     }
   };
 
+  const handleEditAvatarChange = async (info: any) => {
+    if (info.file.status === 'done' || info.file.originFileObj) {
+      const file = info.file.originFileObj;
+      if (file) {
+        try {
+          const compressedBase64 = await compressImage(file, 200, 0.7);
+          editForm.setFieldsValue({ avatar: compressedBase64 });
+          setEditAvatarPreview(compressedBase64);
+          message.success('头像上传成功');
+        } catch (error) {
+          message.error('头像处理失败');
+        }
+      }
+    }
+  };
+
   const uploadProps: UploadProps = {
     name: 'file',
     showUploadList: false,
@@ -431,6 +449,33 @@ const ChatbotManagement: React.FC = () => {
     onChange: handleAvatarChange,
   };
 
+  const editUploadProps: UploadProps = {
+    name: 'file',
+    showUploadList: false,
+    accept: 'image/*',
+    beforeUpload: (file) => {
+      const isImage = file.type.startsWith('image/');
+      if (!isImage) {
+        message.error('只能上传图片文件！');
+        return false;
+      }
+      const isLt5M = file.size / 1024 / 1024 < 5;
+      if (!isLt5M) {
+        message.error('图片大小不能超过 5MB！');
+        return false;
+      }
+      return true;
+    },
+    customRequest: ({ file, onSuccess }) => {
+      setTimeout(() => {
+        if (onSuccess) {
+          onSuccess({ status: 'done' }, file);
+        }
+      }, 0);
+    },
+    onChange: handleEditAvatarChange,
+  };
+
   const getSourceConfigFields = () => {
     const sourceType = sourceTypes.find(st => st.source_type === selectedSourceType);
     if (!sourceType) return [];
@@ -438,32 +483,12 @@ const ChatbotManagement: React.FC = () => {
   };
 
   return (
-    <div className={`chatbot-management ${theme === 'dark' ? 'dark' : 'light'}`}>
-      <div className={`chatbot-header ${theme === 'dark' ? 'dark' : 'light'}`}>
-        <Breadcrumb
-          className={theme === 'dark' ? 'dark' : 'light'}
-          items={[
-            {
-              title: (
-                <>
-                  <HomeOutlined />
-                  <span>首页</span>
-                </>
-              ),
-              onClick: () => navigate('/'),
-              className: 'breadcrumb-item',
-            },
-            {
-              title: (
-                <>
-                  <RobotOutlined />
-                  <span>机器人管理</span>
-                </>
-              ),
-            },
-          ]}
-        />
-      </div>
+    <div className={`page-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+      <PageHeader 
+        items={[
+          { title: '机器人管理', icon: <RobotOutlined /> }
+        ]} 
+      />
 
       <Layout className="chatbot-layout">
         <LeftSider
@@ -483,12 +508,18 @@ const ChatbotManagement: React.FC = () => {
         </LeftSider>
 
         <Content className={`chatbot-content ${theme === 'dark' ? 'dark' : 'light'}`}>
-          <div className={`content-header ${theme === 'dark' ? 'dark' : 'light'}`}>
+          <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '24px' }}>
             <Button 
               type="primary" 
               icon={<PlusOutlined />} 
               onClick={handleAddChatbot}
-              className={theme === 'dark' ? 'dark' : ''}
+              style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                border: 'none',
+                borderRadius: '18px',
+                padding: '0 20px',
+                height: '36px'
+              }}
             >
               新增机器人
             </Button>
@@ -539,17 +570,24 @@ const ChatbotManagement: React.FC = () => {
                             className="action-button"
                             title="编辑"
                           />
-                          <Button 
-                            type="text" 
-                            icon={<DeleteOutlined />}
-                            danger
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteChatbot(chatbot.id);
-                            }}
-                            className="action-button"
-                            title="删除"
-                          />
+                          <Popconfirm
+                              title="确认删除"
+                              description="确定要删除这个机器人吗？"
+                              onConfirm={(e) => {
+                                e.stopPropagation();
+                                handleDeleteChatbot(chatbot.id);
+                              }}
+                              okText="确认"
+                              cancelText="取消"
+                            >
+                              <Button 
+                                type="text" 
+                                icon={<DeleteOutlined />}
+                                danger
+                                className="action-button"
+                                title="删除"
+                              />
+                            </Popconfirm>
                         </div>
                         <div className="card-main" onClick={() => handleCardClick(chatbot.id)}>
                           <div className="card-avatar-container">
@@ -819,7 +857,7 @@ const ChatbotManagement: React.FC = () => {
                   }} 
                 />
               )}
-              <Upload {...uploadProps} maxCount={1}>
+              <Upload {...editUploadProps} maxCount={1}>
                 <Button icon={<UploadOutlined />}>点击上传</Button>
               </Upload>
             </div>

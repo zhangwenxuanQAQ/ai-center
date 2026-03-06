@@ -21,12 +21,18 @@ class BaseModel(Model):
         updated_at: 更新时间
         create_user_id: 创建用户ID
         update_user_id: 更新用户ID
+        deleted: 是否删除
+        deleted_at: 删除时间
+        deleted_user_id: 删除用户ID
     """
     id = UUIDField(primary_key=True, default=uuid.uuid4, verbose_name="主键ID")
     created_at = DateTimeField(default=datetime.now, verbose_name="创建时间")
     updated_at = DateTimeField(null=True, verbose_name="更新时间")
     create_user_id = UUIDField(null=True, verbose_name="创建用户ID")
     update_user_id = UUIDField(null=True, verbose_name="更新用户ID")
+    deleted = BooleanField(default=False, verbose_name="是否删除")
+    deleted_at = DateTimeField(null=True, verbose_name="删除时间")
+    deleted_user_id = UUIDField(null=True, verbose_name="删除用户ID")
 
     class Meta:
         database = db

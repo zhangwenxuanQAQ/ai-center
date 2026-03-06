@@ -1,0 +1,187 @@
+/* ==================== 公共页面头部样式 ==================== */
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 32px;
+  height: 80px;
+  box-sizing: border-box;
+  backdrop-filter: blur(20px);
+  position: relative;
+  z-index: 10;
+  animation: slideDown 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0;
+}
+
+.page-header.dark {
+  background: rgb(30, 30, 30);
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+.page-header.light {
+  background: rgba(255, 255, 255, 0.95);
+  border-bottom: 0.5px solid rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-header .ant-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.page-header .ant-breadcrumb.dark {
+  color: #ffffff !important;
+}
+
+.page-header .ant-breadcrumb.light {
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+.page-header .page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 夜间模式面包屑样式覆盖 */
+body[data-theme="dark"] .page-header .ant-breadcrumb,
+body[data-theme="dark"] .page-header .ant-breadcrumb *,
+body[data-theme="dark"] .page-header .ant-breadcrumb-separator,
+body[data-theme="dark"] .page-header .ant-breadcrumb-link,
+body[data-theme="dark"] .page-header .ant-breadcrumb-link a,
+body[data-theme="dark"] .page-header .ant-breadcrumb-link span,
+body[data-theme="dark"] .page-header .ant-breadcrumb-item,
+body[data-theme="dark"] .page-header .ant-breadcrumb-item span,
+body[data-theme="dark"] .page-header .ant-breadcrumb-item:last-child,
+body[data-theme="dark"] .page-header .ant-breadcrumb .ant-breadcrumb-item:last-child,
+body[data-theme="dark"] .page-header .ant-breadcrumb .ant-breadcrumb-item:last-child span {
+  color: #ffffff !important;
+  font-size: 14px;
+  font-weight: 400;
+  transition: all 0.3s ease;
+}
+
+body[data-theme="dark"] .page-header .ant-breadcrumb-link:hover {
+  color: #fff !important;
+  transform: translateY(-1px);
+}
+
+/* 白天模式面包屑样式覆盖 */
+body[data-theme="light"] .page-header .ant-breadcrumb,
+body[data-theme="light"] .page-header .ant-breadcrumb *,
+body[data-theme="light"] .page-header .ant-breadcrumb-separator,
+body[data-theme="light"] .page-header .ant-breadcrumb-link,
+body[data-theme="light"] .page-header .ant-breadcrumb-link a,
+body[data-theme="light"] .page-header .ant-breadcrumb-link span,
+body[data-theme="light"] .page-header .ant-breadcrumb-item,
+body[data-theme="light"] .page-header .ant-breadcrumb-item span {
+  color: rgba(0, 0, 0, 0.85) !important;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+/* ==================== 公共面包屑样式 ==================== */
+
+.breadcrumb-home {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.breadcrumb-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.breadcrumb-current {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 500;
+}
+
+/* ==================== 公共按钮样式 ==================== */
+
+.page-header .ant-btn {
+  height: 36px;
+  padding: 0 20px;
+  border-radius: 18px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.page-header .ant-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.page-header .ant-btn:hover::before {
+  left: 100%;
+}
+
+/* 夜间模式按钮样式 */
+body[data-theme="dark"] .page-header .ant-btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border: none !important;
+  color: white !important;
+}
+
+body[data-theme="dark"] .page-header .ant-btn-primary:hover {
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+}
+
+body[data-theme="dark"] .page-header .ant-btn-default {
+  color: #fff !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  background: linear-gradient(135deg, rgba(120, 119, 198, 0.3) 0%, rgba(255, 119, 198, 0.3) 100%) !important;
+}
+
+body[data-theme="dark"] .page-header .ant-btn-default:hover {
+  border-color: rgba(255, 255, 255, 0.4) !important;
+  background: linear-gradient(135deg, rgba(120, 119, 198, 0.5) 0%, rgba(255, 119, 198, 0.5) 100%) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(120, 119, 198, 0.3);
+}
+
+/* 白天模式按钮样式 */
+body[data-theme="light"] .page-header .ant-btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border: none !important;
+  color: white !important;
+}
+
+body[data-theme="light"] .page-header .ant-btn-primary:hover {
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+}

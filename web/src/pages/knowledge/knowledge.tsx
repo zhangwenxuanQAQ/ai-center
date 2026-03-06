@@ -1,10 +1,35 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { BookOutlined } from '@ant-design/icons';
+import PageHeader from '../../components/page-header';
+import '../../styles/common.css';
 
 const Knowledge: React.FC = () => {
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+
+  useEffect(() => {
+    const currentTheme = document.body.getAttribute('data-theme') || 'dark';
+    setTheme(currentTheme as 'light' | 'dark');
+
+    const observer = new MutationObserver(() => {
+      const newTheme = document.body.getAttribute('data-theme') || 'dark';
+      setTheme(newTheme as 'light' | 'dark');
+    });
+
+    observer.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
+
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div>
-      <h1>知识库管理</h1>
-      <p>这里是知识库管理页面</p>
+    <div className={`page-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+      <PageHeader 
+        items={[
+          { title: '知识库管理', icon: <BookOutlined /> }
+        ]} 
+      />
+      <div className="page-content">
+        <p>这里是知识库管理页面</p>
+      </div>
     </div>
   );
 };

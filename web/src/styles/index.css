@@ -1,0 +1,103 @@
+/* ==================== 全局基础样式 ==================== */
+
+#root {
+  width: 100%;
+  margin: 0 auto;
+  padding: 0;
+  text-align: center;
+}
+
+/* ==================== 布局基础样式 ==================== */
+
+.dark-theme {
+  background-color: rgb(30, 30, 30);
+}
+
+.dark-theme .ant-layout-header {
+  background-color: rgb(30, 30, 30);
+}
+
+.dark-theme-sider {
+  background-color: rgb(30, 30, 30) !important;
+}
+
+.dark-theme-sider .ant-menu {
+  background-color: rgb(30, 30, 30) !important;
+  color: #ffffff;
+}
+
+.dark-theme-sider .ant-menu-item {
+  color: #ffffff;
+  background-color: rgb(30, 30, 30) !important;
+}
+
+.dark-theme-sider .ant-menu-item-selected {
+  background-color: #333333 !important;
+  color: #1890ff !important;
+}
+
+.dark-theme-sider .ant-menu-submenu-title {
+  color: #ffffff;
+  background-color: rgb(30, 30, 30) !important;
+}
+
+.dark-theme-sider .ant-menu-sub {
+  background-color: rgb(30, 30, 30) !important;
+}
+
+.dark-theme-sider .ant-menu-submenu {
+  background-color: rgb(30, 30, 30) !important;
+}
+
+.light-theme {
+  background-color: #ffffff;
+}
+
+.light-theme .ant-layout-header {
+  background-color: #ffffff;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.light-theme-sider {
+  background-color: #ffffff !important;
+  border-right: 1px solid #e8e8e8;
+}
+
+.light-theme-sider .ant-menu {
+  background-color: #ffffff !important;
+  color: #000000;
+}
+
+.light-theme-sider .ant-menu-item {
+  color: #000000;
+  background-color: #ffffff !important;
+}
+
+.light-theme-sider .ant-menu-item-selected {
+  background-color: #e6f7ff !important;
+  color: #1890ff !important;
+}
+
+.light-theme-sider .ant-menu-submenu-title {
+  color: #000000;
+  background-color: #ffffff !important;
+}
+
+.light-theme-sider .ant-menu-sub {
+  background-color: #ffffff !important;
+}
+
+.light-theme-sider .ant-menu-submenu {
+  background-color: #ffffff !important;
+}
+
+/* 内容区域样式 */
+.dark-theme .ant-layout-content {
+  background-color: #000000;
+  color: #ffffff;
+}
+
+.light-theme .ant-layout-content {
+  background-color: #ffffff
+  color: #000000;
+}

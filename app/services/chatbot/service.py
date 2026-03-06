@@ -3,6 +3,7 @@
 """
 
 import json
+from datetime import datetime
 from app.database.models import Chatbot, ChatbotMCP, ChatbotCategory
 from app.services.chatbot.dto import ChatbotCreate, ChatbotUpdate, Chatbot as ChatbotDTO
 from app.database.db_utils import handle_transaction
@@ -140,8 +141,8 @@ class ChatbotService:
             List[dict]: 聊天机器人列表（包含mcp_ids）
         """
         try:
-            # 使用Peewee ORM查询数据
-            chatbots = list(Chatbot.select().offset(skip).limit(limit))
+            # 使用Peewee ORM查询数据，只返回未删除的机器人
+            chatbots = list(Chatbot.select().where(Chatbot.deleted == False).offset(skip).limit(limit))
             result = []
             for chatbot in chatbots:
                 # 获取MCP关联
@@ -178,10 +179,13 @@ class ChatbotService:
             chatbot_id: 聊天机器人ID
             
         Returns:
-            dict: 聊天机器人对象（包含mcp_ids），不存在则返回None
+            dict: 聊天机器人对象（包含mcp_ids），不存在或已删除则返回None
         """
         try:
             chatbot = Chatbot.get_by_id(chatbot_id)
+            # 检查是否已删除
+            if chatbot.deleted:
+                return None
         except Chatbot.DoesNotExist:
             return None
         mcp_ids = [str(cm.mcp_id) for cm in ChatbotMCP.select().where(ChatbotMCP.chatbot_id == chatbot.id)]
@@ -254,12 +258,13 @@ class ChatbotService:
 
     @staticmethod
     @handle_transaction
-    def delete_chatbot(chatbot_id: str):
+    def delete_chatbot(chatbot_id: str, deleted_user_id: str = None):
         """
-        删除聊天机器人
+        删除聊天机器人（逻辑删除）
         
         Args:
             chatbot_id: 聊天机器人ID
+            deleted_user_id: 删除用户ID
             
         Returns:
             Chatbot: 被删除的聊天机器人对象
@@ -279,11 +284,12 @@ class ChatbotService:
             # 保存要返回的聊天机器人对象
             deleted_chatbot = db_chatbot
             
-            # 删除相关的MCP关联
-            ChatbotMCP.delete().where(ChatbotMCP.chatbot_id == chatbot_id).execute()
-            
-            # 删除聊天机器人
-            db_chatbot.delete_instance()
+            # 逻辑删除：更新相关字段
+            db_chatbot.deleted = True
+            db_chatbot.deleted_at = datetime.now()
+            if deleted_user_id:
+                db_chatbot.deleted_user_id = deleted_user_id
+            db_chatbot.save()
             
             return deleted_chatbot
         except Exception as e:
