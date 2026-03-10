@@ -2,6 +2,7 @@
 MCP服务类，提供MCP相关的CRUD操作
 """
 
+from datetime import datetime
 from app.database.models import MCP
 from app.services.mcp.dto import MCPCreate, MCPUpdate
 from app.database.db_utils import handle_transaction
@@ -86,6 +87,7 @@ class MCPService:
         update_data = mcp.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(db_mcp, field, value)
+        db_mcp.updated_at = datetime.now()
         db_mcp.save()
         return db_mcp
 

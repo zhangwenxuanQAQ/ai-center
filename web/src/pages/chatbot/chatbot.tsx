@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Layout, Tree, Card, Row, Col, Avatar, Tag, Empty, Spin, Button, Modal, Form, Input, Select, Upload, message, Dropdown, Popconfirm, Pagination } from 'antd';
+import { Layout, Tree, Card, Row, Col, Avatar, Tag, Empty, Spin, Button, Modal, Form, Input, Select, TreeSelect, Upload, message, Dropdown, Popconfirm, Pagination } from 'antd';
 const { TextArea } = Input;
 import { RobotOutlined, HomeOutlined, PlusOutlined, UploadOutlined, MoreOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UpOutlined, DownOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
@@ -389,6 +389,20 @@ const ChatbotManagement: React.FC = () => {
 
   const handleTreeExpand: TreeProps['onExpand'] = (expandedKeys) => {
     setExpandedKeys(expandedKeys as string[]);
+  };
+
+  // 构建分类下拉树数据
+  const buildCategoryTreeSelectData = (): TreeDataNode[] => {
+    const buildNode = (category: ChatbotCategory): TreeDataNode => ({
+      title: category.name,
+      value: category.id,
+      key: category.id,
+      children: category.children && category.children.length > 0
+        ? category.children.map(child => buildNode(child))
+        : undefined,
+    });
+
+    return categories.map(category => buildNode(category));
   };
 
   const getSourceTypeLabel = (sourceType?: string): string => {
@@ -1158,13 +1172,12 @@ const ChatbotManagement: React.FC = () => {
             name="category_id"
             label="分类"
           >
-            <Select placeholder="请选择分类">
-              {categories.map(category => (
-                <Option key={category.id} value={category.id}>
-                  {category.name}
-                </Option>
-              ))}
-            </Select>
+            <TreeSelect
+              placeholder="请选择分类"
+              treeData={buildCategoryTreeSelectData()}
+              treeDefaultExpandAll
+              allowClear
+            />
           </Form.Item>
 
           <Form.Item
@@ -1288,13 +1301,12 @@ const ChatbotManagement: React.FC = () => {
             name="category_id"
             label="分类"
           >
-            <Select placeholder="请选择分类">
-              {categories.map(category => (
-                <Option key={category.id} value={category.id}>
-                  {category.name}
-                </Option>
-              ))}
-            </Select>
+            <TreeSelect
+              placeholder="请选择分类"
+              treeData={buildCategoryTreeSelectData()}
+              treeDefaultExpandAll
+              allowClear
+            />
           </Form.Item>
 
           <Form.Item

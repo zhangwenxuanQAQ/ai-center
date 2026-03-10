@@ -2,6 +2,7 @@
 用户服务类，提供用户相关的CRUD操作
 """
 
+from datetime import datetime
 from app.database.models import User
 from app.services.user.dto import UserCreate, UserUpdate
 from app.database.db_utils import handle_transaction
@@ -86,6 +87,7 @@ class UserService:
         update_data = user.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(db_user, field, value)
+        db_user.updated_at = datetime.now()
         db_user.save()
         return db_user
 

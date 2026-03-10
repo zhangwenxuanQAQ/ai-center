@@ -2,6 +2,7 @@
 提示词服务类，提供提示词相关的CRUD操作
 """
 
+from datetime import datetime
 from app.database.models import Prompt
 from app.services.prompt.dto import PromptCreate, PromptUpdate
 from app.database.db_utils import handle_transaction
@@ -86,6 +87,7 @@ class PromptService:
         update_data = prompt.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(db_prompt, field, value)
+        db_prompt.updated_at = datetime.now()
         db_prompt.save()
         return db_prompt
 

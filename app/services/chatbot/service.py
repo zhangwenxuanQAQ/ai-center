@@ -289,6 +289,7 @@ class ChatbotService:
             if update_data:
                 for field, value in update_data.items():
                     setattr(db_chatbot, field, value)
+                db_chatbot.updated_at = datetime.now()
                 db_chatbot.save()
             
             # 更新MCP关联

@@ -2,6 +2,7 @@
 LLM模型服务类，提供LLM模型相关的CRUD操作
 """
 
+from datetime import datetime
 from app.database.models import LLMModel
 from app.services.llm_model.dto import LLMModelCreate, LLMModelUpdate
 from app.database.db_utils import handle_transaction
@@ -86,6 +87,7 @@ class LLMModelService:
         update_data = llm_model.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(db_llm_model, field, value)
+        db_llm_model.updated_at = datetime.now()
         db_llm_model.save()
         return db_llm_model
 

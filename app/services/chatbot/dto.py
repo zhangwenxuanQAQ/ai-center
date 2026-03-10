@@ -16,6 +16,7 @@ class ChatbotBase(BaseModel):
         name: 聊天机器人名称（必填）
         description: 聊天机器人描述
         model_id: LLM模型ID
+        category_id: 分类ID
         avatar: 头像URL或Base64
         greeting: 欢迎语（必填）
         prompt_id: 提示词ID
@@ -27,6 +28,7 @@ class ChatbotBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="聊天机器人名称，长度1-100个字符")
     description: Optional[str] = Field(None, max_length=500, description="聊天机器人描述，最大长度500个字符")
     model_id: Optional[str] = Field(None, description="LLM模型ID，UUID格式")
+    category_id: Optional[str] = Field(None, description="分类ID，UUID格式")
     avatar: Optional[str] = Field(None, description="头像URL或Base64")
     greeting: str = Field(..., min_length=1, max_length=500, description="欢迎语，长度1-500个字符")
     prompt_id: Optional[str] = Field(None, description="提示词ID，UUID格式")
@@ -54,6 +56,7 @@ class ChatbotUpdate(BaseModel):
         name: 聊天机器人名称
         description: 聊天机器人描述
         model_id: LLM模型ID
+        category_id: 分类ID
         avatar: 头像URL
         greeting: 欢迎语
         prompt_id: 提示词ID
@@ -66,6 +69,7 @@ class ChatbotUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100, description="聊天机器人名称，长度1-100个字符")
     description: Optional[str] = Field(None, min_length=1, max_length=500, description="聊天机器人描述，长度1-500个字符")
     model_id: Optional[str] = Field(None, description="LLM模型ID，UUID格式")
+    category_id: Optional[str] = Field(None, description="分类ID，UUID格式")
     avatar: Optional[str] = Field(None, description="头像URL或Base64")
     greeting: Optional[str] = Field(None, max_length=500, description="欢迎语，最大长度500个字符")
     prompt_id: Optional[str] = Field(None, description="提示词ID，UUID格式")

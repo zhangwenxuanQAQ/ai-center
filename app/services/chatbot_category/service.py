@@ -222,6 +222,7 @@ class ChatbotCategoryService:
         
         for field, value in update_data.items():
             setattr(db_category, field, value)
+        db_category.updated_at = datetime.now()
         db_category.save()
         return db_category
     

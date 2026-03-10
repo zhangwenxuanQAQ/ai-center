@@ -83,9 +83,11 @@ class ChatService:
             raise ResourceNotFoundError(
                 message=f"聊天记录 {chat_id} 不存在"
             )
+        
         update_data = chat.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(db_chat, field, value)
+        db_chat.updated_at = datetime.now()
         db_chat.save()
         return db_chat
 
