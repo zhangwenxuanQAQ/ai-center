@@ -18,11 +18,17 @@ import Chat from './pages/chat/chat.tsx';
 const { Header, Content, Sider } = Layout;
 
 function App() {
-  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+  // 从localStorage获取主题，如果没有则使用默认值'dark'
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const savedTheme = localStorage.getItem('theme');
+    return (savedTheme as 'light' | 'dark') || 'dark';
+  });
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     document.body.setAttribute('data-theme', theme);
+    // 将主题保存到localStorage
+    localStorage.setItem('theme', theme);
   }, [theme]);
 
   const toggleTheme = () => {

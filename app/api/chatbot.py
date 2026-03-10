@@ -78,19 +78,28 @@ def create_chatbot(chatbot: ChatbotCreate):
 
 
 @router.get("", response_model=ApiResponse)
-def get_chatbots(skip: int = 0, limit: int = 100):
+def get_chatbots(category_id: str = None, page: int = 1, page_size: int = 12, name: str = None, source_type: str = None, code: str = None):
     """
     获取聊天机器人列表
     
     Args:
-        skip: 跳过的记录数
-        limit: 返回的最大记录数
+        category_id: 分类ID（可选）
+        page: 页码，默认1
+        page_size: 每页数量，默认12
+        name: 机器人名称（模糊查询）
+        source_type: 来源类型
+        code: 机器人编码（模糊查询）
         
     Returns:
         ApiResponse: 统一格式的响应对象
     """
-    chatbots = ChatbotService.get_chatbots(skip, limit)
-    return ResponseUtil.success(data=chatbots, message="获取聊天机器人列表成功")
+    # 计算skip值
+    skip = (page - 1) * page_size
+    # 获取机器人列表
+    chatbots = ChatbotService.get_chatbots(skip, page_size, category_id, name, source_type, code)
+    # 计算总记录数
+    total = len(ChatbotService.get_chatbots(0, 10000, category_id, name, source_type, code))  # 暂时获取所有记录来计算总数
+    return ResponseUtil.success(data={"data": chatbots, "total": total}, message="获取聊天机器人列表成功")
 
 
 @router.get("/{chatbot_id}", response_model=ApiResponse)

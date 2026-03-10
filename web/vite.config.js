@@ -8,7 +8,7 @@ export default defineConfig({
     port: 8000,
     proxy: {
       '/aicenter': {
-        target: 'http://localhost:8000',
+        target: 'http://localhost:8081',
         changeOrigin: true,
       }
     }

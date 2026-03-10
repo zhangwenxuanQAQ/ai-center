@@ -64,22 +64,12 @@ export async function request<T = any>(
       ...requestConfig,
     });
 
-    // 检查HTTP状态码
-    if (!response.ok) {
-      const errorMsg = `HTTP Error: ${response.status} ${response.statusText}`;
-      if (showError) {
-        message.error(`网络请求失败: ${errorMsg}`);
-      }
-      throw new Error(errorMsg);
-    }
-
+    // 解析响应体
     const result: ApiResponse<T> = await response.json();
 
     // 检查业务状态码
     if (result.code !== 200 && result.code !== 201) {
-      if (showError) {
-        message.error(result.message || '请求失败');
-      }
+      // 只抛出错误，不显示错误消息，由调用方处理
       throw new Error(result.message || '请求失败');
     }
 
@@ -99,11 +89,7 @@ export async function request<T = any>(
       throw new Error(errorMsg);
     }
 
-    // 如果是其他错误且未显示过，则显示
-    if (showError && error instanceof Error && !error.message.includes('HTTP Error')) {
-      message.error(error.message || '请求异常');
-    }
-
+    // 其他错误（如业务错误）由调用方处理
     throw error;
   }
 }

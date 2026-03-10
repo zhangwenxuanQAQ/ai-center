@@ -271,7 +271,6 @@ body[data-theme="light"] div.ant-select:hover div.ant-select-selector {
 body[data-theme="light"] .ant-select-focused .ant-select-selector,
 body[data-theme="light"] div.ant-select-focused div.ant-select-selector {
   border-color: #667eea !important;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1) !important;
 }
 
 /* Select Dropdown 样式 */
@@ -384,11 +383,6 @@ body[data-theme="light"] span.ant-checkbox-checked span.ant-checkbox-inner {
   border-color: #667eea !important;
 }
 
-/* Tree 样式 */
-body[data-theme="light"] .ant-tree-node-selected,
-body[data-theme="light"] span.ant-tree-node-selected {
-  background: rgba(102, 126, 234, 0.1) !important;
-}
 
 /* Breadcrumb 样式 */
 body[data-theme="light"] .ant-breadcrumb,

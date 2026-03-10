@@ -48,7 +48,7 @@ body[data-theme="dark"] .dark-theme-sider .ant-menu-submenu {
 
 /* 内容区域样式 - main区域使用黑色 */
 body[data-theme="dark"] .dark-theme .ant-layout-content {
-  background-color: #000000;
+  background-color: rgb(30, 30, 30);
   color: #ffffff;
 }
 
@@ -667,16 +667,6 @@ body[data-theme="dark"] div.ant-tree {
 body[data-theme="dark"] .ant-tree-node-content-wrapper,
 body[data-theme="dark"] span.ant-tree-node-content-wrapper {
   color: rgba(255, 255, 255, 0.85) !important;
-}
-
-body[data-theme="dark"] .ant-tree-node-content-wrapper:hover,
-body[data-theme="dark"] span.ant-tree-node-content-wrapper:hover {
-  background: rgba(255, 255, 255, 0.08) !important;
-}
-
-body[data-theme="dark"] .ant-tree-node-selected,
-body[data-theme="dark"] span.ant-tree-node-selected {
-  background: rgba(102, 126, 234, 0.2) !important;
 }
 
 /* Breadcrumb 样式 */

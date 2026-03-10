@@ -7,7 +7,7 @@ from datetime import datetime
 from app.database.models import Chatbot, ChatbotMCP, ChatbotCategory
 from app.services.chatbot.dto import ChatbotCreate, ChatbotUpdate, Chatbot as ChatbotDTO
 from app.database.db_utils import handle_transaction
-from app.core.exceptions import ResourceNotFoundError
+from app.core.exceptions import ResourceNotFoundError, DuplicateResourceError
 from app.constants.chatbot_constants import SOURCE_TYPE, SOURCE_CONFIG_FIELDS
 from app.database.database import db
 
@@ -105,6 +105,9 @@ class ChatbotService:
             
         Returns:
             Chatbot: 创建的聊天机器人对象
+            
+        Raises:
+            Exception: 编码已存在
         """
         try:
             chatbot_data = chatbot.model_dump()
@@ -113,6 +116,15 @@ class ChatbotService:
             if not chatbot_data.get('category_id'):
                 default_category = ChatbotService._get_or_create_default_category()
                 chatbot_data['category_id'] = default_category.id
+            
+            # 检查编码是否重复
+            code = chatbot_data.get('code')
+            if code:
+                existing_chatbot = Chatbot.select().where(
+                    (Chatbot.code == code) & (Chatbot.deleted == False)
+                ).first()
+                if existing_chatbot:
+                    raise DuplicateResourceError("编码已存在")
             
             # 创建聊天机器人对象
             db_chatbot = Chatbot(**chatbot_data)
@@ -129,20 +141,46 @@ class ChatbotService:
             raise
 
     @staticmethod
-    def get_chatbots(skip: int = 0, limit: int = 100):
+    def get_chatbots(skip: int = 0, limit: int = 100, category_id: str = None, name: str = None, source_type: str = None, code: str = None):
         """
         获取聊天机器人列表
         
         Args:
             skip: 跳过的记录数
             limit: 返回的最大记录数
+            category_id: 分类ID（可选）
+            name: 机器人名称（模糊查询）
+            source_type: 来源类型
+            code: 机器人编码（模糊查询）
             
         Returns:
             List[dict]: 聊天机器人列表（包含mcp_ids）
         """
         try:
-            # 使用Peewee ORM查询数据，只返回未删除的机器人
-            chatbots = list(Chatbot.select().where(Chatbot.deleted == False).offset(skip).limit(limit))
+            # 构建查询
+            query = Chatbot.select().where(Chatbot.deleted == False)
+            
+            # 如果指定了分类ID，添加分类过滤
+            if category_id:
+                query = query.where(Chatbot.category_id == category_id)
+            
+            # 如果指定了名称，添加名称模糊查询
+            if name:
+                query = query.where(Chatbot.name.contains(name))
+            
+            # 如果指定了来源类型，添加来源类型过滤
+            if source_type:
+                query = query.where(Chatbot.source_type == source_type)
+            
+            # 如果指定了编码，添加编码模糊查询
+            if code:
+                query = query.where(Chatbot.code.contains(code))
+            
+            # 按照创建时间倒序排序
+            query = query.order_by(Chatbot.created_at.desc())
+            
+            # 执行查询
+            chatbots = list(query.offset(skip).limit(limit))
             result = []
             for chatbot in chatbots:
                 # 获取MCP关联
@@ -154,7 +192,7 @@ class ChatbotService:
                     "name": chatbot.name,
                     "description": chatbot.description,
                     "model_id": str(chatbot.model_id) if chatbot.model_id else None,
-                    "category_id": str(chatbot.category_id) if chatbot.category_id else None,
+                    "category_id": str(chatbot.category_id).replace('-', '') if chatbot.category_id else None,
                     "avatar": chatbot.avatar,
                     "greeting": chatbot.greeting,
                     "prompt_id": str(chatbot.prompt_id) if chatbot.prompt_id else None,
@@ -195,7 +233,7 @@ class ChatbotService:
             "name": chatbot.name,
             "description": chatbot.description,
             "model_id": str(chatbot.model_id) if chatbot.model_id else None,
-            "category_id": str(chatbot.category_id) if chatbot.category_id else None,
+            "category_id": str(chatbot.category_id).replace('-', '') if chatbot.category_id else None,
             "avatar": chatbot.avatar,
             "greeting": chatbot.greeting,
             "prompt_id": str(chatbot.prompt_id) if chatbot.prompt_id else None,
@@ -223,6 +261,7 @@ class ChatbotService:
             
         Raises:
             ResourceNotFoundError: 聊天机器人不存在
+            Exception: 编码已存在
         """
         try:
             # 检查聊天机器人是否存在
@@ -236,6 +275,15 @@ class ChatbotService:
             update_data = chatbot.model_dump(exclude_unset=True)
             # 提取mcp_ids，不包含在Chatbot模型中
             mcp_ids = update_data.pop('mcp_ids', None)
+            
+            # 检查编码是否重复
+            if 'code' in update_data:
+                code = update_data['code']
+                existing_chatbot = Chatbot.select().where(
+                    (Chatbot.code == code) & (Chatbot.id != chatbot_id) & (Chatbot.deleted == False)
+                ).first()
+                if existing_chatbot:
+                    raise DuplicateResourceError("编码已存在")
             
             # 更新聊天机器人
             if update_data:

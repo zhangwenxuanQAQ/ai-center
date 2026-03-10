@@ -72,6 +72,29 @@ try:
         else:
             print(f"  deleted_user_id字段已存在，跳过")
     
+    # 移除chatbot表中code字段的唯一约束
+    print("\n移除chatbot表中code字段的唯一约束...")
+    try:
+        # 查看表的索引
+        cursor = db.execute_sql("SHOW INDEX FROM chatbot;")
+        indexes = cursor.fetchall()
+        
+        # 查找code字段的唯一索引
+        has_unique_index = False
+        for index in indexes:
+            if index[4] == 'code' and index[2] == 'UNI':
+                has_unique_index = True
+                break
+        
+        if has_unique_index:
+            # 移除唯一约束
+            db.execute_sql("ALTER TABLE chatbot DROP INDEX code;")
+            print("  成功移除chatbot表中code字段的唯一约束")
+        else:
+            print("  chatbot表中code字段没有唯一约束，跳过移除")
+    except Exception as e:
+        print(f"  移除chatbot表中code字段的唯一约束失败: {e}")
+    
     print("\n数据库迁移完成")
 except Exception as e:
     print(f"数据库迁移失败: {e}")

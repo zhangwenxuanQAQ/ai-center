@@ -3,7 +3,7 @@
 使用Peewee ORM定义所有数据库表模型
 """
 
-from peewee import Model, CharField, TextField, BooleanField, DateTimeField, ForeignKeyField, UUIDField
+from peewee import Model, CharField, TextField, BooleanField, DateTimeField, ForeignKeyField, UUIDField, IntegerField
 from datetime import datetime
 import uuid
 from .database import db
@@ -122,9 +122,14 @@ class ChatbotCategory(BaseModel):
     name = CharField(max_length=255, index=True, verbose_name="分类名称")
     description = TextField(null=True, verbose_name="分类描述")
     is_default = BooleanField(default=False, verbose_name="是否为默认分类")
+    parent_id = ForeignKeyField('self', backref='children', null=True, verbose_name="父分类ID")
+    sort_order = IntegerField(default=0, verbose_name="排序顺序")
 
     class Meta:
         table_name = 'chatbot_category'
+        indexes = (
+            (('parent_id', 'sort_order'), False),
+        )
 
 
 class Chatbot(BaseModel):
@@ -133,7 +138,7 @@ class Chatbot(BaseModel):
     
     存储聊天机器人配置信息
     """
-    code = CharField(max_length=100, unique=True, index=True, verbose_name="机器人编码")
+    code = CharField(max_length=100, index=True, verbose_name="机器人编码")
     name = CharField(max_length=255, index=True, verbose_name="聊天机器人名称")
     description = TextField(null=True, verbose_name="聊天机器人描述")
     model_id = ForeignKeyField(LLMModel, backref='chatbots', null=True, verbose_name="LLM模型ID")
