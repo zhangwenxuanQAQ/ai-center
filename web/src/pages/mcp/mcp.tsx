@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Layout, Tree, Card, Row, Col, Empty, Spin, Button, Modal, Form, Input, Select, TreeSelect, message, Popconfirm, Pagination } from 'antd';
+import { Layout, Tree, Card, Row, Col, Empty, Spin, Button, Modal, Form, Input, Select, TreeSelect, message, Popconfirm, Pagination, Upload } from 'antd';
+import type { UploadProps } from 'antd';
 const { TextArea } = Input;
-import { ApiOutlined, PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UpOutlined, DownOutlined } from '@ant-design/icons';
+import { ApiOutlined, PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UpOutlined, DownOutlined, UploadOutlined } from '@ant-design/icons';
 import type { TreeDataNode, TreeProps } from 'antd';
 import { mcpService, MCPServer, MCPCategory } from '../../services/mcp';
 import PageHeader from '../../components/page-header';
@@ -25,12 +26,15 @@ const MCPManagement: React.FC = () => {
   const [editForm] = Form.useForm();
   const [sourceTypes, setSourceTypes] = useState<Record<string, string>>({});
   const [transportTypes, setTransportTypes] = useState<Record<string, string>>({});
-  const [selectedSourceType, setSelectedSourceType] = useState<string>('thirdparty');
-  const [selectedEditSourceType, setSelectedEditSourceType] = useState<string>('thirdparty');
+  const [selectedSourceType, setSelectedSourceType] = useState<string>('local');
+  const [selectedEditSourceType, setSelectedEditSourceType] = useState<string>('local');
   const [selectedTransportType, setSelectedTransportType] = useState<string>('streamable_http');
   const [selectedEditTransportType, setSelectedEditTransportType] = useState<string>('streamable_http');
+  const [localMcpConfig, setLocalMcpConfig] = useState<{ host: string; port: number; transport_type: string }>({ host: '127.0.0.1', port: 8082, transport_type: 'streamable_http' });
   const [editingServerId, setEditingServerId] = useState<string | null>(null);
-  const [searchKeyword, setSearchKeyword] = useState<string>('');
+  const [searchName, setSearchName] = useState<string>('');
+  const [searchCode, setSearchCode] = useState<string>('');
+  const [filterSourceType, setFilterSourceType] = useState<string>('');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(12);
   const [totalServers, setTotalServers] = useState<number>(0);
@@ -41,6 +45,9 @@ const MCPManagement: React.FC = () => {
   const [categoryEditForm] = Form.useForm();
   const [editingCategory, setEditingCategory] = useState<MCPCategory | null>(null);
   const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
+  
+  const [avatarPreview, setAvatarPreview] = useState<string>('');
+  const [editAvatarPreview, setEditAvatarPreview] = useState<string>('');
   
   const cardRefs = useRef<{ [key: string]: HTMLDivElement }>({});
 
@@ -59,14 +66,19 @@ const MCPManagement: React.FC = () => {
 
   useEffect(() => {
     fetchCategories();
-    fetchServers();
     fetchSourceTypes();
     fetchTransportTypes();
+    fetchLocalMcpConfig();
   }, []);
 
   useEffect(() => {
-    fetchServers(selectedCategory);
-  }, [selectedCategory, searchKeyword]);
+    setCurrentPage(1);
+    fetchServers(selectedCategory, 1, pageSize);
+  }, [selectedCategory, searchName, searchCode, filterSourceType]);
+
+  useEffect(() => {
+    fetchServers(selectedCategory, currentPage, pageSize);
+  }, [currentPage, pageSize]);
 
   const getAllCategoryKeys = (categories: MCPCategory[]): string[] => {
     let keys: string[] = [];
@@ -97,10 +109,12 @@ const MCPManagement: React.FC = () => {
         page !== undefined ? page : currentPage,
         size !== undefined ? size : pageSize,
         categoryId || undefined,
-        searchKeyword || undefined
+        searchName || undefined,
+        filterSourceType || undefined,
+        searchCode || undefined
       );
-      setServers(data);
-      setTotalServers(data.length);
+      setServers(data.data);
+      setTotalServers(data.total);
     } catch (error) {
       console.error('Failed to fetch servers:', error);
       setServers([]);
@@ -125,6 +139,15 @@ const MCPManagement: React.FC = () => {
       setTransportTypes(data);
     } catch (error) {
       console.error('Failed to fetch transport types:', error);
+    }
+  };
+
+  const fetchLocalMcpConfig = async () => {
+    try {
+      const data = await mcpService.getLocalMcpConfig();
+      setLocalMcpConfig(data);
+    } catch (error) {
+      console.error('Failed to fetch local mcp config:', error);
     }
   };
 
@@ -233,14 +256,16 @@ const MCPManagement: React.FC = () => {
       title: (
         <div className="category-tree-node" style={{ cursor: 'pointer' }}>
           <div className="category-name" title={category.name}>{category.name}</div>
-          <div className="category-actions">
-            <Button type="text" icon={<UpOutlined />} size="small" title="上移" onClick={(e) => { e.stopPropagation(); handleCategorySort(category, 'up'); }} />
-            <Button type="text" icon={<DownOutlined />} size="small" title="下移" onClick={(e) => { e.stopPropagation(); handleCategorySort(category, 'down'); }} />
-            <Button type="text" icon={<EditOutlined />} size="small" title="编辑" onClick={(e) => { e.stopPropagation(); handleEditCategory(category); }} />
-            <Popconfirm title="确认删除" description="确定要删除这个分类吗？" onConfirm={(e) => { e.stopPropagation(); handleDeleteCategory(category); }} okText="确认" cancelText="取消">
-              <Button type="text" icon={<DeleteOutlined />} size="small" danger title="删除" className="delete-category-btn" onClick={(e) => e.stopPropagation()} />
-            </Popconfirm>
-          </div>
+          {!category.is_default && (
+            <div className="category-actions">
+              <Button type="text" icon={<UpOutlined />} size="small" title="上移" onClick={(e) => { e.stopPropagation(); handleCategorySort(category, 'up'); }} />
+              <Button type="text" icon={<DownOutlined />} size="small" title="下移" onClick={(e) => { e.stopPropagation(); handleCategorySort(category, 'down'); }} />
+              <Button type="text" icon={<EditOutlined />} size="small" title="编辑" onClick={(e) => { e.stopPropagation(); handleEditCategory(category); }} />
+              <Popconfirm title="确认删除" description="确定要删除这个分类吗？" onConfirm={(e) => { e.stopPropagation(); handleDeleteCategory(category); }} okText="确认" cancelText="取消">
+                <Button type="text" icon={<DeleteOutlined />} size="small" danger title="删除" className="delete-category-btn" onClick={(e) => e.stopPropagation()} />
+              </Popconfirm>
+            </div>
+          )}
         </div>
       ),
       key: `category-${category.id}`,
@@ -292,9 +317,11 @@ const MCPManagement: React.FC = () => {
 
   const handleAddServer = () => {
     form.resetFields();
-    setSelectedSourceType('thirdparty');
+    setSelectedSourceType('local');
     setSelectedTransportType('streamable_http');
-    form.setFieldsValue({ source_type: 'thirdparty', transport_type: 'streamable_http' });
+    setAvatarPreview('');
+    const defaultUrl = `http://${localMcpConfig.host}:${localMcpConfig.port}/mcp`;
+    form.setFieldsValue({ source_type: 'local', transport_type: 'streamable_http', url: defaultUrl });
     setIsModalVisible(true);
   };
 
@@ -313,6 +340,7 @@ const MCPManagement: React.FC = () => {
     });
     setSelectedEditSourceType(server.source_type || 'thirdparty');
     setSelectedEditTransportType(server.transport_type || 'streamable_http');
+    setEditAvatarPreview(server.avatar || '');
     setIsEditModalVisible(true);
   };
 
@@ -320,9 +348,10 @@ const MCPManagement: React.FC = () => {
     setSelectedSourceType(value);
     if (value === 'local') {
       setSelectedTransportType('streamable_http');
+      const defaultUrl = `http://${localMcpConfig.host}:${localMcpConfig.port}/mcp`;
       form.setFieldsValue({ 
         transport_type: 'streamable_http',
-        url: 'http://127.0.0.1:8082/mcp'
+        url: defaultUrl
       });
     } else {
       form.setFieldsValue({ url: '' });
@@ -333,9 +362,10 @@ const MCPManagement: React.FC = () => {
     setSelectedEditSourceType(value);
     if (value === 'local') {
       setSelectedEditTransportType('streamable_http');
+      const defaultUrl = `http://${localMcpConfig.host}:${localMcpConfig.port}/mcp`;
       editForm.setFieldsValue({ 
         transport_type: 'streamable_http',
-        url: 'http://127.0.0.1:8082/mcp'
+        url: defaultUrl
       });
     }
   };
@@ -348,13 +378,135 @@ const MCPManagement: React.FC = () => {
     setSelectedEditTransportType(value);
   };
 
+  const compressImage = (file: File, maxWidth: number = 200, quality: number = 0.7): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (e) => {
+        const img = new window.Image();
+        img.src = e.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+          
+          const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressedBase64);
+        };
+        img.onerror = (error) => reject(error);
+      };
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
+  const handleAvatarChange = async (info: any) => {
+    if (info.file.status === 'done' || info.file.originFileObj) {
+      const file = info.file.originFileObj;
+      if (file) {
+        try {
+          const compressedBase64 = await compressImage(file, 200, 0.7);
+          form.setFieldsValue({ avatar: compressedBase64 });
+          setAvatarPreview(compressedBase64);
+          message.success('头像上传成功');
+        } catch (error) {
+          message.error('头像处理失败');
+        }
+      }
+    }
+  };
+
+  const handleEditAvatarChange = async (info: any) => {
+    if (info.file.status === 'done' || info.file.originFileObj) {
+      const file = info.file.originFileObj;
+      if (file) {
+        try {
+          const compressedBase64 = await compressImage(file, 200, 0.7);
+          editForm.setFieldsValue({ avatar: compressedBase64 });
+          setEditAvatarPreview(compressedBase64);
+          message.success('头像上传成功');
+        } catch (error) {
+          message.error('头像处理失败');
+        }
+      }
+    }
+  };
+
+  const uploadProps: UploadProps = {
+    name: 'file',
+    showUploadList: false,
+    accept: 'image/*',
+    beforeUpload: (file) => {
+      const isImage = file.type.startsWith('image/');
+      if (!isImage) {
+        message.error('只能上传图片文件！');
+        return false;
+      }
+      const isLt5M = file.size / 1024 / 1024 < 5;
+      if (!isLt5M) {
+        message.error('图片大小不能超过 5MB！');
+        return false;
+      }
+      return true;
+    },
+    customRequest: ({ file, onSuccess }) => {
+      setTimeout(() => {
+        if (onSuccess) {
+          onSuccess({ status: 'done' }, file);
+        }
+      }, 0);
+    },
+    onChange: handleAvatarChange,
+  };
+
+  const editUploadProps: UploadProps = {
+    name: 'file',
+    showUploadList: false,
+    accept: 'image/*',
+    beforeUpload: (file) => {
+      const isImage = file.type.startsWith('image/');
+      if (!isImage) {
+        message.error('只能上传图片文件！');
+        return false;
+      }
+      const isLt5M = file.size / 1024 / 1024 < 5;
+      if (!isLt5M) {
+        message.error('图片大小不能超过 5MB！');
+        return false;
+      }
+      return true;
+    },
+    customRequest: ({ file, onSuccess }) => {
+      setTimeout(() => {
+        if (onSuccess) {
+          onSuccess({ status: 'done' }, file);
+        }
+      }, 0);
+    },
+    onChange: handleEditAvatarChange,
+  };
+
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
       await mcpService.createServer(values);
       message.success('MCP服务创建成功！');
       setIsModalVisible(false);
-      fetchServers(selectedCategory);
+      form.resetFields();
+      setAvatarPreview('');
+      setSelectedSourceType('thirdparty');
+      setSelectedTransportType('streamable_http');
+      fetchServers(selectedCategory, currentPage, pageSize);
     } catch (error) {
       console.error('创建失败:', error);
     }
@@ -367,7 +519,12 @@ const MCPManagement: React.FC = () => {
       await mcpService.updateServer(editingServerId, values);
       message.success('MCP服务更新成功！');
       setIsEditModalVisible(false);
-      fetchServers(selectedCategory);
+      editForm.resetFields();
+      setEditAvatarPreview('');
+      setSelectedEditSourceType('thirdparty');
+      setSelectedEditTransportType('streamable_http');
+      setEditingServerId(null);
+      fetchServers(selectedCategory, currentPage, pageSize);
     } catch (error) {
       console.error('更新失败:', error);
     }
@@ -377,7 +534,11 @@ const MCPManagement: React.FC = () => {
     try {
       await mcpService.deleteServer(serverId);
       message.success('MCP服务删除成功！');
-      fetchServers(selectedCategory);
+      if (servers.length === 1 && currentPage > 1) {
+        setCurrentPage(currentPage - 1);
+      } else {
+        fetchServers(selectedCategory, currentPage, pageSize);
+      }
     } catch (error) {
       console.error('删除失败:', error);
     }
@@ -414,16 +575,49 @@ const MCPManagement: React.FC = () => {
               新增MCP服务
             </Button>
             <Input
-              placeholder="搜索MCP服务名称"
-              value={searchKeyword}
-              onChange={(e) => setSearchKeyword(e.target.value)}
+              placeholder="搜索服务名称"
+              value={searchName}
+              onChange={(e) => setSearchName(e.target.value)}
               prefix={<SearchOutlined />}
-              style={{ width: '300px', height: '36px', borderRadius: '18px', background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff', border: 'none' }}
+              style={{ width: '200px', height: '36px', borderRadius: '18px', background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff', border: 'none' }}
               className="no-border-input"
             />
+            <Input
+              placeholder="搜索服务编码"
+              value={searchCode}
+              onChange={(e) => setSearchCode(e.target.value)}
+              prefix={<SearchOutlined />}
+              style={{ width: '200px', height: '36px', borderRadius: '18px', background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff', border: 'none' }}
+              className="no-border-input"
+            />
+            <Select
+              placeholder="按来源筛选"
+              value={filterSourceType}
+              onChange={setFilterSourceType}
+              style={{
+                width: '150px',
+                borderRadius: '18px',
+                background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
+                border: 'none',
+                color: theme === 'dark' ? '#ffffff' : '#000000',
+                height: '36px'
+              }}
+            >
+              <Option value="">全部来源</Option>
+              {Object.entries(sourceTypes).map(([key, value]) => (
+                <Option key={key} value={key}>{value}</Option>
+              ))}
+            </Select>
           </div>
           
-          <div style={{ flex: 1, overflowY: 'auto', marginBottom: '0' }}>
+          <div style={{ 
+            flex: 1, 
+            overflowY: 'auto', 
+            marginBottom: '0',
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none'
+          }} className="hide-scrollbar">
+            <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; }`}</style>
             {loading ? (
               <div className="loading-container"><Spin size="large" /></div>
             ) : servers.length === 0 ? (
@@ -445,7 +639,19 @@ const MCPManagement: React.FC = () => {
                             <div className="card-avatar-container">
                               <div className="card-avatar">
                                 {server.avatar ? (
-                                  <img src={server.avatar} alt={server.name} style={{ width: '72px', height: '72px', borderRadius: '50%', objectFit: 'cover' }} />
+                                  <img 
+                                    src={server.avatar} 
+                                    alt={server.name} 
+                                    style={{ 
+                                      width: '72px', 
+                                      height: '72px', 
+                                      borderRadius: '50%', 
+                                      objectFit: 'cover',
+                                      position: 'absolute',
+                                      top: 0,
+                                      left: 0
+                                    }} 
+                                  />
                                 ) : (
                                   <ApiOutlined style={{ fontSize: '32px' }} />
                                 )}
@@ -465,12 +671,53 @@ const MCPManagement: React.FC = () => {
               </Row>
             )}
           </div>
+          
+          {totalServers > 0 && (
+            <div style={{ paddingTop: '24px', borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(0, 0, 0, 0.1)', display: 'flex', justifyContent: 'center' }}>
+              <Pagination
+                current={currentPage}
+                pageSize={pageSize}
+                total={totalServers}
+                onChange={(page) => {
+                  setCurrentPage(page);
+                  fetchServers(selectedCategory, page, pageSize);
+                }}
+                onShowSizeChange={(current, size) => {
+                  setPageSize(size);
+                  setCurrentPage(1);
+                  fetchServers(selectedCategory, 1, size);
+                }}
+                showSizeChanger
+                showQuickJumper
+                showTotal={(total) => `共 ${total} 条记录`}
+                pageSizeOptions={['12', '24', '36', '48']}
+                locale={{
+                  items_per_page: '条/页',
+                  jump_to: '前往',
+                  jump_to_confirm: '确定',
+                  page: '页',
+                  prev_page: '上一页',
+                  next_page: '下一页',
+                  prev_5: '向前 5 页',
+                  next_5: '向后 5 页',
+                  prev_3: '向前 3 页',
+                  next_3: '向后 3 页',
+                  first: '第一页',
+                  last: '最后一页'
+                }}
+                className={`pagination ${theme === 'dark' ? 'dark' : 'light'}`}
+                style={{
+                  margin: 0
+                }}
+              />
+            </div>
+          )}
         </Content>
       </Layout>
 
       {/* 新增MCP服务模态框 */}
       <Modal title="新增MCP服务" open={isModalVisible} onOk={handleSubmit} onCancel={() => setIsModalVisible(false)} width={600} okText="保存" cancelText="取消" className={`mcp-modal ${theme === 'dark' ? 'dark' : 'light'}`}>
-        <Form form={form} layout="vertical" initialValues={{ source_type: 'thirdparty', transport_type: 'streamable_http' }}>
+        <Form form={form} layout="vertical" initialValues={{ source_type: 'local', transport_type: 'streamable_http' }}>
           <Form.Item name="name" label="服务名称" rules={[{ required: true, message: '请输入服务名称' }]}>
             <Input placeholder="请输入服务名称" />
           </Form.Item>
@@ -491,8 +738,32 @@ const MCPManagement: React.FC = () => {
               ))}
             </Select>
           </Form.Item>
+          {selectedTransportType === 'stdio' && (
+            <Form.Item name="config" label="NPX命令">
+              <TextArea rows={4} placeholder="以高德地图为例: npx -y @amap/amap-maps-mcp-server" />
+            </Form.Item>
+          )}
+          {(selectedTransportType === 'sse' || selectedTransportType === 'streamable_http') && (
+            <>
+              <Form.Item name="url" label="URL">
+                <Input placeholder="请输入MCP服务URL" disabled={selectedSourceType === 'local'} />
+              </Form.Item>
+              {selectedSourceType === 'thirdparty' && (
+                <Form.Item name="config" label="自定义参数（JSON格式）">
+                  <TextArea rows={4} placeholder='请输入JSON格式的自定义参数，例如：{"headers": {"Authorization": "Bearer xxx"}}' />
+                </Form.Item>
+              )}
+            </>
+          )}
           <Form.Item name="avatar" label="服务头像">
-            <Input placeholder="请输入头像URL（可选）" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              {avatarPreview && (
+                <img src={avatarPreview} alt="头像预览" style={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover' }} />
+              )}
+              <Upload {...uploadProps}>
+                <Button icon={<UploadOutlined />}>上传头像</Button>
+              </Upload>
+            </div>
           </Form.Item>
           <Form.Item name="category_id" label="分类">
             <TreeSelect placeholder="请选择分类" treeData={buildCategoryTreeSelectData()} treeDefaultExpandAll allowClear />
@@ -500,19 +771,6 @@ const MCPManagement: React.FC = () => {
           <Form.Item name="description" label="服务描述">
             <TextArea rows={3} placeholder="请输入服务描述" />
           </Form.Item>
-          <Form.Item name="url" label="URL" rules={[{ required: true, message: '请输入URL' }]}>
-            <Input placeholder="请输入MCP服务URL" disabled={selectedSourceType === 'local'} />
-          </Form.Item>
-          {selectedTransportType === 'stdio' && (
-            <Form.Item name="config" label="NPX命令">
-              <TextArea rows={4} placeholder="以高德地图为例: npx -y @amap/amap-maps-mcp-server" />
-            </Form.Item>
-          )}
-          {(selectedTransportType === 'sse' || selectedTransportType === 'streamable_http') && selectedSourceType === 'thirdparty' && (
-            <Form.Item name="config" label="自定义参数（JSON格式）">
-              <TextArea rows={4} placeholder='请输入JSON格式的自定义参数，例如：{"headers": {"Authorization": "Bearer xxx"}}' />
-            </Form.Item>
-          )}
         </Form>
       </Modal>
 
@@ -539,8 +797,32 @@ const MCPManagement: React.FC = () => {
               ))}
             </Select>
           </Form.Item>
+          {selectedEditTransportType === 'stdio' && (
+            <Form.Item name="config" label="NPX命令">
+              <TextArea rows={4} placeholder="以高德地图为例: npx -y @amap/amap-maps-mcp-server" />
+            </Form.Item>
+          )}
+          {(selectedEditTransportType === 'sse' || selectedEditTransportType === 'streamable_http') && (
+            <>
+              <Form.Item name="url" label="URL">
+                <Input placeholder="请输入MCP服务URL" disabled={selectedEditSourceType === 'local'} />
+              </Form.Item>
+              {selectedEditSourceType === 'thirdparty' && (
+                <Form.Item name="config" label="自定义参数（JSON格式）">
+                  <TextArea rows={4} placeholder='请输入JSON格式的自定义参数，例如：{"headers": {"Authorization": "Bearer xxx"}}' />
+                </Form.Item>
+              )}
+            </>
+          )}
           <Form.Item name="avatar" label="服务头像">
-            <Input placeholder="请输入头像URL（可选）" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              {editAvatarPreview && (
+                <img src={editAvatarPreview} alt="头像预览" style={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover' }} />
+              )}
+              <Upload {...editUploadProps}>
+                <Button icon={<UploadOutlined />}>上传头像</Button>
+              </Upload>
+            </div>
           </Form.Item>
           <Form.Item name="category_id" label="分类">
             <TreeSelect placeholder="请选择分类" treeData={buildCategoryTreeSelectData()} treeDefaultExpandAll allowClear />
@@ -548,19 +830,6 @@ const MCPManagement: React.FC = () => {
           <Form.Item name="description" label="服务描述">
             <TextArea rows={3} placeholder="请输入服务描述" />
           </Form.Item>
-          <Form.Item name="url" label="URL" rules={[{ required: true, message: '请输入URL' }]}>
-            <Input placeholder="请输入MCP服务URL" disabled={selectedEditSourceType === 'local'} />
-          </Form.Item>
-          {selectedEditTransportType === 'stdio' && (
-            <Form.Item name="config" label="NPX命令">
-              <TextArea rows={4} placeholder="以高德地图为例: npx -y @amap/amap-maps-mcp-server" />
-            </Form.Item>
-          )}
-          {(selectedEditTransportType === 'sse' || selectedEditTransportType === 'streamable_http') && selectedEditSourceType === 'thirdparty' && (
-            <Form.Item name="config" label="自定义参数（JSON格式）">
-              <TextArea rows={4} placeholder='请输入JSON格式的自定义参数，例如：{"headers": {"Authorization": "Bearer xxx"}}' />
-            </Form.Item>
-          )}
         </Form>
       </Modal>
 

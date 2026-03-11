@@ -104,7 +104,7 @@ def delete_mcp_category(category_id: str):
 
 
 # MCP服务相关接口
-@router.get("/server/source-types", response_model=ApiResponse)
+@router.get("/server/source_types", response_model=ApiResponse)
 def get_mcp_source_types():
     """
     获取MCP服务来源类型
@@ -116,7 +116,7 @@ def get_mcp_source_types():
     return ResponseUtil.success(data=source_types, message="获取来源类型成功")
 
 
-@router.get("/server/transport-types", response_model=ApiResponse)
+@router.get("/server/transport_types", response_model=ApiResponse)
 def get_mcp_transport_types():
     """
     获取MCP服务传输类型
@@ -126,6 +126,18 @@ def get_mcp_transport_types():
     """
     transport_types = MCPServerService.get_transport_types()
     return ResponseUtil.success(data=transport_types, message="获取传输类型成功")
+
+
+@router.get("/server/local_config", response_model=ApiResponse)
+def get_mcp_local_config():
+    """
+    获取本地MCP服务配置
+    
+    Returns:
+        ApiResponse: 统一格式的响应对象，包含本地MCP配置
+    """
+    local_config = MCPServerService.get_local_mcp_config()
+    return ResponseUtil.success(data=local_config, message="获取本地MCP配置成功")
 
 
 @router.post("/server", response_model=ApiResponse)
@@ -145,26 +157,32 @@ def create_mcp_server(server: MCPServerCreate):
 
 @router.get("/server", response_model=ApiResponse)
 def get_mcp_servers(
-    skip: int = Query(0, description="跳过的记录数"),
-    limit: int = Query(100, description="返回的最大记录数"),
+    page: int = Query(1, description="页码"),
+    page_size: int = Query(12, description="每页数量"),
     category_id: str = Query(None, description="分类ID"),
-    name: str = Query(None, description="服务名称（模糊查询）")
+    name: str = Query(None, description="服务名称（模糊查询）"),
+    source_type: str = Query(None, description="来源类型"),
+    code: str = Query(None, description="服务编码（模糊查询）")
 ):
     """
-    获取MCP服务列表
+    获取MCP服务列表（分页）
     
     Args:
-        skip: 跳过的记录数
-        limit: 返回的最大记录数
+        page: 页码，默认1
+        page_size: 每页数量，默认12
         category_id: 分类ID（可选）
         name: 服务名称（模糊查询，可选）
+        source_type: 来源类型（可选）
+        code: 服务编码（模糊查询，可选）
         
     Returns:
-        ApiResponse: 统一格式的响应对象
+        ApiResponse: 统一格式的响应对象，包含data和total
     """
-    servers = MCPServerService.get_servers(skip, limit, category_id, name)
+    skip = (page - 1) * page_size
+    servers = MCPServerService.get_servers(skip, page_size, category_id, name, source_type, code)
+    total = MCPServerService.count_servers(category_id, name, source_type, code)
     servers_data = [server.__data__ for server in servers]
-    return ResponseUtil.success(data=servers_data, message="获取MCP服务列表成功")
+    return ResponseUtil.success(data={"data": servers_data, "total": total}, message="获取MCP服务列表成功")
 
 
 @router.get("/server/{server_id}", response_model=ApiResponse)
@@ -215,7 +233,7 @@ def delete_mcp_server(server_id: str):
     return ResponseUtil.success(data=db_server.__data__, message="MCP服务删除成功")
 
 
-@router.post("/server/{server_id}/import-tools", response_model=ApiResponse)
+@router.post("/server/{server_id}/import_tools", response_model=ApiResponse)
 def import_mcp_tools(server_id: str, tools: list = Body(...)):
     """
     导入MCP工具

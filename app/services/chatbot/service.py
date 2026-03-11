@@ -134,7 +134,7 @@ class ChatbotService:
             if mcp_server_ids:
                 for mcp_server_id in mcp_server_ids:
                     chatbot_mcp = ChatbotMCP(chatbot_id=db_chatbot.id, mcp_server_id=mcp_server_id)
-                    chatbot_mcp.save()
+                    chatbot_mcp.save(force_insert=True)
             
             return db_chatbot
         except Exception as e:
@@ -299,7 +299,7 @@ class ChatbotService:
                 # 添加新的关联
                 for mcp_server_id in mcp_server_ids:
                     chatbot_mcp = ChatbotMCP(chatbot_id=chatbot_id, mcp_server_id=mcp_server_id)
-                    chatbot_mcp.save()
+                    chatbot_mcp.save(force_insert=True)
             
             return db_chatbot
         except Exception as e:

@@ -34,7 +34,7 @@ try:
         endpoint="https://api.openai.com/v1",
         model_type="gpt-3.5-turbo"
     )
-    test_llm.save()
+    test_llm.save(force_insert=True)
     print(f"LLM模型创建成功，ID: {test_llm.id}")
     
     # 创建聊天机器人
@@ -43,7 +43,7 @@ try:
         description="这是一个测试机器人",
         model_id=test_llm.id
     )
-    test_chatbot.save()
+    test_chatbot.save(force_insert=True)
     print(f"聊天机器人创建成功，ID: {test_chatbot.id}")
     
     # 尝试查询数据

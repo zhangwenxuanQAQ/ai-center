@@ -199,11 +199,11 @@ class MCPServer(SoftDeleteModel):
     
     存储MCP（模型上下文协议）服务配置
     """
-    code = CharField(max_length=100, unique=True, null=True, index=True, verbose_name="MCP服务编码")
+    code = CharField(max_length=100, unique=True, index=True, verbose_name="MCP服务编码")
     name = CharField(max_length=255, index=True, verbose_name="MCP服务名称")
     description = TextField(null=True, verbose_name="MCP服务描述")
-    url = CharField(max_length=512, verbose_name="MCP URL")
-    avatar = CharField(max_length=512, null=True, verbose_name="MCP服务头像")
+    url = CharField(max_length=512, null=True, verbose_name="MCP URL")
+    avatar = TextField(null=True, verbose_name="MCP服务头像")
     transport_type = CharField(max_length=50, verbose_name="传输方式")
     source_type = CharField(max_length=50, verbose_name="来源类型")
     category_id = CharField(max_length=40, null=True, index=True, verbose_name="分类ID")

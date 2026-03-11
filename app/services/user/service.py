@@ -29,7 +29,7 @@ class UserService:
             User: 创建的用户对象
         """
         db_user = User(**user.model_dump())
-        db_user.save()
+        db_user.save(force_insert=True)
         return db_user
 
     @staticmethod

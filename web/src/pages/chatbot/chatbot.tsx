@@ -43,6 +43,7 @@ const ChatbotManagement: React.FC = () => {
   const [editAvatarPreview, setEditAvatarPreview] = useState<string>('');
   const [editingChatbotId, setEditingChatbotId] = useState<number | null>(null);
   const [searchKeyword, setSearchKeyword] = useState<string>('');
+  const [searchCode, setSearchCode] = useState<string>('');
   const [searchSourceType, setSearchSourceType] = useState<string>('');
   const [filteredChatbots, setFilteredChatbots] = useState<Chatbot[]>([]);
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -89,7 +90,7 @@ const ChatbotManagement: React.FC = () => {
   useEffect(() => {
     // 当搜索关键词或来源类型变化时，重新获取数据
     fetchChatbots(selectedCategory, 1, pageSize);
-  }, [searchKeyword, searchSourceType, selectedCategory]); // 移除pageSize依赖，避免修改每页大小时重复调用
+  }, [searchKeyword, searchCode, searchSourceType, selectedCategory]);
 
 
 
@@ -127,7 +128,7 @@ const ChatbotManagement: React.FC = () => {
         size !== undefined ? size : pageSize, 
         searchKeyword, 
         searchSourceType || undefined,
-        undefined // 不传递编码参数，避免名称过滤时也过滤编码
+        searchCode || undefined
       );
       const data = response.data;
       setChatbots(data);
@@ -135,7 +136,6 @@ const ChatbotManagement: React.FC = () => {
       setTotalChatbots(response.total);
     } catch (error) {
       console.error('Failed to fetch chatbots:', error);
-      // 在错误情况下也设置为空数组，避免undefined错误
       setChatbots([]);
       setFilteredChatbots([]);
       setTotalChatbots(0);
@@ -825,7 +825,24 @@ const ChatbotManagement: React.FC = () => {
               onChange={(e) => setSearchKeyword(e.target.value)}
               prefix={<SearchOutlined />}
               style={{
-                width: '300px',
+                width: '200px',
+                height: '36px',
+                borderRadius: '18px',
+                background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
+                border: 'none',
+                boxShadow: 'none',
+                outline: 'none',
+                color: theme === 'dark' ? '#ffffff' : '#000000'
+              }}
+              className="no-border-input"
+            />
+            <Input
+              placeholder="搜索机器人编码"
+              value={searchCode}
+              onChange={(e) => setSearchCode(e.target.value)}
+              prefix={<SearchOutlined />}
+              style={{
+                width: '200px',
                 height: '36px',
                 borderRadius: '18px',
                 background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',

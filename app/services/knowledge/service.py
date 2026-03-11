@@ -28,7 +28,7 @@ class KnowledgeService:
             Knowledge: 创建的知识库对象
         """
         db_knowledge = Knowledge(**knowledge.model_dump())
-        db_knowledge.save()
+        db_knowledge.save(force_insert=True)
         return db_knowledge
 
     @staticmethod

@@ -11,6 +11,7 @@ export interface MCPCategory {
   description?: string;
   parent_id?: string;
   sort_order: number;
+  is_default?: boolean;
   created_at?: string;
   updated_at?: string;
   children?: MCPCategory[];
@@ -83,24 +84,33 @@ export const mcpService = {
    * 获取MCP服务来源类型
    */
   getSourceTypes: async (): Promise<Record<string, string>> => {
-    return http.get<Record<string, string>>('/aicenter/v1/mcp/server/source-types');
+    return http.get<Record<string, string>>('/aicenter/v1/mcp/server/source_types');
   },
 
   /**
    * 获取MCP服务传输类型
    */
   getTransportTypes: async (): Promise<Record<string, string>> => {
-    return http.get<Record<string, string>>('/aicenter/v1/mcp/server/transport-types');
+    return http.get<Record<string, string>>('/aicenter/v1/mcp/server/transport_types');
   },
 
   /**
-   * 获取MCP服务列表
+   * 获取本地MCP服务配置
    */
-  getServers: async (skip: number = 0, limit: number = 100, category_id?: string, name?: string): Promise<MCPServer[]> => {
-    let params = [`skip=${skip}`, `limit=${limit}`];
+  getLocalMcpConfig: async (): Promise<{ host: string; port: number; transport_type: string }> => {
+    return http.get<{ host: string; port: number; transport_type: string }>('/aicenter/v1/mcp/server/local_config');
+  },
+
+  /**
+   * 获取MCP服务列表（分页）
+   */
+  getServers: async (page: number = 1, pageSize: number = 12, category_id?: string, name?: string, source_type?: string, code?: string): Promise<{ data: MCPServer[], total: number }> => {
+    let params = [`page=${page}`, `page_size=${pageSize}`];
     if (category_id) params.push(`category_id=${category_id}`);
     if (name) params.push(`name=${encodeURIComponent(name)}`);
-    return http.get<MCPServer[]>(`/aicenter/v1/mcp/server?${params.join('&')}`);
+    if (source_type) params.push(`source_type=${encodeURIComponent(source_type)}`);
+    if (code) params.push(`code=${encodeURIComponent(code)}`);
+    return http.get<{ data: MCPServer[], total: number }>(`/aicenter/v1/mcp/server?${params.join('&')}`);
   },
 
   /**
@@ -135,7 +145,7 @@ export const mcpService = {
    * 导入MCP工具
    */
   importTools: async (serverId: string, tools: Partial<MCPTool>[]): Promise<MCPTool[]> => {
-    return http.post<MCPTool[]>(`/aicenter/v1/mcp/server/${serverId}/import-tools`, tools);
+    return http.post<MCPTool[]>(`/aicenter/v1/mcp/server/${serverId}/import_tools`, tools);
   },
 
   /**

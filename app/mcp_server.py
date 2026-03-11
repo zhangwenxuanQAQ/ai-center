@@ -4,7 +4,7 @@ MCP服务独立入口
 
 import uvicorn
 from app.configs.config import config
-from app.core.mcp.server import mcp_runner
+from app.core.mcp.server.server import mcp_runner
 
 print("=" * 80)
 print("MCP服务启动中...")

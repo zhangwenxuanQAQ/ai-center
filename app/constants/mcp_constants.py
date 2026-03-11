@@ -11,9 +11,20 @@ TRANSPORT_TYPE = {
     "stdio": "Stdio",
 }
 
-# 默认本地MCP SERVER配置
-DEFAULT_LOCAL_MCP_CONFIG = {
-    "host": "127.0.0.1",
-    "port": 8082,
-    "transport_type": "streamable_http"
-}
+
+def _get_default_local_mcp_config():
+    """
+    获取默认本地MCP SERVER配置
+    从配置文件读取host和port
+    """
+    from app.configs.config import config
+    host = config.config.get('mcp', {}).get('host', '127.0.0.1')
+    port = config.config.get('mcp', {}).get('port', 8082)
+    return {
+        "host": host,
+        "port": port,
+        "transport_type": "streamable_http"
+    }
+
+
+DEFAULT_LOCAL_MCP_CONFIG = _get_default_local_mcp_config()

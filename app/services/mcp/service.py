@@ -62,7 +62,7 @@ class MCPCategoryService:
             raise DuplicateResourceError(f"分类名称 '{category.name}' 已存在")
         
         db_category = MCPCategory(**category.model_dump())
-        db_category.save()
+        db_category.save(force_insert=True)
         return db_category
     
     @staticmethod
@@ -225,6 +225,16 @@ class MCPServerService:
         return TRANSPORT_TYPE
     
     @staticmethod
+    def get_local_mcp_config():
+        """
+        获取本地MCP服务配置
+        
+        Returns:
+            dict: 本地MCP配置，包含host、port和transport_type
+        """
+        return DEFAULT_LOCAL_MCP_CONFIG
+    
+    @staticmethod
     @handle_transaction
     def create_server(server: MCPServerCreate):
         """
@@ -260,11 +270,11 @@ class MCPServerService:
             server_data['url'] = f"http://{host}:{port}/mcp"
         
         db_server = MCPServer(**server_data)
-        db_server.save()
+        db_server.save(force_insert=True)
         return db_server
     
     @staticmethod
-    def get_servers(skip: int = 0, limit: int = 100, category_id: str = None, name: str = None):
+    def get_servers(skip: int = 0, limit: int = 100, category_id: str = None, name: str = None, source_type: str = None, code: str = None):
         """
         获取MCP服务列表
         
@@ -273,6 +283,8 @@ class MCPServerService:
             limit: 返回的最大记录数
             category_id: 分类ID（可选）
             name: 服务名称（模糊查询）
+            source_type: 来源类型
+            code: 服务编码（模糊查询）
             
         Returns:
             List[MCPServer]: MCP服务列表
@@ -285,7 +297,43 @@ class MCPServerService:
         if name:
             query = query.where(MCPServer.name.contains(name))
         
-        return list(query.offset(skip).limit(limit))
+        if source_type:
+            query = query.where(MCPServer.source_type == source_type)
+        
+        if code:
+            query = query.where(MCPServer.code.contains(code))
+        
+        return list(query.order_by(MCPServer.created_at.desc()).offset(skip).limit(limit))
+    
+    @staticmethod
+    def count_servers(category_id: str = None, name: str = None, source_type: str = None, code: str = None) -> int:
+        """
+        统计MCP服务总数
+        
+        Args:
+            category_id: 分类ID（可选）
+            name: 服务名称（模糊查询）
+            source_type: 来源类型
+            code: 服务编码（模糊查询）
+            
+        Returns:
+            int: MCP服务总数
+        """
+        query = MCPServer.select().where(MCPServer.deleted == False)
+        
+        if category_id:
+            query = query.where(MCPServer.category_id == category_id)
+        
+        if name:
+            query = query.where(MCPServer.name.contains(name))
+        
+        if source_type:
+            query = query.where(MCPServer.source_type == source_type)
+        
+        if code:
+            query = query.where(MCPServer.code.contains(code))
+        
+        return query.count()
     
     @staticmethod
     def get_server(server_id: str):
@@ -422,7 +470,7 @@ class MCPServerService:
             else:
                 tool_data['server_id'] = server_id
                 new_tool = MCPTool(**tool_data)
-                new_tool.save()
+                new_tool.save(force_insert=True)
                 imported_tools.append(new_tool)
         
         return imported_tools
@@ -448,7 +496,7 @@ class MCPToolService:
             MCPTool: 创建的MCP工具对象
         """
         db_tool = MCPTool(**tool.model_dump())
-        db_tool.save()
+        db_tool.save(force_insert=True)
         return db_tool
     
     @staticmethod

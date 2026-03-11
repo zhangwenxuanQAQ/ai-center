@@ -29,7 +29,7 @@ class PromptService:
             Prompt: 创建的提示词对象
         """
         db_prompt = Prompt(**prompt.model_dump())
-        db_prompt.save()
+        db_prompt.save(force_insert=True)
         return db_prompt
 
     @staticmethod

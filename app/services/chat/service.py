@@ -28,7 +28,7 @@ class ChatService:
             Chat: 创建的聊天对象
         """
         db_chat = Chat(**chat.model_dump())
-        db_chat.save()
+        db_chat.save(force_insert=True)
         return db_chat
 
     @staticmethod

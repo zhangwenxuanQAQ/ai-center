@@ -31,7 +31,7 @@ class ChatbotCategoryService:
                 description="系统默认分类",
                 is_default=True
             )
-            default_category.save()
+            default_category.save(force_insert=True)
         return default_category
     
     @staticmethod

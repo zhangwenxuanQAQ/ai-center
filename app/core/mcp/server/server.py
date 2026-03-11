@@ -11,7 +11,7 @@ from fastmcp import FastMCP
 
 from app.configs.config import config
 from app.database.models import MCPTool, MCPServer
-from app.core.mcp.tools import ToolRegistry, execute_tool
+from app.core.mcp.server.tools import ToolRegistry, execute_tool
 
 logger = logging.getLogger(__name__)
 

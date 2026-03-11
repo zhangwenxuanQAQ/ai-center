@@ -57,3 +57,17 @@ description: 根据标准的MCP协议规范搭建自己的MCP SERVER
   }
 }
 ```
+
+##stdio 连接代码示例
+```
+import asyncio
+from fastmcp import FastMCP
+
+async def main():
+    mcp = FastMCP()
+    await mcp.connect("stdio")
+    await mcp.start()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```

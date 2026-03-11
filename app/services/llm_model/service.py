@@ -29,7 +29,7 @@ class LLMModelService:
             LLMModel: 创建的LLM模型对象
         """
         db_llm_model = LLMModel(**llm_model.model_dump())
-        db_llm_model.save()
+        db_llm_model.save(force_insert=True)
         return db_llm_model
 
     @staticmethod
