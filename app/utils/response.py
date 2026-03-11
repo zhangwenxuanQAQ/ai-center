@@ -30,7 +30,9 @@ class ResponseCode:
     UNAUTHORIZED = 401
     FORBIDDEN = 403
     NOT_FOUND = 404
+    DUPLICATE_RESOURCE = 409
     INTERNAL_ERROR = 500
+    DATABASE_ERROR = 503
 
 
 class ResponseUtil:

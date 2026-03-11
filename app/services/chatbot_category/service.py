@@ -2,6 +2,7 @@
 机器人分类服务类，提供机器人分类相关的CRUD操作
 """
 
+from datetime import datetime
 from app.database.models import ChatbotCategory
 from app.services.chatbot_category.dto import ChatbotCategoryCreate, ChatbotCategoryUpdate
 from app.database.db_utils import handle_transaction
@@ -48,10 +49,11 @@ class ChatbotCategoryService:
         Raises:
             DuplicateResourceError: 同一父分类下已存在同名分类
         """
-        # 检查同一父分类下是否已存在同名分类
+        # 检查同一父分类下是否已存在同名分类（排除已删除的）
         existing_category = ChatbotCategory.select().where(
             ChatbotCategory.name == category.name,
-            ChatbotCategory.parent_id == category.parent_id
+            ChatbotCategory.parent_id == category.parent_id,
+            ChatbotCategory.deleted == False
         ).first()
         
         if existing_category:
@@ -88,8 +90,10 @@ class ChatbotCategoryService:
         Returns:
             List[dict]: 分类树结构
         """
-        # 获取所有分类
-        all_categories = list(ChatbotCategory.select().order_by(ChatbotCategory.sort_order.asc()))
+        # 获取所有未删除的分类
+        all_categories = list(ChatbotCategory.select().where(
+            ChatbotCategory.deleted == False
+        ).order_by(ChatbotCategory.sort_order.asc()))
         
         # 构建分类节点映射，使用移除横杠的ID作为键
         def remove_hyphens(id_str):
@@ -230,7 +234,7 @@ class ChatbotCategoryService:
     @handle_transaction
     def delete_category(category_id: str):
         """
-        删除机器人分类
+        删除机器人分类（软删除）
         
         Args:
             category_id: 机器人分类ID
@@ -240,16 +244,53 @@ class ChatbotCategoryService:
             
         Raises:
             ResourceNotFoundError: 机器人分类不存在
+            ValueError: 不能删除默认分类或分类下有数据
         """
         try:
             db_category = ChatbotCategory.get_by_id(category_id)
-        except ChatbotCategory.DoesNotExist:
+        except:
             raise ResourceNotFoundError(
+                resource_type="机器人分类",
+                resource_id=category_id,
                 message=f"机器人分类 {category_id} 不存在"
             )
         
         if db_category.is_default:
             raise ValueError("不能删除默认分类")
+        
+        # 检查分类下是否有机器人
+        from app.database.models import Chatbot
+        bots_in_category = Chatbot.select().where(
+            (Chatbot.category_id == category_id) & 
+            (Chatbot.deleted == False)
+        ).count()
+        
+        if bots_in_category > 0:
+            raise ValueError(f"该分类下存在 {bots_in_category} 个机器人，无法删除")
+        
+        # 递归检查所有子分类
+        def check_subcategories(parent_id):
+            """递归检查子分类下是否有机器人"""
+            subcategories = ChatbotCategory.select().where(
+                (ChatbotCategory.parent_id == parent_id) &
+                (ChatbotCategory.deleted == False)
+            )
+            
+            for subcategory in subcategories:
+                # 检查子分类下是否有机器人
+                bots_count = Chatbot.select().where(
+                    (Chatbot.category_id == subcategory.id) & 
+                    (Chatbot.deleted == False)
+                ).count()
+                
+                if bots_count > 0:
+                    raise ValueError(f"子分类 '{subcategory.name}' 下存在 {bots_count} 个机器人，无法删除")
+                
+                # 递归检查子分类的子分类
+                check_subcategories(subcategory.id)
+        
+        # 检查所有子分类
+        check_subcategories(category_id)
         
         db_category.delete_instance()
         return db_category

@@ -1,0 +1,177 @@
+/**
+ * MCP服务
+ * 提供MCP相关的API调用
+ */
+
+import http from '../utils/request';
+
+export interface MCPCategory {
+  id: string;
+  name: string;
+  description?: string;
+  parent_id?: string;
+  sort_order: number;
+  created_at?: string;
+  updated_at?: string;
+  children?: MCPCategory[];
+}
+
+export interface MCPServer {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  url: string;
+  api_key?: string;
+  transport_type: string;
+  source_type: string;
+  category_id?: string;
+  config?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface MCPTool {
+  id: string;
+  name: string;
+  description?: string;
+  tool_type: string;
+  server_id: string;
+  config?: string;
+  status: boolean;
+  created_at: string;
+  updated_at?: string;
+}
+
+export const mcpService = {
+  /**
+   * 获取MCP分类列表
+   */
+  getCategories: async (skip: number = 0, limit: number = 100): Promise<MCPCategory[]> => {
+    return http.get<MCPCategory[]>(`/aicenter/v1/mcp/category?skip=${skip}&limit=${limit}`);
+  },
+
+  /**
+   * 获取MCP分类树形结构
+   */
+  getCategoryTree: async (): Promise<MCPCategory[]> => {
+    return http.get<MCPCategory[]>('/aicenter/v1/mcp/category/tree');
+  },
+
+  /**
+   * 创建MCP分类
+   */
+  createCategory: async (data: Partial<MCPCategory>): Promise<MCPCategory> => {
+    return http.post<MCPCategory>('/aicenter/v1/mcp/category', data);
+  },
+
+  /**
+   * 更新MCP分类
+   */
+  updateCategory: async (id: string, data: Partial<MCPCategory>): Promise<MCPCategory> => {
+    return http.post<MCPCategory>(`/aicenter/v1/mcp/category/${id}`, data);
+  },
+
+  /**
+   * 删除MCP分类
+   */
+  deleteCategory: async (id: string): Promise<MCPCategory> => {
+    return http.post<MCPCategory>(`/aicenter/v1/mcp/category/${id}/delete`);
+  },
+
+  /**
+   * 获取MCP服务来源类型
+   */
+  getSourceTypes: async (): Promise<Record<string, string>> => {
+    return http.get<Record<string, string>>('/aicenter/v1/mcp/server/source-types');
+  },
+
+  /**
+   * 获取MCP服务传输类型
+   */
+  getTransportTypes: async (): Promise<Record<string, string>> => {
+    return http.get<Record<string, string>>('/aicenter/v1/mcp/server/transport-types');
+  },
+
+  /**
+   * 获取MCP服务列表
+   */
+  getServers: async (skip: number = 0, limit: number = 100, category_id?: string, name?: string): Promise<MCPServer[]> => {
+    let params = [`skip=${skip}`, `limit=${limit}`];
+    if (category_id) params.push(`category_id=${category_id}`);
+    if (name) params.push(`name=${encodeURIComponent(name)}`);
+    return http.get<MCPServer[]>(`/aicenter/v1/mcp/server?${params.join('&')}`);
+  },
+
+  /**
+   * 获取单个MCP服务
+   */
+  getServer: async (id: string): Promise<MCPServer> => {
+    return http.get<MCPServer>(`/aicenter/v1/mcp/server/${id}`);
+  },
+
+  /**
+   * 创建MCP服务
+   */
+  createServer: async (data: Partial<MCPServer>): Promise<MCPServer> => {
+    return http.post<MCPServer>('/aicenter/v1/mcp/server', data);
+  },
+
+  /**
+   * 更新MCP服务
+   */
+  updateServer: async (id: string, data: Partial<MCPServer>): Promise<MCPServer> => {
+    return http.post<MCPServer>(`/aicenter/v1/mcp/server/${id}`, data);
+  },
+
+  /**
+   * 删除MCP服务
+   */
+  deleteServer: async (id: string): Promise<MCPServer> => {
+    return http.post<MCPServer>(`/aicenter/v1/mcp/server/${id}/delete`);
+  },
+
+  /**
+   * 导入MCP工具
+   */
+  importTools: async (serverId: string, tools: Partial<MCPTool>[]): Promise<MCPTool[]> => {
+    return http.post<MCPTool[]>(`/aicenter/v1/mcp/server/${serverId}/import-tools`, tools);
+  },
+
+  /**
+   * 获取MCP工具列表
+   */
+  getTools: async (skip: number = 0, limit: number = 100, server_id?: string): Promise<MCPTool[]> => {
+    let params = [`skip=${skip}`, `limit=${limit}`];
+    if (server_id) params.push(`server_id=${server_id}`);
+    return http.get<MCPTool[]>(`/aicenter/v1/mcp/tool?${params.join('&')}`);
+  },
+
+  /**
+   * 获取单个MCP工具
+   */
+  getTool: async (id: string): Promise<MCPTool> => {
+    return http.get<MCPTool>(`/aicenter/v1/mcp/tool/${id}`);
+  },
+
+  /**
+   * 创建MCP工具
+   */
+  createTool: async (data: Partial<MCPTool>): Promise<MCPTool> => {
+    return http.post<MCPTool>('/aicenter/v1/mcp/tool', data);
+  },
+
+  /**
+   * 更新MCP工具
+   */
+  updateTool: async (id: string, data: Partial<MCPTool>): Promise<MCPTool> => {
+    return http.post<MCPTool>(`/aicenter/v1/mcp/tool/${id}`, data);
+  },
+
+  /**
+   * 删除MCP工具
+   */
+  deleteTool: async (id: string): Promise<MCPTool> => {
+    return http.post<MCPTool>(`/aicenter/v1/mcp/tool/${id}/delete`);
+  },
+};

@@ -92,6 +92,20 @@
   font-weight: 500;
 }
 
+/* ==================== 公共输入框样式 ==================== */
+
+.no-border-input {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+  transition: all 0.3s ease;
+
+  &:focus {
+    background: rgba(102, 126, 234, 0.05) !important;
+  }
+}
+
 /* ==================== 公共 Tree 样式 ==================== */
 
 .ant-tree-treenode-leaf {

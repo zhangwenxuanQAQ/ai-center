@@ -2,6 +2,11 @@
 FastAPI应用主入口
 """
 
+import asyncio
+import subprocess
+import sys
+import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -16,19 +21,20 @@ from app.core.exceptions import (
 )
 from app.utils.response import ResponseUtil, ResponseCode
 
-# 创建数据库表
+print("=" * 80)
+print("AI Center 后端服务启动中...")
+print("=" * 80)
+
+print("\n[1/3] 初始化数据库...")
 create_tables()
 
-# 运行数据库迁移，添加逻辑删除字段
-print("正在运行数据库迁移...")
+print("\n[2/3] 运行数据库迁移...")
 try:
     from app.database.database import db
     
-    # 确保数据库连接
     if db.is_closed():
         db.connect()
     
-    # 获取所有表名
     cursor = db.execute_sql("SHOW TABLES;")
     tables = cursor.fetchall()
     table_names = [table[0] for table in tables]
@@ -38,11 +44,9 @@ try:
     for table_name in table_names:
         print(f"\n处理表: {table_name}")
         
-        # 检查表是否已存在逻辑删除字段
         cursor = db.execute_sql(f"DESCRIBE {table_name};")
         columns = [column[0] for column in cursor.fetchall()]
         
-        # 添加deleted字段
         if 'deleted' not in columns:
             try:
                 db.execute_sql(f"ALTER TABLE {table_name} ADD COLUMN deleted TINYINT DEFAULT 0")
@@ -52,7 +56,6 @@ try:
         else:
             print(f"  deleted字段已存在，跳过")
         
-        # 添加deleted_at字段
         if 'deleted_at' not in columns:
             try:
                 db.execute_sql(f"ALTER TABLE {table_name} ADD COLUMN deleted_at DATETIME DEFAULT NULL")
@@ -62,7 +65,6 @@ try:
         else:
             print(f"  deleted_at字段已存在，跳过")
         
-        # 添加deleted_user_id字段
         if 'deleted_user_id' not in columns:
             try:
                 db.execute_sql(f"ALTER TABLE {table_name} ADD COLUMN deleted_user_id VARCHAR(36) DEFAULT NULL")
@@ -72,14 +74,11 @@ try:
         else:
             print(f"  deleted_user_id字段已存在，跳过")
     
-    # 移除chatbot表中code字段的唯一约束
     print("\n移除chatbot表中code字段的唯一约束...")
     try:
-        # 查看表的索引
         cursor = db.execute_sql("SHOW INDEX FROM chatbot;")
         indexes = cursor.fetchall()
         
-        # 查找code字段的唯一索引
         has_unique_index = False
         for index in indexes:
             if index[4] == 'code' and index[2] == 'UNI':
@@ -87,7 +86,6 @@ try:
                 break
         
         if has_unique_index:
-            # 移除唯一约束
             db.execute_sql("ALTER TABLE chatbot DROP INDEX code;")
             print("  成功移除chatbot表中code字段的唯一约束")
         else:
@@ -99,13 +97,52 @@ try:
 except Exception as e:
     print(f"数据库迁移失败: {e}")
 
+mcp_enabled = config.config.get('mcp', {}).get('enabled', False)
+mcp_process = None
+
+if mcp_enabled:
+    print("\n[3/3] 启动MCP服务...")
+    mcp_host = config.config.get('mcp', {}).get('host', '127.0.0.1')
+    mcp_port = config.config.get('mcp', {}).get('port', 8082)
+    
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    mcp_process = subprocess.Popen(
+        [sys.executable, "-m", "app.mcp_server"],
+        cwd=project_root,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
+    )
+    print(f"MCP服务已启动: http://{mcp_host}:{mcp_port}/mcp")
+else:
+    print("\n[3/3] MCP服务未启用（配置文件中mcp.enabled=false）")
+
+print("\n" + "=" * 80)
+print("AI Center 服务启动成功！")
+print("=" * 80)
+print(f"\n服务地址:")
+print(f"  - 后端API:     http://{config.server['host']}:{config.server['http_port']}")
+print(f"  - Swagger文档: http://{config.server['host']}:{config.server['http_port']}/docs")
+print(f"  - ReDoc文档:   http://{config.server['host']}:{config.server['http_port']}/redoc")
+
+if mcp_enabled:
+    mcp_host = config.config.get('mcp', {}).get('host', '127.0.0.1')
+    mcp_port = config.config.get('mcp', {}).get('port', 8082)
+    print(f"  - MCP服务:     http://{mcp_host}:{mcp_port}/mcp")
+else:
+    print(f"  - MCP服务:     未启用")
+
+print(f"\n数据库连接:")
+print(f"  - 主机: {config.mysql['host']}:{config.mysql['port']}")
+print(f"  - 数据库: {config.mysql['name']}")
+print(f"  - 用户: {config.mysql['user']}")
+print("\n" + "=" * 80)
+
 app = FastAPI(
     title="AI Center API",
     description="AI服务中心后端API",
     version="1.0.0"
 )
 
-# 配置CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -114,7 +151,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 全局异常处理器
 async def base_service_error_handler(request: Request, exc: BaseServiceError):
     """
     处理所有Service层异常
@@ -131,7 +167,7 @@ async def base_service_error_handler(request: Request, exc: BaseServiceError):
         message=exc.message,
         data={"error_type": exc.__class__.__name__, "detail": exc.detail}
     )
-    return JSONResponse(content=response.model_dump(), status_code=response.code)
+    return JSONResponse(content=response.model_dump(), status_code=ResponseCode.INTERNAL_ERROR)
 
 async def resource_not_found_error_handler(request: Request, exc: ResourceNotFoundError):
     """
@@ -147,7 +183,7 @@ async def resource_not_found_error_handler(request: Request, exc: ResourceNotFou
     response = ResponseUtil.not_found(
         message=exc.message
     )
-    return JSONResponse(content=response.model_dump(), status_code=response.code)
+    return JSONResponse(content=response.model_dump(), status_code=ResponseCode.NOT_FOUND)
 
 async def duplicate_resource_error_handler(request: Request, exc: DuplicateResourceError):
     """
@@ -161,11 +197,10 @@ async def duplicate_resource_error_handler(request: Request, exc: DuplicateResou
         JSONResponse: 统一格式的响应
     """
     response = ResponseUtil.error(
-        code=ResponseCode.BAD_REQUEST,
-        message=exc.message,
-        data={"error_type": exc.__class__.__name__, "detail": exc.detail}
+        code=ResponseCode.DUPLICATE_RESOURCE,
+        message=exc.message
     )
-    return JSONResponse(content=response.model_dump(), status_code=response.code)
+    return JSONResponse(content=response.model_dump(), status_code=ResponseCode.DUPLICATE_RESOURCE)
 
 async def database_operation_error_handler(request: Request, exc: DatabaseOperationError):
     """
@@ -179,36 +214,67 @@ async def database_operation_error_handler(request: Request, exc: DatabaseOperat
         JSONResponse: 统一格式的响应
     """
     response = ResponseUtil.error(
-        code=ResponseCode.INTERNAL_ERROR,
-        message=exc.message,
-        data={"error_type": exc.__class__.__name__, "detail": exc.detail}
+        code=ResponseCode.DATABASE_ERROR,
+        message=exc.message
     )
-    return JSONResponse(content=response.model_dump(), status_code=response.code)
+    return JSONResponse(content=response.model_dump(), status_code=ResponseCode.DATABASE_ERROR)
 
-# 注册异常处理器
 app.add_exception_handler(BaseServiceError, base_service_error_handler)
 app.add_exception_handler(ResourceNotFoundError, resource_not_found_error_handler)
 app.add_exception_handler(DuplicateResourceError, duplicate_resource_error_handler)
 app.add_exception_handler(DatabaseOperationError, database_operation_error_handler)
 
-# 包含路由
-app.include_router(router, prefix="/aicenter/v1")
-
-
-@app.get("/")
-def read_root():
+# 添加ValueError异常处理器
+async def value_error_handler(request: Request, exc: ValueError):
     """
-    根路径，返回API信息
+    处理ValueError异常
     
+    Args:
+        request: 请求对象
+        exc: 异常对象
+        
     Returns:
-        dict: API信息
+        JSONResponse: 统一格式的响应
     """
-    return ResponseUtil.success(
-        data={"message": "AI Center Backend API", "version": "1.0.0"},
-        message="欢迎访问AI Center API"
-    ).model_dump()
+    response = ResponseUtil.error(
+        code=ResponseCode.BAD_REQUEST,
+        message=str(exc)
+    )
+    return JSONResponse(content=response.model_dump(), status_code=400)
 
+# 添加通用异常处理器
+async def general_exception_handler(request: Request, exc: Exception):
+    """
+    处理所有未捕获的异常
+    
+    Args:
+        request: 请求对象
+        exc: 异常对象
+        
+    Returns:
+        JSONResponse: 统一格式的响应
+    """
+    response = ResponseUtil.error(
+        code=ResponseCode.INTERNAL_ERROR,
+        message=f"服务器内部错误: {str(exc)}"
+    )
+    return JSONResponse(content=response.model_dump(), status_code=500)
+
+app.add_exception_handler(ValueError, value_error_handler)
+app.add_exception_handler(Exception, general_exception_handler)
+
+app.include_router(router, prefix="/aicenter/v1")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host=config.server['host'], port=config.server['http_port'])
+    try:
+        uvicorn.run(
+            "app.server_run:app",
+            host=config.server['host'],
+            port=config.server['http_port'],
+            reload=False
+        )
+    finally:
+        if mcp_process:
+            mcp_process.terminate()
+            mcp_process.wait()

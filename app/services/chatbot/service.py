@@ -111,7 +111,7 @@ class ChatbotService:
         """
         try:
             chatbot_data = chatbot.model_dump()
-            mcp_ids = chatbot_data.pop('mcp_ids', [])
+            mcp_server_ids = chatbot_data.pop('mcp_server_ids', [])
             
             if not chatbot_data.get('category_id'):
                 default_category = ChatbotService._get_or_create_default_category()
@@ -131,9 +131,9 @@ class ChatbotService:
             # 保存到数据库，使用force_insert=True强制插入
             db_chatbot.save(force_insert=True)
             
-            if mcp_ids:
-                for mcp_id in mcp_ids:
-                    chatbot_mcp = ChatbotMCP(chatbot_id=db_chatbot.id, mcp_id=mcp_id)
+            if mcp_server_ids:
+                for mcp_server_id in mcp_server_ids:
+                    chatbot_mcp = ChatbotMCP(chatbot_id=db_chatbot.id, mcp_server_id=mcp_server_id)
                     chatbot_mcp.save()
             
             return db_chatbot
@@ -183,8 +183,8 @@ class ChatbotService:
             chatbots = list(query.offset(skip).limit(limit))
             result = []
             for chatbot in chatbots:
-                # 获取MCP关联
-                mcp_ids = [str(cm.mcp_id) for cm in ChatbotMCP.select().where(ChatbotMCP.chatbot_id == chatbot.id)]
+                # 获取MCP服务关联
+                mcp_server_ids = [str(cm.mcp_server_id) for cm in ChatbotMCP.select().where(ChatbotMCP.chatbot_id == chatbot.id)]
                 # 构建聊天机器人字典
                 chatbot_dict = {
                     "id": str(chatbot.id),
@@ -201,7 +201,7 @@ class ChatbotService:
                     "source_config": chatbot.source_config,
                     "created_at": chatbot.created_at,
                     "updated_at": chatbot.updated_at,
-                    "mcp_ids": mcp_ids
+                    "mcp_server_ids": mcp_server_ids
                 }
                 result.append(chatbot_dict)
             return result
@@ -226,7 +226,7 @@ class ChatbotService:
                 return None
         except Chatbot.DoesNotExist:
             return None
-        mcp_ids = [str(cm.mcp_id) for cm in ChatbotMCP.select().where(ChatbotMCP.chatbot_id == chatbot.id)]
+        mcp_server_ids = [str(cm.mcp_server_id) for cm in ChatbotMCP.select().where(ChatbotMCP.chatbot_id == chatbot.id)]
         chatbot_dict = {
             "id": str(chatbot.id),
             "code": chatbot.code,
@@ -242,7 +242,7 @@ class ChatbotService:
             "source_config": chatbot.source_config,
             "created_at": chatbot.created_at,
             "updated_at": chatbot.updated_at,
-            "mcp_ids": mcp_ids
+            "mcp_server_ids": mcp_server_ids
         }
         return chatbot_dict
 
@@ -273,8 +273,8 @@ class ChatbotService:
                 )
             
             update_data = chatbot.model_dump(exclude_unset=True)
-            # 提取mcp_ids，不包含在Chatbot模型中
-            mcp_ids = update_data.pop('mcp_ids', None)
+            # 提取mcp_server_ids，不包含在Chatbot模型中
+            mcp_server_ids = update_data.pop('mcp_server_ids', None)
             
             # 检查编码是否重复
             if 'code' in update_data:
@@ -292,13 +292,13 @@ class ChatbotService:
                 db_chatbot.updated_at = datetime.now()
                 db_chatbot.save()
             
-            # 更新MCP关联
-            if mcp_ids is not None:
+            # 更新MCP服务关联
+            if mcp_server_ids is not None:
                 # 删除现有的关联
                 ChatbotMCP.delete().where(ChatbotMCP.chatbot_id == chatbot_id).execute()
                 # 添加新的关联
-                for mcp_id in mcp_ids:
-                    chatbot_mcp = ChatbotMCP(chatbot_id=chatbot_id, mcp_id=mcp_id)
+                for mcp_server_id in mcp_server_ids:
+                    chatbot_mcp = ChatbotMCP(chatbot_id=chatbot_id, mcp_server_id=mcp_server_id)
                     chatbot_mcp.save()
             
             return db_chatbot

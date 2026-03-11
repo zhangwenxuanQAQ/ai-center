@@ -42,9 +42,9 @@ class ChatbotCreate(ChatbotBase):
     聊天机器人创建DTO
     
     Attributes:
-        mcp_ids: MCP ID列表
+        mcp_server_ids: MCP服务ID列表
     """
-    mcp_ids: Optional[List[str]] = Field(None, description="MCP ID列表，UUID格式")
+    mcp_server_ids: Optional[List[str]] = Field(None, description="MCP服务ID列表，UUID格式")
 
 
 class ChatbotUpdate(BaseModel):
@@ -63,7 +63,7 @@ class ChatbotUpdate(BaseModel):
         knowledge_id: 知识库ID
         source_type: 来源类型
         source_config: 来源配置
-        mcp_ids: MCP ID列表
+        mcp_server_ids: MCP服务ID列表
     """
     code: Optional[str] = Field(None, min_length=1, max_length=100, description="机器人编码，全局唯一")
     name: Optional[str] = Field(None, min_length=1, max_length=100, description="聊天机器人名称，长度1-100个字符")
@@ -76,7 +76,7 @@ class ChatbotUpdate(BaseModel):
     knowledge_id: Optional[str] = Field(None, description="知识库ID，UUID格式")
     source_type: Optional[str] = Field(None, max_length=50, description="来源类型，最大长度50个字符")
     source_config: Optional[str] = Field(None, max_length=2000, description="来源配置，最大长度2000个字符")
-    mcp_ids: Optional[List[str]] = Field(None, description="MCP ID列表，UUID格式")
+    mcp_server_ids: Optional[List[str]] = Field(None, description="MCP服务ID列表，UUID格式")
 
 
 class Chatbot(ChatbotBase, BaseDTO):
@@ -86,9 +86,9 @@ class Chatbot(ChatbotBase, BaseDTO):
     继承自ChatbotBase和BaseDTO，包含聊天机器人基本信息和公共字段
     
     Attributes:
-        mcp_ids: MCP ID列表
+        mcp_server_ids: MCP服务ID列表
     """
-    mcp_ids: Optional[List[str]] = Field(None, description="MCP ID列表，UUID格式")
+    mcp_server_ids: Optional[List[str]] = Field(None, description="MCP服务ID列表，UUID格式")
     
     class Config:
         from_attributes = True

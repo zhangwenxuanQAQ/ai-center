@@ -223,8 +223,7 @@ const ChatbotManagement: React.FC = () => {
       message.success('排序更新成功！');
       fetchCategories();
     } catch (error) {
-      console.error('Failed to update category order:', error);
-      message.error('更新排序失败');
+      console.error('更新排序失败:', error);
     }
   };
 
@@ -234,8 +233,7 @@ const ChatbotManagement: React.FC = () => {
       message.success('分类删除成功！');
       fetchCategories();
     } catch (error) {
-      console.error('Failed to delete category:', error);
-      message.error('删除分类失败');
+      console.error('删除分类失败:', error);
     }
   };
 
@@ -247,8 +245,7 @@ const ChatbotManagement: React.FC = () => {
       setIsCategoryModalVisible(false);
       fetchCategories();
     } catch (error) {
-      console.error('Failed to create category:', error);
-      message.error('创建分类失败');
+      console.error('创建分类失败:', error);
     }
   };
 
@@ -261,8 +258,7 @@ const ChatbotManagement: React.FC = () => {
       setIsCategoryEditModalVisible(false);
       fetchCategories();
     } catch (error) {
-      console.error('Failed to update category:', error);
-      message.error('更新分类失败');
+      console.error('更新分类失败:', error);
     }
   };
 
@@ -535,28 +531,19 @@ const ChatbotManagement: React.FC = () => {
       
       // 调用后端接口更新机器人
       if (editingChatbotId) {
-        try {
-          await chatbotService.updateChatbot(editingChatbotId, chatbotData);
-          message.success('机器人更新成功！');
-          setIsEditModalVisible(false);
-          editForm.resetFields();
-          setSelectedEditSourceType('');
-          setEditSourceConfig({});
-          setEditingChatbotId(null);
-          fetchChatbots(selectedCategory);
-        } catch (error: any) {
-          if (error.message && error.message.includes('编码已存在')) {
-            message.error('机器人编码已存在，请使用其他编码');
-          } else {
-            message.error('更新失败，请重试');
-          }
-        }
+        await chatbotService.updateChatbot(editingChatbotId, chatbotData);
+        message.success('机器人更新成功！');
+        setIsEditModalVisible(false);
+        editForm.resetFields();
+        setSelectedEditSourceType('');
+        setEditSourceConfig({});
+        setEditingChatbotId(null);
+        fetchChatbots(selectedCategory);
       } else {
         throw new Error('编辑的机器人ID不存在');
       }
     } catch (error) {
-      console.error('Form validation failed:', error);
-      message.error('更新失败，请重试');
+      console.error('更新失败:', error);
     }
   };
 
@@ -568,8 +555,7 @@ const ChatbotManagement: React.FC = () => {
       message.success('机器人删除成功！');
       fetchChatbots(selectedCategory);
     } catch (error) {
-      console.error('Delete chatbot failed:', error);
-      message.error('删除失败，请重试');
+      console.error('删除失败:', error);
     }
   };
 
@@ -637,24 +623,15 @@ const ChatbotManagement: React.FC = () => {
       console.log('Submitting chatbot:', chatbotData);
       
       // 调用后端接口创建机器人
-      try {
-        await chatbotService.createChatbot(chatbotData);
-        message.success('机器人创建成功！');
-        setIsModalVisible(false);
-        form.resetFields();
-        setSelectedSourceType('');
-        setSourceConfig({});
-        fetchChatbots(selectedCategory);
-      } catch (error: any) {
-        if (error.message && error.message.includes('编码已存在')) {
-          message.error('机器人编码已存在，请使用其他编码');
-        } else {
-          message.error('创建失败，请重试');
-        }
-      }
+      await chatbotService.createChatbot(chatbotData);
+      message.success('机器人创建成功！');
+      setIsModalVisible(false);
+      form.resetFields();
+      setSelectedSourceType('');
+      setSourceConfig({});
+      fetchChatbots(selectedCategory);
     } catch (error) {
-      console.error('Form validation failed:', error);
-      message.error('创建失败，请重试');
+      console.error('创建失败:', error);
     }
   };
 

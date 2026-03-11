@@ -89,8 +89,20 @@ export async function request<T = any>(
       throw new Error(errorMsg);
     }
 
-    // 其他错误（如业务错误）由调用方处理
-    throw error;
+    // 处理业务错误
+    if (error instanceof Error) {
+      if (showError) {
+        message.error(error.message);
+      }
+      throw error;
+    }
+
+    // 其他未知错误
+    const errorMsg = '发生未知错误';
+    if (showError) {
+      message.error(errorMsg);
+    }
+    throw new Error(errorMsg);
   }
 }
 
