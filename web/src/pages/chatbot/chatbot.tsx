@@ -1056,7 +1056,7 @@ const ChatbotManagement: React.FC = () => {
         open={isModalVisible}
         onOk={handleSubmit}
         onCancel={() => setIsModalVisible(false)}
-        width={600}
+        width={700}
         okText="保存"
         cancelText="取消"
         className={`chatbot-modal ${theme === 'dark' ? 'dark' : 'light'}`}
@@ -1069,53 +1069,73 @@ const ChatbotManagement: React.FC = () => {
             source_type: 'local'
           }}
         >
-          <Form.Item
-            name="name"
-            label="机器人名称"
-            rules={[{ required: true, message: '请输入机器人名称' }]}
-          >
-            <Input placeholder="请输入机器人名称" />
-          </Form.Item>
-
-          <Form.Item
-            name="code"
-            label="机器人编码"
-            rules={[
-              { required: true, message: '请输入机器人编码' },
-              { pattern: /^[a-zA-Z0-9_]+$/, message: '编码只能包含字母、数字和下划线' }
-            ]}
-          >
-            <Input placeholder="请输入机器人编码（字母、数字、下划线）" onChange={handleCodeChange} />
-          </Form.Item>
-
-          <Form.Item
-            name="source_type"
-            label="来源"
-            rules={[{ required: true, message: '请选择来源' }]}
-          >
-            <Select 
-              placeholder="请选择来源" 
-              onChange={handleSourceTypeChange}
-            >
-              {sourceTypes.map(source => (
-                <Option key={source.source_type} value={source.source_type}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <img 
-                      src={sourceTypeIcons[source.source_type]} 
-                      alt="" 
-                      style={{ 
-                        width: 20, 
-                        height: 20,
-                        filter: theme === 'dark' ? 'invert(1) brightness(100%)' : 'none'
-                      }} 
-                    />
-                    <span>{source.source_name}</span>
-                  </div>
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
-
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="name"
+                label="机器人名称"
+                rules={[{ required: true, message: '请输入机器人名称' }]}
+              >
+                <Input placeholder="请输入机器人名称" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="code"
+                label="机器人编码"
+                rules={[
+                  { required: true, message: '请输入机器人编码' },
+                  { pattern: /^[a-zA-Z0-9_]+$/, message: '编码只能包含字母、数字和下划线' }
+                ]}
+              >
+                <Input placeholder="请输入机器人编码（字母、数字、下划线）" onChange={handleCodeChange} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="source_type"
+                label="来源"
+                rules={[{ required: true, message: '请选择来源' }]}
+              >
+                <Select 
+                  placeholder="请选择来源" 
+                  onChange={handleSourceTypeChange}
+                >
+                  {sourceTypes.map(source => (
+                    <Option key={source.source_type} value={source.source_type}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <img 
+                          src={sourceTypeIcons[source.source_type]} 
+                          alt="" 
+                          style={{ 
+                            width: 20, 
+                            height: 20,
+                            filter: theme === 'dark' ? 'invert(1) brightness(100%)' : 'none'
+                          }} 
+                        />
+                        <span>{source.source_name}</span>
+                      </div>
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="category_id"
+                label="分类"
+              >
+                <TreeSelect
+                  placeholder="请选择分类"
+                  treeData={buildCategoryTreeSelectData()}
+                  treeDefaultExpandAll
+                  allowClear
+                />
+              </Form.Item>
+            </Col>
+          </Row>
           {selectedSourceType && getSourceConfigFields().map(field => (
             <Form.Item
               key={field.name}
@@ -1129,7 +1149,6 @@ const ChatbotManagement: React.FC = () => {
               />
             </Form.Item>
           ))}
-
           <Form.Item
             name="greeting"
             label="欢迎语"
@@ -1137,7 +1156,6 @@ const ChatbotManagement: React.FC = () => {
           >
             <TextArea rows={2} placeholder="请输入欢迎语" />
           </Form.Item>
-
           <Form.Item
             name="avatar"
             label="头像"
@@ -1148,8 +1166,8 @@ const ChatbotManagement: React.FC = () => {
                   src={avatarPreview} 
                   alt="头像预览" 
                   style={{ 
-                    width: 80, 
-                    height: 80, 
+                    width: 60, 
+                    height: 60, 
                     borderRadius: '50%', 
                     objectFit: 'cover',
                     border: '2px solid #d9d9d9'
@@ -1161,19 +1179,6 @@ const ChatbotManagement: React.FC = () => {
               </Upload>
             </div>
           </Form.Item>
-
-          <Form.Item
-            name="category_id"
-            label="分类"
-          >
-            <TreeSelect
-              placeholder="请选择分类"
-              treeData={buildCategoryTreeSelectData()}
-              treeDefaultExpandAll
-              allowClear
-            />
-          </Form.Item>
-
           <Form.Item
             name="description"
             label="机器人描述"
@@ -1189,7 +1194,7 @@ const ChatbotManagement: React.FC = () => {
         open={isEditModalVisible}
         onOk={handleEditSubmit}
         onCancel={() => setIsEditModalVisible(false)}
-        width={600}
+        width={700}
         okText="保存"
         cancelText="取消"
         className={`chatbot-modal ${theme === 'dark' ? 'dark' : 'light'}`}
@@ -1198,53 +1203,73 @@ const ChatbotManagement: React.FC = () => {
           form={editForm}
           layout="vertical"
         >
-          <Form.Item
-            name="name"
-            label="机器人名称"
-            rules={[{ required: true, message: '请输入机器人名称' }]}
-          >
-            <Input placeholder="请输入机器人名称" />
-          </Form.Item>
-
-          <Form.Item
-            name="code"
-            label="机器人编码"
-            rules={[
-              { required: true, message: '请输入机器人编码' },
-              { pattern: /^[a-zA-Z0-9_]+$/, message: '编码只能包含字母、数字和下划线' }
-            ]}
-          >
-            <Input placeholder="请输入机器人编码（字母、数字、下划线）" />
-          </Form.Item>
-
-          <Form.Item
-            name="source_type"
-            label="来源"
-            rules={[{ required: true, message: '请选择来源' }]}
-          >
-            <Select 
-              placeholder="请选择来源" 
-              onChange={handleEditSourceTypeChange}
-            >
-              {sourceTypes.map(source => (
-                <Option key={source.source_type} value={source.source_type}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <img 
-                      src={sourceTypeIcons[source.source_type]} 
-                      alt="" 
-                      style={{ 
-                        width: 20, 
-                        height: 20,
-                        filter: theme === 'dark' ? 'invert(1) brightness(100%)' : 'none'
-                      }} 
-                    />
-                    <span>{source.source_name}</span>
-                  </div>
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
-
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="name"
+                label="机器人名称"
+                rules={[{ required: true, message: '请输入机器人名称' }]}
+              >
+                <Input placeholder="请输入机器人名称" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="code"
+                label="机器人编码"
+                rules={[
+                  { required: true, message: '请输入机器人编码' },
+                  { pattern: /^[a-zA-Z0-9_]+$/, message: '编码只能包含字母、数字和下划线' }
+                ]}
+              >
+                <Input placeholder="请输入机器人编码（字母、数字、下划线）" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="source_type"
+                label="来源"
+                rules={[{ required: true, message: '请选择来源' }]}
+              >
+                <Select 
+                  placeholder="请选择来源" 
+                  onChange={handleEditSourceTypeChange}
+                >
+                  {sourceTypes.map(source => (
+                    <Option key={source.source_type} value={source.source_type}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <img 
+                          src={sourceTypeIcons[source.source_type]} 
+                          alt="" 
+                          style={{ 
+                            width: 20, 
+                            height: 20,
+                            filter: theme === 'dark' ? 'invert(1) brightness(100%)' : 'none'
+                          }} 
+                        />
+                        <span>{source.source_name}</span>
+                      </div>
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="category_id"
+                label="分类"
+              >
+                <TreeSelect
+                  placeholder="请选择分类"
+                  treeData={buildCategoryTreeSelectData()}
+                  treeDefaultExpandAll
+                  allowClear
+                />
+              </Form.Item>
+            </Col>
+          </Row>
           {selectedEditSourceType && getEditSourceConfigFields().map(field => (
             <Form.Item
               key={field.name}
@@ -1258,7 +1283,6 @@ const ChatbotManagement: React.FC = () => {
               />
             </Form.Item>
           ))}
-
           <Form.Item
             name="greeting"
             label="欢迎语"
@@ -1266,7 +1290,6 @@ const ChatbotManagement: React.FC = () => {
           >
             <TextArea rows={2} placeholder="请输入欢迎语" />
           </Form.Item>
-
           <Form.Item
             name="avatar"
             label="头像"
@@ -1277,8 +1300,8 @@ const ChatbotManagement: React.FC = () => {
                   src={editAvatarPreview} 
                   alt="头像预览" 
                   style={{ 
-                    width: 80, 
-                    height: 80, 
+                    width: 60, 
+                    height: 60, 
                     borderRadius: '50%', 
                     objectFit: 'cover',
                     border: '2px solid #d9d9d9'
@@ -1290,19 +1313,6 @@ const ChatbotManagement: React.FC = () => {
               </Upload>
             </div>
           </Form.Item>
-
-          <Form.Item
-            name="category_id"
-            label="分类"
-          >
-            <TreeSelect
-              placeholder="请选择分类"
-              treeData={buildCategoryTreeSelectData()}
-              treeDefaultExpandAll
-              allowClear
-            />
-          </Form.Item>
-
           <Form.Item
             name="description"
             label="机器人描述"

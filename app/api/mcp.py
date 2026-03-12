@@ -4,7 +4,12 @@ MCP控制器，提供MCP相关的API接口
 
 from fastapi import APIRouter, Body, Query
 from app.services.mcp.service import MCPCategoryService, MCPServerService, MCPToolService
-from app.services.mcp.dto import MCPCategoryCreate, MCPCategoryUpdate, MCPCategory, MCPServerCreate, MCPServerUpdate, MCPServer, MCPToolCreate, MCPToolUpdate, MCPTool
+from app.services.mcp.dto import (
+    MCPCategoryCreate, MCPCategoryUpdate, MCPCategory, 
+    MCPServerCreate, MCPServerUpdate, MCPServer, 
+    MCPToolCreate, MCPToolUpdate, MCPTool,
+    MCPConnectionTest, MCPConnectionTestResult
+)
 from app.utils.response import ResponseUtil, ApiResponse
 
 router = APIRouter()
@@ -99,8 +104,11 @@ def delete_mcp_category(category_id: str):
     Returns:
         ApiResponse: 统一格式的响应对象
     """
-    db_category = MCPCategoryService.delete_category(category_id)
-    return ResponseUtil.success(data=db_category.__data__, message="MCP分类删除成功")
+    try:
+        db_category = MCPCategoryService.delete_category(category_id)
+        return ResponseUtil.success(data=db_category.__data__, message="MCP分类删除成功")
+    except ValueError as e:
+        return ResponseUtil.error(message=str(e))
 
 
 # MCP服务相关接口
@@ -138,6 +146,28 @@ def get_mcp_local_config():
     """
     local_config = MCPServerService.get_local_mcp_config()
     return ResponseUtil.success(data=local_config, message="获取本地MCP配置成功")
+
+
+@router.post("/server/test_connection", response_model=ApiResponse)
+async def test_mcp_server_connection(connection_test: MCPConnectionTest):
+    """
+    测试MCP服务连接
+    
+    Args:
+        connection_test: MCP连接测试请求DTO
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象，包含测试结果
+    """
+    result = await MCPServerService.test_connection(
+        transport_type=connection_test.transport_type,
+        url=connection_test.url,
+        config=connection_test.config
+    )
+    if result.get("success"):
+        return ResponseUtil.success(data=result, message="MCP服务连接成功")
+    else:
+        return ResponseUtil.success(data=result, message=result.get("message", "MCP服务连接失败"))
 
 
 @router.post("/server", response_model=ApiResponse)

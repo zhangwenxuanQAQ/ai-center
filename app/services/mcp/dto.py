@@ -16,11 +16,13 @@ class MCPCategoryBase(BaseModel):
         description: 分类描述
         parent_id: 父分类ID
         sort_order: 排序顺序
+        is_default: 是否默认分类
     """
     name: str = Field(..., min_length=1, max_length=100, description="分类名称，长度1-100个字符")
     description: Optional[str] = Field(None, max_length=500, description="分类描述，最大长度500个字符")
     parent_id: Optional[str] = Field(None, description="父分类ID，UUID格式")
     sort_order: int = Field(default=0, description="排序顺序")
+    is_default: Optional[bool] = Field(default=False, description="是否默认分类")
 
 
 class MCPCategoryCreate(MCPCategoryBase):
@@ -183,3 +185,31 @@ class MCPTool(MCPToolBase, BaseDTO):
     
     class Config:
         from_attributes = True
+
+
+class MCPConnectionTest(BaseModel):
+    """
+    MCP连接测试请求DTO
+    
+    Attributes:
+        transport_type: 传输类型
+        url: 服务URL（用于sse和streamable_http）
+        config: 配置信息（用于stdio的命令等）
+    """
+    transport_type: str = Field(..., description="传输类型：sse/streamable_http/stdio")
+    url: Optional[str] = Field(None, description="服务URL，用于sse和streamable_http")
+    config: Optional[str] = Field(None, description="配置信息，JSON格式")
+
+
+class MCPConnectionTestResult(BaseModel):
+    """
+    MCP连接测试结果DTO
+    
+    Attributes:
+        success: 是否成功
+        message: 结果消息
+        server_info: 服务器信息（连接成功时返回）
+    """
+    success: bool = Field(..., description="是否连接成功")
+    message: str = Field(..., description="结果消息")
+    server_info: Optional[dict] = Field(None, description="服务器信息")

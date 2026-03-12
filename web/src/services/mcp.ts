@@ -28,8 +28,21 @@ export interface MCPServer {
   source_type: string;
   category_id?: string;
   config?: string;
+  avatar?: string;
   created_at: string;
   updated_at?: string;
+}
+
+export interface MCPConnectionTest {
+  transport_type: string;
+  url?: string;
+  config?: string;
+}
+
+export interface MCPConnectionTestResult {
+  success: boolean;
+  message: string;
+  server_info?: Record<string, unknown>;
 }
 
 export interface MCPTool {
@@ -99,6 +112,13 @@ export const mcpService = {
    */
   getLocalMcpConfig: async (): Promise<{ host: string; port: number; transport_type: string }> => {
     return http.get<{ host: string; port: number; transport_type: string }>('/aicenter/v1/mcp/server/local_config');
+  },
+
+  /**
+   * 测试MCP服务连接
+   */
+  testConnection: async (data: MCPConnectionTest): Promise<MCPConnectionTestResult> => {
+    return http.post<MCPConnectionTestResult>('/aicenter/v1/mcp/server/test_connection', data);
   },
 
   /**

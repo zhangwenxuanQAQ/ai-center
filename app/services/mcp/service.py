@@ -4,11 +4,61 @@ MCP服务类，提供MCP相关的CRUD操作
 
 import json
 from datetime import datetime
+from typing import Dict, Any, Optional, List
 from app.database.models import MCPCategory, MCPServer, MCPTool
 from app.services.mcp.dto import MCPCategoryCreate, MCPCategoryUpdate, MCPServerCreate, MCPServerUpdate, MCPToolCreate, MCPToolUpdate
 from app.database.db_utils import handle_transaction
 from app.core.exceptions import ResourceNotFoundError, DuplicateResourceError
 from app.constants.mcp_constants import SOURCE_TYPE, TRANSPORT_TYPE, DEFAULT_LOCAL_MCP_CONFIG
+
+
+def parse_mcp_config(config: str, transport_type: str) -> Dict[str, Any]:
+    """
+    解析MCP服务配置
+    
+    Args:
+        config: JSON格式的配置字符串
+        transport_type: 传输类型
+        
+    Returns:
+        Dict[str, Any]: 解析后的配置字典，包含command, args, env, cwd, headers等
+    """
+    result = {
+        'command': None,
+        'args': None,
+        'env': None,
+        'cwd': None,
+        'headers': None
+    }
+    
+    if not config:
+        return result
+    
+    try:
+        config_data = json.loads(config)
+        if not isinstance(config_data, dict):
+            return result
+            
+        if transport_type == 'stdio':
+            mcp_servers = config_data.get('mcpServers', {})
+            if mcp_servers:
+                first_server_key = next(iter(mcp_servers), None)
+                if first_server_key:
+                    server_config = mcp_servers[first_server_key]
+                    result['command'] = server_config.get('command')
+                    result['args'] = server_config.get('args')
+                    result['env'] = server_config.get('env')
+                    result['cwd'] = server_config.get('cwd')
+        else:
+            result['headers'] = config_data.get('headers')
+            result['command'] = config_data.get('command')
+            result['args'] = config_data.get('args')
+            result['env'] = config_data.get('env')
+            result['cwd'] = config_data.get('cwd')
+    except json.JSONDecodeError:
+        pass
+    
+    return result
 
 
 class MCPCategoryService:
@@ -30,9 +80,13 @@ class MCPCategoryService:
         if not default_category:
             default_category = MCPCategory(
                 name="默认分类",
-                description="系统默认分类"
+                description="系统默认分类",
+                is_default=True
             )
             default_category.save(force_insert=True)
+        elif not default_category.is_default:
+            default_category.is_default = True
+            default_category.save()
         return default_category
     
     @staticmethod
@@ -97,6 +151,7 @@ class MCPCategoryService:
                         "id": str(cat.id),
                         "name": cat.name,
                         "description": cat.description,
+                        'is_default': cat.is_default,
                         "parent_id": str(cat.parent_id) if cat.parent_id else None,
                         "sort_order": cat.sort_order,
                         "children": build_tree(cat.id)
@@ -183,6 +238,7 @@ class MCPCategoryService:
             
         Raises:
             ResourceNotFoundError: MCP分类不存在
+            ValueError: 分类下存在MCP服务，无法删除
         """
         try:
             db_category = MCPCategory.get_by_id(category_id)
@@ -190,6 +246,26 @@ class MCPCategoryService:
                 raise ResourceNotFoundError(message=f"MCP分类 {category_id} 不存在")
         except MCPCategory.DoesNotExist:
             raise ResourceNotFoundError(message=f"MCP分类 {category_id} 不存在")
+        
+        def get_all_child_category_ids(parent_id: str) -> list:
+            child_ids = [parent_id]
+            children = MCPCategory.select().where(
+                (MCPCategory.parent_id == parent_id) &
+                (MCPCategory.deleted == False)
+            )
+            for child in children:
+                child_ids.extend(get_all_child_category_ids(child.id))
+            return child_ids
+        
+        all_category_ids = get_all_child_category_ids(category_id)
+        
+        server_count = MCPServer.select().where(
+            (MCPServer.category_id.in_(all_category_ids)) &
+            (MCPServer.deleted == False)
+        ).count()
+        
+        if server_count > 0:
+            raise ValueError(f"该分类或其子分类下存在 {server_count} 个MCP服务，无法删除")
         
         db_category.deleted = True
         db_category.deleted_at = datetime.now()
@@ -428,6 +504,35 @@ class MCPServerService:
         db_server.deleted_at = datetime.now()
         db_server.save()
         return db_server
+    
+    @staticmethod
+    async def test_connection(transport_type: str, url: str = None, config: str = None) -> dict:
+        """
+        测试MCP服务连接
+        
+        Args:
+            transport_type: 传输类型
+            url: 服务URL
+            config: 配置信息
+            
+        Returns:
+            dict: 测试结果
+        """
+        from app.core.mcp.client.client import test_mcp_connection
+        
+        parsed_config = parse_mcp_config(config, transport_type)
+        
+        result = await test_mcp_connection(
+            transport_type=transport_type,
+            url=url,
+            headers=parsed_config['headers'],
+            command=parsed_config['command'],
+            args=parsed_config['args'],
+            env=parsed_config['env'],
+            cwd=parsed_config['cwd']
+        )
+        
+        return result
     
     @staticmethod
     @handle_transaction

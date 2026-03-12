@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Layout, Tree, Card, Row, Col, Empty, Spin, Button, Modal, Form, Input, Select, TreeSelect, message, Popconfirm, Pagination, Upload } from 'antd';
+import { Layout, Tree, Card, Row, Col, Empty, Spin, Button, Modal, Form, Input, Select, TreeSelect, message, Popconfirm, Pagination, Upload, Tooltip } from 'antd';
 import type { UploadProps } from 'antd';
 const { TextArea } = Input;
-import { ApiOutlined, PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UpOutlined, DownOutlined, UploadOutlined } from '@ant-design/icons';
+import { ApiOutlined, PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UpOutlined, DownOutlined, UploadOutlined, ApiTwoTone, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined } from '@ant-design/icons';
 import type { TreeDataNode, TreeProps } from 'antd';
-import { mcpService, MCPServer, MCPCategory } from '../../services/mcp';
+import { mcpService, MCPServer, MCPCategory, MCPConnectionTest } from '../../services/mcp';
 import PageHeader from '../../components/page-header';
 import '../../styles/common.css';
 import './mcp.less';
@@ -48,6 +48,9 @@ const MCPManagement: React.FC = () => {
   
   const [avatarPreview, setAvatarPreview] = useState<string>('');
   const [editAvatarPreview, setEditAvatarPreview] = useState<string>('');
+  
+  const [testingConnection, setTestingConnection] = useState<boolean>(false);
+  const [connectionTestResult, setConnectionTestResult] = useState<{ success: boolean; message: string } | null>(null);
   
   const cardRefs = useRef<{ [key: string]: HTMLDivElement }>({});
 
@@ -544,6 +547,61 @@ const MCPManagement: React.FC = () => {
     }
   };
 
+  const handleTestConnection = async (formInstance: any, sourceType: string) => {
+    try {
+      const values = await formInstance.validateFields(['transport_type', 'url', 'config']);
+      setTestingConnection(true);
+      setConnectionTestResult(null);
+      
+      const result = await mcpService.testConnection({
+        transport_type: values.transport_type,
+        url: values.url,
+        config: values.config
+      });
+      
+      setConnectionTestResult({
+        success: result.success,
+        message: result.message
+      });
+      
+      if (result.success) {
+        message.success('连接测试成功！');
+      } else {
+        message.error(result.message || '连接测试失败');
+      }
+    } catch (error: any) {
+      console.error('测试连接失败:', error);
+      setConnectionTestResult({
+        success: false,
+        message: error.message || '连接测试失败'
+      });
+      message.error('连接测试失败');
+    } finally {
+      setTestingConnection(false);
+    }
+  };
+
+  const handleTestServerConnection = async (server: MCPServer) => {
+    const key = `test-${server.id}`;
+    message.loading({ content: `正在测试 ${server.name} 连接...`, key, duration: 0 });
+    
+    try {
+      const result = await mcpService.testConnection({
+        transport_type: server.transport_type,
+        url: server.url,
+        config: server.config
+      });
+      
+      if (result.success) {
+        message.success({ content: `${server.name} 连接测试成功！`, key });
+      } else {
+        message.error({ content: `${server.name} 连接失败: ${result.message}`, key });
+      }
+    } catch (error: any) {
+      message.error({ content: `${server.name} 连接测试失败: ${error.message}`, key });
+    }
+  };
+
   const handleCardMouseMove = (serverId: string, e: React.MouseEvent<HTMLDivElement>) => {
     const card = cardRefs.current[serverId];
     if (!card) return;
@@ -630,6 +688,14 @@ const MCPManagement: React.FC = () => {
                       <Card hoverable className={`mcp-card ${theme === 'dark' ? 'dark' : 'light'}`} bodyStyle={{ padding: '16px' }}>
                         <div className="card-content">
                           <div className="card-actions">
+                            <Tooltip title="测试连接">
+                              <Button 
+                                type="text" 
+                                icon={<ApiTwoTone />} 
+                                onClick={(e) => { e.stopPropagation(); handleTestServerConnection(server); }} 
+                                className="action-button" 
+                              />
+                            </Tooltip>
                             <Button type="text" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); handleEditServer(server); }} className="action-button" title="编辑" />
                             <Popconfirm title="确认删除" description="确定要删除这个MCP服务吗？" onConfirm={(e) => { e.stopPropagation(); handleDeleteServer(server.id); }} okText="确认" cancelText="取消">
                               <Button type="text" icon={<DeleteOutlined />} danger className="action-button" title="删除" />
@@ -716,31 +782,97 @@ const MCPManagement: React.FC = () => {
       </Layout>
 
       {/* 新增MCP服务模态框 */}
-      <Modal title="新增MCP服务" open={isModalVisible} onOk={handleSubmit} onCancel={() => setIsModalVisible(false)} width={600} okText="保存" cancelText="取消" className={`mcp-modal ${theme === 'dark' ? 'dark' : 'light'}`}>
+      <Modal 
+        title="新增MCP服务" 
+        open={isModalVisible} 
+        onOk={handleSubmit} 
+        onCancel={() => { setIsModalVisible(false); setConnectionTestResult(null); }} 
+        width={700} 
+        okText="保存" 
+        cancelText="取消" 
+        className={`mcp-modal ${theme === 'dark' ? 'dark' : 'light'}`}
+        footer={[
+          <Button key="cancel" onClick={() => { setIsModalVisible(false); setConnectionTestResult(null); }}>
+            取消
+          </Button>,
+          <Button 
+            key="test" 
+            type="default" 
+            icon={testingConnection ? <LoadingOutlined /> : <ApiTwoTone />}
+            onClick={() => handleTestConnection(form, selectedSourceType)}
+            loading={testingConnection}
+            disabled={selectedSourceType === 'local'}
+            style={{ marginRight: '8px' }}
+          >
+            {testingConnection ? '测试中...' : '测试连接'}
+          </Button>,
+          <Button key="submit" type="primary" onClick={handleSubmit}>
+            保存
+          </Button>,
+          connectionTestResult && (
+            <span key="result" style={{ 
+              color: connectionTestResult.success ? '#52c41a' : '#ff4d4f',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              marginLeft: '8px'
+            }}>
+              {connectionTestResult.success ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
+              {connectionTestResult.message}
+            </span>
+          )
+        ].filter(Boolean)}
+      >
         <Form form={form} layout="vertical" initialValues={{ source_type: 'local', transport_type: 'streamable_http' }}>
-          <Form.Item name="name" label="服务名称" rules={[{ required: true, message: '请输入服务名称' }]}>
-            <Input placeholder="请输入服务名称" />
-          </Form.Item>
-          <Form.Item name="code" label="服务编码" rules={[{ required: true, message: '请输入服务编码' }, { pattern: /^[a-zA-Z0-9_]+$/, message: '编码只能包含字母、数字和下划线' }]}>
-            <Input placeholder="请输入服务编码（字母、数字、下划线）" />
-          </Form.Item>
-          <Form.Item name="source_type" label="来源类型" rules={[{ required: true, message: '请选择来源类型' }]}>
-            <Select placeholder="请选择来源类型" onChange={handleSourceTypeChange}>
-              {Object.entries(sourceTypes).map(([key, value]) => (
-                <Option key={key} value={key}>{value}</Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item name="transport_type" label="传输类型" rules={[{ required: true, message: '请选择传输类型' }]}>
-            <Select placeholder="请选择传输类型" onChange={handleTransportTypeChange} disabled={selectedSourceType === 'local'}>
-              {Object.entries(transportTypes).map(([key, value]) => (
-                <Option key={key} value={key}>{value}</Option>
-              ))}
-            </Select>
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="name" label="服务名称" rules={[{ required: true, message: '请输入服务名称' }]}>
+                <Input placeholder="请输入服务名称" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="code" label="服务编码" rules={[{ required: true, message: '请输入服务编码' }, { pattern: /^[a-zA-Z0-9_]+$/, message: '编码只能包含字母、数字和下划线' }]}>
+                <Input placeholder="请输入服务编码（字母、数字、下划线）" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="source_type" label="来源类型" rules={[{ required: true, message: '请选择来源类型' }]}>
+                <Select placeholder="请选择来源类型" onChange={handleSourceTypeChange}>
+                  {Object.entries(sourceTypes).map(([key, value]) => (
+                    <Option key={key} value={key}>{value}</Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="transport_type" label="传输类型" rules={[{ required: true, message: '请选择传输类型' }]}>
+                <Select placeholder="请选择传输类型" onChange={handleTransportTypeChange} disabled={selectedSourceType === 'local'}>
+                  {Object.entries(transportTypes).map(([key, value]) => (
+                    <Option key={key} value={key}>{value}</Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
           {selectedTransportType === 'stdio' && (
             <Form.Item name="config" label="NPX命令">
-              <TextArea rows={4} placeholder="以高德地图为例: npx -y @amap/amap-maps-mcp-server" />
+              <TextArea rows={8} placeholder={`以高德地图为例：
+{
+  "mcpServers": {
+    "amap-maps": {
+      "args": [
+        "-y",
+        "@amap/amap-maps-mcp-server"
+      ],
+      "command": "npx",
+      "env": {
+        "AMAP_MAPS_API_KEY": ""
+      }
+    }
+  }
+}`} />
             </Form.Item>
           )}
           {(selectedTransportType === 'sse' || selectedTransportType === 'streamable_http') && (
@@ -755,19 +887,25 @@ const MCPManagement: React.FC = () => {
               )}
             </>
           )}
-          <Form.Item name="avatar" label="服务头像">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              {avatarPreview && (
-                <img src={avatarPreview} alt="头像预览" style={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover' }} />
-              )}
-              <Upload {...uploadProps}>
-                <Button icon={<UploadOutlined />}>上传头像</Button>
-              </Upload>
-            </div>
-          </Form.Item>
-          <Form.Item name="category_id" label="分类">
-            <TreeSelect placeholder="请选择分类" treeData={buildCategoryTreeSelectData()} treeDefaultExpandAll allowClear />
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="category_id" label="分类">
+                <TreeSelect placeholder="请选择分类" treeData={buildCategoryTreeSelectData()} treeDefaultExpandAll allowClear />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="avatar" label="服务头像">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                  {avatarPreview && (
+                    <img src={avatarPreview} alt="头像预览" style={{ width: 60, height: 60, borderRadius: '50%', objectFit: 'cover' }} />
+                  )}
+                  <Upload {...uploadProps}>
+                    <Button icon={<UploadOutlined />}>上传头像</Button>
+                  </Upload>
+                </div>
+              </Form.Item>
+            </Col>
+          </Row>
           <Form.Item name="description" label="服务描述">
             <TextArea rows={3} placeholder="请输入服务描述" />
           </Form.Item>
@@ -775,31 +913,97 @@ const MCPManagement: React.FC = () => {
       </Modal>
 
       {/* 编辑MCP服务模态框 */}
-      <Modal title="编辑MCP服务" open={isEditModalVisible} onOk={handleEditSubmit} onCancel={() => setIsEditModalVisible(false)} width={600} okText="保存" cancelText="取消" className={`mcp-modal ${theme === 'dark' ? 'dark' : 'light'}`}>
+      <Modal 
+        title="编辑MCP服务" 
+        open={isEditModalVisible} 
+        onOk={handleEditSubmit} 
+        onCancel={() => { setIsEditModalVisible(false); setConnectionTestResult(null); }} 
+        width={700} 
+        okText="保存" 
+        cancelText="取消" 
+        className={`mcp-modal ${theme === 'dark' ? 'dark' : 'light'}`}
+        footer={[
+          <Button key="cancel" onClick={() => { setIsEditModalVisible(false); setConnectionTestResult(null); }}>
+            取消
+          </Button>,
+          <Button 
+            key="test" 
+            type="default" 
+            icon={testingConnection ? <LoadingOutlined /> : <ApiTwoTone />}
+            onClick={() => handleTestConnection(editForm, selectedEditSourceType)}
+            loading={testingConnection}
+            disabled={selectedEditSourceType === 'local'}
+            style={{ marginRight: '8px' }}
+          >
+            {testingConnection ? '测试中...' : '测试连接'}
+          </Button>,
+          <Button key="submit" type="primary" onClick={handleEditSubmit}>
+            保存
+          </Button>,
+          connectionTestResult && (
+            <span key="result" style={{ 
+              color: connectionTestResult.success ? '#52c41a' : '#ff4d4f',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              marginLeft: '8px'
+            }}>
+              {connectionTestResult.success ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
+              {connectionTestResult.message}
+            </span>
+          )
+        ].filter(Boolean)}
+      >
         <Form form={editForm} layout="vertical">
-          <Form.Item name="name" label="服务名称" rules={[{ required: true, message: '请输入服务名称' }]}>
-            <Input placeholder="请输入服务名称" />
-          </Form.Item>
-          <Form.Item name="code" label="服务编码" rules={[{ required: true, message: '请输入服务编码' }, { pattern: /^[a-zA-Z0-9_]+$/, message: '编码只能包含字母、数字和下划线' }]}>
-            <Input placeholder="请输入服务编码（字母、数字、下划线）" />
-          </Form.Item>
-          <Form.Item name="source_type" label="来源类型" rules={[{ required: true, message: '请选择来源类型' }]}>
-            <Select placeholder="请选择来源类型" onChange={handleEditSourceTypeChange}>
-              {Object.entries(sourceTypes).map(([key, value]) => (
-                <Option key={key} value={key}>{value}</Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item name="transport_type" label="传输类型" rules={[{ required: true, message: '请选择传输类型' }]}>
-            <Select placeholder="请选择传输类型" onChange={handleEditTransportTypeChange} disabled={selectedEditSourceType === 'local'}>
-              {Object.entries(transportTypes).map(([key, value]) => (
-                <Option key={key} value={key}>{value}</Option>
-              ))}
-            </Select>
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="name" label="服务名称" rules={[{ required: true, message: '请输入服务名称' }]}>
+                <Input placeholder="请输入服务名称" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="code" label="服务编码" rules={[{ required: true, message: '请输入服务编码' }, { pattern: /^[a-zA-Z0-9_]+$/, message: '编码只能包含字母、数字和下划线' }]}>
+                <Input placeholder="请输入服务编码（字母、数字、下划线）" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="source_type" label="来源类型" rules={[{ required: true, message: '请选择来源类型' }]}>
+                <Select placeholder="请选择来源类型" onChange={handleEditSourceTypeChange}>
+                  {Object.entries(sourceTypes).map(([key, value]) => (
+                    <Option key={key} value={key}>{value}</Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="transport_type" label="传输类型" rules={[{ required: true, message: '请选择传输类型' }]}>
+                <Select placeholder="请选择传输类型" onChange={handleEditTransportTypeChange} disabled={selectedEditSourceType === 'local'}>
+                  {Object.entries(transportTypes).map(([key, value]) => (
+                    <Option key={key} value={key}>{value}</Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
           {selectedEditTransportType === 'stdio' && (
             <Form.Item name="config" label="NPX命令">
-              <TextArea rows={4} placeholder="以高德地图为例: npx -y @amap/amap-maps-mcp-server" />
+              <TextArea rows={8} placeholder={`以高德地图为例：
+{
+  "mcpServers": {
+    "amap-maps": {
+      "args": [
+        "-y",
+        "@amap/amap-maps-mcp-server"
+      ],
+      "command": "npx",
+      "env": {
+        "AMAP_MAPS_API_KEY": ""
+      }
+    }
+  }
+}`} />
             </Form.Item>
           )}
           {(selectedEditTransportType === 'sse' || selectedEditTransportType === 'streamable_http') && (
@@ -814,19 +1018,25 @@ const MCPManagement: React.FC = () => {
               )}
             </>
           )}
-          <Form.Item name="avatar" label="服务头像">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              {editAvatarPreview && (
-                <img src={editAvatarPreview} alt="头像预览" style={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover' }} />
-              )}
-              <Upload {...editUploadProps}>
-                <Button icon={<UploadOutlined />}>上传头像</Button>
-              </Upload>
-            </div>
-          </Form.Item>
-          <Form.Item name="category_id" label="分类">
-            <TreeSelect placeholder="请选择分类" treeData={buildCategoryTreeSelectData()} treeDefaultExpandAll allowClear />
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="category_id" label="分类">
+                <TreeSelect placeholder="请选择分类" treeData={buildCategoryTreeSelectData()} treeDefaultExpandAll allowClear />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="avatar" label="服务头像">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                  {editAvatarPreview && (
+                    <img src={editAvatarPreview} alt="头像预览" style={{ width: 60, height: 60, borderRadius: '50%', objectFit: 'cover' }} />
+                  )}
+                  <Upload {...editUploadProps}>
+                    <Button icon={<UploadOutlined />}>上传头像</Button>
+                  </Upload>
+                </div>
+              </Form.Item>
+            </Col>
+          </Row>
           <Form.Item name="description" label="服务描述">
             <TextArea rows={3} placeholder="请输入服务描述" />
           </Form.Item>

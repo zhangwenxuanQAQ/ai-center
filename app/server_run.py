@@ -93,6 +93,19 @@ try:
     except Exception as e:
         print(f"  移除chatbot表中code字段的唯一约束失败: {e}")
     
+    print("\n为mcp_category表添加is_default字段...")
+    try:
+        cursor = db.execute_sql("DESCRIBE mcp_category;")
+        columns = [column[0] for column in cursor.fetchall()]
+        
+        if 'is_default' not in columns:
+            db.execute_sql("ALTER TABLE mcp_category ADD COLUMN is_default TINYINT DEFAULT 0")
+            print("  成功添加is_default字段")
+        else:
+            print("  is_default字段已存在，跳过")
+    except Exception as e:
+        print(f"  添加is_default字段失败: {e}")
+    
     print("\n数据库迁移完成")
 except Exception as e:
     print(f"数据库迁移失败: {e}")
