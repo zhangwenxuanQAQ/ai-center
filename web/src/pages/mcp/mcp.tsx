@@ -805,7 +805,6 @@ const MCPManagement: React.FC = () => {
             icon={testingConnection ? <LoadingOutlined /> : <ApiTwoTone />}
             onClick={() => handleTestConnection(form, selectedSourceType)}
             loading={testingConnection}
-            disabled={selectedSourceType === 'local'}
             style={{ marginRight: '8px' }}
           >
             {testingConnection ? '测试中...' : '测试连接'}
@@ -882,11 +881,11 @@ const MCPManagement: React.FC = () => {
           {(selectedTransportType === 'sse' || selectedTransportType === 'streamable_http') && (
             <>
               <Form.Item name="url" label="URL">
-                <Input placeholder="请输入MCP服务URL" disabled={selectedSourceType === 'local'} />
+                <Input placeholder="请输入MCP服务URL" />
               </Form.Item>
               {selectedSourceType === 'thirdparty' && (
                 <Form.Item name="config" label="自定义参数（JSON格式）">
-                  <TextArea rows={4} placeholder='请输入JSON格式的自定义参数，例如：{"headers": {"Authorization": "Bearer xxx"}}' />
+                  <TextArea rows={8} placeholder='请输入JSON格式的自定义参数，例如：{"headers": {"Authorization": "Bearer xxx"}}' />
                 </Form.Item>
               )}
             </>
@@ -936,7 +935,6 @@ const MCPManagement: React.FC = () => {
             icon={testingConnection ? <LoadingOutlined /> : <ApiTwoTone />}
             onClick={() => handleTestConnection(editForm, selectedEditSourceType)}
             loading={testingConnection}
-            disabled={selectedEditSourceType === 'local'}
             style={{ marginRight: '8px' }}
           >
             {testingConnection ? '测试中...' : '测试连接'}
@@ -1013,11 +1011,11 @@ const MCPManagement: React.FC = () => {
           {(selectedEditTransportType === 'sse' || selectedEditTransportType === 'streamable_http') && (
             <>
               <Form.Item name="url" label="URL">
-                <Input placeholder="请输入MCP服务URL" disabled={selectedEditSourceType === 'local'} />
+                <Input placeholder="请输入MCP服务URL" />
               </Form.Item>
               {selectedEditSourceType === 'thirdparty' && (
                 <Form.Item name="config" label="自定义参数（JSON格式）">
-                  <TextArea rows={4} placeholder='请输入JSON格式的自定义参数，例如：{"headers": {"Authorization": "Bearer xxx"}}' />
+                  <TextArea rows={8} placeholder='请输入JSON格式的自定义参数，例如：{"headers": {"Authorization": "Bearer xxx"}}' />
                 </Form.Item>
               )}
             </>

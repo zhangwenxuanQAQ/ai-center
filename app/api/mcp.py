@@ -353,24 +353,32 @@ def create_mcp_tool(tool: MCPToolCreate):
 
 @router.get("/tool", response_model=ApiResponse)
 def get_mcp_tools(
-    skip: int = Query(0, description="跳过的记录数"),
-    limit: int = Query(100, description="返回的最大记录数"),
-    server_id: str = Query(None, description="MCP服务ID")
+    page: int = Query(0, description="页码，从0开始"),
+    page_size: int = Query(10, description="每页数量"),
+    server_id: str = Query(None, description="MCP服务ID"),
+    name: str = Query(None, description="工具名称（模糊查询）"),
+    description: str = Query(None, description="工具描述（模糊查询）"),
+    status: str = Query(None, description="状态（true/false）")
 ):
     """
-    获取MCP工具列表
+    获取MCP工具列表（分页）
     
     Args:
-        skip: 跳过的记录数
-        limit: 返回的最大记录数
+        page: 页码，从0开始
+        page_size: 每页数量，默认10
         server_id: MCP服务ID，可选
+        name: 工具名称（模糊查询，可选）
+        description: 工具描述（模糊查询，可选）
+        status: 状态（true/false，可选）
         
     Returns:
-        ApiResponse: 统一格式的响应对象
+        ApiResponse: 统一格式的响应对象，包含data和total
     """
-    tools = MCPToolService.get_tools(skip, limit, server_id)
+    skip = page * page_size
+    tools = MCPToolService.get_tools(skip, page_size, server_id, name, description, status)
+    total = MCPToolService.count_tools(server_id, name, description, status)
     tools_data = [tool.__data__ for tool in tools]
-    return ResponseUtil.success(data=tools_data, message="获取MCP工具列表成功")
+    return ResponseUtil.success(data={"data": tools_data, "total": total}, message="获取MCP工具列表成功")
 
 
 @router.get("/tool/{tool_id}", response_model=ApiResponse)

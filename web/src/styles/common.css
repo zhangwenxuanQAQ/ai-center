@@ -106,6 +106,12 @@
   }
 }
 
+.ant-input-affix-wrapper input {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 /* ==================== 公共 Tree 样式 ==================== */
 
 .ant-tree-treenode-leaf {

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Form, Input, Select, TreeSelect, Button, Table, Switch, Modal, message, Popconfirm, Space, Card, Row, Col, Upload, Spin } from 'antd';
 const { TextArea } = Input;
-import { ArrowLeftOutlined, SaveOutlined, UndoOutlined, ApiOutlined, ApiTwoTone, UploadOutlined, ImportOutlined, DeleteOutlined, EditOutlined, PlusOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SaveOutlined, UndoOutlined, ApiOutlined, ApiTwoTone, UploadOutlined, ImportOutlined, DeleteOutlined, EditOutlined, PlusOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, ClearOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { UploadProps } from 'antd';
 import { mcpService, MCPServer, MCPCategory, MCPTool } from '../../services/mcp';
@@ -46,6 +46,9 @@ const MCPSetting: React.FC = () => {
   const [searchName, setSearchName] = useState('');
   const [searchDescription, setSearchDescription] = useState('');
   const [searchStatus, setSearchStatus] = useState<string>('');
+  const [toolsPage, setToolsPage] = useState(1);
+  const [toolsPageSize, setToolsPageSize] = useState(10);
+  const [toolsTotal, setToolsTotal] = useState(0);
   
   const [isImportModalVisible, setIsImportModalVisible] = useState(false);
   const [importType, setImportType] = useState<'swagger' | 'tools'>('tools');
@@ -56,16 +59,26 @@ const MCPSetting: React.FC = () => {
   const [isToolModalVisible, setIsToolModalVisible] = useState(false);
   const [toolForm] = Form.useForm();
   const [editingTool, setEditingTool] = useState<MCPTool | null>(null);
+  const [localMcpConfig, setLocalMcpConfig] = useState<{ host: string; port: number; transport_type: string }>({ host: '127.0.0.1', port: 8082, transport_type: 'streamable_http' });
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem('theme') as 'dark' | 'light' | null;
-    if (savedTheme) {
-      setTheme(savedTheme);
-    }
-    
+    const currentTheme = document.body.getAttribute('data-theme') || 'light';
+    setTheme(currentTheme as 'light' | 'dark');
+
+    const observer = new MutationObserver(() => {
+      const newTheme = document.body.getAttribute('data-theme') || 'light';
+      setTheme(newTheme as 'light' | 'dark');
+    });
+
+    observer.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
     if (id) {
       fetchServer(id);
       fetchCategories();
+      fetchLocalMcpConfig();
     }
   }, [id]);
 
@@ -73,7 +86,7 @@ const MCPSetting: React.FC = () => {
     if (server) {
       fetchTools();
     }
-  }, [server, searchName, searchDescription, searchStatus]);
+  }, [server, searchName, searchDescription, searchStatus, toolsPage, toolsPageSize]);
 
   useEffect(() => {
     const currentValues = form.getFieldsValue();
@@ -130,27 +143,34 @@ const MCPSetting: React.FC = () => {
     }
   };
 
+  const fetchLocalMcpConfig = async () => {
+    try {
+      const data = await mcpService.getLocalMcpConfig();
+      setLocalMcpConfig(data);
+    } catch (error) {
+      console.error('Failed to fetch local mcp config:', error);
+    }
+  };
+
   const fetchTools = async () => {
     if (!server) return;
     setToolsLoading(true);
     try {
-      const data = await mcpService.getTools(0, 1000, server.id);
-      let filtered = data;
-      if (searchName) {
-        filtered = filtered.filter(t => t.name.toLowerCase().includes(searchName.toLowerCase()));
-      }
-      if (searchDescription) {
-        filtered = filtered.filter(t => t.description?.toLowerCase().includes(searchDescription.toLowerCase()));
-      }
-      if (searchStatus !== '') {
-        filtered = filtered.filter(t => t.status === (searchStatus === 'true'));
-      }
-      setTools(filtered);
+      const data = await mcpService.getTools(toolsPage - 1, toolsPageSize, server.id, searchName, searchDescription, searchStatus);
+      setTools(data.data || data);
+      setToolsTotal(data.total || (Array.isArray(data) ? data.length : 0));
     } catch (error) {
       console.error('Failed to fetch tools:', error);
     } finally {
       setToolsLoading(false);
     }
+  };
+
+  const handleClearFilters = () => {
+    setSearchName('');
+    setSearchDescription('');
+    setSearchStatus('');
+    setToolsPage(1);
   };
 
   const handleValuesChange = () => {
@@ -163,6 +183,16 @@ const MCPSetting: React.FC = () => {
 
   const handleSourceTypeChange = (value: string) => {
     setSelectedSourceType(value);
+    if (value === 'local') {
+      setSelectedTransportType('streamable_http');
+      const defaultUrl = `http://${localMcpConfig.host}:${localMcpConfig.port}/mcp`;
+      form.setFieldsValue({ 
+        transport_type: 'streamable_http',
+        url: defaultUrl
+      });
+    } else {
+      form.setFieldsValue({ url: '' });
+    }
     handleValuesChange();
   };
 
@@ -432,55 +462,35 @@ const MCPSetting: React.FC = () => {
     <div className={`page-container ${theme === 'dark' ? 'dark' : 'light'}`}>
       <PageHeader
         items={[
-          { title: 'MCP管理', icon: <ApiOutlined />, onClick: () => navigate('/mcps') },
+          { title: 'MCP管理', icon: <ApiOutlined />, onClick: () => navigate('/mcp') },
           { title: '服务配置' },
           { title: server?.name || '' }
         ]}
         extra={
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/mcps')}>
+          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/mcp')}>
             返回列表
           </Button>
         }
       />
 
-      <div className="mcp-setting-container" style={{ display: 'flex', gap: '16px', height: 'calc(100% - 60px)', overflow: 'hidden' }}>
-        <div style={{ width: '400px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '16px', overflow: 'auto' }}>
-          <Card 
-            title="基本信息" 
-            className={`setting-card ${theme === 'dark' ? 'dark' : 'light'}`}
-            size="small"
-            extra={
-              <Space size="small">
-                <Button 
-                  size="small"
-                  icon={testingConnection ? <LoadingOutlined /> : <ApiTwoTone />}
-                  onClick={handleTestConnection}
-                  loading={testingConnection}
-                  disabled={selectedSourceType === 'local'}
-                >
-                  测试
-                </Button>
-                <Button 
-                  size="small"
-                  icon={<UndoOutlined />}
-                  onClick={handleRestore}
-                  disabled={!hasChanges}
-                >
-                  恢复
-                </Button>
-                <Button 
-                  size="small"
-                  type="primary"
-                  icon={<SaveOutlined />}
-                  onClick={handleSave}
-                  loading={saving}
-                  disabled={!hasChanges}
-                >
-                  保存
-                </Button>
-              </Space>
-            }
+      <div className="mcp-setting-container" style={{ display: 'flex', gap: '8px', height: 'calc(100% - 60px)', overflow: 'hidden' }}>
+        <div style={{ width: '30%', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '16px', overflow: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }} className="hide-scrollbar">
+          <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; }`}</style>
+          <div 
+            className={`setting-section ${theme === 'dark' ? 'dark' : 'light'}`}
+            style={{ 
+              padding: '16px', 
+              borderRadius: '8px', 
+              border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8', 
+              background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fff',
+              display: 'flex',
+              flexDirection: 'column',
+              height: '100%'
+            }}
           >
+            <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8' }}>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '500', color: theme === 'dark' ? '#fff' : '#000', textAlign: 'left' }}>基本信息</h3>
+            </div>
             {connectionTestResult && (
               <div style={{ 
                 marginBottom: 12,
@@ -501,18 +511,25 @@ const MCPSetting: React.FC = () => {
               form={form} 
               layout="vertical"
               onValuesChange={handleValuesChange}
-              size="small"
+              style={{ flex: 1, overflow: 'auto', overflowX: 'hidden', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              className="hide-scrollbar"
             >
-              <Form.Item name="name" label="服务名称" rules={[{ required: true, message: '请输入服务名称' }]}>
-                <Input placeholder="请输入服务名称" />
-              </Form.Item>
-              <Form.Item name="code" label="服务编码" rules={[{ required: true, message: '请输入服务编码' }, { pattern: /^[a-zA-Z0-9_]+$/, message: '编码只能包含字母、数字和下划线' }]}>
-                <Input placeholder="请输入服务编码" disabled />
-              </Form.Item>
-              <Row gutter={8}>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item name="name" label="服务名称" rules={[{ required: true, message: '请输入服务名称' }]}>
+                    <Input placeholder="请输入服务名称" />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item name="code" label="服务编码" rules={[{ required: true, message: '请输入服务编码' }, { pattern: /^[a-zA-Z0-9_]+$/, message: '编码只能包含字母、数字和下划线' }]}>
+                    <Input placeholder="请输入服务编码" />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Row gutter={16}>
                 <Col span={12}>
                   <Form.Item name="source_type" label="来源类型" rules={[{ required: true, message: '请选择来源类型' }]}>
-                    <Select placeholder="请选择来源类型" onChange={handleSourceTypeChange} disabled>
+                    <Select placeholder="请选择来源类型" onChange={handleSourceTypeChange}>
                       {Object.entries(sourceTypes).map(([key, value]) => (
                         <Option key={key} value={key}>{value}</Option>
                       ))}
@@ -531,7 +548,9 @@ const MCPSetting: React.FC = () => {
               </Row>
               {selectedTransportType === 'stdio' && (
                 <Form.Item name="config" label="NPX命令">
-                  <TextArea rows={6} placeholder={`以高德地图为例：
+                  <TextArea 
+                    rows={8} 
+                    placeholder={`以高德地图为例：
 {
   "mcpServers": {
     "amap-maps": {
@@ -540,79 +559,135 @@ const MCPSetting: React.FC = () => {
       "env": {"AMAP_MAPS_API_KEY": ""}
     }
   }
-}`} />
+}`}
+                    style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                    className="hide-scrollbar"
+                  />
                 </Form.Item>
               )}
               {(selectedTransportType === 'sse' || selectedTransportType === 'streamable_http') && (
                 <>
                   <Form.Item name="url" label="URL">
-                    <Input placeholder="请输入MCP服务URL" disabled={selectedSourceType === 'local'} />
+                    <Input placeholder="请输入MCP服务URL" />
                   </Form.Item>
                   {selectedSourceType === 'thirdparty' && (
-                    <Form.Item name="config" label="自定义参数">
-                      <TextArea rows={3} placeholder='JSON格式，如：{"headers": {"Authorization": "Bearer xxx"}}' />
+                    <Form.Item name="config" label="自定义参数（JSON格式）">
+                      <TextArea 
+                        rows={8} 
+                        placeholder='请输入JSON格式的自定义参数，例如：{"headers": {"Authorization": "Bearer xxx"}}'
+                        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                        className="hide-scrollbar"
+                      />
                     </Form.Item>
                   )}
                 </>
               )}
-              <Form.Item name="category_id" label="分类">
-                <TreeSelect placeholder="请选择分类" treeData={buildCategoryTreeSelectData()} treeDefaultExpandAll allowClear />
-              </Form.Item>
-              <Form.Item name="avatar" label="服务头像">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  {avatarPreview && (
-                    <img src={avatarPreview} alt="头像" style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover' }} />
-                  )}
-                  <Upload {...uploadProps}>
-                    <Button size="small" icon={<UploadOutlined />}>上传</Button>
-                  </Upload>
-                </div>
-              </Form.Item>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item name="category_id" label="分类">
+                    <TreeSelect placeholder="请选择分类" treeData={buildCategoryTreeSelectData()} treeDefaultExpandAll allowClear />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item name="avatar" label="服务头像">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                      {avatarPreview && (
+                        <img src={avatarPreview} alt="头像预览" style={{ width: 60, height: 60, borderRadius: '50%', objectFit: 'cover' }} />
+                      )}
+                      <Upload {...uploadProps}>
+                        <Button icon={<UploadOutlined />}>上传头像</Button>
+                      </Upload>
+                    </div>
+                  </Form.Item>
+                </Col>
+              </Row>
               <Form.Item name="description" label="服务描述">
-                <TextArea rows={2} placeholder="请输入服务描述" />
+                <TextArea rows={3} placeholder="请输入服务描述" />
               </Form.Item>
             </Form>
-          </Card>
+            <div style={{ 
+              marginTop: '16px', 
+              paddingTop: '16px', 
+              borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '8px'
+            }}>
+              <Button 
+                icon={testingConnection ? <LoadingOutlined /> : <ApiTwoTone />}
+                onClick={handleTestConnection}
+                loading={testingConnection}
+              >
+                测试连接
+              </Button>
+              <Button 
+                icon={<UndoOutlined />}
+                onClick={handleRestore}
+                disabled={!hasChanges}
+              >
+                恢复
+              </Button>
+              <Button 
+                type="primary"
+                icon={<SaveOutlined />}
+                onClick={handleSave}
+                loading={saving}
+                disabled={!hasChanges}
+                style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', color: '#fff' }}
+              >
+                保存
+              </Button>
+            </div>
+          </div>
         </div>
 
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <Card 
-            title="工具列表" 
-            className={`setting-card tools-card ${theme === 'dark' ? 'dark' : 'light'}`}
-            style={{ flex: 1, display: 'flex', flexDirection: 'column' }}
-            bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '12px' }}
-            extra={
+        <div style={{ width: '70%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div 
+            className={`setting-section tools-section ${theme === 'dark' ? 'dark' : 'light'}`}
+            style={{ 
+              flex: 1, 
+              display: 'flex', 
+              flexDirection: 'column', 
+              padding: '16px', 
+              borderRadius: '8px', 
+              border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8', 
+              background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fff' 
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '16px', borderBottom: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8' }}>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '500', color: theme === 'dark' ? '#fff' : '#000', textAlign: 'left' }}>工具列表</h3>
               <Button type="primary" size="small" icon={<ImportOutlined />} onClick={handleImportClick}>
                 导入
               </Button>
-            }
-          >
-            <div style={{ marginBottom: 12, display: 'flex', gap: 8 }}>
+            </div>
+            <div style={{ marginBottom: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
               <Input
                 placeholder="搜索名称"
                 value={searchName}
-                onChange={(e) => setSearchName(e.target.value)}
-                style={{ width: 120 }}
-                size="small"
+                onChange={(e) => { setSearchName(e.target.value); setToolsPage(1); }}
+                style={{ width: 160 }}
+                allowClear
               />
               <Input
                 placeholder="搜索描述"
                 value={searchDescription}
-                onChange={(e) => setSearchDescription(e.target.value)}
-                style={{ width: 120 }}
-                size="small"
+                onChange={(e) => { setSearchDescription(e.target.value); setToolsPage(1); }}
+                style={{ width: 160 }}
+                allowClear
               />
               <Select
-                placeholder="状态"
+                placeholder="请选择状态"
                 value={searchStatus}
-                onChange={setSearchStatus}
-                style={{ width: 80 }}
-                size="small"
+                onChange={(value) => { setSearchStatus(value); setToolsPage(1); }}
+                style={{ width: 120 }}
                 allowClear
               >
                 <Option value="true">启用</Option>
                 <Option value="false">禁用</Option>
               </Select>
+              <Button icon={<ClearOutlined />} onClick={handleClearFilters}>
+                清空
+              </Button>
             </div>
             <div style={{ flex: 1, overflow: 'hidden' }}>
               <Table
@@ -622,16 +697,23 @@ const MCPSetting: React.FC = () => {
                 loading={toolsLoading}
                 size="small"
                 pagination={{
+                  current: toolsPage,
+                  pageSize: toolsPageSize,
+                  total: toolsTotal,
                   showSizeChanger: true,
                   showQuickJumper: true,
                   showTotal: (total) => `共 ${total} 条`,
                   pageSizeOptions: ['10', '20', '50', '100'],
                   size: 'small',
+                  onChange: (page, pageSize) => {
+                    setToolsPage(page);
+                    setToolsPageSize(pageSize);
+                  },
                 }}
-                scroll={{ y: 'calc(100vh - 320px)' }}
+                scroll={{ y: 'calc(100vh - 360px)' }}
               />
             </div>
-          </Card>
+          </div>
         </div>
       </div>
 
@@ -699,7 +781,7 @@ const MCPSetting: React.FC = () => {
             <TextArea rows={3} placeholder="请输入工具描述" />
           </Form.Item>
           <Form.Item name="config" label="工具配置">
-            <TextArea rows={6} placeholder="请输入工具配置（JSON格式）" />
+            <TextArea rows={8} placeholder="请输入工具配置（JSON格式）" />
           </Form.Item>
         </Form>
       </Modal>

@@ -605,7 +605,7 @@ class MCPToolService:
         return db_tool
     
     @staticmethod
-    def get_tools(skip: int = 0, limit: int = 100, server_id: str = None):
+    def get_tools(skip: int = 0, limit: int = 100, server_id: str = None, name: str = None, description: str = None, status: str = None):
         """
         获取MCP工具列表
         
@@ -613,6 +613,9 @@ class MCPToolService:
             skip: 跳过的记录数
             limit: 返回的最大记录数
             server_id: MCP服务ID，可选
+            name: 工具名称（模糊查询）
+            description: 工具描述（模糊查询）
+            status: 状态（true/false）
             
         Returns:
             List[MCPTool]: MCP工具列表
@@ -620,7 +623,40 @@ class MCPToolService:
         query = MCPTool.select().where(MCPTool.deleted == False)
         if server_id:
             query = query.where(MCPTool.server_id == server_id)
-        return list(query.offset(skip).limit(limit))
+        if name:
+            query = query.where(MCPTool.name.contains(name))
+        if description:
+            query = query.where(MCPTool.description.contains(description))
+        if status is not None and status != '':
+            status_bool = status.lower() == 'true'
+            query = query.where(MCPTool.status == status_bool)
+        return list(query.order_by(MCPTool.created_at.desc()).offset(skip).limit(limit))
+    
+    @staticmethod
+    def count_tools(server_id: str = None, name: str = None, description: str = None, status: str = None) -> int:
+        """
+        统计MCP工具总数
+        
+        Args:
+            server_id: MCP服务ID，可选
+            name: 工具名称（模糊查询）
+            description: 工具描述（模糊查询）
+            status: 状态（true/false）
+            
+        Returns:
+            int: MCP工具总数
+        """
+        query = MCPTool.select().where(MCPTool.deleted == False)
+        if server_id:
+            query = query.where(MCPTool.server_id == server_id)
+        if name:
+            query = query.where(MCPTool.name.contains(name))
+        if description:
+            query = query.where(MCPTool.description.contains(description))
+        if status is not None and status != '':
+            status_bool = status.lower() == 'true'
+            query = query.where(MCPTool.status == status_bool)
+        return query.count()
     
     @staticmethod
     def get_tool(tool_id: str):

@@ -248,8 +248,6 @@ body[data-theme="dark"] label.ant-form-item-label {
   color: rgba(255, 255, 255, 0.85) !important;
 }
 
-body[data-theme="dark"] .ant-input,
-body[data-theme="dark"] input.ant-input,
 body[data-theme="dark"] textarea.ant-input,
 body[data-theme="dark"] .ant-input-affix-wrapper,
 body[data-theme="dark"] span.ant-input-affix-wrapper,
@@ -277,8 +275,6 @@ body[data-theme="dark"] textarea.ant-textarea:hover {
   border-color: rgba(102, 126, 234, 0.5) !important;
 }
 
-body[data-theme="dark"] .ant-input:focus,
-body[data-theme="dark"] input.ant-input:focus,
 body[data-theme="dark"] .ant-input-affix-wrapper-focused,
 body[data-theme="dark"] span.ant-input-affix-wrapper-focused,
 body[data-theme="dark"] .ant-textarea:focus,

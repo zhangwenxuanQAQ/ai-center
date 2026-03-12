@@ -187,12 +187,15 @@ export const mcpService = {
   },
 
   /**
-   * 获取MCP工具列表
+   * 获取MCP工具列表（分页）
    */
-  getTools: async (skip: number = 0, limit: number = 100, server_id?: string): Promise<MCPTool[]> => {
-    let params = [`skip=${skip}`, `limit=${limit}`];
+  getTools: async (page: number = 0, pageSize: number = 10, server_id?: string, name?: string, description?: string, status?: string): Promise<{ data: MCPTool[], total: number }> => {
+    let params = [`page=${page}`, `page_size=${pageSize}`];
     if (server_id) params.push(`server_id=${server_id}`);
-    return http.get<MCPTool[]>(`/aicenter/v1/mcp/tool?${params.join('&')}`);
+    if (name) params.push(`name=${encodeURIComponent(name)}`);
+    if (description) params.push(`description=${encodeURIComponent(description)}`);
+    if (status !== undefined && status !== '') params.push(`status=${status}`);
+    return http.get<{ data: MCPTool[], total: number }>(`/aicenter/v1/mcp/tool?${params.join('&')}`);
   },
 
   /**

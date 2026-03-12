@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { Layout, Menu, Button, Card, ConfigProvider, theme as antTheme } from 'antd';
-import { HomeOutlined, MessageOutlined, SettingOutlined, LogoutOutlined, RobotOutlined, BookOutlined, DatabaseOutlined, CommentOutlined, MoonOutlined, SunOutlined, MenuFoldOutlined, MenuUnfoldOutlined, HistoryOutlined } from '@ant-design/icons';
+import { HomeOutlined, MessageOutlined, SettingOutlined, LogoutOutlined, RobotOutlined, BookOutlined, DatabaseOutlined, CommentOutlined, MoonOutlined, SunOutlined, MenuFoldOutlined, MenuUnfoldOutlined, HistoryOutlined, TeamOutlined, ToolOutlined, FileTextOutlined } from '@ant-design/icons';
 import { useState, useEffect } from 'react';
 import './styles/index.css';
 import './styles/common.css';
@@ -72,7 +72,7 @@ function App() {
         </Header>
         <Layout style={{ height: 'calc(100vh - 64px)', overflow: 'hidden' }}>
           <Sider 
-            width={250} 
+            width={280} 
             collapsedWidth={80} 
             className={theme === 'dark' ? 'dark-theme-sider' : 'light-theme-sider'}
             collapsed={collapsed}
@@ -87,12 +87,12 @@ function App() {
               <Menu.Item key="1" icon={<HomeOutlined />}>
                 <Link to="/">首页</Link>
               </Menu.Item>
-              <Menu.SubMenu key="sub1" title="聊天">
+              <Menu.SubMenu key="sub1" title="聊天" icon={<TeamOutlined />}>
                 <Menu.Item key="2" icon={<MessageOutlined />}>
                   <Link to="/chats">聊天</Link>
                 </Menu.Item>
               </Menu.SubMenu>
-              <Menu.SubMenu key="sub2" title="配置">
+              <Menu.SubMenu key="sub2" title="配置" icon={<ToolOutlined />}>
                 <Menu.Item key="3" icon={<RobotOutlined />}>
                   <Link to="/chatbots">机器人</Link>
                 </Menu.Item>
@@ -109,7 +109,7 @@ function App() {
                   <Link to="/llm_models">模型配置</Link>
                 </Menu.Item>
               </Menu.SubMenu>
-              <Menu.SubMenu key="sub3" title="日志">
+              <Menu.SubMenu key="sub3" title="日志" icon={<FileTextOutlined />}>
                 <Menu.Item key="8" icon={<HistoryOutlined />}>
                   <Link to="/chats">问答日志</Link>
                 </Menu.Item>

@@ -889,15 +889,13 @@ const ChatbotManagement: React.FC = () => {
           {/* 机器人列表区域 - 可滚动，隐藏滚动条 */}
           <div style={{ 
             flex: 1, 
+            minHeight: 0,
             overflowY: 'auto', 
             marginBottom: '0',
-            /* 隐藏滚动条但保留滚动功能 */
-            scrollbarWidth: 'none', /* Firefox */
-            msOverflowStyle: 'none', /* IE and Edge */
-            '&::-webkit-scrollbar': {
-              display: 'none' /* Chrome, Safari and Opera */
-            }
-          }}>
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none'
+          }} className="hide-scrollbar">
+            <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; }`}</style>
             {loading ? (
               <div className="loading-container">
                 <Spin size="large" />
