@@ -4,6 +4,7 @@ import type { UploadProps } from 'antd';
 const { TextArea } = Input;
 import { ApiOutlined, PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UpOutlined, DownOutlined, UploadOutlined, ApiTwoTone, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined } from '@ant-design/icons';
 import type { TreeDataNode, TreeProps } from 'antd';
+import { useNavigate } from 'react-router-dom';
 import { mcpService, MCPServer, MCPCategory, MCPConnectionTest } from '../../services/mcp';
 import PageHeader from '../../components/page-header';
 import '../../styles/common.css';
@@ -13,6 +14,7 @@ const { Sider: LeftSider, Content } = Layout;
 const { Option } = Select;
 
 const MCPManagement: React.FC = () => {
+  const navigate = useNavigate();
   const [categories, setCategories] = useState<MCPCategory[]>([]);
   const [servers, setServers] = useState<MCPServer[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -614,7 +616,9 @@ const MCPManagement: React.FC = () => {
 
   return (
     <div className={`page-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-      <PageHeader items={[{ title: 'MCP配置', icon: <ApiOutlined /> }]} />
+      <PageHeader items={[
+        { title: 'MCP管理', icon: <ApiOutlined /> }
+      ]} />
 
       <Layout className="mcp-layout">
         <LeftSider width={260} className={`category-sider ${theme === 'dark' ? 'dark' : 'light'}`}>
@@ -685,7 +689,7 @@ const MCPManagement: React.FC = () => {
                 {servers.map((server, index) => (
                   <Col key={server.id} xs={24} sm={12} md={8} lg={6} style={{ animationDelay: `${index * 0.1}s`, animationFillMode: 'both' }}>
                     <div ref={(el) => { if (el) cardRefs.current[server.id] = el; }} onMouseMove={(e) => handleCardMouseMove(server.id, e)}>
-                      <Card hoverable className={`mcp-card ${theme === 'dark' ? 'dark' : 'light'}`} bodyStyle={{ padding: '16px' }}>
+                      <Card hoverable className={`mcp-card ${theme === 'dark' ? 'dark' : 'light'}`} bodyStyle={{ padding: '16px' }} onClick={() => navigate(`/mcp/setting/${server.id}`)}>
                         <div className="card-content">
                           <div className="card-actions">
                             <Tooltip title="测试连接">
@@ -698,7 +702,7 @@ const MCPManagement: React.FC = () => {
                             </Tooltip>
                             <Button type="text" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); handleEditServer(server); }} className="action-button" title="编辑" />
                             <Popconfirm title="确认删除" description="确定要删除这个MCP服务吗？" onConfirm={(e) => { e.stopPropagation(); handleDeleteServer(server.id); }} okText="确认" cancelText="取消">
-                              <Button type="text" icon={<DeleteOutlined />} danger className="action-button" title="删除" />
+                              <Button type="text" icon={<DeleteOutlined />} danger className="action-button" title="删除" onClick={(e) => e.stopPropagation()} />
                             </Popconfirm>
                           </div>
                           <div className="card-main">

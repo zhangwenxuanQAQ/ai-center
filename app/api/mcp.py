@@ -11,6 +11,7 @@ from app.services.mcp.dto import (
     MCPConnectionTest, MCPConnectionTestResult
 )
 from app.utils.response import ResponseUtil, ApiResponse
+from app.core.mcp.utils import convert_swagger_url_to_mcp_tools, convert_swagger_json_to_mcp_tools
 
 router = APIRouter()
 
@@ -278,6 +279,60 @@ def import_mcp_tools(server_id: str, tools: list = Body(...)):
     imported_tools = MCPServerService.import_tools(server_id, tools)
     tools_data = [tool.__data__ for tool in imported_tools]
     return ResponseUtil.success(data=tools_data, message="MCP工具导入成功")
+
+
+@router.post("/server/{server_id}/import_swagger", response_model=ApiResponse)
+def import_swagger_tools(
+    server_id: str,
+    swagger_url: str = Body(None, embed=True),
+    swagger_json: str = Body(None, embed=True),
+    include_patterns: list = Body(None, embed=True),
+    exclude_patterns: list = Body(None, embed=True)
+):
+    """
+    从Swagger/OpenAPI文档导入MCP工具
+    
+    Args:
+        server_id: MCP服务ID
+        swagger_url: Swagger文档URL
+        swagger_json: Swagger文档JSON字符串
+        include_patterns: 包含的API路径模式列表
+        exclude_patterns: 排除的API路径模式列表
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    from app.core.mcp.utils import convert_swagger_url_to_mcp_tools, convert_swagger_json_to_mcp_tools
+    
+    server = MCPServerService.get_server(server_id)
+    if server is None:
+        return ResponseUtil.not_found(message=f"MCP服务 {server_id} 不存在")
+    
+    try:
+        if swagger_url:
+            tools = convert_swagger_url_to_mcp_tools(
+                swagger_url=swagger_url,
+                server_id=server_id,
+                base_url=server.url,
+                include_patterns=include_patterns,
+                exclude_patterns=exclude_patterns
+            )
+        elif swagger_json:
+            tools = convert_swagger_json_to_mcp_tools(
+                swagger_json=swagger_json,
+                server_id=server_id,
+                base_url=server.url,
+                include_patterns=include_patterns,
+                exclude_patterns=exclude_patterns
+            )
+        else:
+            return ResponseUtil.error(message="请提供swagger_url或swagger_json参数")
+        
+        imported_tools = MCPServerService.import_tools(server_id, tools)
+        tools_data = [tool.__data__ for tool in imported_tools]
+        return ResponseUtil.success(data=tools_data, message=f"成功从Swagger导入 {len(tools_data)} 个MCP工具")
+    except Exception as e:
+        return ResponseUtil.error(message=f"Swagger导入失败: {str(e)}")
 
 
 # MCP工具相关接口

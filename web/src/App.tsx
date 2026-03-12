@@ -9,6 +9,7 @@ import './styles/themes/light.css';
 import Home from './pages/home/home.tsx';
 import Chatbot from './pages/chatbot/chatbot.tsx';
 import MCP from './pages/mcp/mcp.tsx';
+import MCPSetting from './pages/mcp/mcp_setting.tsx';
 import Knowledge from './pages/knowledge/knowledge.tsx';
 import LLMModel from './pages/llm_model/llm_model.tsx';
 import Prompt from './pages/prompt/prompt.tsx';
@@ -160,6 +161,7 @@ function App() {
                   <Route path="/" element={<Home />} />
                   <Route path="/chatbots" element={<Chatbot />} />
                   <Route path="/mcps" element={<MCP />} />
+                  <Route path="/mcp/setting/:id" element={<MCPSetting />} />
                   <Route path="/knowledges" element={<Knowledge />} />
                   <Route path="/llm_models" element={<LLMModel />} />
                   <Route path="/prompts" element={<Prompt />} />

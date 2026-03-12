@@ -169,6 +169,24 @@ export const mcpService = {
   },
 
   /**
+   * 从Swagger导入MCP工具
+   */
+  importSwaggerTools: async (
+    serverId: string, 
+    swaggerUrl?: string, 
+    swaggerJson?: string,
+    includePatterns?: string[],
+    excludePatterns?: string[]
+  ): Promise<MCPTool[]> => {
+    return http.post<MCPTool[]>(`/aicenter/v1/mcp/server/${serverId}/import_swagger`, {
+      swagger_url: swaggerUrl,
+      swagger_json: swaggerJson,
+      include_patterns: includePatterns,
+      exclude_patterns: excludePatterns
+    });
+  },
+
+  /**
    * 获取MCP工具列表
    */
   getTools: async (skip: number = 0, limit: number = 100, server_id?: string): Promise<MCPTool[]> => {
