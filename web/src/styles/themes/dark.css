@@ -36,6 +36,7 @@ body[data-theme="dark"] .dark-theme-sider .ant-menu-item-selected {
 body[data-theme="dark"] .dark-theme-sider .ant-menu-submenu-title {
   color: #ffffff;
   background-color: rgb(30, 30, 30) !important;
+  font-weight: 600;
 }
 
 body[data-theme="dark"] .dark-theme-sider .ant-menu-sub {

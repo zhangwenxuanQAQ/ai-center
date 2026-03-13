@@ -44,8 +44,9 @@ body[data-theme="light"] .light-theme-sider .ant-menu-sub {
   background-color: #ffffff !important;
 }
 
-body[data-theme="light"] .light-theme-sider .ant-menu-submenu {
+body[data-theme="light"] .light-theme-sider .ant-menu-submenu-title {
   background-color: #ffffff !important;
+  font-weight: 600;
 }
 
 /* 内容区域样式 */

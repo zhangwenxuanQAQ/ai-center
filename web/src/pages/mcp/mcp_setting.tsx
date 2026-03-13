@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Form, Input, Select, TreeSelect, Button, Table, Switch, Modal, message, Popconfirm, Space, Card, Row, Col, Upload, Spin } from 'antd';
+import { Form, Input, Select, TreeSelect, Button, Table, Switch, Modal, message, Popconfirm, Space, Card, Row, Col, Upload, Spin, Pagination } from 'antd';
 const { TextArea } = Input;
 import { ArrowLeftOutlined, SaveOutlined, UndoOutlined, ApiOutlined, ApiTwoTone, UploadOutlined, ImportOutlined, DeleteOutlined, EditOutlined, PlusOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, ClearOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
@@ -45,7 +45,7 @@ const MCPSetting: React.FC = () => {
   const [toolsLoading, setToolsLoading] = useState(false);
   const [searchName, setSearchName] = useState('');
   const [searchDescription, setSearchDescription] = useState('');
-  const [searchStatus, setSearchStatus] = useState<string>('');
+  const [searchStatus, setSearchStatus] = useState<string | undefined>(undefined);
   const [toolsPage, setToolsPage] = useState(1);
   const [toolsPageSize, setToolsPageSize] = useState(10);
   const [toolsTotal, setToolsTotal] = useState(0);
@@ -169,7 +169,7 @@ const MCPSetting: React.FC = () => {
   const handleClearFilters = () => {
     setSearchName('');
     setSearchDescription('');
-    setSearchStatus('');
+    setSearchStatus(undefined);
     setToolsPage(1);
   };
 
@@ -654,32 +654,29 @@ const MCPSetting: React.FC = () => {
               background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fff' 
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '16px', borderBottom: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8' }}>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '500', color: theme === 'dark' ? '#fff' : '#000', textAlign: 'left' }}>工具列表</h3>
+            <div style={{ marginBottom: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
               <Button type="primary" size="small" icon={<ImportOutlined />} onClick={handleImportClick}>
                 导入
               </Button>
-            </div>
-            <div style={{ marginBottom: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
               <Input
                 placeholder="搜索名称"
                 value={searchName}
                 onChange={(e) => { setSearchName(e.target.value); setToolsPage(1); }}
-                style={{ width: 160 }}
+                style={{ width: 200 }}
                 allowClear
               />
               <Input
                 placeholder="搜索描述"
                 value={searchDescription}
                 onChange={(e) => { setSearchDescription(e.target.value); setToolsPage(1); }}
-                style={{ width: 160 }}
+                style={{ width: 200 }}
                 allowClear
               />
               <Select
                 placeholder="请选择状态"
                 value={searchStatus}
                 onChange={(value) => { setSearchStatus(value); setToolsPage(1); }}
-                style={{ width: 120 }}
+                style={{ width: 140 }}
                 allowClear
               >
                 <Option value="true">启用</Option>
@@ -689,29 +686,54 @@ const MCPSetting: React.FC = () => {
                 清空
               </Button>
             </div>
-            <div style={{ flex: 1, overflow: 'hidden' }}>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <Table
                 columns={toolColumns}
                 dataSource={tools}
                 rowKey="id"
                 loading={toolsLoading}
                 size="small"
-                pagination={{
-                  current: toolsPage,
-                  pageSize: toolsPageSize,
-                  total: toolsTotal,
-                  showSizeChanger: true,
-                  showQuickJumper: true,
-                  showTotal: (total) => `共 ${total} 条`,
-                  pageSizeOptions: ['10', '20', '50', '100'],
-                  size: 'small',
-                  onChange: (page, pageSize) => {
+                pagination={false}
+                scroll={{ y: 'calc(100vh - 420px)' }}
+                style={{ flex: 1, minHeight: 0 }}
+              />
+              <div style={{ 
+                paddingTop: '16px', 
+                borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                flexShrink: 0,
+                background: theme === 'dark' ? 'rgba(30, 30, 30, 0.95)' : '#fff'
+              }}>
+                <Pagination
+                  current={toolsPage}
+                  pageSize={toolsPageSize}
+                  total={toolsTotal}
+                  showSizeChanger
+                  showQuickJumper
+                  showTotal={(total) => `共 ${total} 条`}
+                  pageSizeOptions={['10', '20', '50', '100']}
+                  size="small"
+                  onChange={(page, pageSize) => {
                     setToolsPage(page);
                     setToolsPageSize(pageSize);
-                  },
-                }}
-                scroll={{ y: 'calc(100vh - 360px)' }}
-              />
+                  }}
+                  locale={{
+                    items_per_page: '条/页',
+                    jump_to: '跳转到',
+                    jump_to_confirm: '确定',
+                    page: '页',
+                    prev_page: '上一页',
+                    next_page: '下一页',
+                    prev_5: '向前 5 页',
+                    next_5: '向后 5 页',
+                    prev_3: '向前 3 页',
+                    next_3: '向后 3 页',
+                    first: '第一页',
+                    last: '最后一页'
+                  }}
+                />
+              </div>
             </div>
           </div>
         </div>
