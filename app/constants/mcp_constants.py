@@ -28,3 +28,9 @@ def _get_default_local_mcp_config():
 
 
 DEFAULT_LOCAL_MCP_CONFIG = _get_default_local_mcp_config()
+
+# MCP工具类型
+TOOL_TYPE = {
+    "restful_api": "api接口",
+    "tool": "工具"
+}

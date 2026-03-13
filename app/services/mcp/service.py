@@ -579,6 +579,74 @@ class MCPServerService:
                 imported_tools.append(new_tool)
         
         return imported_tools
+    
+    @staticmethod
+    async def get_remote_tools(server_id: str, page: int = 0, page_size: int = 20, name: str = None, description: str = None) -> dict:
+        """
+        获取MCP服务远程工具列表（能力列表）
+        
+        连接MCP服务获取实时工具列表，支持分页和过滤
+        
+        Args:
+            server_id: MCP服务ID
+            page: 页码，从0开始
+            page_size: 每页数量，默认20
+            name: 工具名称（模糊查询，可选）
+            description: 工具描述（模糊查询，可选）
+            
+        Returns:
+            dict: 包含data和total的字典
+            
+        Raises:
+            ResourceNotFoundError: MCP服务不存在
+        """
+        from app.core.mcp.client.client import get_mcp_tools
+        
+        try:
+            db_server = MCPServer.get_by_id(server_id)
+            if db_server.deleted:
+                raise ResourceNotFoundError(message=f"MCP服务 {server_id} 不存在")
+        except MCPServer.DoesNotExist:
+            raise ResourceNotFoundError(message=f"MCP服务 {server_id} 不存在")
+        
+        parsed_config = parse_mcp_config(db_server.config, db_server.transport_type)
+        
+        raw_tools = await get_mcp_tools(
+            transport_type=db_server.transport_type,
+            url=db_server.url,
+            headers=parsed_config['headers'],
+            command=parsed_config['command'],
+            args=parsed_config['args'],
+            env=parsed_config['env'],
+            cwd=parsed_config['cwd']
+        )
+        
+        tools_list = []
+        for tool in raw_tools:
+            tool_item = {
+                "name": tool.get("name", ""),
+                "description": tool.get("description", ""),
+                "tool_type": "mcp",
+                "server_id": server_id,
+                "config": tool.get("inputSchema", {}),
+                "status": True
+            }
+            tools_list.append(tool_item)
+        
+        if name:
+            tools_list = [t for t in tools_list if name.lower() in t["name"].lower()]
+        if description:
+            tools_list = [t for t in tools_list if description.lower() in (t["description"] or "").lower()]
+        
+        total = len(tools_list)
+        start = page * page_size
+        end = start + page_size
+        paginated_tools = tools_list[start:end]
+        
+        return {
+            "data": paginated_tools,
+            "total": total
+        }
 
 
 class MCPToolService:

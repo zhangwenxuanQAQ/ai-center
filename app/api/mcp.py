@@ -281,6 +281,33 @@ def import_mcp_tools(server_id: str, tools: list = Body(...)):
     return ResponseUtil.success(data=tools_data, message="MCP工具导入成功")
 
 
+@router.get("/server/{server_id}/remote_tools", response_model=ApiResponse)
+async def get_mcp_remote_tools(
+    server_id: str,
+    page: int = Query(0, description="页码，从0开始"),
+    page_size: int = Query(20, description="每页数量，默认20"),
+    name: str = Query(None, description="工具名称（模糊查询）"),
+    description: str = Query(None, description="工具描述（模糊查询）")
+):
+    """
+    获取MCP服务远程工具列表（能力列表）
+    
+    连接MCP服务获取实时工具列表，支持分页和过滤
+    
+    Args:
+        server_id: MCP服务ID
+        page: 页码，从0开始
+        page_size: 每页数量，默认20
+        name: 工具名称（模糊查询，可选）
+        description: 工具描述（模糊查询，可选）
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象，包含data和total
+    """
+    result = await MCPServerService.get_remote_tools(server_id, page, page_size, name, description)
+    return ResponseUtil.success(data=result, message="获取远程工具列表成功")
+
+
 @router.post("/server/{server_id}/import_swagger", response_model=ApiResponse)
 def import_swagger_tools(
     server_id: str,

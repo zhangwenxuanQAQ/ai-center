@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Form, Input, Select, TreeSelect, Button, Table, Switch, Modal, message, Popconfirm, Space, Card, Row, Col, Upload, Spin, Pagination } from 'antd';
+import { Form, Input, Select, TreeSelect, Button, Table, Switch, Modal, message, Popconfirm, Space, Card, Row, Col, Upload, Spin, Pagination, Dropdown } from 'antd';
 const { TextArea } = Input;
 import { ArrowLeftOutlined, SaveOutlined, UndoOutlined, ApiOutlined, ApiTwoTone, UploadOutlined, ImportOutlined, DeleteOutlined, EditOutlined, PlusOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, ClearOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
@@ -55,6 +55,15 @@ const MCPSetting: React.FC = () => {
   const [swaggerUrl, setSwaggerUrl] = useState('');
   const [swaggerJson, setSwaggerJson] = useState('');
   const [importing, setImporting] = useState(false);
+  
+  const [remoteTools, setRemoteTools] = useState<MCPTool[]>([]);
+  const [remoteToolsLoading, setRemoteToolsLoading] = useState(false);
+  const [remoteToolsPage, setRemoteToolsPage] = useState(1);
+  const [remoteToolsPageSize, setRemoteToolsPageSize] = useState(20);
+  const [remoteToolsTotal, setRemoteToolsTotal] = useState(0);
+  const [remoteToolsSearchName, setRemoteToolsSearchName] = useState('');
+  const [remoteToolsSearchDesc, setRemoteToolsSearchDesc] = useState('');
+  const [selectedRemoteTools, setSelectedRemoteTools] = useState<string[]>([]);
   
   const [isToolModalVisible, setIsToolModalVisible] = useState(false);
   const [toolForm] = Form.useForm();
@@ -311,12 +320,53 @@ const MCPSetting: React.FC = () => {
     }));
   };
 
-  const handleImportClick = () => {
+  const handleImportClick = (type?: 'swagger' | 'tools') => {
+    if (type) {
+      setImportType(type);
+    } else {
+      setImportType('swagger');
+    }
     setIsImportModalVisible(true);
-    setImportType('tools');
     setSwaggerUrl('');
     setSwaggerJson('');
+    setSelectedRemoteTools([]);
+    setRemoteToolsSearchName('');
+    setRemoteToolsSearchDesc('');
+    setRemoteToolsPage(1);
+    if (type === 'tools' && server) {
+      fetchRemoteTools(1, 20, '', '');
+    }
   };
+
+  const fetchRemoteTools = async (page: number = remoteToolsPage, pageSize: number = remoteToolsPageSize, name: string = remoteToolsSearchName, description: string = remoteToolsSearchDesc) => {
+    if (!server) return;
+    setRemoteToolsLoading(true);
+    try {
+      const data = await mcpService.getRemoteTools(server.id, page - 1, pageSize, name, description);
+      setRemoteTools(data.data || []);
+      setRemoteToolsTotal(data.total || 0);
+    } catch (error) {
+      console.error('Failed to fetch remote tools:', error);
+      message.error('获取远程工具列表失败');
+      setRemoteTools([]);
+      setRemoteToolsTotal(0);
+    } finally {
+      setRemoteToolsLoading(false);
+    }
+  };
+
+  const importMenuItems = [
+    {
+      key: 'swagger',
+      label: '来自API接口',
+      onClick: () => handleImportClick('swagger'),
+    },
+    {
+      key: 'tools',
+      label: '来自能力列表',
+      onClick: () => handleImportClick('tools'),
+    },
+  ];
 
   const handleImport = async () => {
     if (!server) return;
@@ -332,6 +382,14 @@ const MCPSetting: React.FC = () => {
           swaggerUrl || undefined,
           swaggerJson || undefined
         );
+        message.success(`成功导入 ${result.length} 个工具`);
+      } else if (importType === 'tools') {
+        if (selectedRemoteTools.length === 0) {
+          message.error('请选择要导入的工具');
+          return;
+        }
+        const toolsToImport = remoteTools.filter(t => selectedRemoteTools.includes(t.name));
+        const result = await mcpService.importTools(server.id, toolsToImport);
         message.success(`成功导入 ${result.length} 个工具`);
       }
       setIsImportModalVisible(false);
@@ -655,9 +713,17 @@ const MCPSetting: React.FC = () => {
             }}
           >
             <div style={{ marginBottom: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
-              <Button type="primary" size="small" icon={<ImportOutlined />} onClick={handleImportClick}>
-                导入
-              </Button>
+              {server?.source_type === 'local' ? (
+                <Dropdown menu={{ items: importMenuItems }} trigger={['hover']}>
+                  <Button type="primary" size="small" icon={<ImportOutlined />}>
+                    导入
+                  </Button>
+                </Dropdown>
+              ) : (
+                <Button type="primary" size="small" icon={<ImportOutlined />} onClick={() => handleImportClick('tools')}>
+                  导入
+                </Button>
+              )}
               <Input
                 placeholder="搜索名称"
                 value={searchName}
@@ -740,7 +806,7 @@ const MCPSetting: React.FC = () => {
       </div>
 
       <Modal
-        title="导入工具"
+        title={importType === 'swagger' ? '导入工具 - API接口' : '导入工具 - 能力列表'}
         open={isImportModalVisible}
         onCancel={() => setIsImportModalVisible(false)}
         onOk={handleImport}
@@ -749,16 +815,6 @@ const MCPSetting: React.FC = () => {
         okText="导入"
         cancelText="取消"
       >
-        {server?.source_type === 'local' && (
-          <div style={{ marginBottom: 16 }}>
-            <span style={{ marginRight: 16 }}>导入方式：</span>
-            <Select value={importType} onChange={setImportType} style={{ width: 200 }}>
-              <Option value="swagger">从Swagger导入</Option>
-              <Option value="tools">从工具列表导入</Option>
-            </Select>
-          </div>
-        )}
-        
         {importType === 'swagger' && (
           <>
             <Form.Item label="Swagger URL">
@@ -780,8 +836,71 @@ const MCPSetting: React.FC = () => {
         )}
         
         {importType === 'tools' && (
-          <div style={{ padding: '20px 0', textAlign: 'center', color: '#999' }}>
-            工具列表导入功能开发中...
+          <div>
+            <div style={{ marginBottom: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
+              <Input
+                placeholder="搜索名称"
+                value={remoteToolsSearchName}
+                onChange={(e) => { setRemoteToolsSearchName(e.target.value); setRemoteToolsPage(1); }}
+                style={{ width: 160 }}
+                allowClear
+              />
+              <Input
+                placeholder="搜索描述"
+                value={remoteToolsSearchDesc}
+                onChange={(e) => { setRemoteToolsSearchDesc(e.target.value); setRemoteToolsPage(1); }}
+                style={{ width: 160 }}
+                allowClear
+              />
+              <Button type="primary" onClick={() => fetchRemoteTools(1, remoteToolsPageSize, remoteToolsSearchName, remoteToolsSearchDesc)}>
+                搜索
+              </Button>
+            </div>
+            <Table
+              rowKey="name"
+              columns={[
+                {
+                  title: '工具名称',
+                  dataIndex: 'name',
+                  key: 'name',
+                  width: 200,
+                },
+                {
+                  title: '描述',
+                  dataIndex: 'description',
+                  key: 'description',
+                  ellipsis: true,
+                },
+              ]}
+              dataSource={remoteTools}
+              loading={remoteToolsLoading}
+              size="small"
+              pagination={{
+                current: remoteToolsPage,
+                pageSize: remoteToolsPageSize,
+                total: remoteToolsTotal,
+                showSizeChanger: true,
+                showQuickJumper: true,
+                showTotal: (total) => `共 ${total} 条`,
+                pageSizeOptions: ['10', '20', '50', '100'],
+                size: 'small',
+                onChange: (page, pageSize) => {
+                  setRemoteToolsPage(page);
+                  setRemoteToolsPageSize(pageSize);
+                  fetchRemoteTools(page, pageSize, remoteToolsSearchName, remoteToolsSearchDesc);
+                },
+              }}
+              rowSelection={{
+                selectedRowKeys: selectedRemoteTools,
+                onChange: (keys) => setSelectedRemoteTools(keys as string[]),
+              }}
+              scroll={{ y: 300 }}
+            />
+            {selectedRemoteTools.length > 0 && (
+              <div style={{ marginTop: 8, color: theme === 'dark' ? '#aaa' : '#666' }}>
+                已选择 {selectedRemoteTools.length} 个工具
+              </div>
+            )}
           </div>
         )}
       </Modal>

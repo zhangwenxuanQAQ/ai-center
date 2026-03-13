@@ -169,6 +169,16 @@ export const mcpService = {
   },
 
   /**
+   * 获取MCP服务远程工具列表（能力列表）
+   */
+  getRemoteTools: async (serverId: string, page: number = 0, pageSize: number = 20, name?: string, description?: string): Promise<{ data: MCPTool[], total: number }> => {
+    let params = [`page=${page}`, `page_size=${pageSize}`];
+    if (name) params.push(`name=${encodeURIComponent(name)}`);
+    if (description) params.push(`description=${encodeURIComponent(description)}`);
+    return http.get<{ data: MCPTool[], total: number }>(`/aicenter/v1/mcp/server/${serverId}/remote_tools?${params.join('&')}`);
+  },
+
+  /**
    * 从Swagger导入MCP工具
    */
   importSwaggerTools: async (

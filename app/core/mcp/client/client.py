@@ -411,19 +411,25 @@ async def get_mcp_tools(
         async with client.connect():
             tools = await client.list_tools()
             for tool in tools:
+                input_schema = tool.inputSchema if tool.inputSchema else {}
+                if hasattr(input_schema, 'model_dump'):
+                    input_schema = input_schema.model_dump()
                 tools_list.append({
                     "name": tool.name,
                     "description": tool.description or "",
-                    "inputSchema": tool.inputSchema.model_dump() if tool.inputSchema else {}
+                    "inputSchema": input_schema
                 })
     elif isinstance(client, StdioClient):
         async with client.connect():
             tools = await client.list_tools()
             for tool in tools:
+                input_schema = tool.inputSchema if tool.inputSchema else {}
+                if hasattr(input_schema, 'model_dump'):
+                    input_schema = input_schema.model_dump()
                 tools_list.append({
                     "name": tool.name,
                     "description": tool.description or "",
-                    "inputSchema": tool.inputSchema.model_dump() if tool.inputSchema else {}
+                    "inputSchema": input_schema
                 })
     
     return tools_list
