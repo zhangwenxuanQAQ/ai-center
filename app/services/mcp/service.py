@@ -9,7 +9,7 @@ from app.database.models import MCPCategory, MCPServer, MCPTool
 from app.services.mcp.dto import MCPCategoryCreate, MCPCategoryUpdate, MCPServerCreate, MCPServerUpdate, MCPToolCreate, MCPToolUpdate
 from app.database.db_utils import handle_transaction
 from app.core.exceptions import ResourceNotFoundError, DuplicateResourceError
-from app.constants.mcp_constants import SOURCE_TYPE, TRANSPORT_TYPE, DEFAULT_LOCAL_MCP_CONFIG
+from app.constants.mcp_constants import SOURCE_TYPE, TRANSPORT_TYPE, DEFAULT_LOCAL_MCP_CONFIG, TOOL_TYPE
 
 
 def parse_mcp_config(config: str, transport_type: str) -> Dict[str, Any]:
@@ -626,9 +626,9 @@ class MCPServerService:
             tool_item = {
                 "name": tool.get("name", ""),
                 "description": tool.get("description", ""),
-                "tool_type": "mcp",
+                "tool_type": list(TOOL_TYPE.keys())[1],  # mcp
                 "server_id": server_id,
-                "config": tool.get("inputSchema", {}),
+                "config": tool,  # 返回原始的mcp tool结构
                 "status": True
             }
             tools_list.append(tool_item)

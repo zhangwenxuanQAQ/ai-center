@@ -385,15 +385,6 @@ body[data-theme="dark"] button.ant-btn-primary:hover {
   background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
 }
 
-body[data-theme="dark"] .ant-btn-text,
-body[data-theme="dark"] button.ant-btn-text {
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-
-body[data-theme="dark"] .ant-btn-text:hover,
-body[data-theme="dark"] button.ant-btn-text:hover {
-  background: rgba(255, 255, 255, 0.08) !important;
-}
 
 /* ==================== 夜间模式其他组件样式 ==================== */
 

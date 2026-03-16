@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Form, Input, Select, TreeSelect, Button, Table, Switch, Modal, message, Popconfirm, Space, Card, Row, Col, Upload, Spin, Pagination, Dropdown } from 'antd';
+import { Form, Input, Select, TreeSelect, Button, Table, Switch, Modal, message, Popconfirm, Space, Card, Row, Col, Upload, Spin, Pagination, Dropdown, Tooltip } from 'antd';
 const { TextArea } = Input;
 import { ArrowLeftOutlined, SaveOutlined, UndoOutlined, ApiOutlined, ApiTwoTone, UploadOutlined, ImportOutlined, DeleteOutlined, EditOutlined, PlusOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, ClearOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
@@ -426,10 +426,32 @@ const MCPSetting: React.FC = () => {
 
   const handleEditTool = (tool: MCPTool) => {
     setEditingTool(tool);
+    let configStr = '';
+    try {
+      if (tool.config) {
+        let configObj;
+        if (typeof tool.config === 'string') {
+          try {
+            configObj = JSON.parse(tool.config);
+          } catch (parseError) {
+            configStr = tool.config;
+          }
+        } else if (typeof tool.config === 'object') {
+          configObj = tool.config;
+        }
+        if (configObj) {
+          configStr = JSON.stringify(configObj, null, 2);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to parse config:', error);
+      configStr = tool.config || '';
+    }
     toolForm.setFieldsValue({
       name: tool.name,
       description: tool.description,
-      config: tool.config
+      status: tool.status,
+      config: configStr
     });
     setIsToolModalVisible(true);
   };
@@ -438,7 +460,21 @@ const MCPSetting: React.FC = () => {
     if (!editingTool) return;
     try {
       const values = await toolForm.validateFields();
-      await mcpService.updateTool(editingTool.id, values);
+      let updatedConfig = values.config;
+      try {
+        const configObj = JSON.parse(values.config);
+        configObj.name = values.name;
+        configObj.description = values.description || '';
+        updatedConfig = JSON.stringify(configObj);
+      } catch {
+        // 如果不是有效JSON，保持原样
+      }
+      await mcpService.updateTool(editingTool.id, {
+        name: values.name,
+        description: values.description,
+        status: values.status,
+        config: updatedConfig
+      });
       message.success('更新成功');
       setIsToolModalVisible(false);
       fetchTools();
@@ -453,19 +489,21 @@ const MCPSetting: React.FC = () => {
       title: '工具名称',
       dataIndex: 'name',
       key: 'name',
-      width: 200,
+      width: 150,
+      ellipsis: true,
     },
     {
       title: '描述',
       dataIndex: 'description',
       key: 'description',
+      width: 150,
       ellipsis: true,
     },
     {
       title: '类型',
       dataIndex: 'tool_type',
       key: 'tool_type',
-      width: 100,
+      width: 80,
     },
     {
       title: '状态',
@@ -484,12 +522,13 @@ const MCPSetting: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      width: 120,
+      width: 70,
+      fixed: 'right',
       render: (_, record: MCPTool) => (
         <Space size="small">
-          <Button type="link" icon={<EditOutlined />} onClick={() => handleEditTool(record)} size="small">
-            编辑
-          </Button>
+          <Tooltip title="编辑">
+            <Button type="text" icon={<EditOutlined />} onClick={() => handleEditTool(record)} size="small" />
+          </Tooltip>
           <Popconfirm
             title="确认删除"
             description="确定要删除这个工具吗？"
@@ -497,9 +536,9 @@ const MCPSetting: React.FC = () => {
             okText="确认"
             cancelText="取消"
           >
-            <Button type="link" icon={<DeleteOutlined />} danger size="small">
-              删除
-            </Button>
+            <Tooltip title="删除">
+              <Button type="text" icon={<DeleteOutlined />} danger size="small" className="delete-button" />
+            </Tooltip>
           </Popconfirm>
         </Space>
       ),
@@ -760,7 +799,7 @@ const MCPSetting: React.FC = () => {
                 loading={toolsLoading}
                 size="small"
                 pagination={false}
-                scroll={{ y: 'calc(100vh - 420px)' }}
+                scroll={{ y: 'calc(100vh - 400px)' }}
                 style={{ flex: 1, minHeight: 0 }}
               />
               <div style={{ 
@@ -811,7 +850,7 @@ const MCPSetting: React.FC = () => {
         onCancel={() => setIsImportModalVisible(false)}
         onOk={handleImport}
         confirmLoading={importing}
-        width={600}
+        width={800}
         okText="导入"
         cancelText="取消"
       >
@@ -842,6 +881,7 @@ const MCPSetting: React.FC = () => {
                 placeholder="搜索名称"
                 value={remoteToolsSearchName}
                 onChange={(e) => { setRemoteToolsSearchName(e.target.value); setRemoteToolsPage(1); }}
+                onPressEnter={() => fetchRemoteTools(1, remoteToolsPageSize, remoteToolsSearchName, remoteToolsSearchDesc)}
                 style={{ width: 160 }}
                 allowClear
               />
@@ -849,6 +889,7 @@ const MCPSetting: React.FC = () => {
                 placeholder="搜索描述"
                 value={remoteToolsSearchDesc}
                 onChange={(e) => { setRemoteToolsSearchDesc(e.target.value); setRemoteToolsPage(1); }}
+                onPressEnter={() => fetchRemoteTools(1, remoteToolsPageSize, remoteToolsSearchName, remoteToolsSearchDesc)}
                 style={{ width: 160 }}
                 allowClear
               />
@@ -857,6 +898,7 @@ const MCPSetting: React.FC = () => {
               </Button>
             </div>
             <Table
+              className="import-modal-pagination"
               rowKey="name"
               columns={[
                 {
@@ -864,12 +906,23 @@ const MCPSetting: React.FC = () => {
                   dataIndex: 'name',
                   key: 'name',
                   width: 200,
+                  ellipsis: true,
+                  render: (text: string) => (
+                    <Tooltip title={text} placement="topLeft">
+                      <span>{text}</span>
+                    </Tooltip>
+                  ),
                 },
                 {
                   title: '描述',
                   dataIndex: 'description',
                   key: 'description',
                   ellipsis: true,
+                  render: (text: string) => (
+                    <Tooltip title={text} placement="topLeft">
+                      <span>{text || '-'}</span>
+                    </Tooltip>
+                  ),
                 },
               ]}
               dataSource={remoteTools}
@@ -884,6 +937,21 @@ const MCPSetting: React.FC = () => {
                 showTotal: (total) => `共 ${total} 条`,
                 pageSizeOptions: ['10', '20', '50', '100'],
                 size: 'small',
+                simple: false,
+                locale: {
+                  items_per_page: '条/页',
+                  jump_to: '跳转到',
+                  jump_to_confirm: '确定',
+                  page: '页',
+                  prev_page: '上一页',
+                  next_page: '下一页',
+                  prev_5: '向前 5 页',
+                  next_5: '向后 5 页',
+                  prev_3: '向前 3 页',
+                  next_3: '向后 3 页',
+                  first: '第一页',
+                  last: '最后一页'
+                },
                 onChange: (page, pageSize) => {
                   setRemoteToolsPage(page);
                   setRemoteToolsPageSize(pageSize);
@@ -910,7 +978,7 @@ const MCPSetting: React.FC = () => {
         open={isToolModalVisible}
         onCancel={() => setIsToolModalVisible(false)}
         onOk={handleToolSubmit}
-        width={600}
+        width={700}
         okText="保存"
         cancelText="取消"
       >
@@ -921,8 +989,11 @@ const MCPSetting: React.FC = () => {
           <Form.Item name="description" label="工具描述">
             <TextArea rows={3} placeholder="请输入工具描述" />
           </Form.Item>
+          <Form.Item name="status" label="状态" valuePropName="checked">
+            <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+          </Form.Item>
           <Form.Item name="config" label="工具配置">
-            <TextArea rows={8} placeholder="请输入工具配置（JSON格式）" />
+            <TextArea rows={12} placeholder="请输入工具配置（JSON格式）" style={{ fontFamily: 'monospace', whiteSpace: 'pre', overflowWrap: 'normal' }} />
           </Form.Item>
         </Form>
       </Modal>
