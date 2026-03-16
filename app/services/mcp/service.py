@@ -566,13 +566,13 @@ class MCPServerService:
             ).first()
             
             if existing_tool:
-                for field, value in tool_data.items():
-                    if field != 'name':
-                        setattr(existing_tool, field, value)
-                existing_tool.updated_at = datetime.now()
-                existing_tool.save()
-                imported_tools.append(existing_tool)
+                # 跳过重复名称的工具
+                continue
             else:
+                # 确保config字段是JSON字符串
+                if 'config' in tool_data and tool_data['config'] and isinstance(tool_data['config'], dict):
+                    import json
+                    tool_data['config'] = json.dumps(tool_data['config'])
                 tool_data['server_id'] = server_id
                 new_tool = MCPTool(**tool_data)
                 new_tool.save(force_insert=True)
@@ -801,3 +801,29 @@ class MCPToolService:
         db_tool.deleted_at = datetime.now()
         db_tool.save()
         return db_tool
+    
+    @staticmethod
+    @handle_transaction
+    def batch_delete_tools(tool_ids: list) -> int:
+        """
+        批量删除MCP工具（逻辑删除）
+        
+        Args:
+            tool_ids: MCP工具ID列表
+            
+        Returns:
+            int: 删除成功的工具数量
+        """
+        deleted_count = 0
+        for tool_id in tool_ids:
+            try:
+                db_tool = MCPTool.get_by_id(tool_id)
+                if not db_tool.deleted:
+                    db_tool.deleted = True
+                    db_tool.deleted_at = datetime.now()
+                    db_tool.save()
+                    deleted_count += 1
+            except MCPTool.DoesNotExist:
+                # 跳过不存在的工具
+                continue
+        return deleted_count

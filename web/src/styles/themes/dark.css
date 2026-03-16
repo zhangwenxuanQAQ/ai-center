@@ -91,7 +91,7 @@ body[data-theme="dark"] div.ant-modal-header {
 
 body[data-theme="dark"] .ant-modal-title,
 body[data-theme="dark"] div.ant-modal-title {
-  color: rgba(255, 255, 255, 0.95) !important;
+  color: #ffffff !important;
   font-size: 18px !important;
   font-weight: 600 !important;
 }
@@ -103,14 +103,14 @@ body[data-theme="dark"] button.ant-modal-close {
 
 body[data-theme="dark"] .ant-modal-close:hover,
 body[data-theme="dark"] button.ant-modal-close:hover {
-  color: rgba(255, 255, 255, 0.95) !important;
+  color: #ffffff !important;
 }
 
 body[data-theme="dark"] .ant-modal-body,
 body[data-theme="dark"] div.ant-modal-body {
   background: transparent !important;
   padding: 24px !important;
-  color: rgba(255, 255, 255, 0.85) !important;
+  color: #ffffff !important;
 }
 
 body[data-theme="dark"] .ant-modal-footer,
@@ -119,6 +119,17 @@ body[data-theme="dark"] div.ant-modal-footer {
   border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
   border-radius: 0 0 16px 16px !important;
   padding: 16px 24px !important;
+}
+
+/* Modal Confirm 样式 */
+body[data-theme="dark"] .ant-modal-confirm-title,
+body[data-theme="dark"] div.ant-modal-confirm-title {
+  color: #ffffff !important;
+}
+
+body[data-theme="dark"] .ant-modal-confirm-content,
+body[data-theme="dark"] div.ant-modal-confirm-content {
+  color: #ffffff !important;
 }
 
 /* Popconfirm 样式 */
@@ -132,13 +143,13 @@ body[data-theme="dark"] div.ant-popover-inner {
 
 body[data-theme="dark"] .ant-popover-title,
 body[data-theme="dark"] div.ant-popover-title {
-  color: rgba(255, 255, 255, 0.95) !important;
+  color: #ffffff !important;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 
 body[data-theme="dark"] .ant-popover-inner-content,
 body[data-theme="dark"] div.ant-popover-inner-content {
-  color: rgba(255, 255, 255, 0.85) !important;
+  color: #ffffff !important;
 }
 
 body[data-theme="dark"] .ant-popover-arrow::before,
@@ -367,12 +378,6 @@ body[data-theme="dark"] button.ant-btn-default {
   color: rgba(255, 255, 255, 0.85) !important;
 }
 
-body[data-theme="dark"] .ant-btn-default:hover,
-body[data-theme="dark"] button.ant-btn-default:hover {
-  border-color: rgba(255, 255, 255, 0.4) !important;
-  background: rgba(255, 255, 255, 0.05) !important;
-  color: rgba(255, 255, 255, 0.95) !important;
-}
 
 body[data-theme="dark"] .ant-btn-primary,
 body[data-theme="dark"] button.ant-btn-primary {
@@ -383,6 +388,11 @@ body[data-theme="dark"] button.ant-btn-primary {
 body[data-theme="dark"] .ant-btn-primary:hover,
 body[data-theme="dark"] button.ant-btn-primary:hover {
   background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
+}
+
+body[data-theme="dark"] .ant-btn-danger,
+body[data-theme="dark"] button.ant-btn-danger {
+  border: none !important;
 }
 
 

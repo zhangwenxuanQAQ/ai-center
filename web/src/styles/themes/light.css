@@ -292,6 +292,25 @@ body[data-theme="light"] button.ant-btn-primary:hover {
   background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
 }
 
+body[data-theme="light"] .ant-btn-danger,
+body[data-theme="light"] button.ant-btn-danger {
+  border: none !important;
+  color: #ff4d4f !important;
+}
+
+/* 移除确认按钮的默认选中边框 */
+body[data-theme="light"] .ant-btn-danger:focus,
+body[data-theme="light"] button.ant-btn-danger:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+body[data-theme="dark"] .ant-btn-danger:focus,
+body[data-theme="dark"] button.ant-btn-danger:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 /* ==================== 白天模式其他组件样式 ==================== */
 
 /* DatePicker 样式 */

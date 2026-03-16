@@ -2,6 +2,7 @@
 MCP控制器，提供MCP相关的API接口
 """
 
+import json
 from fastapi import APIRouter, Body, Query
 from app.services.mcp.service import MCPCategoryService, MCPServerService, MCPToolService
 from app.services.mcp.dto import (
@@ -404,7 +405,17 @@ def get_mcp_tools(
     skip = page * page_size
     tools = MCPToolService.get_tools(skip, page_size, server_id, name, description, status)
     total = MCPToolService.count_tools(server_id, name, description, status)
-    tools_data = [tool.__data__ for tool in tools]
+    tools_data = []
+    for tool in tools:
+        tool_dict = tool.__data__
+        if tool_dict.get('config'):
+            try:
+                if isinstance(tool_dict['config'], str):
+                    tool_dict['config'] = json.loads(tool_dict['config'])
+            except json.JSONDecodeError:
+                # 如果解析失败，保持原样
+                pass
+        tools_data.append(tool_dict)
     return ResponseUtil.success(data={"data": tools_data, "total": total}, message="获取MCP工具列表成功")
 
 
@@ -454,3 +465,18 @@ def delete_mcp_tool(tool_id: str):
     """
     db_tool = MCPToolService.delete_tool(tool_id)
     return ResponseUtil.success(data=db_tool.__data__, message="MCP工具删除成功")
+
+
+@router.post("/tools/batch_delete", response_model=ApiResponse)
+def batch_delete_mcp_tools(tool_ids: list = Body(..., description="MCP工具ID列表")):
+    """
+    批量删除MCP工具
+    
+    Args:
+        tool_ids: MCP工具ID列表
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    deleted_count = MCPToolService.batch_delete_tools(tool_ids)
+    return ResponseUtil.success(data={"deleted_count": deleted_count}, message=f"成功删除 {deleted_count} 个工具")

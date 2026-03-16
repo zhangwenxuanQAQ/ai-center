@@ -235,4 +235,11 @@ export const mcpService = {
   deleteTool: async (id: string): Promise<MCPTool> => {
     return http.post<MCPTool>(`/aicenter/v1/mcp/tool/${id}/delete`);
   },
+
+  /**
+   * 批量删除MCP工具
+   */
+  batchDeleteTools: async (toolIds: string[]): Promise<{ deleted_count: number }> => {
+    return http.post<{ deleted_count: number }>('/aicenter/v1/mcp/tools/batch_delete', toolIds);
+  },
 };

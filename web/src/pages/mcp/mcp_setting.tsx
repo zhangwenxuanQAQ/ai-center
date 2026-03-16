@@ -47,7 +47,7 @@ const MCPSetting: React.FC = () => {
   const [searchDescription, setSearchDescription] = useState('');
   const [searchStatus, setSearchStatus] = useState<string | undefined>(undefined);
   const [toolsPage, setToolsPage] = useState(1);
-  const [toolsPageSize, setToolsPageSize] = useState(10);
+  const [toolsPageSize, setToolsPageSize] = useState(20);
   const [toolsTotal, setToolsTotal] = useState(0);
   
   const [isImportModalVisible, setIsImportModalVisible] = useState(false);
@@ -64,6 +64,7 @@ const MCPSetting: React.FC = () => {
   const [remoteToolsSearchName, setRemoteToolsSearchName] = useState('');
   const [remoteToolsSearchDesc, setRemoteToolsSearchDesc] = useState('');
   const [selectedRemoteTools, setSelectedRemoteTools] = useState<string[]>([]);
+  const [selectedToolIds, setSelectedToolIds] = useState<string[]>([]);
   
   const [isToolModalVisible, setIsToolModalVisible] = useState(false);
   const [toolForm] = Form.useForm();
@@ -424,6 +425,42 @@ const MCPSetting: React.FC = () => {
     }
   };
 
+  const handleBatchDelete = async () => {
+    if (selectedToolIds.length === 0) {
+      message.warning('请选择要删除的工具');
+      return;
+    }
+    
+    Modal.confirm({
+      title: '确认删除',
+      content: `确定要删除选中的 ${selectedToolIds.length} 个工具吗？`,
+      onOk: async () => {
+        try {
+          const result = await mcpService.batchDeleteTools(selectedToolIds);
+          message.success(`成功删除 ${result.deleted_count} 个工具`);
+          setSelectedToolIds([]);
+          fetchTools();
+        } catch (error) {
+          console.error('Failed to batch delete tools:', error);
+          message.error('批量删除失败');
+        }
+      },
+      okText: '确认',
+      cancelText: '取消',
+      okType: 'danger',
+      okButtonProps: {
+        style: {
+          color: theme === 'dark' ? '#fff' : '#333'
+        }
+      },
+      cancelButtonProps: {
+        style: {
+          color: theme === 'dark' ? '#fff' : '#333'
+        }
+      }
+    });
+  };
+
   const handleEditTool = (tool: MCPTool) => {
     setEditingTool(tool);
     let configStr = '';
@@ -754,15 +791,24 @@ const MCPSetting: React.FC = () => {
             <div style={{ marginBottom: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
               {server?.source_type === 'local' ? (
                 <Dropdown menu={{ items: importMenuItems }} trigger={['hover']}>
-                  <Button type="primary" size="small" icon={<ImportOutlined />}>
+                  <Button type="primary" icon={<ImportOutlined />}>
                     导入
                   </Button>
                 </Dropdown>
               ) : (
-                <Button type="primary" size="small" icon={<ImportOutlined />} onClick={() => handleImportClick('tools')}>
+                <Button type="primary" icon={<ImportOutlined />} onClick={() => handleImportClick('tools')}>
                   导入
                 </Button>
               )}
+              <Button 
+                danger 
+                icon={<DeleteOutlined />} 
+                onClick={handleBatchDelete} 
+                className="batch-delete-button"
+                disabled={selectedToolIds.length === 0}
+              >
+                批量删除 ({selectedToolIds.length})
+              </Button>
               <Input
                 placeholder="搜索名称"
                 value={searchName}
@@ -801,6 +847,10 @@ const MCPSetting: React.FC = () => {
                 pagination={false}
                 scroll={{ y: 'calc(100vh - 400px)' }}
                 style={{ flex: 1, minHeight: 0 }}
+                rowSelection={{
+                  selectedRowKeys: selectedToolIds,
+                  onChange: (keys) => setSelectedToolIds(keys as string[]),
+                }}
               />
               <div style={{ 
                 paddingTop: '16px', 
@@ -822,6 +872,7 @@ const MCPSetting: React.FC = () => {
                   onChange={(page, pageSize) => {
                     setToolsPage(page);
                     setToolsPageSize(pageSize);
+                    // 切换页号时不清空选择
                   }}
                   locale={{
                     items_per_page: '条/页',
