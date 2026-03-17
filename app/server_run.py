@@ -7,6 +7,10 @@ import subprocess
 import sys
 import os
 from contextlib import asynccontextmanager
+
+# 添加项目根目录到Python路径
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -106,6 +110,25 @@ try:
     except Exception as e:
         print(f"  添加is_default字段失败: {e}")
     
+    print("\n为mcp_tool表添加title和extra_config字段...")
+    try:
+        cursor = db.execute_sql("DESCRIBE mcp_tool;")
+        columns = [column[0] for column in cursor.fetchall()]
+        
+        if 'title' not in columns:
+            db.execute_sql("ALTER TABLE mcp_tool ADD COLUMN title VARCHAR(255) DEFAULT NULL")
+            print("  成功添加title字段")
+        else:
+            print("  title字段已存在，跳过")
+        
+        if 'extra_config' not in columns:
+            db.execute_sql("ALTER TABLE mcp_tool ADD COLUMN extra_config TEXT DEFAULT NULL")
+            print("  成功添加extra_config字段")
+        else:
+            print("  extra_config字段已存在，跳过")
+    except Exception as e:
+        print(f"  添加字段失败: {e}")
+    
     print("\n数据库迁移完成")
 except Exception as e:
     print(f"数据库迁移失败: {e}")
@@ -121,9 +144,7 @@ if mcp_enabled:
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     mcp_process = subprocess.Popen(
         [sys.executable, "-m", "app.mcp_server"],
-        cwd=project_root,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL
+        cwd=project_root
     )
     print(f"MCP服务已启动: http://{mcp_host}:{mcp_port}/mcp")
 else:
@@ -282,10 +303,9 @@ if __name__ == "__main__":
     import uvicorn
     try:
         uvicorn.run(
-            "app.server_run:app",
+            app,
             host=config.server['host'],
-            port=config.server['http_port'],
-            reload=False
+            port=config.server['http_port']
         )
     finally:
         if mcp_process:

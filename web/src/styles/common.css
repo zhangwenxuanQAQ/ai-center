@@ -26,6 +26,8 @@
       pointer-events: none;
       animation: backgroundPulse 20s ease-in-out infinite;
     }
+
+
   }
 
   &.light {
@@ -152,4 +154,29 @@
 .ant-tree .ant-tree-treenode:hover {
   background: linear-gradient(90deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2)) !important;
   border-radius: 8px;
+}
+
+/* ==================== 公共分页样式 ==================== */
+
+.ant-pagination {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ant-pagination-item {
+  margin: 0 !important;
+  border-radius: 4px;
+}
+
+.ant-pagination-prev,
+.ant-pagination-next,
+.ant-pagination-jump-prev,
+.ant-pagination-jump-next {
+  margin: 0 !important;
+  border-radius: 4px;
+}
+
+.ant-pagination-item-link {
+  border-radius: 4px !important;
 }

@@ -95,7 +95,6 @@ def create_mcp_server() -> FastMCP:
     """
     mcp = FastMCP("AI-Center-MCP-Server")
     
-    @mcp.tool()
     def list_tools() -> List[Dict[str, Any]]:
         """
         列出所有可用的MCP工具
@@ -112,7 +111,6 @@ def create_mcp_server() -> FastMCP:
         
         return get_tools_from_db(server_id)
     
-    @mcp.tool()
     async def call_tool(name: str, arguments: Dict[str, Any]) -> Any:
         """
         调用指定的MCP工具

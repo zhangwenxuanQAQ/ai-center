@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Form, Input, Select, TreeSelect, Button, Table, Switch, Modal, message, Popconfirm, Space, Card, Row, Col, Upload, Spin, Pagination, Dropdown, Tooltip } from 'antd';
+import { Form, Input, Select, TreeSelect, Button, Table, Switch, Modal, message, Popconfirm, Space, Card, Row, Col, Upload, Spin, Pagination, Dropdown, Tooltip, Radio } from 'antd';
 const { TextArea } = Input;
 import { ArrowLeftOutlined, SaveOutlined, UndoOutlined, ApiOutlined, ApiTwoTone, UploadOutlined, ImportOutlined, DeleteOutlined, EditOutlined, PlusOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, ClearOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
@@ -21,6 +21,11 @@ const transportTypes: Record<string, string> = {
   'sse': 'SSE',
   'streamable_http': 'Streamable HTTP',
   'stdio': 'Stdio'
+};
+
+const toolTypes: Record<string, string> = {
+  'restful_api': 'api接口',
+  'mcp': 'mcp工具'
 };
 
 const MCPSetting: React.FC = () => {
@@ -52,9 +57,21 @@ const MCPSetting: React.FC = () => {
   
   const [isImportModalVisible, setIsImportModalVisible] = useState(false);
   const [importType, setImportType] = useState<'swagger' | 'tools'>('tools');
+  const [swaggerInputType, setSwaggerInputType] = useState<'url' | 'json'>('url');
   const [swaggerUrl, setSwaggerUrl] = useState('');
   const [swaggerJson, setSwaggerJson] = useState('');
   const [importing, setImporting] = useState(false);
+  const [swaggerTools, setSwaggerTools] = useState<MCPTool[]>([]);
+  const [swaggerToolsLoading, setSwaggerToolsLoading] = useState(false);
+  const [selectedSwaggerTools, setSelectedSwaggerTools] = useState<string[]>([]);
+  const [swaggerParseResult, setSwaggerParseResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [swaggerToolsPage, setSwaggerToolsPage] = useState(1);
+  const [swaggerToolsPageSize, setSwaggerToolsPageSize] = useState(20);
+  const [swaggerToolsTotal, setSwaggerToolsTotal] = useState(0);
+  const [swaggerToolsSearchTitle, setSwaggerToolsSearchTitle] = useState('');
+  const [swaggerToolsSearchDesc, setSwaggerToolsSearchDesc] = useState('');
+  const [selectAll, setSelectAll] = useState(false);
+  const [globalExtraConfig, setGlobalExtraConfig] = useState('{}');
   
   const [remoteTools, setRemoteTools] = useState<MCPTool[]>([]);
   const [remoteToolsLoading, setRemoteToolsLoading] = useState(false);
@@ -65,6 +82,7 @@ const MCPSetting: React.FC = () => {
   const [remoteToolsSearchDesc, setRemoteToolsSearchDesc] = useState('');
   const [selectedRemoteTools, setSelectedRemoteTools] = useState<string[]>([]);
   const [selectedToolIds, setSelectedToolIds] = useState<string[]>([]);
+  const [selectAllRemote, setSelectAllRemote] = useState(false);
   
   const [isToolModalVisible, setIsToolModalVisible] = useState(false);
   const [toolForm] = Form.useForm();
@@ -330,10 +348,17 @@ const MCPSetting: React.FC = () => {
     setIsImportModalVisible(true);
     setSwaggerUrl('');
     setSwaggerJson('');
+    setSwaggerInputType('url');
+    setSwaggerTools([]);
+    setSelectedSwaggerTools([]);
+    setSwaggerParseResult(null);
+    setSelectAll(false);
+    setGlobalExtraConfig('{}');
     setSelectedRemoteTools([]);
     setRemoteToolsSearchName('');
     setRemoteToolsSearchDesc('');
     setRemoteToolsPage(1);
+    setSelectAllRemote(false);
     if (type === 'tools' && server) {
       fetchRemoteTools(1, 20, '', '');
     }
@@ -356,6 +381,90 @@ const MCPSetting: React.FC = () => {
     }
   };
 
+  const parseSwagger = async () => {
+    if (!server) return;
+    if (!swaggerUrl && !swaggerJson) {
+      return;
+    }
+    setSwaggerToolsLoading(true);
+    setSwaggerParseResult(null);
+    try {
+      let baseUrl = server.url;
+      let headers = {};
+      
+      // 解析全局配置
+      if (globalExtraConfig) {
+        try {
+          const config = JSON.parse(globalExtraConfig);
+          if (config.base_url) {
+            baseUrl = config.base_url;
+          }
+          if (config.headers) {
+            headers = config.headers;
+          }
+        } catch (e) {
+          console.error('Failed to parse global extra config:', e);
+        }
+      }
+      
+      const result = await mcpService.parseSwagger(
+        server.id,
+        swaggerUrl || undefined,
+        swaggerJson || undefined,
+        baseUrl,
+        headers
+      );
+      setSwaggerTools(result.data || []);
+      setSwaggerToolsTotal(result.total || 0);
+      setSwaggerToolsPage(1);
+      setSelectedSwaggerTools([]);
+      
+      // 从第一个工具的extra_config中提取base_url和headers作为默认值
+      if (result.data && result.data.length > 0) {
+        try {
+          const firstTool = result.data[0];
+          const extraConfig = JSON.parse(firstTool.extra_config || '{}');
+          const defaultConfig = {
+            base_url: extraConfig.base_url || '',
+            headers: extraConfig.headers || {}
+          };
+          setGlobalExtraConfig(JSON.stringify(defaultConfig, null, 2));
+        } catch (e) {
+          console.error('Failed to parse extra config:', e);
+        }
+      }
+      
+      setSwaggerParseResult({
+        success: true,
+        message: `成功解析Swagger，发现 ${result.data?.length || 0} 个工具`
+      });
+    } catch (error: any) {
+      console.error('Failed to parse swagger:', error);
+      setSwaggerTools([]);
+      setSwaggerToolsTotal(0);
+      setSelectedSwaggerTools([]);
+      setSwaggerParseResult({
+        success: false,
+        message: error.message || '解析Swagger失败'
+      });
+    } finally {
+      setSwaggerToolsLoading(false);
+    }
+  };
+
+  const handleSwaggerInputBlur = () => {
+    parseSwagger();
+  };
+
+  const handleSwaggerSearch = () => {
+    setSwaggerToolsPage(1);
+  };
+
+  const handleSwaggerPageChange = (page: number, pageSize: number) => {
+    setSwaggerToolsPage(page);
+    setSwaggerToolsPageSize(pageSize);
+  };
+
   const importMenuItems = [
     {
       key: 'swagger',
@@ -374,15 +483,49 @@ const MCPSetting: React.FC = () => {
     setImporting(true);
     try {
       if (importType === 'swagger') {
-        if (!swaggerUrl && !swaggerJson) {
-          message.error('请输入Swagger URL或Swagger JSON');
+        if (selectedSwaggerTools.length === 0) {
+          message.error('请选择要导入的工具');
           return;
         }
-        const result = await mcpService.importSwaggerTools(
-          server.id,
-          swaggerUrl || undefined,
-          swaggerJson || undefined
-        );
+        const toolsToImport = swaggerTools.filter(t => selectedSwaggerTools.includes(t.name));
+        
+        // 解析全局配置
+        let baseUrl = server.url;
+        let headers = {};
+        if (globalExtraConfig) {
+          try {
+            const config = JSON.parse(globalExtraConfig);
+            if (config.base_url) {
+              baseUrl = config.base_url;
+            }
+            if (config.headers) {
+              headers = config.headers;
+            }
+          } catch (e) {
+            console.error('Failed to parse global extra config:', e);
+          }
+        }
+        
+        // 更新工具的extra_config，使用全局配置中的base_url和headers
+        const updatedToolsToImport = toolsToImport.map(tool => {
+          let extraConfig = {};
+          try {
+            extraConfig = JSON.parse(tool.extra_config || '{}');
+          } catch (e) {
+            console.error('Failed to parse extra config:', e);
+          }
+          
+          // 更新base_url和headers
+          extraConfig.base_url = baseUrl;
+          extraConfig.headers = headers;
+          
+          return {
+            ...tool,
+            extra_config: JSON.stringify(extraConfig)
+          };
+        });
+        
+        const result = await mcpService.importTools(server.id, updatedToolsToImport);
         message.success(`成功导入 ${result.length} 个工具`);
       } else if (importType === 'tools') {
         if (selectedRemoteTools.length === 0) {
@@ -464,6 +607,7 @@ const MCPSetting: React.FC = () => {
   const handleEditTool = (tool: MCPTool) => {
     setEditingTool(tool);
     let configStr = '';
+    let extraConfigStr = '';
     try {
       if (tool.config) {
         let configObj;
@@ -480,15 +624,33 @@ const MCPSetting: React.FC = () => {
           configStr = JSON.stringify(configObj, null, 2);
         }
       }
+      if (tool.extra_config) {
+        let extraConfigObj;
+        if (typeof tool.extra_config === 'string') {
+          try {
+            extraConfigObj = JSON.parse(tool.extra_config);
+          } catch (parseError) {
+            extraConfigStr = tool.extra_config;
+          }
+        } else if (typeof tool.extra_config === 'object') {
+          extraConfigObj = tool.extra_config;
+        }
+        if (extraConfigObj) {
+          extraConfigStr = JSON.stringify(extraConfigObj, null, 2);
+        }
+      }
     } catch (error) {
       console.error('Failed to parse config:', error);
       configStr = tool.config || '';
+      extraConfigStr = tool.extra_config || '';
     }
     toolForm.setFieldsValue({
       name: tool.name,
+      title: tool.title,
       description: tool.description,
       status: tool.status,
-      config: configStr
+      config: configStr,
+      extra_config: extraConfigStr
     });
     setIsToolModalVisible(true);
   };
@@ -508,9 +670,11 @@ const MCPSetting: React.FC = () => {
       }
       await mcpService.updateTool(editingTool.id, {
         name: values.name,
+        title: values.title,
         description: values.description,
         status: values.status,
-        config: updatedConfig
+        config: updatedConfig,
+        extra_config: values.extra_config
       });
       message.success('更新成功');
       setIsToolModalVisible(false);
@@ -523,6 +687,18 @@ const MCPSetting: React.FC = () => {
 
   const toolColumns: ColumnsType<MCPTool> = [
     {
+      title: '工具标题',
+      dataIndex: 'title',
+      key: 'title',
+      width: 150,
+      ellipsis: true,
+      render: (title: string) => (
+        <Tooltip title={title} placement="topLeft">
+          <span>{title || '-'}</span>
+        </Tooltip>
+      ),
+    },
+    {
       title: '工具名称',
       dataIndex: 'name',
       key: 'name',
@@ -530,17 +706,25 @@ const MCPSetting: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: '描述',
+      title: '工具描述',
       dataIndex: 'description',
       key: 'description',
       width: 150,
       ellipsis: true,
+      render: (description: string) => (
+        <Tooltip title={description} placement="topLeft">
+          <span>{description || '-'}</span>
+        </Tooltip>
+      ),
     },
     {
-      title: '类型',
+      title: '工具类型',
       dataIndex: 'tool_type',
       key: 'tool_type',
       width: 80,
+      render: (toolType: string) => (
+        <span>{toolTypes[toolType] || toolType}</span>
+      ),
     },
     {
       title: '状态',
@@ -901,27 +1085,231 @@ const MCPSetting: React.FC = () => {
         onCancel={() => setIsImportModalVisible(false)}
         onOk={handleImport}
         confirmLoading={importing}
-        width={800}
+        width={1000}
+        style={{ maxHeight: '90vh' }}
+        bodyStyle={{ maxHeight: '70vh', overflow: 'auto' }}
         okText="导入"
         cancelText="取消"
       >
+        <Form layout="horizontal" labelAlign="right" labelCol={{ span: 4 }} wrapperCol={{ span: 20 }}>
         {importType === 'swagger' && (
           <>
-            <Form.Item label="Swagger URL">
-              <Input
-                placeholder="请输入Swagger文档URL"
-                value={swaggerUrl}
-                onChange={(e) => setSwaggerUrl(e.target.value)}
-              />
-            </Form.Item>
-            <Form.Item label="或 Swagger JSON">
+            <div style={{ marginBottom: 16 }}>
+              <Radio.Group
+                value={swaggerInputType}
+                onChange={(e) => setSwaggerInputType(e.target.value)}
+                buttonStyle="solid"
+                size="middle"
+              >
+                <Radio.Button value="url">URL</Radio.Button>
+                <Radio.Button value="json">JSON</Radio.Button>
+              </Radio.Group>
+            </div>
+            {swaggerInputType === 'url' && (
+              <Form.Item label="Swagger URL">
+                <Input
+                  placeholder="请输入Swagger文档URL"
+                  value={swaggerUrl}
+                  onChange={(e) => setSwaggerUrl(e.target.value)}
+                  onBlur={handleSwaggerInputBlur}
+                />
+              </Form.Item>
+            )}
+            {swaggerInputType === 'json' && (
+              <Form.Item label="Swagger JSON">
+                <TextArea
+                  rows={8}
+                  placeholder="请粘贴Swagger JSON内容"
+                  value={swaggerJson}
+                  onChange={(e) => setSwaggerJson(e.target.value)}
+                  onBlur={handleSwaggerInputBlur}
+                />
+              </Form.Item>
+            )}
+            <Form.Item label="其他参数">
               <TextArea
-                rows={8}
-                placeholder="请粘贴Swagger JSON内容"
-                value={swaggerJson}
-                onChange={(e) => setSwaggerJson(e.target.value)}
+                rows={4}
+                placeholder='请输入全局配置（JSON格式），例如：{"base_url": "http://localhost:8080", "headers": {"Authorization": "Bearer token"}}'
+                value={globalExtraConfig}
+                onChange={(e) => setGlobalExtraConfig(e.target.value)}
+                style={{ fontFamily: 'monospace' }}
               />
             </Form.Item>
+            <div style={{ marginBottom: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
+              <Input
+                placeholder="搜索标题"
+                value={swaggerToolsSearchTitle}
+                onChange={(e) => { setSwaggerToolsSearchTitle(e.target.value); setSwaggerToolsPage(1); }}
+                onPressEnter={handleSwaggerSearch}
+                style={{ width: 160 }}
+                allowClear
+              />
+              <Input
+                placeholder="搜索描述"
+                value={swaggerToolsSearchDesc}
+                onChange={(e) => { setSwaggerToolsSearchDesc(e.target.value); setSwaggerToolsPage(1); }}
+                onPressEnter={handleSwaggerSearch}
+                style={{ width: 160 }}
+                allowClear
+              />
+              <Button type="primary" onClick={handleSwaggerSearch}>
+                搜索
+              </Button>
+              <Button 
+                type="default" 
+                onClick={() => {
+                  setSelectAll(!selectAll);
+                  if (!selectAll) {
+                    // 全选当前页的所有工具
+                    const currentPageTools = swaggerTools.filter(tool => {
+                      const titleMatch = !swaggerToolsSearchTitle || tool.title?.toLowerCase().includes(swaggerToolsSearchTitle.toLowerCase());
+                      const descMatch = !swaggerToolsSearchDesc || (tool.description && tool.description.toLowerCase().includes(swaggerToolsSearchDesc.toLowerCase()));
+                      return titleMatch && descMatch;
+                    });
+                    setSelectedSwaggerTools(currentPageTools.map(tool => tool.name));
+                  } else {
+                    // 取消全选
+                    setSelectedSwaggerTools([]);
+                  }
+                }}
+              >
+                {selectAll ? '取消全选' : '全选'}
+              </Button>
+            </div>
+            {swaggerParseResult && (
+              <div style={{ 
+                marginBottom: 16,
+                padding: '8px 12px',
+                borderRadius: 4,
+                background: swaggerParseResult.success ? 'rgba(82, 196, 26, 0.1)' : 'rgba(255, 77, 79, 0.1)',
+                color: swaggerParseResult.success ? '#52c41a' : '#ff4d4f',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: 12
+              }}>
+                {swaggerParseResult.success ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
+                {swaggerParseResult.message}
+              </div>
+            )}
+            <div>
+              <Table
+                className="import-modal-pagination"
+                rowKey="name"
+                columns={[
+                  {
+                    title: '标题',
+                    dataIndex: 'title',
+                    key: 'title',
+                    width: 200,
+                    ellipsis: true,
+                    render: (text: string) => (
+                      <Tooltip title={text} placement="topLeft">
+                        <span>{text || '-'}</span>
+                      </Tooltip>
+                    ),
+                  },
+                  {
+                    title: '描述',
+                    dataIndex: 'description',
+                    key: 'description',
+                    width: 150,
+                    ellipsis: true,
+                    render: (text: string) => (
+                      <Tooltip title={text} placement="topLeft">
+                        <span>{text || '-'}</span>
+                      </Tooltip>
+                    ),
+                  },
+                  {
+                    title: '名称',
+                    dataIndex: 'name',
+                    key: 'name',
+                    width: 150,
+                    ellipsis: true,
+                    render: (text: string) => (
+                      <Tooltip title={text} placement="topLeft">
+                        <span>{text}</span>
+                      </Tooltip>
+                    ),
+                  },
+                  {
+                    title: '接口路径',
+                    key: 'path',
+                    width: 200,
+                    ellipsis: true,
+                    render: (_, record: any) => {
+                      try {
+                        const extraConfig = JSON.parse(record.extra_config || '{}');
+                        return (
+                          <Tooltip title={extraConfig.path || '-'} placement="topLeft">
+                            <span>{extraConfig.path || '-'}</span>
+                          </Tooltip>
+                        );
+                      } catch {
+                        return '-';
+                      }
+                    },
+                  },
+                  {
+                    title: '请求方式',
+                    key: 'method',
+                    width: 100,
+                    render: (_, record: any) => {
+                      try {
+                        const extraConfig = JSON.parse(record.extra_config || '{}');
+                        return extraConfig.method || '-';
+                      } catch {
+                        return '-';
+                      }
+                    },
+                  },
+                ]}
+                dataSource={swaggerTools.filter(tool => {
+                  const titleMatch = !swaggerToolsSearchTitle || tool.title?.toLowerCase().includes(swaggerToolsSearchTitle.toLowerCase());
+                  const descMatch = !swaggerToolsSearchDesc || (tool.description && tool.description.toLowerCase().includes(swaggerToolsSearchDesc.toLowerCase()));
+                  return titleMatch && descMatch;
+                })}
+                loading={swaggerToolsLoading}
+                size="small"
+                pagination={{
+                  current: swaggerToolsPage,
+                  pageSize: swaggerToolsPageSize,
+                  total: swaggerTools.length,
+                  showSizeChanger: true,
+                  showQuickJumper: true,
+                  showTotal: (total) => `共 ${total} 条`,
+                  pageSizeOptions: ['10', '20', '50', '100'],
+                  size: 'small',
+                  simple: false,
+                  locale: {
+                    items_per_page: '条/页',
+                    jump_to: '跳转到',
+                    jump_to_confirm: '确定',
+                    page: '页',
+                    prev_page: '上一页',
+                    next_page: '下一页',
+                    prev_5: '向前 5 页',
+                    next_5: '向后 5 页',
+                    prev_3: '向前 3 页',
+                    next_3: '向后 3 页',
+                    first: '第一页',
+                    last: '最后一页'
+                  },
+                  onChange: handleSwaggerPageChange,
+                }}
+                rowSelection={{
+                  selectedRowKeys: selectedSwaggerTools,
+                  onChange: (keys) => setSelectedSwaggerTools(keys as string[]),
+                }}
+                scroll={{ y: 300 }}
+              />
+              {selectedSwaggerTools.length > 0 && (
+                <div style={{ marginTop: 8, color: theme === 'dark' ? '#aaa' : '#666' }}>
+                  已选择 {selectedSwaggerTools.length} 个工具
+                </div>
+              )}
+            </div>
           </>
         )}
         
@@ -946,6 +1334,22 @@ const MCPSetting: React.FC = () => {
               />
               <Button type="primary" onClick={() => fetchRemoteTools(1, remoteToolsPageSize, remoteToolsSearchName, remoteToolsSearchDesc)}>
                 搜索
+              </Button>
+              <Button 
+                type="default" 
+                onClick={() => {
+                  setSelectAllRemote(!selectAllRemote);
+                  if (!selectAllRemote) {
+                    // 全选当前页的所有工具
+                    const currentPageTools = remoteTools;
+                    setSelectedRemoteTools(currentPageTools.map(tool => tool.name));
+                  } else {
+                    // 取消全选
+                    setSelectedRemoteTools([]);
+                  }
+                }}
+              >
+                {selectAllRemote ? '取消全选' : '全选'}
               </Button>
             </div>
             <Table
@@ -1022,6 +1426,7 @@ const MCPSetting: React.FC = () => {
             )}
           </div>
         )}
+        </Form>
       </Modal>
 
       <Modal
@@ -1037,6 +1442,9 @@ const MCPSetting: React.FC = () => {
           <Form.Item name="name" label="工具名称" rules={[{ required: true, message: '请输入工具名称' }]}>
             <Input placeholder="请输入工具名称" />
           </Form.Item>
+          <Form.Item name="title" label="工具标题">
+            <Input placeholder="请输入工具标题" />
+          </Form.Item>
           <Form.Item name="description" label="工具描述">
             <TextArea rows={3} placeholder="请输入工具描述" />
           </Form.Item>
@@ -1044,7 +1452,10 @@ const MCPSetting: React.FC = () => {
             <Switch checkedChildren="启用" unCheckedChildren="禁用" />
           </Form.Item>
           <Form.Item name="config" label="工具配置">
-            <TextArea rows={12} placeholder="请输入工具配置（JSON格式）" style={{ fontFamily: 'monospace', whiteSpace: 'pre', overflowWrap: 'normal' }} />
+            <TextArea rows={8} placeholder="请输入工具配置（JSON格式）" style={{ fontFamily: 'monospace', whiteSpace: 'pre', overflowWrap: 'normal' }} />
+          </Form.Item>
+          <Form.Item name="extra_config" label="额外配置">
+            <TextArea rows={6} placeholder="请输入额外配置（JSON格式）" style={{ fontFamily: 'monospace', whiteSpace: 'pre', overflowWrap: 'normal' }} />
           </Form.Item>
         </Form>
       </Modal>

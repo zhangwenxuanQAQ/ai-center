@@ -176,21 +176,32 @@ class SwaggerConverter:
         
         input_schema = self._build_input_schema(operation, swagger_doc)
         
+        # 构建标准MCP工具配置结构
         tool_config = {
-            'url': f"{self.base_url}{path}" if self.base_url else path,
-            'method': method.upper(),
-            'headers': self.headers,
+            'name': operation_id,
+            'description': description or f"{method.upper()} {path}",
+            'inputSchema': input_schema
+        }
+        
+        # 构建额外配置，包含接口路径、请求方式、base_url和请求头
+        extra_config = {
             'path': path,
+            'method': method.upper(),
+            'base_url': self.base_url or '',
+            'headers': self.headers,
+            'url': f"{self.base_url}{path}" if self.base_url else path,
             'parameters': operation.get('parameters', []),
             'requestBody': operation.get('requestBody')
         }
         
         return {
             'name': operation_id,
+            'title': summary or f"{method.upper()} {path}",
             'description': description or f"{method.upper()} {path}",
-            'tool_type': 'http',
+            'tool_type': 'restful_api',
             'server_id': server_id,
             'config': json.dumps(tool_config),
+            'extra_config': json.dumps(extra_config),
             'input_schema': input_schema,
             'status': True
         }

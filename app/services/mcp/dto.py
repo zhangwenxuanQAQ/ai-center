@@ -135,17 +135,21 @@ class MCPToolBase(BaseModel):
     
     Attributes:
         name: 工具名称
+        title: 工具标题
         description: 工具描述
         tool_type: 工具类型
         server_id: MCP服务ID
         config: 工具配置
+        extra_config: 额外配置
         status: 状态
     """
     name: str = Field(..., min_length=1, max_length=100, description="工具名称，长度1-100个字符")
+    title: Optional[str] = Field(None, max_length=255, description="工具标题，最大长度255个字符")
     description: Optional[str] = Field(None, max_length=500, description="工具描述，最大长度500个字符")
     tool_type: str = Field(..., min_length=1, max_length=50, description="工具类型，长度1-50个字符")
     server_id: str = Field(..., description="MCP服务ID，UUID格式")
     config: Optional[str] = Field(None, description="工具配置")
+    extra_config: Optional[str] = Field(None, description="额外配置")
     status: bool = Field(default=True, description="状态，True表示启用，False表示禁用")
 
 
@@ -162,17 +166,21 @@ class MCPToolUpdate(BaseModel):
     
     Attributes:
         name: 工具名称
+        title: 工具标题
         description: 工具描述
         tool_type: 工具类型
         server_id: MCP服务ID
         config: 工具配置
+        extra_config: 额外配置
         status: 状态
     """
     name: Optional[str] = Field(None, min_length=1, max_length=100, description="工具名称，长度1-100个字符")
+    title: Optional[str] = Field(None, max_length=255, description="工具标题，最大长度255个字符")
     description: Optional[str] = Field(None, max_length=500, description="工具描述，最大长度500个字符")
     tool_type: Optional[str] = Field(None, min_length=1, max_length=50, description="工具类型，长度1-50个字符")
     server_id: Optional[str] = Field(None, description="MCP服务ID，UUID格式")
     config: Optional[str] = Field(None, description="工具配置")
+    extra_config: Optional[str] = Field(None, description="额外配置")
     status: Optional[bool] = Field(None, description="状态，True表示启用，False表示禁用")
 
 

@@ -335,10 +335,8 @@ body[data-theme="dark"] div.ant-select:hover div.ant-select-selector {
   border-color: rgba(102, 126, 234, 0.5) !important;
 }
 
-body[data-theme="dark"] .ant-select-focused .ant-select-selector,
-body[data-theme="dark"] div.ant-select-focused div.ant-select-selector {
-  border-color: #667eea !important;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2) !important;
+body[data-theme="dark"] .ant-form-item .ant-input{
+  background: rgba(255, 255, 255, 0.05) !important;
 }
 
 /* Select Dropdown 样式 */

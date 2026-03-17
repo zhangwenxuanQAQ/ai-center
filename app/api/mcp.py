@@ -337,6 +337,8 @@ def import_swagger_tools(
         return ResponseUtil.not_found(message=f"MCP服务 {server_id} 不存在")
     
     try:
+        from app.constants.mcp_constants import TOOL_TYPE
+        
         if swagger_url:
             tools = convert_swagger_url_to_mcp_tools(
                 swagger_url=swagger_url,
@@ -356,11 +358,91 @@ def import_swagger_tools(
         else:
             return ResponseUtil.error(message="请提供swagger_url或swagger_json参数")
         
+        # 更新工具类型为常量中定义的值
+        for tool in tools:
+            tool['tool_type'] = TOOL_TYPE.get("restful_api", "restful_api")
+        
         imported_tools = MCPServerService.import_tools(server_id, tools)
         tools_data = [tool.__data__ for tool in imported_tools]
         return ResponseUtil.success(data=tools_data, message=f"成功从Swagger导入 {len(tools_data)} 个MCP工具")
     except Exception as e:
         return ResponseUtil.error(message=f"Swagger导入失败: {str(e)}")
+
+
+@router.post("/server/{server_id}/parse_swagger", response_model=ApiResponse)
+def parse_swagger(
+    server_id: str,
+    swagger_url: str = Body(None, embed=True),
+    swagger_json: str = Body(None, embed=True),
+    base_url: str = Body(None, embed=True),
+    headers: dict = Body(None, embed=True),
+    include_patterns: list = Body(None, embed=True),
+    exclude_patterns: list = Body(None, embed=True)
+):
+    """
+    解析Swagger/OpenAPI文档并返回MCP工具列表
+    
+    Args:
+        server_id: MCP服务ID
+        swagger_url: Swagger文档URL
+        swagger_json: Swagger文档JSON字符串
+        include_patterns: 包含的API路径模式列表
+        exclude_patterns: 排除的API路径模式列表
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象，包含工具列表和总数
+    """
+    from app.core.mcp.utils import convert_swagger_url_to_mcp_tools, convert_swagger_json_to_mcp_tools
+    
+    server = MCPServerService.get_server(server_id)
+    if server is None:
+        return ResponseUtil.not_found(message=f"MCP服务 {server_id} 不存在")
+    
+    try:
+        from app.constants.mcp_constants import TOOL_TYPE
+        
+        # 使用传入的base_url和headers，如果没有则使用server的配置
+        use_base_url = base_url or server.url
+        use_headers = headers or {}
+        
+        if swagger_url:
+            tools = convert_swagger_url_to_mcp_tools(
+                swagger_url=swagger_url,
+                server_id=server_id,
+                base_url=use_base_url,
+                headers=use_headers,
+                include_patterns=include_patterns,
+                exclude_patterns=exclude_patterns
+            )
+        elif swagger_json:
+            tools = convert_swagger_json_to_mcp_tools(
+                swagger_json=swagger_json,
+                server_id=server_id,
+                base_url=use_base_url,
+                headers=use_headers,
+                include_patterns=include_patterns,
+                exclude_patterns=exclude_patterns
+            )
+        else:
+            return ResponseUtil.error(message="请提供swagger_url或swagger_json参数")
+        
+        # 转换工具格式，与远程工具列表格式保持一致
+        tools_data = []
+        for tool in tools:
+            tool_dict = {
+                "name": tool.get("name", ""),
+                "title": tool.get("title", ""),
+                "description": tool.get("description", ""),
+                "tool_type": TOOL_TYPE.get("restful_api", "restful_api"),
+                "status": True,
+                "config": tool.get("config", ""),
+                "extra_config": tool.get("extra_config", "")
+            }
+            tools_data.append(tool_dict)
+        
+        return ResponseUtil.success(data={"data": tools_data, "total": len(tools_data)}, message="Swagger解析成功")
+    except Exception as e:
+        return ResponseUtil.error(message=f"Swagger解析失败: {str(e)}")
 
 
 # MCP工具相关接口

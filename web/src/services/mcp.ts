@@ -48,10 +48,12 @@ export interface MCPConnectionTestResult {
 export interface MCPTool {
   id: string;
   name: string;
+  title?: string;
   description?: string;
   tool_type: string;
   server_id: string;
   config?: string;
+  extra_config?: string;
   status: boolean;
   created_at: string;
   updated_at?: string;
@@ -193,6 +195,24 @@ export const mcpService = {
       swagger_json: swaggerJson,
       include_patterns: includePatterns,
       exclude_patterns: excludePatterns
+    });
+  },
+
+  /**
+   * 解析Swagger并返回工具列表
+   */
+  parseSwagger: async (
+    serverId: string, 
+    swaggerUrl?: string, 
+    swaggerJson?: string,
+    baseUrl?: string,
+    headers?: Record<string, string>
+  ): Promise<{ data: MCPTool[], total: number }> => {
+    return http.post<{ data: MCPTool[], total: number }>(`/aicenter/v1/mcp/server/${serverId}/parse_swagger`, {
+      swagger_url: swaggerUrl,
+      swagger_json: swaggerJson,
+      base_url: baseUrl,
+      headers: headers
     });
   },
 

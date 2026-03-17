@@ -221,10 +221,12 @@ class MCPTool(SoftDeleteModel):
     存储MCP工具配置
     """
     name = CharField(max_length=255, index=True, verbose_name="工具名称")
+    title = CharField(max_length=255, null=True, verbose_name="工具标题")
     description = TextField(null=True, verbose_name="工具描述")
     tool_type = CharField(max_length=50, verbose_name="工具类型")
     server_id = CharField(max_length=40, index=True, verbose_name="MCP服务ID")
     config = TextField(null=True, verbose_name="工具配置")
+    extra_config = TextField(null=True, verbose_name="额外配置")
     status = BooleanField(verbose_name="状态")
     
     class Meta:
