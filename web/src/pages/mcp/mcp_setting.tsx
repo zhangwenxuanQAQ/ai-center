@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Form, Input, Select, TreeSelect, Button, Table, Switch, Modal, message, Popconfirm, Space, Card, Row, Col, Upload, Spin, Pagination, Dropdown, Tooltip, Radio } from 'antd';
 const { TextArea } = Input;
-import { ArrowLeftOutlined, SaveOutlined, UndoOutlined, ApiOutlined, ApiTwoTone, UploadOutlined, ImportOutlined, DeleteOutlined, EditOutlined, PlusOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, ClearOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SaveOutlined, UndoOutlined, ApiOutlined, ApiTwoTone, UploadOutlined, ImportOutlined, DeleteOutlined, EditOutlined, PlusOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, ClearOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { UploadProps } from 'antd';
 import { mcpService, MCPServer, MCPCategory, MCPTool } from '../../services/mcp';
 import PageHeader from '../../components/page-header';
+import MCPTesting from './mcp_testing';
 import '../../styles/common.css';
 import './mcp_setting.less';
 
@@ -88,6 +89,9 @@ const MCPSetting: React.FC = () => {
   const [toolForm] = Form.useForm();
   const [editingTool, setEditingTool] = useState<MCPTool | null>(null);
   const [localMcpConfig, setLocalMcpConfig] = useState<{ host: string; port: number; transport_type: string }>({ host: '127.0.0.1', port: 8082, transport_type: 'streamable_http' });
+  
+  const [isTestingModalVisible, setIsTestingModalVisible] = useState(false);
+  const [testingTool, setTestingTool] = useState<MCPTool | null>(null);
 
   useEffect(() => {
     const currentTheme = document.body.getAttribute('data-theme') || 'light';
@@ -389,7 +393,7 @@ const MCPSetting: React.FC = () => {
     setSwaggerToolsLoading(true);
     setSwaggerParseResult(null);
     try {
-      let baseUrl = server.url;
+      let baseUrl = '';
       let headers = {};
       
       // 解析全局配置
@@ -490,7 +494,7 @@ const MCPSetting: React.FC = () => {
         const toolsToImport = swaggerTools.filter(t => selectedSwaggerTools.includes(t.name));
         
         // 解析全局配置
-        let baseUrl = server.url;
+        let baseUrl = '';
         let headers = {};
         if (globalExtraConfig) {
           try {
@@ -519,6 +523,11 @@ const MCPSetting: React.FC = () => {
           extraConfig.base_url = baseUrl;
           extraConfig.headers = headers;
           
+          // 重新计算url字段
+          if (extraConfig.path) {
+            extraConfig.url = `${baseUrl}${extraConfig.path}`;
+          }
+          
           return {
             ...tool,
             extra_config: JSON.stringify(extraConfig)
@@ -538,9 +547,11 @@ const MCPSetting: React.FC = () => {
       }
       setIsImportModalVisible(false);
       fetchTools();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to import:', error);
-      message.error('导入失败');
+      // 显示具体的错误信息
+      const errorMessage = error.message || error.response?.data?.message || '导入失败';
+      message.error(errorMessage);
     } finally {
       setImporting(false);
     }
@@ -685,6 +696,20 @@ const MCPSetting: React.FC = () => {
     }
   };
 
+  const handleTestTool = (tool: MCPTool) => {
+    setTestingTool(tool);
+    setIsTestingModalVisible(true);
+  };
+
+  const handleTest = async (tool: MCPTool, params: Record<string, any>) => {
+    try {
+      const result = await mcpService.testTool(tool.id, params);
+      return result;
+    } catch (error) {
+      throw error;
+    }
+  };
+
   const toolColumns: ColumnsType<MCPTool> = [
     {
       title: '工具标题',
@@ -743,10 +768,13 @@ const MCPSetting: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      width: 70,
+      width: 100,
       fixed: 'right',
       render: (_, record: MCPTool) => (
         <Space size="small">
+          <Tooltip title="测试">
+            <Button type="text" icon={<PlayCircleOutlined />} onClick={() => handleTestTool(record)} size="small" />
+          </Tooltip>
           <Tooltip title="编辑">
             <Button type="text" icon={<EditOutlined />} onClick={() => handleEditTool(record)} size="small" />
           </Tooltip>
@@ -1357,7 +1385,19 @@ const MCPSetting: React.FC = () => {
               rowKey="name"
               columns={[
                 {
-                  title: '工具名称',
+                  title: '标题',
+                  dataIndex: 'title',
+                  key: 'title',
+                  width: 200,
+                  ellipsis: true,
+                  render: (text: string) => (
+                    <Tooltip title={text} placement="topLeft">
+                      <span>{text || '-'}</span>
+                    </Tooltip>
+                  ),
+                },
+                {
+                  title: '名称',
                   dataIndex: 'name',
                   key: 'name',
                   width: 200,
@@ -1459,6 +1499,15 @@ const MCPSetting: React.FC = () => {
           </Form.Item>
         </Form>
       </Modal>
+
+      {testingTool && (
+        <MCPTesting
+          tool={testingTool}
+          visible={isTestingModalVisible}
+          onCancel={() => setIsTestingModalVisible(false)}
+          onTest={handleTest}
+        />
+      )}
     </div>
   );
 };

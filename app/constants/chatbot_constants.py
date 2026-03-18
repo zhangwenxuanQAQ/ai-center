@@ -8,6 +8,8 @@ SOURCE_TYPE = {
 SOURCE_CONFIG_FIELDS = {
     "local": [],
     "work_weixin": [
-        {"title": "回调地址", "name": "callback_url", "type": "string", "description": "企业微信机器人回调地址"}
+        {"title": "回调地址", "name": "callback_url", "type": "string", "description": "企业微信机器人回调地址"},
+        {"title": "Token", "name": "token", "type": "string", "description": "企业微信机器人Token"},
+        {"title": "EncodingAESKey", "name": "encoding_aes_key", "type": "string", "description": "企业微信机器人EncodingAESKey"},
     ],
 }

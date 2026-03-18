@@ -277,9 +277,14 @@ def import_mcp_tools(server_id: str, tools: list = Body(...)):
     Returns:
         ApiResponse: 统一格式的响应对象
     """
-    imported_tools = MCPServerService.import_tools(server_id, tools)
-    tools_data = [tool.__data__ for tool in imported_tools]
-    return ResponseUtil.success(data=tools_data, message="MCP工具导入成功")
+    try:
+        imported_tools = MCPServerService.import_tools(server_id, tools)
+        tools_data = [tool.__data__ for tool in imported_tools]
+        return ResponseUtil.success(data=tools_data, message="MCP工具导入成功")
+    except ValueError as e:
+        return ResponseUtil.error(message=str(e))
+    except Exception as e:
+        return ResponseUtil.error(message=f"导入工具失败: {str(e)}")
 
 
 @router.get("/server/{server_id}/remote_tools", response_model=ApiResponse)
@@ -308,76 +313,15 @@ async def get_mcp_remote_tools(
     result = await MCPServerService.get_remote_tools(server_id, page, page_size, name, description)
     return ResponseUtil.success(data=result, message="获取远程工具列表成功")
 
-
-@router.post("/server/{server_id}/import_swagger", response_model=ApiResponse)
-def import_swagger_tools(
-    server_id: str,
-    swagger_url: str = Body(None, embed=True),
-    swagger_json: str = Body(None, embed=True),
-    include_patterns: list = Body(None, embed=True),
-    exclude_patterns: list = Body(None, embed=True)
-):
-    """
-    从Swagger/OpenAPI文档导入MCP工具
-    
-    Args:
-        server_id: MCP服务ID
-        swagger_url: Swagger文档URL
-        swagger_json: Swagger文档JSON字符串
-        include_patterns: 包含的API路径模式列表
-        exclude_patterns: 排除的API路径模式列表
-        
-    Returns:
-        ApiResponse: 统一格式的响应对象
-    """
-    from app.core.mcp.utils import convert_swagger_url_to_mcp_tools, convert_swagger_json_to_mcp_tools
-    
-    server = MCPServerService.get_server(server_id)
-    if server is None:
-        return ResponseUtil.not_found(message=f"MCP服务 {server_id} 不存在")
-    
-    try:
-        from app.constants.mcp_constants import TOOL_TYPE
-        
-        if swagger_url:
-            tools = convert_swagger_url_to_mcp_tools(
-                swagger_url=swagger_url,
-                server_id=server_id,
-                base_url=server.url,
-                include_patterns=include_patterns,
-                exclude_patterns=exclude_patterns
-            )
-        elif swagger_json:
-            tools = convert_swagger_json_to_mcp_tools(
-                swagger_json=swagger_json,
-                server_id=server_id,
-                base_url=server.url,
-                include_patterns=include_patterns,
-                exclude_patterns=exclude_patterns
-            )
-        else:
-            return ResponseUtil.error(message="请提供swagger_url或swagger_json参数")
-        
-        # 更新工具类型为常量中定义的值
-        for tool in tools:
-            tool['tool_type'] = TOOL_TYPE.get("restful_api", "restful_api")
-        
-        imported_tools = MCPServerService.import_tools(server_id, tools)
-        tools_data = [tool.__data__ for tool in imported_tools]
-        return ResponseUtil.success(data=tools_data, message=f"成功从Swagger导入 {len(tools_data)} 个MCP工具")
-    except Exception as e:
-        return ResponseUtil.error(message=f"Swagger导入失败: {str(e)}")
-
-
 @router.post("/server/{server_id}/parse_swagger", response_model=ApiResponse)
 def parse_swagger(
     server_id: str,
     swagger_url: str = Body(None, embed=True),
     swagger_json: str = Body(None, embed=True),
-    base_url: str = Body(None, embed=True),
-    headers: dict = Body(None, embed=True),
     include_patterns: list = Body(None, embed=True),
-    exclude_patterns: list = Body(None, embed=True)
+    exclude_patterns: list = Body(None, embed=True),
+    base_url: str = Body(None, embed=True),
+    headers: dict = Body(None, embed=True)
 ):
     """
     解析Swagger/OpenAPI文档并返回MCP工具列表
@@ -401,16 +345,10 @@ def parse_swagger(
     try:
         from app.constants.mcp_constants import TOOL_TYPE
         
-        # 使用传入的base_url和headers，如果没有则使用server的配置
-        use_base_url = base_url or server.url
-        use_headers = headers or {}
-        
         if swagger_url:
             tools = convert_swagger_url_to_mcp_tools(
                 swagger_url=swagger_url,
                 server_id=server_id,
-                base_url=use_base_url,
-                headers=use_headers,
                 include_patterns=include_patterns,
                 exclude_patterns=exclude_patterns
             )
@@ -418,8 +356,6 @@ def parse_swagger(
             tools = convert_swagger_json_to_mcp_tools(
                 swagger_json=swagger_json,
                 server_id=server_id,
-                base_url=use_base_url,
-                headers=use_headers,
                 include_patterns=include_patterns,
                 exclude_patterns=exclude_patterns
             )
@@ -433,7 +369,7 @@ def parse_swagger(
                 "name": tool.get("name", ""),
                 "title": tool.get("title", ""),
                 "description": tool.get("description", ""),
-                "tool_type": TOOL_TYPE.get("restful_api", "restful_api"),
+                "tool_type": "restful_api",
                 "status": True,
                 "config": tool.get("config", ""),
                 "extra_config": tool.get("extra_config", "")
@@ -562,3 +498,22 @@ def batch_delete_mcp_tools(tool_ids: list = Body(..., description="MCP工具ID�
     """
     deleted_count = MCPToolService.batch_delete_tools(tool_ids)
     return ResponseUtil.success(data={"deleted_count": deleted_count}, message=f"成功删除 {deleted_count} 个工具")
+
+
+@router.post("/tool/{tool_id}/test", response_model=ApiResponse)
+async def test_mcp_tool(tool_id: str, params: dict = Body(..., description="工具测试参数")):
+    """
+    测试MCP工具
+    
+    Args:
+        tool_id: MCP工具ID
+        params: 工具测试参数
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象，包含测试结果
+    """
+    try:
+        result = await MCPToolService.test_tool(tool_id, params)
+        return ResponseUtil.success(data=result, message="工具测试成功")
+    except Exception as e:
+        return ResponseUtil.error(message=f"工具测试失败: {str(e)}")

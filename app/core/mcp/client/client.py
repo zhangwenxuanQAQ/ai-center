@@ -182,11 +182,18 @@ class StreamableHttpClient(MCPClientBase):
         """
         建立Streamable HTTP连接
         """
-        async with streamable_http_client(self.url) as (read_stream, write_stream, get_session_id):
-            async with ClientSession(read_stream, write_stream) as session:
-                await self._initialize_session(session)
-                self._get_session_id = get_session_id
-                yield self
+        import httpx
+        from mcp.shared._httpx_utils import create_mcp_http_client
+        
+        # 创建带有自定义headers的httpx客户端
+        client = create_mcp_http_client(headers=self.headers)
+        
+        async with client:
+            async with streamable_http_client(self.url, http_client=client) as (read_stream, write_stream, get_session_id):
+                async with ClientSession(read_stream, write_stream) as session:
+                    await self._initialize_session(session)
+                    self._get_session_id = get_session_id
+                    yield self
     
     async def test_connection(self) -> Dict[str, Any]:
         """

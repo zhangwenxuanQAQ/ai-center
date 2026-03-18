@@ -549,6 +549,7 @@ class MCPServerService:
             
         Raises:
             ResourceNotFoundError: MCP服务不存在
+            ValueError: 工具配置错误
         """
         try:
             db_server = MCPServer.get_by_id(server_id)
@@ -569,6 +570,29 @@ class MCPServerService:
                 # 跳过重复名称的工具
                 continue
             else:
+                # 检查base_url是否为空，并更新url字段
+                if tool_data.get('tool_type') == 'restful_api':
+                    extra_config = tool_data.get('extra_config')
+                    if extra_config:
+                        import json
+                        try:
+                            if isinstance(extra_config, str):
+                                extra_config_dict = json.loads(extra_config)
+                            else:
+                                extra_config_dict = extra_config
+                            if not extra_config_dict.get('base_url'):
+                                raise ValueError(f"工具 {tool_data.get('name')} 的base_url不能为空")
+                            # 如果有base_url和path，更新url字段
+                            if extra_config_dict.get('base_url') and extra_config_dict.get('path'):
+                                extra_config_dict['url'] = f"{extra_config_dict['base_url']}{extra_config_dict['path']}"
+                                # 更新tool_data中的extra_config
+                                if isinstance(extra_config, str):
+                                    tool_data['extra_config'] = json.dumps(extra_config_dict)
+                                else:
+                                    tool_data['extra_config'] = extra_config_dict
+                        except json.JSONDecodeError:
+                            pass
+                
                 # 确保config字段是JSON字符串
                 if 'config' in tool_data and tool_data['config'] and isinstance(tool_data['config'], dict):
                     import json
@@ -625,10 +649,11 @@ class MCPServerService:
         for tool in raw_tools:
             tool_item = {
                 "name": tool.get("name", ""),
+                "title": tool.get("title") or tool.get("name", ""),
                 "description": tool.get("description", ""),
-                "tool_type": list(TOOL_TYPE.keys())[1],  # mcp
+                "tool_type": "mcp",
                 "server_id": server_id,
-                "config": tool,  # 返回原始的mcp tool结构
+                "config": tool,
                 "status": True
             }
             tools_list.append(tool_item)
@@ -827,3 +852,69 @@ class MCPToolService:
                 # 跳过不存在的工具
                 continue
         return deleted_count
+    
+    @staticmethod
+    async def test_tool(tool_id: str, params: dict) -> dict:
+        """
+        测试MCP工具
+        
+        Args:
+            tool_id: MCP工具ID
+            params: 工具测试参数
+            
+        Returns:
+            dict: 测试结果
+            
+        Raises:
+            ResourceNotFoundError: MCP工具不存在
+        """
+        try:
+            db_tool = MCPTool.get_by_id(tool_id)
+            if db_tool.deleted:
+                raise ResourceNotFoundError(message=f"MCP工具 {tool_id} 不存在")
+        except MCPTool.DoesNotExist:
+            raise ResourceNotFoundError(message=f"MCP工具 {tool_id} 不存在")
+        
+        # 获取工具所属的MCP服务
+        try:
+            db_server = MCPServer.get_by_id(db_tool.server_id)
+            if db_server.deleted:
+                raise ResourceNotFoundError(message=f"MCP服务 {db_tool.server_id} 不存在")
+        except MCPServer.DoesNotExist:
+            raise ResourceNotFoundError(message=f"MCP服务 {db_tool.server_id} 不存在")
+        
+        # 解析MCP服务配置
+        parsed_config = parse_mcp_config(db_server.config, db_server.transport_type)
+        
+        # 构建完整的参数，包含extra_config和server_id
+        full_params = {**params}
+        if db_tool.extra_config:
+            try:
+                import json
+                extra_config = json.loads(db_tool.extra_config)
+                if isinstance(extra_config, dict):
+                    full_params.update(extra_config)
+            except json.JSONDecodeError:
+                pass
+        
+        
+        # 调用MCP工具（所有工具类型都通过MCP服务调用）
+        from app.core.mcp.client.client import call_mcp_tool
+        
+        # 添加server_id到请求头
+        headers = {**(parsed_config['headers'] or {})}
+        headers['X-MCP-Server-ID'] = db_server.id
+        
+        result = await call_mcp_tool(
+            transport_type=db_server.transport_type,
+            tool_name=db_tool.name,
+            arguments=full_params,
+            url=db_server.url,
+            headers=headers,
+            command=parsed_config['command'],
+            args=parsed_config['args'],
+            env=parsed_config['env'],
+            cwd=parsed_config['cwd']
+        )
+        
+        return result

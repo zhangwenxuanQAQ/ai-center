@@ -88,8 +88,8 @@ class WorkWeixinChatService:
         if not config:
             return -1, "机器人配置不存在"
         
-        token = config.get('Token', '')
-        encoding_aes_key = config.get('EncodingAESKey', '')
+        token = config.get('token', '')
+        encoding_aes_key = config.get('encoding_aes_key', '')
         
         receiveid = ''
         wxcpt = WXBizJsonMsgCrypt(token, encoding_aes_key, receiveid)
@@ -132,8 +132,8 @@ class WorkWeixinChatService:
         if not config:
             return -1, None
         
-        token = config.get('Token', '')
-        encoding_aes_key = config.get('EncodingAESKey', '')
+        token = config.get('token', '')
+        encoding_aes_key = config.get('encoding_aes_key', '')
         
         receiveid = ''
         wxcpt = WXBizJsonMsgCrypt(token, encoding_aes_key, receiveid)
@@ -280,8 +280,8 @@ class WorkWeixinChatService:
         if not config:
             return None
         
-        token = config.get('Token', '')
-        encoding_aes_key = config.get('EncodingAESKey', '')
+        token = config.get('token', '')
+        encoding_aes_key = config.get('encoding_aes_key', '')
         
         logger.info(f"开始加密消息，receiveid={receiveid}, nonce={nonce}, timestamp={timestamp}")
         logger.debug(f"发送流消息: {stream}")

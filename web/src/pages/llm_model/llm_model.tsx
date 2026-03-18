@@ -24,11 +24,11 @@ const LLMModel: React.FC = () => {
     <div className={`page-container ${theme === 'dark' ? 'dark' : 'light'}`}>
       <PageHeader 
         items={[
-          { title: '模型配置', icon: <SettingOutlined /> }
+          { title: '模型库', icon: <SettingOutlined /> }
         ]} 
       />
       <div className="page-content">
-        <p>这里是模型配置页面</p>
+        <p>这里是模型库页面</p>
       </div>
     </div>
   );

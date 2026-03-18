@@ -39,7 +39,19 @@ class BuiltinToolExecutor(ToolExecutor):
         self.func = func
     
     async def execute(self, arguments: Dict[str, Any]) -> Any:
-        return await self.func(arguments)
+        import inspect
+        sig = inspect.signature(self.func)
+        params = sig.parameters
+        
+        # 如果函数没有参数，直接调用
+        if len(params) == 0:
+            return await self.func()
+        # 如果函数只有一个参数，且参数名不是常见的位置参数名，直接传递arguments
+        elif len(params) == 1 and list(params.keys())[0] not in ['url', 'method', 'headers', 'params', 'data', 'json']:
+            return await self.func(arguments)
+        # 否则，将arguments字典解包为关键字参数
+        else:
+            return await self.func(**arguments)
 
 
 class HttpToolExecutor(ToolExecutor):
@@ -152,20 +164,10 @@ class ToolRegistry:
     def register_builtin_tools(cls):
         """
         注册内置工具
+        注意：内置工具现在通过 @mcp.tool() 装饰器直接在工具文件中注册
+        此方法保留用于兼容性，但不再注册内置工具
         """
-        @cls.register_builtin("echo")
-        async def echo_tool(arguments: Dict[str, Any]) -> Any:
-            """回显工具，用于测试"""
-            return {"echo": arguments}
-        
-        @cls.register_builtin("get_server_info")
-        async def get_server_info(arguments: Dict[str, Any]) -> Any:
-            """获取服务器信息"""
-            return {
-                "name": "AI-Center-MCP-Server",
-                "version": "1.0.0",
-                "status": "running"
-            }
+        pass
 
 
 async def execute_tool(server_id: str, tool_name: str, arguments: Dict[str, Any]) -> Any:
@@ -185,11 +187,7 @@ async def execute_tool(server_id: str, tool_name: str, arguments: Dict[str, Any]
     """
     from app.database.models import MCPTool, MCPServer
     
-    try:
-        server = MCPServer.get_by_id(server_id)
-    except MCPServer.DoesNotExist:
-        raise ValueError(f"MCP服务 {server_id} 不存在")
-    
+    # 尝试通过server_id和tool_name查询工具
     try:
         tool = MCPTool.select().where(
             (MCPTool.name == tool_name) &
@@ -202,44 +200,91 @@ async def execute_tool(server_id: str, tool_name: str, arguments: Dict[str, Any]
         raise ValueError(f"查询工具失败: {e}")
     
     if not tool:
+        # 如果通过server_id和tool_name查询不到，尝试只通过tool_name查询
+        try:
+            tool = MCPTool.select().where(
+                (MCPTool.name == tool_name) &
+                (MCPTool.status == True) &
+                (MCPTool.deleted == False)
+            ).first()
+        except Exception as e:
+            logger.error(f"查询工具失败: {e}")
+            raise ValueError(f"查询工具失败: {e}")
+    
+    if not tool:
         raise ValueError(f"工具 {tool_name} 不存在或未启用")
     
-    executor = ToolRegistry.get(tool_name)
-    
-    if executor:
-        logger.info(f"执行已注册工具: {tool_name}, 参数: {arguments}")
-        return await executor.execute(arguments)
-    
-    if tool.config:
-        try:
-            config = json.loads(tool.config)
-            executor_type = config.get("executor_type")
-            
-            if executor_type == "http":
-                url = config.get("url")
-                method = config.get("method", "POST")
-                headers = config.get("headers", {})
-                
-                if not url:
-                    raise ValueError("HTTP工具配置缺少URL")
-                
-                http_executor = HttpToolExecutor(url, method, headers)
-                logger.info(f"执行HTTP工具: {tool_name}, URL: {url}")
-                return await http_executor.execute(arguments)
-            
-            elif executor_type == "script":
-                script = config.get("script")
-                if script:
-                    logger.info(f"执行脚本工具: {tool_name}")
-                    return {"message": f"脚本工具 {tool_name} 执行成功", "script": script}
+    # 根据工具类型执行不同的逻辑
+    if tool.tool_type == "restful_api":
+        # 对于restful_api类型的工具，直接调用API接口
+        url = None
+        method = "POST"
+        headers = {}
         
-        except json.JSONDecodeError:
-            pass
-    
-    logger.info(f"执行默认工具: {tool_name}")
-    return {
-        "tool": tool_name,
-        "server_id": server_id,
-        "arguments": arguments,
-        "message": f"工具 {tool_name} 执行成功"
-    }
+        # 首先检查config中是否包含必要信息
+        if tool.config:
+            try:
+                config = json.loads(tool.config)
+                url = config.get("url")
+                method = config.get("method", method)
+                headers = config.get("headers", headers)
+            except json.JSONDecodeError:
+                pass
+        
+        # 如果config中没有url，检查extra_config
+        if not url and tool.extra_config:
+            try:
+                extra_config = json.loads(tool.extra_config)
+                url = extra_config.get("url")
+                method = extra_config.get("method", method)
+                headers = extra_config.get("headers", headers)
+            except json.JSONDecodeError:
+                pass
+        
+        if not url:
+            raise ValueError("restful_api工具配置缺少url字段")
+        
+        http_executor = HttpToolExecutor(url, method, headers)
+        logger.info(f"执行restful_api工具: {tool_name}, URL: {url}, Method: {method}")
+        return await http_executor.execute(arguments)
+    else:
+        # 对于mcp类型的工具，使用现有执行逻辑
+        executor = ToolRegistry.get(tool_name)
+        
+        if executor:
+            logger.info(f"执行已注册工具: {tool_name}, 参数: {arguments}")
+            return await executor.execute(arguments)
+        
+        if tool.config:
+            try:
+                config = json.loads(tool.config)
+                executor_type = config.get("executor_type")
+                
+                if executor_type == "http":
+                    url = config.get("url")
+                    method = config.get("method", "POST")
+                    headers = config.get("headers", {})
+                    
+                    if not url:
+                        raise ValueError("HTTP工具配置缺少URL")
+                    
+                    http_executor = HttpToolExecutor(url, method, headers)
+                    logger.info(f"执行HTTP工具: {tool_name}, URL: {url}")
+                    return await http_executor.execute(arguments)
+                
+                elif executor_type == "script":
+                    script = config.get("script")
+                    if script:
+                        logger.info(f"执行脚本工具: {tool_name}")
+                        return {"message": f"脚本工具 {tool_name} 执行成功", "script": script}
+            
+            except json.JSONDecodeError:
+                pass
+        
+        logger.info(f"执行默认工具: {tool_name}")
+        return {
+            "tool": tool_name,
+            "server_id": server_id,
+            "arguments": arguments,
+            "message": f"工具 {tool_name} 执行成功"
+        }

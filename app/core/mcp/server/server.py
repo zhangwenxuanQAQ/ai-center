@@ -6,37 +6,18 @@ MCP SERVER核心服务实现
 import json
 import logging
 from typing import Any, Optional, Dict, List
+from contextvars import ContextVar
 
 from fastmcp import FastMCP
 
 from app.configs.config import config
 from app.database.models import MCPTool, MCPServer
-from app.core.mcp.server.tools import ToolRegistry, execute_tool
+from app.core.mcp.server.tools import execute_tool
 
 logger = logging.getLogger(__name__)
 
-
-class MCPServerContext:
-    """
-    MCP SERVER上下文管理类
-    用于管理请求级别的上下文信息
-    """
-    _current_server_id: Optional[str] = None
-    
-    @classmethod
-    def set_server_id(cls, server_id: str):
-        """设置当前请求的MCP服务ID"""
-        cls._current_server_id = server_id
-    
-    @classmethod
-    def get_server_id(cls) -> Optional[str]:
-        """获取当前请求的MCP服务ID"""
-        return cls._current_server_id
-    
-    @classmethod
-    def clear(cls):
-        """清除上下文"""
-        cls._current_server_id = None
+# 使用contextvars来管理请求级别的server_id
+_current_server_id: ContextVar[Optional[str]] = ContextVar('current_server_id', default=None)
 
 
 def get_tools_from_db(server_id: str) -> List[Dict[str, Any]]:
@@ -86,49 +67,112 @@ def get_tools_from_db(server_id: str) -> List[Dict[str, Any]]:
         return []
 
 
-def create_mcp_server() -> FastMCP:
+# 创建FastMCP实例
+mcp: FastMCP = FastMCP("AI-Center-MCP-Server")
+
+
+# 导入工具模块，触发装饰器注册
+from app.core.mcp.tool import get_current_time, call_restful_api
+
+
+def create_mcp_http_app_with_middleware():
     """
-    创建FastMCP服务实例
-    
-    Returns:
-        FastMCP: MCP服务实例
+    创建带有中间件的MCP HTTP应用
+    中间件用于从请求头获取server_id并设置到上下文
     """
-    mcp = FastMCP("AI-Center-MCP-Server")
+    from fastmcp import FastMCP
     
-    def list_tools() -> List[Dict[str, Any]]:
-        """
-        列出所有可用的MCP工具
-        
-        工具来源来自表mcp_tool，mcp_server_id来自连接服务时的请求头
-        
-        Returns:
-            List[Dict]: 工具列表
-        """
-        server_id = MCPServerContext.get_server_id()
-        if not server_id:
-            logger.warning("未设置MCP服务ID，返回空工具列表")
-            return []
-        
-        return get_tools_from_db(server_id)
+    # 获取原始的HTTP应用
+    original_app = mcp.http_app(path="/mcp", transport="streamable-http")
     
-    async def call_tool(name: str, arguments: Dict[str, Any]) -> Any:
+    async def mcp_middleware(scope, receive, send):
         """
-        调用指定的MCP工具
+        MCP中间件，用于处理请求头
+        """
+        if scope['type'] == 'http':
+            # 从请求头获取X-MCP-Server-ID
+            headers = dict(scope.get('headers', []))
+            server_id = None
+            
+            # 查找X-MCP-Server-ID请求头
+            for key, value in headers.items():
+                if key.lower() == b'x-mcp-server-id':
+                    server_id = value.decode('utf-8')
+                    break
+            
+            # 设置server_id到上下文
+            if server_id:
+                _current_server_id.set(server_id)
+                logger.info(f"从请求头获取到server_id: {server_id}")
+            
+        try:
+            await original_app(scope, receive, send)
+        finally:
+            # 清理上下文
+            _current_server_id.set(None)
+    
+    return mcp_middleware
+
+
+def setup_mcp_server():
+    """
+    初始化MCP服务，扩展工具调用逻辑
+    """
+    logger.info("正在初始化MCP服务...")
+    
+    # 保存原始的call_tool方法
+    original_call_tool = mcp.call_tool
+    
+    async def custom_call_tool(name: str, arguments: dict[str, Any], **kwargs) -> Any:
+        """
+        自定义的工具调用方法
+        先尝试调用内置工具，失败则从数据库查找
         
         Args:
             name: 工具名称
             arguments: 工具参数
-            
-        Returns:
-            Any: 工具执行结果
+            **kwargs: 额外参数（如version等）
         """
-        server_id = MCPServerContext.get_server_id()
-        if not server_id:
-            raise ValueError("未设置MCP服务ID")
-        
-        return await execute_tool(server_id, name, arguments)
+        try:
+            return await original_call_tool(name, arguments, **kwargs)
+        except Exception as e:
+            # 尝试从数据库查找工具
+            server_id = arguments.pop('server_id', None)
+            
+            if not server_id:
+                server_id = _current_server_id.get()
+                if server_id:
+                    logger.info(f"从上下文获取到server_id: {server_id}")
+            
+            if not server_id:
+                try:
+                    tool_record = MCPTool.select().where(
+                        (MCPTool.name == name) &
+                        (MCPTool.status == True) &
+                        (MCPTool.deleted == False)
+                    ).first()
+                    if tool_record:
+                        server_id = tool_record.server_id
+                    else:
+                        raise ValueError(f"工具 {name} 不存在")
+                except Exception as ex:
+                    raise ValueError(f"获取工具信息失败: {ex}")
+            
+            result = await execute_tool(server_id, name, arguments)
+            
+            # 检查返回值是否为字典，如果是，转换为ToolResult对象
+            if isinstance(result, dict):
+                from fastmcp.tools.tool import ToolResult
+                from mcp.types import TextContent
+                import json
+                result_str = json.dumps(result, indent=2, ensure_ascii=False)
+                return ToolResult(content=[TextContent(type="text", text=result_str)])
+            
+            return result
     
-    return mcp
+    # 替换call_tool方法
+    mcp.call_tool = custom_call_tool
+    logger.info("MCP服务初始化完成")
 
 
 class MCPServerRunner:
@@ -150,9 +194,8 @@ class MCPServerRunner:
         """
         logger.info("正在初始化MCP SERVER...")
         
-        self.mcp = create_mcp_server()
-        
-        ToolRegistry.register_builtin_tools()
+        setup_mcp_server()
+        self.mcp = mcp
         
         logger.info(f"MCP SERVER初始化完成")
     
@@ -163,7 +206,7 @@ class MCPServerRunner:
         Returns:
             FastMCP: MCP实例
         """
-        if not self.mcp:
+        if not self._running:
             self.setup()
         return self.mcp
     
@@ -176,7 +219,7 @@ class MCPServerRunner:
         """
         if not self.mcp:
             self.setup()
-        return self.mcp.http_app(path=self.path, transport="streamable-http")
+        return create_mcp_http_app_with_middleware()
     
     async def start(self):
         """
@@ -195,8 +238,8 @@ class MCPServerRunner:
         停止MCP SERVER
         """
         self._running = False
-        MCPServerContext.clear()
-        logger.info("MCP SERVER已停止")
+        _current_server_id.set(None)
+        logger.info(f"MCP SERVER已停止")
 
 
 mcp_runner = MCPServerRunner()

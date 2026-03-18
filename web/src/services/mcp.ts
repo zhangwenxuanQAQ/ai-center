@@ -181,24 +181,6 @@ export const mcpService = {
   },
 
   /**
-   * 从Swagger导入MCP工具
-   */
-  importSwaggerTools: async (
-    serverId: string, 
-    swaggerUrl?: string, 
-    swaggerJson?: string,
-    includePatterns?: string[],
-    excludePatterns?: string[]
-  ): Promise<MCPTool[]> => {
-    return http.post<MCPTool[]>(`/aicenter/v1/mcp/server/${serverId}/import_swagger`, {
-      swagger_url: swaggerUrl,
-      swagger_json: swaggerJson,
-      include_patterns: includePatterns,
-      exclude_patterns: excludePatterns
-    });
-  },
-
-  /**
    * 解析Swagger并返回工具列表
    */
   parseSwagger: async (
@@ -261,5 +243,12 @@ export const mcpService = {
    */
   batchDeleteTools: async (toolIds: string[]): Promise<{ deleted_count: number }> => {
     return http.post<{ deleted_count: number }>('/aicenter/v1/mcp/tools/batch_delete', toolIds);
+  },
+
+  /**
+   * 测试MCP工具
+   */
+  testTool: async (toolId: string, params: Record<string, any>): Promise<any> => {
+    return http.post<any>(`/aicenter/v1/mcp/tool/${toolId}/test`, params);
   },
 };

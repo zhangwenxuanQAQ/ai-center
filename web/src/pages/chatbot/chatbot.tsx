@@ -511,9 +511,36 @@ const ChatbotManagement: React.FC = () => {
   };
 
   const handleEditSourceConfigChange = (field: string, value: string) => {
+    setEditSourceConfig(prev => {
+      const newConfig = {
+        ...prev,
+        [field]: value
+      };
+      
+      // 当base_url变化时，更新url字段
+      if (field === 'base_url' && newConfig.path) {
+        newConfig.url = `${value}${newConfig.path}`;
+      }
+      
+      return newConfig;
+    });
+  };
+
+  // 生成随机Token（编辑模式）
+  const generateEditToken = () => {
+    const token = generateRandomString(32);
     setEditSourceConfig(prev => ({
       ...prev,
-      [field]: value
+      token: token
+    }));
+  };
+
+  // 生成随机EncodingAESKey（编辑模式）
+  const generateEditEncodingAESKey = () => {
+    const encodingAESKey = generateRandomString(43);
+    setEditSourceConfig(prev => ({
+      ...prev,
+      encoding_aes_key: encodingAESKey
     }));
   };
 
@@ -603,10 +630,47 @@ const ChatbotManagement: React.FC = () => {
     }
   };
 
+  // 生成随机字符串
+  const generateRandomString = (length: number = 32): string => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    for (let i = 0; i < length; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  };
+
   const handleSourceConfigChange = (field: string, value: string) => {
+    setSourceConfig(prev => {
+      const newConfig = {
+        ...prev,
+        [field]: value
+      };
+      
+      // 当base_url变化时，更新url字段
+      if (field === 'base_url' && newConfig.path) {
+        newConfig.url = `${value}${newConfig.path}`;
+      }
+      
+      return newConfig;
+    });
+  };
+
+  // 生成随机Token
+  const generateToken = () => {
+    const token = generateRandomString(32);
     setSourceConfig(prev => ({
       ...prev,
-      [field]: value
+      token: token
+    }));
+  };
+
+  // 生成随机EncodingAESKey
+  const generateEncodingAESKey = () => {
+    const encodingAESKey = generateRandomString(43);
+    setSourceConfig(prev => ({
+      ...prev,
+      encoding_aes_key: encodingAESKey
     }));
   };
 
@@ -1140,11 +1204,22 @@ const ChatbotManagement: React.FC = () => {
               label={field.title}
               rules={field.required ? [{ required: true, message: `请输入${field.title}` }] : []}
             >
-              <Input 
-                placeholder={field.description} 
-                value={sourceConfig[field.name]}
-                onChange={(e) => handleSourceConfigChange(field.name, e.target.value)}
-              />
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <Input 
+                  placeholder={field.description} 
+                  value={sourceConfig[field.name]}
+                  onChange={(e) => handleSourceConfigChange(field.name, e.target.value)}
+                  style={{ flex: 1 }}
+                />
+                {selectedSourceType === 'work_weixin' && (field.name === 'token' || field.name === 'encoding_aes_key') && (
+                  <Button 
+                    onClick={field.name === 'token' ? generateToken : generateEncodingAESKey}
+                    size="small"
+                  >
+                    随机生成
+                  </Button>
+                )}
+              </div>
             </Form.Item>
           ))}
           <Form.Item
@@ -1274,11 +1349,22 @@ const ChatbotManagement: React.FC = () => {
               label={field.title}
               rules={field.required ? [{ required: true, message: `请输入${field.title}` }] : []}
             >
-              <Input 
-                placeholder={field.description} 
-                value={editSourceConfig[field.name]}
-                onChange={(e) => handleEditSourceConfigChange(field.name, e.target.value)}
-              />
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <Input 
+                  placeholder={field.description} 
+                  value={editSourceConfig[field.name]}
+                  onChange={(e) => handleEditSourceConfigChange(field.name, e.target.value)}
+                  style={{ flex: 1 }}
+                />
+                {selectedEditSourceType === 'work_weixin' && (field.name === 'token' || field.name === 'encoding_aes_key') && (
+                  <Button 
+                    onClick={field.name === 'token' ? generateEditToken : generateEditEncodingAESKey}
+                    size="small"
+                  >
+                    随机生成
+                  </Button>
+                )}
+              </div>
             </Form.Item>
           ))}
           <Form.Item

@@ -342,6 +342,12 @@ def convert_swagger_url_to_mcp_tools(
     Returns:
         List[Dict]: MCP工具列表
     """
+    # 如果没有提供base_url，从swagger_url中解析
+    if not base_url:
+        from urllib.parse import urlparse
+        parsed_url = urlparse(swagger_url)
+        base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
+    
     converter = SwaggerConverter(base_url=base_url, headers=headers)
     swagger_doc = converter.load_from_url(swagger_url)
     return converter.convert_to_mcp_tools(
@@ -374,6 +380,7 @@ def convert_swagger_json_to_mcp_tools(
     Returns:
         List[Dict]: MCP工具列表
     """
+    # 从json转工具base_url默认为空
     converter = SwaggerConverter(base_url=base_url, headers=headers)
     swagger_doc = converter.load_from_json(swagger_json)
     return converter.convert_to_mcp_tools(
