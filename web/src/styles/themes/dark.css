@@ -691,3 +691,21 @@ body[data-theme="dark"] .ant-empty-image svg,
 body[data-theme="dark"] div.ant-empty-image svg {
   fill: rgba(255, 255, 255, 0.3) !important;
 }
+
+/* Tooltip 样式 */
+body[data-theme="dark"] .ant-tooltip .ant-tooltip-inner {
+  background: rgba(30, 30, 30, 0.95) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+}
+
+body[data-theme="dark"] .ant-tooltip .ant-tooltip-content {
+  background: transparent !important;
+}
+
+body[data-theme="dark"] .ant-tooltip .ant-tooltip-arrow::before {
+  background: rgba(30, 30, 30, 0.95) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}

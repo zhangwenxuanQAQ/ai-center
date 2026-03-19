@@ -26,8 +26,6 @@
       pointer-events: none;
       animation: backgroundPulse 20s ease-in-out infinite;
     }
-
-
   }
 
   &.light {
@@ -156,27 +154,36 @@
   border-radius: 8px;
 }
 
-/* ==================== 公共分页样式 ==================== */
+/* ==================== 公共 Tooltip 样式 ==================== */
 
-.ant-pagination {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+/* 白天模式 */
+.light-theme .ant-tooltip .ant-tooltip-inner {
+  background: #ffffff;
+  color: #000000;
+  border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
-.ant-pagination-item {
-  margin: 0 !important;
-  border-radius: 4px;
+.light-theme .ant-tooltip .ant-tooltip-content {
+  background: transparent;
 }
 
-.ant-pagination-prev,
-.ant-pagination-next,
-.ant-pagination-jump-prev,
-.ant-pagination-jump-next {
-  margin: 0 !important;
-  border-radius: 4px;
+.light-theme .ant-tooltip .ant-tooltip-arrow::before {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
-.ant-pagination-item-link {
-  border-radius: 4px !important;
+/* 夜间模式 */
+.dark-theme .ant-tooltip .ant-tooltip-inner {
+  background: #667eea;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.dark-theme .ant-tooltip .ant-tooltip-content {
+  background: transparent;
+}
+
+.dark-theme .ant-tooltip .ant-tooltip-arrow::before {
+  background: #667eea;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }

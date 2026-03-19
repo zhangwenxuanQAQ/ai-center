@@ -5,10 +5,11 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
+    host: '10.9.44.5',
     port: 8000,
     proxy: {
       '/aicenter': {
-        target: 'http://localhost:8081',
+        target: 'http://10.9.44.5:8080',
         changeOrigin: true,
       }
     }

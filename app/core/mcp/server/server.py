@@ -72,7 +72,7 @@ mcp: FastMCP = FastMCP("AI-Center-MCP-Server")
 
 
 # 导入工具模块，触发装饰器注册
-from app.core.mcp.tool import get_current_time, call_restful_api
+# from app.core.mcp.tool import get_current_time, call_restful_api
 
 
 def create_mcp_http_app_with_middleware():
@@ -80,8 +80,6 @@ def create_mcp_http_app_with_middleware():
     创建带有中间件的MCP HTTP应用
     中间件用于从请求头获取server_id并设置到上下文
     """
-    from fastmcp import FastMCP
-    
     # 获取原始的HTTP应用
     original_app = mcp.http_app(path="/mcp", transport="streamable-http")
     
@@ -104,13 +102,13 @@ def create_mcp_http_app_with_middleware():
             if server_id:
                 _current_server_id.set(server_id)
                 logger.info(f"从请求头获取到server_id: {server_id}")
-            
+        
         try:
             await original_app(scope, receive, send)
         finally:
             # 清理上下文
             _current_server_id.set(None)
-    
+
     return mcp_middleware
 
 
@@ -119,7 +117,6 @@ def setup_mcp_server():
     初始化MCP服务，扩展工具调用逻辑
     """
     logger.info("正在初始化MCP服务...")
-    
     # 保存原始的call_tool方法
     original_call_tool = mcp.call_tool
     
@@ -169,7 +166,7 @@ def setup_mcp_server():
                 return ToolResult(content=[TextContent(type="text", text=result_str)])
             
             return result
-    
+
     # 替换call_tool方法
     mcp.call_tool = custom_call_tool
     logger.info("MCP服务初始化完成")
@@ -182,7 +179,7 @@ class MCPServerRunner:
     """
     
     def __init__(self):
-        self.mcp: Optional[FastMCP] = None
+        self.mcp = None
         self.host: str = config.config.get('mcp', {}).get('host', '0.0.0.0')
         self.port: int = config.config.get('mcp', {}).get('port', 8082)
         self.path: str = "/mcp"
@@ -199,12 +196,12 @@ class MCPServerRunner:
         
         logger.info(f"MCP SERVER初始化完成")
     
-    def get_mcp(self) -> FastMCP:
+    def get_mcp(self):
         """
-        获取FastMCP实例
+        获取MCP实例
         
         Returns:
-            FastMCP: MCP实例
+            MCP实例
         """
         if not self._running:
             self.setup()

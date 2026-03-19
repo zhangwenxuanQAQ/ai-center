@@ -101,3 +101,37 @@
   background-color: #ffffff
   color: #000000;
 }
+
+/* ==================== 全局 Tooltip 样式 ==================== */
+
+/* 白天模式 */
+.light-theme .ant-tooltip .ant-tooltip-inner {
+  background: #ffffff;
+  color: #000000;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.light-theme .ant-tooltip .ant-tooltip-content {
+  background: transparent;
+}
+
+.light-theme .ant-tooltip .ant-tooltip-arrow::before {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* 夜间模式 */
+.dark-theme .ant-tooltip .ant-tooltip-inner {
+  background: #667eea;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.dark-theme .ant-tooltip .ant-tooltip-content {
+  background: transparent;
+}
+
+.dark-theme .ant-tooltip .ant-tooltip-arrow::before {
+  background: #667eea;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}

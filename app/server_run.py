@@ -129,6 +129,42 @@ try:
     except Exception as e:
         print(f"  添加字段失败: {e}")
     
+    print("\n为llm_model表添加category_id、tags、config、status字段...")
+    try:
+        cursor = db.execute_sql("DESCRIBE llm_model;")
+        columns = [column[0] for column in cursor.fetchall()]
+        
+        if 'category_id' not in columns:
+            db.execute_sql("ALTER TABLE llm_model ADD COLUMN category_id VARCHAR(40) DEFAULT NULL")
+            print("  成功添加category_id字段")
+        else:
+            print("  category_id字段已存在，跳过")
+        
+        if 'tags' not in columns:
+            db.execute_sql("ALTER TABLE llm_model ADD COLUMN tags TEXT DEFAULT NULL")
+            print("  成功添加tags字段")
+        else:
+            print("  tags字段已存在，跳过")
+        
+        if 'config' not in columns:
+            db.execute_sql("ALTER TABLE llm_model ADD COLUMN config TEXT DEFAULT NULL")
+            print("  成功添加config字段")
+        else:
+            print("  config字段已存在，跳过")
+        
+        if 'status' not in columns:
+            db.execute_sql("ALTER TABLE llm_model ADD COLUMN status TINYINT DEFAULT 1")
+            print("  成功添加status字段")
+        else:
+            print("  status字段已存在，跳过")
+        
+        if 'provider' in columns:
+            # 将provider字段改为可空
+            db.execute_sql("ALTER TABLE llm_model MODIFY COLUMN provider VARCHAR(255) DEFAULT NULL")
+            print("  成功修改provider字段为可空")
+    except Exception as e:
+        print(f"  添加字段失败: {e}")
+    
     print("\n数据库迁移完成")
 except Exception as e:
     print(f"数据库迁移失败: {e}")

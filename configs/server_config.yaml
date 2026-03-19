@@ -1,5 +1,5 @@
 server:
-  host: '127.0.0.1'
+  host: '10.9.44.5'
   http_port: 8081
 mysql:
   name: 'ai_center'

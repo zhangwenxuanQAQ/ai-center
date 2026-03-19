@@ -108,6 +108,25 @@ class Knowledge(SoftDeleteModel):
         table_name = 'knowledge'
 
 
+class LLMCategory(SoftDeleteModel):
+    """
+    LLM模型分类模型
+    
+    存储LLM模型分类信息，支持树形结构
+    """
+    name = CharField(max_length=255, index=True, verbose_name="分类名称")
+    description = TextField(null=True, verbose_name="分类描述")
+    parent_id = CharField(max_length=40, null=True, index=True, verbose_name="父分类ID")
+    sort_order = IntegerField(default=0, verbose_name="排序序号")
+    is_default = BooleanField(default=False, verbose_name="是否默认分类")
+    
+    class Meta:
+        table_name = 'llm_category'
+        indexes = (
+            (('parent_id', 'sort_order'), False),
+        )
+
+
 class LLMModel(SoftDeleteModel):
     """
     LLM模型配置
@@ -115,10 +134,14 @@ class LLMModel(SoftDeleteModel):
     存储大语言模型配置信息
     """
     name = CharField(max_length=255, index=True, verbose_name="模型名称")
-    provider = CharField(max_length=255, verbose_name="提供商")
+    provider = CharField(max_length=255, null=True, verbose_name="提供商")
     api_key = CharField(max_length=255, verbose_name="API密钥")
     endpoint = CharField(max_length=512, verbose_name="端点地址")
     model_type = CharField(max_length=255, verbose_name="模型类型")
+    category_id = CharField(max_length=40, null=True, index=True, verbose_name="分类ID")
+    tags = TextField(null=True, verbose_name="标签数组JSON")
+    config = TextField(null=True, verbose_name="模型参数配置JSON")
+    status = BooleanField(default=True, verbose_name="状态")
     
     class Meta:
         table_name = 'llm_model'
@@ -258,6 +281,7 @@ def create_tables():
         User,
         ChatbotCategory,
         Knowledge,
+        LLMCategory,
         LLMModel,
         Prompt,
         Chatbot,

@@ -416,3 +416,21 @@ body[data-theme="light"] .ant-empty,
 body[data-theme="light"] div.ant-empty {
   color: rgba(0, 0, 0, 0.45) !important;
 }
+
+/* Tooltip 样式 */
+body[data-theme="light"] .ant-tooltip .ant-tooltip-inner {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+}
+
+body[data-theme="light"] .ant-tooltip .ant-tooltip-content {
+  background: transparent !important;
+}
+
+body[data-theme="light"] .ant-tooltip .ant-tooltip-arrow::before {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+}

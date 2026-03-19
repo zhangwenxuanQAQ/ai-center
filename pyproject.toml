@@ -19,6 +19,8 @@ dependencies = [
     "slowapi",
     "flasgger",
     "email-validator",
+    "httpx",
+    "openai",
 ]
 
 [tool.setuptools.packages.find]
@@ -27,6 +29,3 @@ where = ["app"]
 [build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
-
-[tool.uv]
-python-version = "3.10"

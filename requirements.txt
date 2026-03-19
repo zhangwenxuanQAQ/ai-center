@@ -12,3 +12,4 @@ flasgger
 email-validator
 fastmcp
 httpx
+openai

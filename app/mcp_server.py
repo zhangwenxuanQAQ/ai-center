@@ -32,5 +32,6 @@ if __name__ == "__main__":
     uvicorn.run(
         mcp,
         host=mcp_host,
-        port=mcp_port
+        port=mcp_port,
+        ws='none'
     )
