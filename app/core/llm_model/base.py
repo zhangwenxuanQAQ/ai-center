@@ -55,6 +55,20 @@ class BaseLLM(ABC):
         pass
     
     @abstractmethod
+    def stream_generate_with_messages(self, messages: list, **kwargs) -> Generator[Dict[str, Any], None, None]:
+        """
+        使用消息列表流式生成文本
+        
+        Args:
+            messages: 消息列表，格式为[{'role': 'user'/'assistant', 'content': '...'}]
+            **kwargs: 其他参数
+            
+        Yields:
+            流式生成的结果
+        """
+        pass
+    
+    @abstractmethod
     def get_model_info(self) -> Dict[str, Any]:
         """
         获取模型信息

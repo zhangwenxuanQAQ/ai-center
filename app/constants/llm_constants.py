@@ -63,7 +63,7 @@ MODEL_CONFIG_PARAMS = {
             "min": 0,
             "max": 1,
             "step": 0.01,
-            "default": 0.9,
+            "default": 0.1,
             "description": "核采样参数，控制候选词的概率累积阈值"
         },
         {
@@ -72,7 +72,7 @@ MODEL_CONFIG_PARAMS = {
             "type": "number",
             "min": 1,
             "max": 100,
-            "default": 40,
+            "default": 10,
             "description": "限制每步生成的候选词数量"
         },
         {
@@ -80,7 +80,7 @@ MODEL_CONFIG_PARAMS = {
             "label": "最大Token数",
             "type": "number",
             "min": 1,
-            "max": 128000,
+            "max": 200000,
             "default": 4096,
             "description": "生成文本的最大长度"
         },
@@ -210,7 +210,7 @@ MODEL_CONFIG_PARAMS = {
             "type": "number",
             "min": 1,
             "max": 100,
-            "default": 40,
+            "default": 10,
             "description": "限制每步生成的候选词数量"
         },
         {
@@ -218,7 +218,7 @@ MODEL_CONFIG_PARAMS = {
             "label": "最大Token数",
             "type": "number",
             "min": 1,
-            "max": 128000,
+            "max": 200000,
             "default": 4096,
             "description": "生成内容的最大长度"
         },

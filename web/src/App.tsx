@@ -12,6 +12,7 @@ import MCP from './pages/mcp/mcp.tsx';
 import MCPSetting from './pages/mcp/mcp_setting.tsx';
 import Knowledge from './pages/knowledge/knowledge.tsx';
 import LLMModel from './pages/llm_model/llm_model.tsx';
+import LLMModelSetting from './pages/llm_model/llm_model_setting.tsx';
 import Prompt from './pages/prompt/prompt.tsx';
 import User from './pages/user/user.tsx';
 import Chat from './pages/chat/chat.tsx';
@@ -72,7 +73,7 @@ function App() {
         </Header>
         <Layout style={{ height: 'calc(100vh - 64px)', overflow: 'hidden' }}>
           <Sider 
-            width={280} 
+            width={250} 
             collapsedWidth={80} 
             className={theme === 'dark' ? 'dark-theme-sider' : 'light-theme-sider'}
             collapsed={collapsed}
@@ -164,6 +165,7 @@ function App() {
                   <Route path="/mcp/setting/:id" element={<MCPSetting />} />
                   <Route path="/knowledges" element={<Knowledge />} />
                   <Route path="/llm_models" element={<LLMModel />} />
+                  <Route path="/llm_model/setting/:id" element={<LLMModelSetting />} />
                   <Route path="/prompts" element={<Prompt />} />
                   <Route path="/users" element={<User />} />
                   <Route path="/chats" element={<Chat />} />

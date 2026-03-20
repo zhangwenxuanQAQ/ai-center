@@ -87,13 +87,24 @@ class TTSModel(BaseLLM):
             return
         
         try:
-            # 注意：OpenAI TTS API可能不支持流式输出
-            # 这里先使用非流式方法，然后模拟流式输出
             response = self.generate(prompt, **kwargs)
             if 'error' not in response:
                 yield response
         except Exception as e:
             yield {'error': str(e)}
+    
+    def stream_generate_with_messages(self, messages: list, **kwargs) -> Generator[Dict[str, Any], None, None]:
+        """
+        使用消息列表流式生成（TTS模型不支持）
+        
+        Args:
+            messages: 消息列表
+            **kwargs: 其他参数
+            
+        Yields:
+            错误信息
+        """
+        yield {'error': 'TTS model does not support chat messages'}
     
     def get_model_info(self) -> Dict[str, Any]:
         """

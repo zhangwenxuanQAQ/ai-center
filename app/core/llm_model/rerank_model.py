@@ -90,9 +90,21 @@ class RerankModel(BaseLLM):
         Yields:
             流式生成的结果
         """
-        # 重排序通常不需要流式，直接调用非流式方法
         result = self.generate(prompt, **kwargs)
         yield result
+    
+    def stream_generate_with_messages(self, messages: list, **kwargs) -> Any:
+        """
+        使用消息列表流式生成（重排序模型不支持）
+        
+        Args:
+            messages: 消息列表
+            **kwargs: 其他参数
+            
+        Yields:
+            错误信息
+        """
+        yield {'error': 'Rerank model does not support chat messages'}
     
     def get_model_info(self) -> Dict[str, Any]:
         """

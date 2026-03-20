@@ -22,11 +22,26 @@ class VisionModel(BaseLLM):
             model_config: 模型配置，包含api_key、endpoint等信息
         """
         super().__init__(model_config)
-        # 初始化OpenAI客户端
         self.client = OpenAI(
             api_key=self.api_key,
             base_url=self.endpoint
         )
+    
+    def _handle_deep_thinking(self, params: dict, kwargs: dict) -> dict:
+        """
+        处理深度思考参数
+        
+        Args:
+            params: 当前参数字典
+            kwargs: 用户传入的参数
+            
+        Returns:
+            更新后的参数字典
+        """
+        deep_thinking = kwargs.pop('deep_thinking', False)
+        if self.provider and self.provider.lower() == 'qwen' and not bool(deep_thinking):
+            params['extra_body'] = False
+        return params
     
     def generate(self, prompt: str, **kwargs) -> Dict[str, Any]:
         """
@@ -47,7 +62,6 @@ class VisionModel(BaseLLM):
             return {'error': 'No image URL provided'}
         
         try:
-            # 构建参数字典，包含默认值和用户传入的参数
             params = {
                 'model': self.model_name,
                 'messages': [
@@ -67,15 +81,13 @@ class VisionModel(BaseLLM):
                 'temperature': 0.7,
                 'max_tokens': 4096
             }
-            # 更新为用户传入的参数
+            
+            params = self._handle_deep_thinking(params, kwargs)
             params.update(kwargs)
-            # 移除image_url，因为它已经在messages中使用
             params.pop('image_url', None)
             
-            # 使用OpenAI SDK分析图像
             response = self.client.chat.completions.create(**params)
             
-            # 格式化响应
             return {
                 'text': response.choices[0].message.content,
                 'usage': response.usage.model_dump() if response.usage else {},
@@ -105,7 +117,6 @@ class VisionModel(BaseLLM):
             return
         
         try:
-            # 构建参数字典，包含默认值和用户传入的参数
             params = {
                 'model': self.model_name,
                 'messages': [
@@ -126,12 +137,51 @@ class VisionModel(BaseLLM):
                 'max_tokens': 4096,
                 'stream': True
             }
-            # 更新为用户传入的参数
+            
+            params = self._handle_deep_thinking(params, kwargs)
             params.update(kwargs)
-            # 移除image_url，因为它已经在messages中使用
             params.pop('image_url', None)
             
-            # 使用OpenAI SDK流式分析图像
+            stream = self.client.chat.completions.create(**params)
+            
+            for chunk in stream:
+                if chunk.choices:
+                    choice = chunk.choices[0]
+                    if choice.delta.content:
+                        yield {
+                            'text': choice.delta.content,
+                            'finish_reason': choice.finish_reason
+                        }
+        except Exception as e:
+            yield {'error': str(e)}
+    
+    def stream_generate_with_messages(self, messages: list, **kwargs) -> Generator[Dict[str, Any], None, None]:
+        """
+        使用消息列表流式生成文本
+        
+        Args:
+            messages: 消息列表
+            **kwargs: 其他参数
+            
+        Yields:
+            流式生成的结果
+        """
+        if not self._validate_config():
+            yield {'error': 'Invalid configuration'}
+            return
+        
+        try:
+            params = {
+                'model': self.model_name,
+                'messages': messages,
+                'temperature': 0.7,
+                'max_tokens': 4096,
+                'stream': True
+            }
+            
+            params = self._handle_deep_thinking(params, kwargs)
+            params.update(kwargs)
+            
             stream = self.client.chat.completions.create(**params)
             
             for chunk in stream:

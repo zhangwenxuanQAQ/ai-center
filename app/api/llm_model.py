@@ -2,7 +2,7 @@
 LLM模型控制器，提供LLM模型相关的API接口
 """
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Body
 from app.services.llm_model.service import LLMModelService, LLMCategoryService
 from app.services.llm_model.dto import (
     LLMModelCreate, LLMModelUpdate, LLMModel as LLMModelSchema,
@@ -261,3 +261,67 @@ def test_model_connection(llm_model_id: str):
             return ResponseUtil.error(data=result, message=result['message'])
     except Exception as e:
         return ResponseUtil.error(message=str(e))
+
+
+@router.post("/model/{llm_model_id}/chat")
+async def chat_with_model(llm_model_id: str, request: dict = Body(...)):
+    """
+    与模型进行对话（流式输出）
+    
+    Args:
+        llm_model_id: LLM模型ID
+        request: 请求体，包含messages和config
+        
+    Returns:
+        StreamingResponse: 流式响应
+    """
+    from fastapi.responses import StreamingResponse
+    from fastapi import HTTPException
+    import json
+    from app.core.llm_model.factory import LLMFactory
+    
+    try:
+        db_llm_model = LLMModelService.get_llm_model(llm_model_id)
+        if not db_llm_model:
+            raise HTTPException(status_code=404, detail="模型不存在")
+        
+        messages = request.get('messages', [])
+        config = request.get('config', {})
+        
+        if not messages:
+            raise HTTPException(status_code=400, detail="消息不能为空")
+        
+        model_config = {
+            'api_key': db_llm_model.api_key,
+            'endpoint': db_llm_model.endpoint,
+            'name': db_llm_model.name,
+            'provider': db_llm_model.provider
+        }
+        
+        model_type = db_llm_model.model_type or 'text'
+        model_instance = LLMFactory.create_model(model_type, model_config)
+        
+        def generate():
+            try:
+                for chunk in model_instance.stream_generate_with_messages(messages, **config):
+                    if 'error' in chunk:
+                        yield f"data: {json.dumps({'error': chunk['error']})}\n\n"
+                        break
+                    yield f"data: {json.dumps(chunk)}\n\n"
+                yield "data: [DONE]\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        
+        return StreamingResponse(
+            generate(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Layout, Tree, Card, Row, Col, Empty, Spin, Button, Modal, Form, Input, Select, TreeSelect, message, Popconfirm, Pagination, Tag, Switch, Tooltip } from 'antd';
 import { SettingOutlined, PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UpOutlined, DownOutlined, CheckCircleOutlined, CloseCircleOutlined, ExperimentOutlined, ApiTwoTone } from '@ant-design/icons';
 import type { TreeDataNode, TreeProps } from 'antd';
@@ -51,6 +52,7 @@ const getProviderAvatar = (provider: string): string => {
 };
 
 const LLMModelManagement: React.FC = () => {
+  const navigate = useNavigate();
   const [categories, setCategories] = useState<LLMCategory[]>([]);
   const [models, setModels] = useState<LLMModel[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -526,7 +528,6 @@ const LLMModelManagement: React.FC = () => {
     const key = `test-${model.id}`;
     message.loading({ content: `正在测试 ${model.name} 连接...`, key, duration: 0 });
     try {
-      // 调用API测试模型连接
       const result = await llmModelService.testConnection(model.id);
       if (result.success) {
         message.success({ content: `${model.name} 连接测试成功！`, key });
@@ -536,6 +537,10 @@ const LLMModelManagement: React.FC = () => {
     } catch (error: any) {
       message.error({ content: `${model.name} 连接测试失败: ${error.message}`, key });
     }
+  };
+
+  const handleCardClick = (modelId: string) => {
+    navigate(`/llm_model/setting/${modelId}`);
   };
 
   const handleAddTag = () => {
@@ -734,7 +739,12 @@ const LLMModelManagement: React.FC = () => {
                 {models.map((model, index) => (
                   <Col key={model.id} xs={24} sm={12} md={8} lg={6} style={{ animationDelay: `${index * 0.1}s`, animationFillMode: 'both' }}>
                     <div ref={(el) => { if (el) cardRefs.current[model.id] = el; }} onMouseMove={(e) => handleCardMouseMove(model.id, e)}>
-                      <Card hoverable className={`llm-model-card ${theme === 'dark' ? 'dark' : 'light'}`} bodyStyle={{ padding: '16px' }}>
+                      <Card 
+                        hoverable 
+                        className={`llm-model-card ${theme === 'dark' ? 'dark' : 'light'}`} 
+                        bodyStyle={{ padding: '16px' }}
+                        onClick={() => handleCardClick(model.id)}
+                      >
                         <div className="card-content">
                           <div className="card-actions">
                             <Tooltip title="测试连接">

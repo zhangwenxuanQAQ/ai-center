@@ -131,4 +131,11 @@ export const llmModelService = {
     if (modelType) params.push(`model_type=${encodeURIComponent(modelType)}`);
     return http.get<string[]>(`/aicenter/v1/llm_model/tags${params.length > 0 ? `?${params.join('&')}` : ''}`);
   },
+
+  /**
+   * 获取模型配置参数
+   */
+  getConfigParams: async (): Promise<Record<string, any[]>> => {
+    return http.get<Record<string, any[]>>('/aicenter/v1/llm_model/config_params');
+  },
 };
