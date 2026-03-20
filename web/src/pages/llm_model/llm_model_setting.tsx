@@ -234,11 +234,39 @@ const LLMModelSetting: React.FC = () => {
   };
 
   const copyToClipboard = (text: string, type: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      message.success(`${type}已复制到剪贴板`);
-    }).catch(() => {
-      message.error('复制失败');
-    });
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(() => {
+        message.success(`${type}已复制到剪贴板`);
+      }).catch(() => {
+        fallbackCopyTextToClipboard(text, type);
+      });
+    } else {
+      fallbackCopyTextToClipboard(text, type);
+    }
+  };
+
+  const fallbackCopyTextToClipboard = (text: string, type: string) => {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-999999px';
+    textArea.style.top = '-999999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    
+    try {
+      const successful = document.execCommand('copy');
+      if (successful) {
+        message.success(`${type}已复制到剪贴板`);
+      } else {
+        message.error('复制失败，请手动复制');
+      }
+    } catch (err) {
+      message.error('复制失败，请手动复制');
+    } finally {
+      document.body.removeChild(textArea);
+    }
   };
 
   const handleEditMessage = (messageId: string, content: string) => {
@@ -952,20 +980,25 @@ const LLMModelSetting: React.FC = () => {
                       )}
                     </div>
                     <div className="message-content">
-                      {msg.role === 'assistant' && (msg.reasoning_content || (thinkingMessageId === msg.id && deepThinking)) && (
+                      {msg.role === 'assistant' && (thinkingMessageId === msg.id && deepThinking) && (
+                        <div className="message-reasoning">
+                          <div className="reasoning-header">
+                            <LoadingOutlined spin />
+                            <BulbOutlined /> 正在思考...
+                          </div>
+                        </div>
+                      )}
+                      {msg.role === 'assistant' && msg.reasoning_content && (
                         <div className="message-reasoning">
                           <div className="reasoning-header" onClick={() => toggleReasoning(msg.id)}>
-                            {thinkingMessageId === msg.id ? (
-                              <LoadingOutlined spin />
-                            ) : expandedReasoning.has(msg.id) ? (
+                            {expandedReasoning.has(msg.id) ? (
                               <DownOutlined />
                             ) : (
                               <RightOutlined />
                             )}
-                            <BulbOutlined /> 
-                            {thinkingMessageId === msg.id && !msg.reasoning_content ? '正在思考...' : '思考过程'}
+                            <BulbOutlined /> 思考过程
                           </div>
-                          {expandedReasoning.has(msg.id) && msg.reasoning_content && (
+                          {expandedReasoning.has(msg.id) && (
                             <div className="reasoning-text">{msg.reasoning_content}</div>
                           )}
                         </div>
@@ -1018,20 +1051,20 @@ const LLMModelSetting: React.FC = () => {
                           )}
                           {msg.role === 'user' && !editingMessageId && (
                             <>
-                              <Tooltip title="复制问题">
-                                <Button 
-                                  type="text" 
-                                  size="small"
-                                  icon={<CopyOutlined />} 
-                                  onClick={() => copyToClipboard(msg.content, '问题')}
-                                />
-                              </Tooltip>
                               <Tooltip title="编辑问题">
                                 <Button 
                                   type="text" 
                                   size="small"
                                   icon={<EditOutlined />} 
                                   onClick={() => handleEditMessage(msg.id, msg.content)}
+                                />
+                              </Tooltip>
+<Tooltip title="复制问题">
+                                <Button 
+                                  type="text" 
+                                  size="small"
+                                  icon={<CopyOutlined />} 
+                                  onClick={() => copyToClipboard(msg.content, '问题')}
                                 />
                               </Tooltip>
                             </>
