@@ -66,8 +66,10 @@ const LLMModelSetting: React.FC = () => {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState('');
   const [thinkingMessageId, setThinkingMessageId] = useState<string | null>(null);
+  const [thinkingDuration, setThinkingDuration] = useState<Record<string, number>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const thinkingStartTimeRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
     const currentTheme = document.body.getAttribute('data-theme') || 'light';
@@ -337,6 +339,9 @@ const LLMModelSetting: React.FC = () => {
     };
     setMessages(prev => [...prev, assistantMessage]);
     setThinkingMessageId(assistantMessageId);
+    if (deepThinking) {
+      thinkingStartTimeRef.current[assistantMessageId] = Date.now();
+    }
 
     try {
       abortControllerRef.current = new AbortController();
@@ -374,7 +379,6 @@ const LLMModelSetting: React.FC = () => {
       const decoder = new TextDecoder();
 
       if (reader) {
-        let hasContent = false;
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -386,6 +390,7 @@ const LLMModelSetting: React.FC = () => {
             if (line.startsWith('data: ')) {
               const data = line.slice(6);
               if (data === '[DONE]') {
+                setThinkingMessageId(null);
                 break;
               }
               try {
@@ -396,14 +401,8 @@ const LLMModelSetting: React.FC = () => {
                       ? { ...msg, content: '错误: ' + parsed.error }
                       : msg
                   ));
+                  setThinkingMessageId(null);
                   break;
-                }
-                
-                if (parsed.text || parsed.reasoning_content) {
-                  hasContent = true;
-                  if (hasContent) {
-                    setThinkingMessageId(null);
-                  }
                 }
                 
                 setMessages(prev => prev.map(msg => {
@@ -448,6 +447,13 @@ const LLMModelSetting: React.FC = () => {
         ));
       }
     } finally {
+      if (deepThinking && thinkingStartTimeRef.current[assistantMessageId]) {
+        const duration = Date.now() - thinkingStartTimeRef.current[assistantMessageId];
+        setThinkingDuration(prev => ({
+          ...prev,
+          [assistantMessageId]: duration
+        }));
+      }
       setIsGenerating(false);
       setThinkingMessageId(null);
       abortControllerRef.current = null;
@@ -650,6 +656,10 @@ const LLMModelSetting: React.FC = () => {
       timestamp: new Date()
     };
     setMessages(prev => [...prev, assistantMessage]);
+    setThinkingMessageId(assistantMessageId);
+    if (deepThinking) {
+      thinkingStartTimeRef.current[assistantMessageId] = Date.now();
+    }
 
     try {
       abortControllerRef.current = new AbortController();
@@ -705,6 +715,7 @@ const LLMModelSetting: React.FC = () => {
             if (line.startsWith('data: ')) {
               const data = line.slice(6);
               if (data === '[DONE]') {
+                setThinkingMessageId(null);
                 break;
               }
               try {
@@ -715,8 +726,10 @@ const LLMModelSetting: React.FC = () => {
                       ? { ...msg, content: '错误: ' + parsed.error }
                       : msg
                   ));
+                  setThinkingMessageId(null);
                   break;
                 }
+                
                 setMessages(prev => prev.map(msg => {
                   if (msg.id !== assistantMessageId) return msg;
                   
@@ -759,7 +772,15 @@ const LLMModelSetting: React.FC = () => {
         ));
       }
     } finally {
+      if (deepThinking && thinkingStartTimeRef.current[assistantMessageId]) {
+        const duration = Date.now() - thinkingStartTimeRef.current[assistantMessageId];
+        setThinkingDuration(prev => ({
+          ...prev,
+          [assistantMessageId]: duration
+        }));
+      }
       setIsGenerating(false);
+      setThinkingMessageId(null);
       abortControllerRef.current = null;
     }
   };
@@ -982,13 +1003,16 @@ const LLMModelSetting: React.FC = () => {
                     <div className="message-content">
                       {msg.role === 'assistant' && (thinkingMessageId === msg.id && deepThinking) && (
                         <div className="message-reasoning">
-                          <div className="reasoning-header">
+                          <div className="reasoning-header" onClick={() => toggleReasoning(msg.id)}>
                             <LoadingOutlined spin />
-                            <BulbOutlined /> 正在思考...
+                            <BulbOutlined /> 正在思考中
                           </div>
+                          {expandedReasoning.has(msg.id) && msg.reasoning_content && (
+                            <div className="reasoning-text">{msg.reasoning_content}</div>
+                          )}
                         </div>
                       )}
-                      {msg.role === 'assistant' && msg.reasoning_content && (
+                      {msg.role === 'assistant' && msg.reasoning_content && !(thinkingMessageId === msg.id && deepThinking) && (
                         <div className="message-reasoning">
                           <div className="reasoning-header" onClick={() => toggleReasoning(msg.id)}>
                             {expandedReasoning.has(msg.id) ? (
@@ -997,15 +1021,15 @@ const LLMModelSetting: React.FC = () => {
                               <RightOutlined />
                             )}
                             <BulbOutlined /> 思考过程
+                            {thinkingDuration[msg.id] && (
+                              <span className="reasoning-duration">
+                                ({(thinkingDuration[msg.id] / 1000).toFixed(1)}s)
+                              </span>
+                            )}
                           </div>
                           {expandedReasoning.has(msg.id) && (
                             <div className="reasoning-text">{msg.reasoning_content}</div>
                           )}
-                        </div>
-                      )}
-                      {msg.role === 'assistant' && thinkingMessageId === msg.id && !msg.content && !msg.reasoning_content && (
-                        <div className="thinking-indicator">
-                          <LoadingOutlined spin /> 正在思考...
                         </div>
                       )}
                       {editingMessageId === msg.id ? (
