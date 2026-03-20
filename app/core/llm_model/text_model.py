@@ -75,11 +75,16 @@ class TextModel(BaseLLM):
             
             response = self.client.chat.completions.create(**params)
             
-            return {
+            result = {
                 'text': response.choices[0].message.content,
                 'usage': response.usage.model_dump() if response.usage else {},
                 'model': response.model
             }
+            
+            if hasattr(response.choices[0].message, 'reasoning_content') and response.choices[0].message.reasoning_content:
+                result['reasoning_content'] = response.choices[0].message.reasoning_content
+            
+            return result
         except Exception as e:
             return {'error': str(e)}
     
@@ -109,7 +114,8 @@ class TextModel(BaseLLM):
                 'top_p': 0.1,
                 'frequency_penalty': 0,
                 'presence_penalty': 0,
-                'stream': True
+                'stream': True,
+                'stream_options': {'include_usage': True}
             }
             
             params = self._handle_deep_thinking(params, kwargs)
@@ -120,10 +126,18 @@ class TextModel(BaseLLM):
             for chunk in stream:
                 if chunk.choices:
                     choice = chunk.choices[0]
-                    yield {
+                    result = {
                         'text': choice.delta.content or '',
                         'finish_reason': choice.finish_reason,
                         'usage': chunk.usage.model_dump() if chunk.usage else None
+                    }
+                    if hasattr(choice.delta, 'reasoning_content') and choice.delta.reasoning_content:
+                        result['reasoning_content'] = choice.delta.reasoning_content
+                    yield result
+                elif chunk.usage:
+                    yield {
+                        'text': '',
+                        'usage': chunk.usage.model_dump()
                     }
         except Exception as e:
             yield {'error': str(e)}
@@ -137,7 +151,7 @@ class TextModel(BaseLLM):
             **kwargs: 其他参数
             
         Yields:
-            流式生成的结果
+            流式生成的结果，包含text、reasoning_content（思考过程）、usage（token消耗）
         """
         if not self._validate_config():
             yield {'error': 'Invalid configuration'}
@@ -152,7 +166,8 @@ class TextModel(BaseLLM):
                 'top_p': 0.1,
                 'frequency_penalty': 0,
                 'presence_penalty': 0,
-                'stream': True
+                'stream': True,
+                'stream_options': {'include_usage': True}
             }
             
             params = self._handle_deep_thinking(params, kwargs)
@@ -163,10 +178,18 @@ class TextModel(BaseLLM):
             for chunk in stream:
                 if chunk.choices:
                     choice = chunk.choices[0]
-                    yield {
+                    result = {
                         'text': choice.delta.content or '',
                         'finish_reason': choice.finish_reason,
                         'usage': chunk.usage.model_dump() if chunk.usage else None
+                    }
+                    if hasattr(choice.delta, 'reasoning_content') and choice.delta.reasoning_content:
+                        result['reasoning_content'] = choice.delta.reasoning_content
+                    yield result
+                elif chunk.usage:
+                    yield {
+                        'text': '',
+                        'usage': chunk.usage.model_dump()
                     }
         except Exception as e:
             yield {'error': str(e)}

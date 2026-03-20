@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Form, Input, Select, TreeSelect, Button, Switch, message, Row, Col, Spin, Slider, InputNumber, Tooltip, Tag } from 'antd';
 const { TextArea } = Input;
-import { ArrowLeftOutlined, SaveOutlined, UndoOutlined, ApiTwoTone, SettingOutlined, ClearOutlined, SendOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, InfoCircleOutlined, BulbOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SaveOutlined, UndoOutlined, ApiTwoTone, SettingOutlined, ClearOutlined, SendOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, InfoCircleOutlined, BulbOutlined, CopyOutlined, ReloadOutlined, EditOutlined, DownOutlined, RightOutlined } from '@ant-design/icons';
 import { llmModelService, LLMModel, LLMCategory } from '../../services/llm_model';
 import { request, post } from '../../utils/request';
 import PageHeader from '../../components/page-header';
@@ -16,6 +16,12 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  reasoning_content?: string;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+  };
 }
 
 interface ConfigParam {
@@ -56,6 +62,10 @@ const LLMModelSetting: React.FC = () => {
   const [inputMessage, setInputMessage] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [deepThinking, setDeepThinking] = useState(true);
+  const [expandedReasoning, setExpandedReasoning] = useState<Set<string>>(new Set());
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState('');
+  const [thinkingMessageId, setThinkingMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -209,6 +219,211 @@ const LLMModelSetting: React.FC = () => {
     setHasChanges(false);
     setConfigHasChanges(false);
     message.info('已恢复原始数据');
+  };
+
+  const toggleReasoning = (messageId: string) => {
+    setExpandedReasoning(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(messageId)) {
+        newSet.delete(messageId);
+      } else {
+        newSet.add(messageId);
+      }
+      return newSet;
+    });
+  };
+
+  const copyToClipboard = (text: string, type: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      message.success(`${type}已复制到剪贴板`);
+    }).catch(() => {
+      message.error('复制失败');
+    });
+  };
+
+  const handleEditMessage = (messageId: string, content: string) => {
+    setEditingMessageId(messageId);
+    setEditingContent(content);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingMessageId(null);
+    setEditingContent('');
+  };
+
+  const handleSaveEdit = async (messageId: string) => {
+    if (!editingContent.trim()) {
+      message.error('内容不能为空');
+      return;
+    }
+    
+    const messageIndex = messages.findIndex(m => m.id === messageId);
+    if (messageIndex === -1) return;
+    
+    const updatedMessages = messages.slice(0, messageIndex);
+    setMessages(updatedMessages);
+    setEditingMessageId(null);
+    setEditingContent('');
+    
+    setInputMessage(editingContent);
+    setTimeout(() => {
+      handleSendMessageWithMessages(updatedMessages, editingContent);
+    }, 100);
+  };
+
+  const handleRegenerate = async (messageIndex: number) => {
+    if (messageIndex < 1) return;
+    
+    const userMessage = messages[messageIndex - 1];
+    if (userMessage.role !== 'user') return;
+    
+    const updatedMessages = messages.slice(0, messageIndex);
+    setMessages(updatedMessages);
+    
+    setTimeout(() => {
+      handleSendMessageWithMessages(updatedMessages.slice(0, -1), userMessage.content);
+    }, 100);
+  };
+
+  const handleSendMessageWithMessages = async (previousMessages: Message[], content: string) => {
+    if (!model || isGenerating) return;
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: content.trim(),
+      timestamp: new Date()
+    };
+
+    const newMessages = [...previousMessages, userMessage];
+    setMessages(newMessages);
+    setInputMessage('');
+    setIsGenerating(true);
+
+    const assistantMessageId = (Date.now() + 1).toString();
+    const assistantMessage: Message = {
+      id: assistantMessageId,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date()
+    };
+    setMessages(prev => [...prev, assistantMessage]);
+    setThinkingMessageId(assistantMessageId);
+
+    try {
+      abortControllerRef.current = new AbortController();
+      
+      const chatMessages = newMessages.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }));
+      
+      const requestBody = {
+        messages: chatMessages,
+        config: {
+          ...modelConfig,
+          deep_thinking: deepThinking
+        }
+      };
+      
+      const url = '/aicenter/v1/llm_model/model/' + model.id + '/chat';
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+        signal: abortControllerRef.current.signal
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`请求失败: ${response.status} ${errorText}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (reader) {
+        let hasContent = false;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n');
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              if (data === '[DONE]') {
+                break;
+              }
+              try {
+                const parsed = JSON.parse(data);
+                if (parsed.error) {
+                  setMessages(prev => prev.map(msg => 
+                    msg.id === assistantMessageId 
+                      ? { ...msg, content: '错误: ' + parsed.error }
+                      : msg
+                  ));
+                  break;
+                }
+                
+                if (parsed.text || parsed.reasoning_content) {
+                  hasContent = true;
+                  if (hasContent) {
+                    setThinkingMessageId(null);
+                  }
+                }
+                
+                setMessages(prev => prev.map(msg => {
+                  if (msg.id !== assistantMessageId) return msg;
+                  
+                  const updates: Partial<Message> = {};
+                  
+                  if (parsed.text) {
+                    updates.content = msg.content + parsed.text;
+                  }
+                  
+                  if (parsed.reasoning_content) {
+                    updates.reasoning_content = (msg.reasoning_content || '') + parsed.reasoning_content;
+                  }
+                  
+                  if (parsed.usage) {
+                    updates.usage = parsed.usage;
+                  }
+                  
+                  return { ...msg, ...updates };
+                }));
+              } catch (e) {
+                // Ignore parse errors
+              }
+            }
+          }
+        }
+      }
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        setMessages(prev => prev.map(msg => 
+          msg.id === assistantMessageId 
+            ? { ...msg, content: msg.content + '\n[已停止生成]' }
+            : msg
+        ));
+      } else {
+        console.error('Chat error:', error);
+        setMessages(prev => prev.map(msg => 
+          msg.id === assistantMessageId 
+            ? { ...msg, content: '抱歉，生成回复时出现错误: ' + error.message }
+            : msg
+        ));
+      }
+    } finally {
+      setIsGenerating(false);
+      setThinkingMessageId(null);
+      abortControllerRef.current = null;
+    }
   };
 
   const handleSave = async () => {
@@ -474,13 +689,25 @@ const LLMModelSetting: React.FC = () => {
                   ));
                   break;
                 }
-                if (parsed.text) {
-                  setMessages(prev => prev.map(msg => 
-                    msg.id === assistantMessageId 
-                      ? { ...msg, content: msg.content + parsed.text }
-                      : msg
-                  ));
-                }
+                setMessages(prev => prev.map(msg => {
+                  if (msg.id !== assistantMessageId) return msg;
+                  
+                  const updates: Partial<Message> = {};
+                  
+                  if (parsed.text) {
+                    updates.content = msg.content + parsed.text;
+                  }
+                  
+                  if (parsed.reasoning_content) {
+                    updates.reasoning_content = (msg.reasoning_content || '') + parsed.reasoning_content;
+                  }
+                  
+                  if (parsed.usage) {
+                    updates.usage = parsed.usage;
+                  }
+                  
+                  return { ...msg, ...updates };
+                }));
               } catch (e) {
                 // Ignore parse errors
               }
@@ -713,15 +940,103 @@ const LLMModelSetting: React.FC = () => {
                   <div className="welcome-hint">输入消息开始体验模型能力</div>
                 </div>
               ) : (
-                messages.map(msg => (
+                messages.map((msg, index) => (
                   <div key={msg.id} className={`message ${msg.role}`}>
                     <div className="message-avatar">
-                      {msg.role === 'user' ? '👤' : '🤖'}
+                      {msg.role === 'user' ? '👤' : (
+                        <img 
+                          src={getProviderAvatar(model?.provider || '')} 
+                          alt={model?.provider || 'AI'} 
+                          className="avatar-image"
+                        />
+                      )}
                     </div>
                     <div className="message-content">
-                      <div className="message-text">{msg.content}</div>
-                      <div className="message-time">
-                        {msg.timestamp.toLocaleTimeString()}
+                      {msg.role === 'assistant' && (msg.reasoning_content || (thinkingMessageId === msg.id && deepThinking)) && (
+                        <div className="message-reasoning">
+                          <div className="reasoning-header" onClick={() => toggleReasoning(msg.id)}>
+                            {thinkingMessageId === msg.id ? (
+                              <LoadingOutlined spin />
+                            ) : expandedReasoning.has(msg.id) ? (
+                              <DownOutlined />
+                            ) : (
+                              <RightOutlined />
+                            )}
+                            <BulbOutlined /> 
+                            {thinkingMessageId === msg.id && !msg.reasoning_content ? '正在思考...' : '思考过程'}
+                          </div>
+                          {expandedReasoning.has(msg.id) && msg.reasoning_content && (
+                            <div className="reasoning-text">{msg.reasoning_content}</div>
+                          )}
+                        </div>
+                      )}
+                      {msg.role === 'assistant' && thinkingMessageId === msg.id && !msg.content && !msg.reasoning_content && (
+                        <div className="thinking-indicator">
+                          <LoadingOutlined spin /> 正在思考...
+                        </div>
+                      )}
+                      {editingMessageId === msg.id ? (
+                        <div className="message-edit-area">
+                          <TextArea
+                            value={editingContent}
+                            onChange={(e) => setEditingContent(e.target.value)}
+                            autoSize={{ minRows: 3, maxRows: 8 }}
+                            style={{ width: '100%' }}
+                          />
+                          <div className="edit-actions">
+                            <Button size="small" onClick={handleCancelEdit}>取消</Button>
+                            <Button size="small" type="primary" onClick={() => handleSaveEdit(msg.id)}>发送</Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="message-text">{msg.content}</div>
+                      )}
+                      <div className="message-footer">
+                        <span className="message-time">
+                          {msg.timestamp.toLocaleTimeString()}
+                        </span>
+                        <div className="message-actions">
+                          {msg.role === 'assistant' && msg.content && (
+                            <>
+                              <Tooltip title="重新回答">
+                                <Button 
+                                  type="text" 
+                                  size="small"
+                                  icon={<ReloadOutlined />} 
+                                  onClick={() => handleRegenerate(index)}
+                                />
+                              </Tooltip>
+                              <Tooltip title="复制回答">
+                                <Button 
+                                  type="text" 
+                                  size="small"
+                                  icon={<CopyOutlined />} 
+                                  onClick={() => copyToClipboard(msg.content, '回答')}
+                                />
+                              </Tooltip>
+                            </>
+                          )}
+                          {msg.role === 'user' && !editingMessageId && (
+                            <>
+                              <Tooltip title="复制问题">
+                                <Button 
+                                  type="text" 
+                                  size="small"
+                                  icon={<CopyOutlined />} 
+                                  onClick={() => copyToClipboard(msg.content, '问题')}
+                                />
+                              </Tooltip>
+                              <Tooltip title="编辑问题">
+                                <Button 
+                                  type="text" 
+                                  size="small"
+                                  icon={<EditOutlined />} 
+                                  onClick={() => handleEditMessage(msg.id, msg.content)}
+                                />
+                              </Tooltip>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -736,7 +1051,7 @@ const LLMModelSetting: React.FC = () => {
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
                   placeholder="输入消息... (Shift+Enter换行，Enter发送)"
-                  autoSize={{ minRows: 6, maxRows: 12 }}
+                  autoSize={{ minRows: 5, maxRows: 12 }}
                   onPressEnter={(e) => {
                     if (!e.shiftKey) {
                       e.preventDefault();

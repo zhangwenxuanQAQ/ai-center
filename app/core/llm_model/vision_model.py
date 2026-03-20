@@ -79,7 +79,9 @@ class VisionModel(BaseLLM):
                     }
                 ],
                 'temperature': 0.7,
-                'max_tokens': 4096
+                'max_tokens': 4096,
+                'stream': True,
+                'stream_options': {'include_usage': True}
             }
             
             params = self._handle_deep_thinking(params, kwargs)
@@ -88,15 +90,20 @@ class VisionModel(BaseLLM):
             
             response = self.client.chat.completions.create(**params)
             
-            return {
+            result = {
                 'text': response.choices[0].message.content,
                 'usage': response.usage.model_dump() if response.usage else {},
                 'model': response.model
             }
+            
+            if hasattr(response.choices[0].message, 'reasoning_content') and response.choices[0].message.reasoning_content:
+                result['reasoning_content'] = response.choices[0].message.reasoning_content
+            
+            return result
         except Exception as e:
             return {'error': str(e)}
     
-    def stream_generate(self, prompt: str, **kwargs) -> Generator[Dict[str, Any], None, None]:
+    def stream_generate(self, prompt: str, **kwargs) -> Generator[Dict[str, Any], None]:
         """
         流式分析图像
         
@@ -135,7 +142,8 @@ class VisionModel(BaseLLM):
                 ],
                 'temperature': 0.7,
                 'max_tokens': 4096,
-                'stream': True
+                'stream': True,
+                'stream_options': {'include_usage': True}
             }
             
             params = self._handle_deep_thinking(params, kwargs)
@@ -147,11 +155,19 @@ class VisionModel(BaseLLM):
             for chunk in stream:
                 if chunk.choices:
                     choice = chunk.choices[0]
-                    if choice.delta.content:
-                        yield {
-                            'text': choice.delta.content,
-                            'finish_reason': choice.finish_reason
-                        }
+                    result = {
+                        'text': choice.delta.content or '',
+                        'finish_reason': choice.finish_reason,
+                        'usage': chunk.usage.model_dump() if chunk.usage else None
+                    }
+                    if hasattr(choice.delta, 'reasoning_content') and choice.delta.reasoning_content:
+                        result['reasoning_content'] = choice.delta.reasoning_content
+                    yield result
+                elif chunk.usage:
+                    yield {
+                        'text': '',
+                        'usage': chunk.usage.model_dump()
+                    }
         except Exception as e:
             yield {'error': str(e)}
     
@@ -176,7 +192,8 @@ class VisionModel(BaseLLM):
                 'messages': messages,
                 'temperature': 0.7,
                 'max_tokens': 4096,
-                'stream': True
+                'stream': True,
+                'stream_options': {'include_usage': True}
             }
             
             params = self._handle_deep_thinking(params, kwargs)
@@ -187,11 +204,19 @@ class VisionModel(BaseLLM):
             for chunk in stream:
                 if chunk.choices:
                     choice = chunk.choices[0]
-                    if choice.delta.content:
-                        yield {
-                            'text': choice.delta.content,
-                            'finish_reason': choice.finish_reason
-                        }
+                    result = {
+                        'text': choice.delta.content or '',
+                        'finish_reason': choice.finish_reason,
+                        'usage': chunk.usage.model_dump() if chunk.usage else None
+                    }
+                    if hasattr(choice.delta, 'reasoning_content') and choice.delta.reasoning_content:
+                        result['reasoning_content'] = choice.delta.reasoning_content
+                    yield result
+                elif chunk.usage:
+                    yield {
+                        'text': '',
+                        'usage': chunk.usage.model_dump()
+                    }
         except Exception as e:
             yield {'error': str(e)}
     
