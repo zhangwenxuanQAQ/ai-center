@@ -17,13 +17,11 @@
 .page-header.dark {
   background: rgb(30, 30, 30);
   border-bottom: 0.5px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
 }
 
 .page-header.light {
   background: rgba(255, 255, 255, 0.95);
   border-bottom: 0.5px solid rgba(0, 0, 0, 0.2);
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
 }
 
 @keyframes slideDown {

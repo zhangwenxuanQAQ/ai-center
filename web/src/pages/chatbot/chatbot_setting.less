@@ -1,0 +1,149 @@
+.chatbot-setting-container {
+  padding: 8px;
+  display: flex;
+  gap: 8px;
+  height: 100%;
+  overflow-y: auto;
+  
+  .setting-section {
+    transition: all 0.3s ease;
+    
+    &.dark {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.1);
+      
+      .ant-form-item-label > label {
+        color: rgba(255, 255, 255, 0.85);
+      }
+    }
+    
+    &.light {
+      background: #fff;
+      border-color: #e8e8e8;
+    }
+  }
+  
+  .config-section {
+    .ant-tabs {
+      height: 100%;
+      
+      .ant-tabs-content {
+        height: calc(100% - 46px);
+        
+        .ant-tabs-tabpane {
+          height: 100%;
+        }
+      }
+    }
+  }
+}
+
+.chatbot-settings-tabs {
+  &.dark {
+    .ant-tabs-tab {
+      color: rgba(255, 255, 255, 0.65);
+      
+      &:hover {
+        color: rgba(255, 255, 255, 0.85);
+      }
+      
+      &.ant-tabs-tab-active {
+        .ant-tabs-tab-btn {
+          color: #667eea;
+        }
+      }
+    }
+    
+    .ant-tabs-ink-bar {
+      background: #667eea;
+    }
+  }
+  
+  &.light {
+    .ant-tabs-tab {
+      color: rgba(0, 0, 0, 0.65);
+      
+      &:hover {
+        color: rgba(0, 0, 0, 0.85);
+      }
+      
+      &.ant-tabs-tab-active {
+        .ant-tabs-tab-btn {
+          color: #667eea;
+        }
+      }
+    }
+    
+    .ant-tabs-ink-bar {
+      background: #667eea;
+    }
+  }
+}
+
+.tab-content {
+  padding: 16px 0;
+  
+  h4 {
+    font-size: 14px;
+    font-weight: 500;
+  }
+}
+
+.mcp-server-card,
+.knowledge-card,
+.model-card {
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+  
+  &.dark {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+    
+    &:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(102, 126, 234, 0.5);
+    }
+    
+    &.selected {
+      background: rgba(102, 126, 234, 0.2);
+      border-color: #667eea;
+    }
+  }
+  
+  &.light {
+    background: #fafafa;
+    border-color: #e8e8e8;
+    
+    &:hover {
+      background: #f0f0f0;
+      border-color: rgba(102, 126, 234, 0.5);
+    }
+    
+    &.selected {
+      background: rgba(102, 126, 234, 0.1);
+      border-color: #667eea;
+    }
+  }
+  
+  .ant-card-body {
+    padding: 12px;
+  }
+}
+
+.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  min-height: 400px;
+}

@@ -286,7 +286,18 @@ class LLMModelService:
             
         Returns:
             LLMModel: 创建的LLM模型对象
+            
+        Raises:
+            DuplicateResourceError: 模型名称已存在
         """
+        existing = LLMModel.select().where(
+            (LLMModel.name == llm_model.name) &
+            (LLMModel.deleted == False)
+        ).first()
+        
+        if existing:
+            raise DuplicateResourceError(f"模型名称 '{llm_model.name}' 已存在")
+        
         model_data = llm_model.model_dump()
         
         if not model_data.get('category_id'):
@@ -423,6 +434,7 @@ class LLMModelService:
             
         Raises:
             ResourceNotFoundError: LLM模型不存在
+            DuplicateResourceError: 模型名称已被其他模型使用
         """
         try:
             db_llm_model = LLMModel.get_by_id(llm_model_id)
@@ -432,6 +444,17 @@ class LLMModelService:
             raise ResourceNotFoundError(message=f"LLM模型 {llm_model_id} 不存在")
         
         update_data = llm_model.model_dump(exclude_unset=True)
+        
+        if 'name' in update_data and update_data['name'] != db_llm_model.name:
+            existing = LLMModel.select().where(
+                (LLMModel.name == update_data['name']) &
+                (LLMModel.id != llm_model_id) &
+                (LLMModel.deleted == False)
+            ).first()
+            
+            if existing:
+                raise DuplicateResourceError(f"模型名称 '{update_data['name']}' 已存在")
+        
         for field, value in update_data.items():
             setattr(db_llm_model, field, value)
         db_llm_model.updated_at = datetime.now()
@@ -496,3 +519,25 @@ class LLMModelService:
         
         # 测试模型
         return ModelTestUtils.test_model(db_llm_model.model_type, model_config)
+    
+    @staticmethod
+    def test_model_config(model_test) -> Dict[str, Any]:
+        """
+        测试模型配置
+        
+        Args:
+            model_test: 模型测试DTO
+            
+        Returns:
+            Dict[str, Any]: 测试结果
+        """
+        # 构建模型配置
+        model_config = {
+            'api_key': model_test.api_key,
+            'endpoint': model_test.endpoint,
+            'name': model_test.name,
+            'provider': model_test.provider
+        }
+        
+        # 测试模型
+        return ModelTestUtils.test_model(model_test.model_type, model_config)

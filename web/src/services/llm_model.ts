@@ -117,10 +117,17 @@ export const llmModelService = {
   },
 
   /**
-   * 测试模型连接
+   * 测试模型连接（通过模型ID）
    */
   testConnection: async (id: string): Promise<{ success: boolean; message: string; result?: string }> => {
     return http.post<{ success: boolean; message: string; result?: string }>(`/aicenter/v1/llm_model/model/${id}/test`);
+  },
+  
+  /**
+   * 测试模型配置（通过配置参数）
+   */
+  testModelConfig: async (data: { name: string; provider?: string; api_key: string; endpoint: string; model_type: string }): Promise<{ success: boolean; message: string; result?: string }> => {
+    return http.post<{ success: boolean; message: string; result?: string }>('/aicenter/v1/llm_model/test_config', data);
   },
   
   /**
@@ -137,5 +144,19 @@ export const llmModelService = {
    */
   getConfigParams: async (): Promise<Record<string, any[]>> => {
     return http.get<Record<string, any[]>>('/aicenter/v1/llm_model/config_params');
+  },
+
+  /**
+   * 与模型进行对话（流式输出）
+   */
+  chat: async (llmModelId: string, messages: any[], config?: Record<string, any>): Promise<Response> => {
+    const response = await fetch(`/aicenter/v1/llm_model/model/${llmModelId}/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ messages, config: config || {} }),
+    });
+    return response;
   },
 };

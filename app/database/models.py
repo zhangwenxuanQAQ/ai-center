@@ -147,6 +147,25 @@ class LLMModel(SoftDeleteModel):
         table_name = 'llm_model'
 
 
+class PromptCategory(SoftDeleteModel):
+    """
+    提示词分类模型
+    
+    存储提示词分类信息，支持树形结构
+    """
+    name = CharField(max_length=255, index=True, verbose_name="分类名称")
+    description = TextField(null=True, verbose_name="分类描述")
+    parent_id = CharField(max_length=40, null=True, index=True, verbose_name="父分类ID")
+    sort_order = IntegerField(default=0, verbose_name="排序序号")
+    is_default = BooleanField(default=False, verbose_name="是否默认分类")
+    
+    class Meta:
+        table_name = 'prompt_category'
+        indexes = (
+            (('parent_id', 'sort_order'), False),
+        )
+
+
 class Prompt(SoftDeleteModel):
     """
     提示词模型
@@ -155,7 +174,10 @@ class Prompt(SoftDeleteModel):
     """
     name = CharField(max_length=255, index=True, verbose_name="提示词名称")
     content = TextField(verbose_name="提示词内容")
-    category = CharField(max_length=255, verbose_name="提示词分类")
+    description = TextField(null=True, verbose_name="提示词描述")
+    category_id = CharField(max_length=40, null=True, index=True, verbose_name="分类ID")
+    tags = TextField(null=True, verbose_name="标签列表，JSON数组格式")
+    status = BooleanField(default=True, verbose_name="状态：True启用，False禁用")
     
     class Meta:
         table_name = 'prompt'

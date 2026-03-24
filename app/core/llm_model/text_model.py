@@ -40,7 +40,7 @@ class TextModel(BaseLLM):
         """
         deep_thinking = kwargs.pop('deep_thinking', False)
         if self.provider and self.provider.lower() == 'qwen' and not bool(deep_thinking):
-            params['extra_body'] = False
+            params['extra_body'] = {"enable_thinking": False}
         return params
     
     def generate(self, prompt: str, **kwargs) -> Dict[str, Any]:

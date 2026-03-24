@@ -165,6 +165,99 @@ try:
     except Exception as e:
         print(f"  添加字段失败: {e}")
     
+    # 创建 prompt_category 表
+    print("\n创建 prompt_category 表...")
+    try:
+        if 'prompt_category' not in table_names:
+            db.execute_sql("""
+                CREATE TABLE prompt_category (
+                    id CHAR(36) NOT NULL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    parent_id CHAR(36),
+                    sort_order INT DEFAULT 0,
+                    is_default TINYINT DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    create_user_id VARCHAR(40) DEFAULT NULL,
+                    update_user_id VARCHAR(40) DEFAULT NULL,
+                    deleted TINYINT DEFAULT 0,
+                    deleted_at DATETIME DEFAULT NULL,
+                    deleted_user_id VARCHAR(36) DEFAULT NULL,
+                    INDEX idx_parent_id (parent_id),
+                    INDEX idx_sort_order (sort_order),
+                    INDEX idx_deleted (deleted)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+            print("  成功创建 prompt_category 表")
+        else:
+            print("  prompt_category 表已存在，检查字段...")
+            cursor = db.execute_sql("DESCRIBE prompt_category;")
+            columns = [column[0] for column in cursor.fetchall()]
+            
+            if 'is_default' not in columns:
+                db.execute_sql("ALTER TABLE prompt_category ADD COLUMN is_default TINYINT DEFAULT 0")
+                print("  成功添加 is_default 字段")
+            else:
+                print("  is_default 字段已存在")
+            
+            if 'create_user_id' not in columns:
+                db.execute_sql("ALTER TABLE prompt_category ADD COLUMN create_user_id VARCHAR(40) DEFAULT NULL")
+                print("  成功添加 create_user_id 字段")
+            else:
+                print("  create_user_id 字段已存在")
+            
+            if 'update_user_id' not in columns:
+                db.execute_sql("ALTER TABLE prompt_category ADD COLUMN update_user_id VARCHAR(40) DEFAULT NULL")
+                print("  成功添加 update_user_id 字段")
+            else:
+                print("  update_user_id 字段已存在")
+    except Exception as e:
+        print(f"  创建 prompt_category 表失败: {e}")
+    
+    # 修改 prompt 表结构
+    print("\n修改 prompt 表结构...")
+    try:
+        cursor = db.execute_sql("DESCRIBE prompt;")
+        columns = [column[0] for column in cursor.fetchall()]
+        
+        # 添加 category_id 字段
+        if 'category_id' not in columns:
+            db.execute_sql("ALTER TABLE prompt ADD COLUMN category_id VARCHAR(40) DEFAULT NULL")
+            print("  成功添加 category_id 字段")
+        else:
+            print("  category_id 字段已存在")
+        
+        # 添加 tags 字段
+        if 'tags' not in columns:
+            db.execute_sql("ALTER TABLE prompt ADD COLUMN tags TEXT DEFAULT NULL")
+            print("  成功添加 tags 字段")
+        else:
+            print("  tags 字段已存在")
+        
+        # 添加 status 字段
+        if 'status' not in columns:
+            db.execute_sql("ALTER TABLE prompt ADD COLUMN status TINYINT DEFAULT 1")
+            print("  成功添加 status 字段")
+        else:
+            print("  status 字段已存在")
+        
+        # 添加 description 字段
+        if 'description' not in columns:
+            db.execute_sql("ALTER TABLE prompt ADD COLUMN description TEXT DEFAULT NULL")
+            print("  成功添加 description 字段")
+        else:
+            print("  description 字段已存在")
+        
+        # 删除 category 字段
+        if 'category' in columns:
+            db.execute_sql("ALTER TABLE prompt DROP COLUMN category")
+            print("  成功删除 category 字段")
+        else:
+            print("  category 字段不存在，无需删除")
+    except Exception as e:
+        print(f"  修改 prompt 表结构失败: {e}")
+    
     print("\n数据库迁移完成")
 except Exception as e:
     print(f"数据库迁移失败: {e}")

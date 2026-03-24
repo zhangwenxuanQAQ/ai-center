@@ -1,0 +1,245 @@
+// 提示词设置页面样式
+
+.prompt-setting-container {
+  padding: 8px;
+  .setting-section {
+    &.dark {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.1);
+
+      .ant-form-item-label > label {
+        color: rgba(255, 255, 255, 0.85);
+      }
+
+      .ant-input,
+      .ant-select-selector,
+      .ant-tree-select .ant-select-selector {
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.15);
+        color: #fff;
+
+        &::placeholder {
+          color: rgba(255, 255, 255, 0.4);
+        }
+
+        &:hover,
+        &:focus {
+          border-color: #667eea;
+        }
+      }
+
+      .ant-select-dropdown {
+        background: #1a1a1a;
+        border-color: rgba(255, 255, 255, 0.1);
+
+        .ant-select-item {
+          color: rgba(255, 255, 255, 0.85);
+
+          &:hover {
+            background: rgba(255, 255, 255, 0.08);
+          }
+
+          &.ant-select-item-option-selected {
+            background: rgba(102, 126, 234, 0.2);
+            color: #fff;
+          }
+        }
+      }
+    }
+
+    &.light {
+      background: #fff;
+      border-color: #d9d9d9;
+
+      .ant-form-item-label > label {
+        color: rgba(0, 0, 0, 0.85);
+      }
+    }
+  }
+}
+
+// Quill 富文本编辑器样式
+.quill-container {
+  &.dark {
+    .ql-toolbar {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.15);
+      border-radius: 4px 4px 0 0;
+
+      .ql-picker {
+        color: rgba(255, 255, 255, 0.85);
+
+        .ql-picker-label {
+          color: rgba(255, 255, 255, 0.85);
+          border-color: rgba(255, 255, 255, 0.15);
+
+          &:hover {
+            border-color: #667eea;
+          }
+        }
+
+        .ql-picker-options {
+          background: #1a1a1a;
+          border-color: rgba(255, 255, 255, 0.15);
+          color: rgba(255, 255, 255, 0.85);
+
+          .ql-picker-item {
+            &:hover {
+              color: #667eea;
+            }
+
+            &.ql-selected {
+              color: #667eea;
+            }
+          }
+        }
+      }
+
+      button {
+        color: rgba(255, 255, 255, 0.85);
+
+        &:hover {
+          color: #667eea;
+
+          .ql-stroke {
+            stroke: #667eea;
+          }
+
+          .ql-fill {
+            fill: #667eea;
+          }
+        }
+
+        &.ql-active {
+          color: #667eea;
+
+          .ql-stroke {
+            stroke: #667eea;
+          }
+
+          .ql-fill {
+            fill: #667eea;
+          }
+        }
+      }
+
+      .ql-stroke {
+        stroke: rgba(255, 255, 255, 0.85);
+      }
+
+      .ql-fill {
+        fill: rgba(255, 255, 255, 0.85);
+      }
+    }
+
+    .ql-container {
+      background: #1a1a1a;
+      border-color: rgba(255, 255, 255, 0.15);
+      border-radius: 0 0 4px 4px;
+
+      .ql-editor {
+        color: #fff;
+
+        &.ql-blank::before {
+          color: rgba(255, 255, 255, 0.4);
+        }
+      }
+    }
+  }
+
+  &.light {
+    .ql-toolbar {
+      background: #fafafa;
+      border-color: #d9d9d9;
+      border-radius: 4px 4px 0 0;
+
+      .ql-picker {
+        color: rgba(0, 0, 0, 0.85);
+
+        .ql-picker-label {
+          color: rgba(0, 0, 0, 0.85);
+          border-color: #d9d9d9;
+
+          &:hover {
+            border-color: #667eea;
+          }
+        }
+
+        .ql-picker-options {
+          background: #fff;
+          border-color: #d9d9d9;
+          color: rgba(0, 0, 0, 0.85);
+
+          .ql-picker-item {
+            &:hover {
+              color: #667eea;
+            }
+
+            &.ql-selected {
+              color: #667eea;
+            }
+          }
+        }
+      }
+
+      button {
+        color: rgba(0, 0, 0, 0.85);
+
+        &:hover {
+          color: #667eea;
+
+          .ql-stroke {
+            stroke: #667eea;
+          }
+
+          .ql-fill {
+            fill: #667eea;
+          }
+        }
+
+        &.ql-active {
+          color: #667eea;
+
+          .ql-stroke {
+            stroke: #667eea;
+          }
+
+          .ql-fill {
+            fill: #667eea;
+          }
+        }
+      }
+
+      .ql-stroke {
+        stroke: rgba(0, 0, 0, 0.85);
+      }
+
+      .ql-fill {
+        fill: rgba(0, 0, 0, 0.85);
+      }
+    }
+
+    .ql-container {
+      background: #fff;
+      border-color: #d9d9d9;
+      border-radius: 0 0 4px 4px;
+
+      .ql-editor {
+        color: #000;
+
+        &.ql-blank::before {
+          color: rgba(0, 0, 0, 0.4);
+        }
+      }
+    }
+  }
+}
+
+// 标签样式
+.ant-tag {
+  &.dark {
+    background: rgba(102, 126, 234, 0.2);
+    border-color: rgba(102, 126, 234, 0.3);
+    color: #fff;
+  }
+}

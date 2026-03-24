@@ -286,8 +286,12 @@ const MCPSetting: React.FC = () => {
         ...values,
         avatar: avatarPreview
       });
+      setOriginalData({
+        ...values,
+        avatar: avatarPreview
+      });
+      setHasChanges(false);
       message.success('保存成功');
-      fetchServer(server.id);
     } catch (error) {
       console.error('Failed to save:', error);
       message.error('保存失败');
@@ -835,7 +839,7 @@ const MCPSetting: React.FC = () => {
             }}
           >
             <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8' }}>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '500', color: theme === 'dark' ? '#fff' : '#000', textAlign: 'left' }}>基本信息</h3>
+              <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', textAlign: 'left' }}>基本信息</h3>
             </div>
             {connectionTestResult && (
               <div style={{ 

@@ -2,14 +2,115 @@
 提示词控制器，提供提示词相关的API接口
 """
 
-from fastapi import APIRouter
-from app.services.prompt.service import PromptService
-from app.services.prompt.dto import PromptCreate, PromptUpdate, Prompt as PromptSchema
+import json
+from fastapi import APIRouter, Body, Query
+from app.services.prompt.service import PromptCategoryService, PromptService
+from app.services.prompt.dto import (
+    PromptCategoryCreate, PromptCategoryUpdate, PromptCategory, 
+    PromptCreate, PromptUpdate, Prompt
+)
 from app.utils.response import ResponseUtil, ApiResponse
 
 router = APIRouter()
 
 
+# 提示词分类相关接口
+@router.post("/category", response_model=ApiResponse)
+def create_prompt_category(category: PromptCategoryCreate):
+    """
+    创建提示词分类
+    
+    Args:
+        category: 提示词分类创建DTO
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    db_category = PromptCategoryService.create_category(category)
+    return ResponseUtil.created(data=db_category.__data__, message="提示词分类创建成功")
+
+
+@router.get("/category", response_model=ApiResponse)
+def get_prompt_categories(skip: int = 0, limit: int = 100):
+    """
+    获取提示词分类列表
+    
+    Args:
+        skip: 跳过的记录数
+        limit: 返回的最大记录数
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    categories = PromptCategoryService.get_categories(skip, limit)
+    categories_data = [category.__data__ for category in categories]
+    return ResponseUtil.success(data=categories_data, message="获取提示词分类列表成功")
+
+
+@router.get("/category/tree", response_model=ApiResponse)
+def get_prompt_category_tree():
+    """
+    获取提示词分类树形结构
+    
+    Returns:
+        ApiResponse: 统一格式的响应对象，包含分类树形结构
+    """
+    tree = PromptCategoryService.get_category_tree()
+    return ResponseUtil.success(data=tree, message="获取提示词分类树成功")
+
+
+@router.get("/category/{category_id}", response_model=ApiResponse)
+def get_prompt_category(category_id: str):
+    """
+    获取单个提示词分类
+    
+    Args:
+        category_id: 提示词分类ID
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    category = PromptCategoryService.get_category(category_id)
+    if category is None:
+        return ResponseUtil.not_found(message=f"提示词分类 {category_id} 不存在")
+    return ResponseUtil.success(data=category.__data__, message="获取提示词分类成功")
+
+
+@router.post("/category/{category_id}", response_model=ApiResponse)
+def update_prompt_category(category_id: str, category: PromptCategoryUpdate):
+    """
+    更新提示词分类
+    
+    Args:
+        category_id: 提示词分类ID
+        category: 提示词分类更新DTO
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    db_category = PromptCategoryService.update_category(category_id, category)
+    return ResponseUtil.success(data=db_category.__data__, message="提示词分类更新成功")
+
+
+@router.post("/category/{category_id}/delete", response_model=ApiResponse)
+def delete_prompt_category(category_id: str):
+    """
+    删除提示词分类
+    
+    Args:
+        category_id: 提示词分类ID
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    try:
+        db_category = PromptCategoryService.delete_category(category_id)
+        return ResponseUtil.success(data=db_category.__data__, message="提示词分类删除成功")
+    except ValueError as e:
+        return ResponseUtil.error(message=str(e))
+
+
+# 提示词相关接口
 @router.post("", response_model=ApiResponse)
 def create_prompt(prompt: PromptCreate):
     """
@@ -26,24 +127,50 @@ def create_prompt(prompt: PromptCreate):
 
 
 @router.get("", response_model=ApiResponse)
-def get_prompts(skip: int = 0, limit: int = 100):
+def get_prompts(
+    page: int = Query(1, description="页码"),
+    page_size: int = Query(12, description="每页数量"),
+    category_id: str = Query(None, description="分类ID"),
+    name: str = Query(None, description="提示词名称（模糊查询）"),
+    status: str = Query(None, description="状态")
+):
     """
     获取提示词列表
     
     Args:
-        skip: 跳过的记录数
-        limit: 返回的最大记录数
+        page: 页码
+        page_size: 每页数量
+        category_id: 分类ID（可选）
+        name: 提示词名称（模糊查询，可选）
+        status: 状态（可选）
         
     Returns:
         ApiResponse: 统一格式的响应对象
     """
-    prompts = PromptService.get_prompts(skip, limit)
-    prompts_data = [prompt.__data__ for prompt in prompts]
-    return ResponseUtil.success(data=prompts_data, message="获取提示词列表成功")
+    skip = (page - 1) * page_size
+    prompts = PromptService.get_prompts(skip, page_size, category_id, name, status)
+    total = PromptService.count_prompts(category_id, name, status)
+    
+    prompts_data = []
+    for prompt in prompts:
+        prompt_dict = prompt.__data__
+        if prompt_dict.get('tags') and isinstance(prompt_dict['tags'], str):
+            try:
+                prompt_dict['tags'] = json.loads(prompt_dict['tags'])
+            except json.JSONDecodeError:
+                prompt_dict['tags'] = []
+        prompts_data.append(prompt_dict)
+    
+    return ResponseUtil.success(data={
+        "data": prompts_data,
+        "total": total,
+        "page": page,
+        "page_size": page_size
+    }, message="获取提示词列表成功")
 
 
 @router.get("/{prompt_id}", response_model=ApiResponse)
-def get_prompt(prompt_id: int):
+def get_prompt(prompt_id: str):
     """
     获取单个提示词
     
@@ -56,11 +183,19 @@ def get_prompt(prompt_id: int):
     prompt = PromptService.get_prompt(prompt_id)
     if prompt is None:
         return ResponseUtil.not_found(message=f"提示词 {prompt_id} 不存在")
-    return ResponseUtil.success(data=prompt.__data__, message="获取提示词成功")
+    
+    prompt_dict = prompt.__data__
+    if prompt_dict.get('tags') and isinstance(prompt_dict['tags'], str):
+        try:
+            prompt_dict['tags'] = json.loads(prompt_dict['tags'])
+        except json.JSONDecodeError:
+            prompt_dict['tags'] = []
+    
+    return ResponseUtil.success(data=prompt_dict, message="获取提示词成功")
 
 
 @router.post("/{prompt_id}", response_model=ApiResponse)
-def update_prompt(prompt_id: int, prompt: PromptUpdate):
+def update_prompt(prompt_id: str, prompt: PromptUpdate):
     """
     更新提示词
     
@@ -72,11 +207,19 @@ def update_prompt(prompt_id: int, prompt: PromptUpdate):
         ApiResponse: 统一格式的响应对象
     """
     db_prompt = PromptService.update_prompt(prompt_id, prompt)
-    return ResponseUtil.success(data=db_prompt.__data__, message="提示词更新成功")
+    
+    prompt_dict = db_prompt.__data__
+    if prompt_dict.get('tags') and isinstance(prompt_dict['tags'], str):
+        try:
+            prompt_dict['tags'] = json.loads(prompt_dict['tags'])
+        except json.JSONDecodeError:
+            prompt_dict['tags'] = []
+    
+    return ResponseUtil.success(data=prompt_dict, message="提示词更新成功")
 
 
 @router.post("/{prompt_id}/delete", response_model=ApiResponse)
-def delete_prompt(prompt_id: int):
+def delete_prompt(prompt_id: str):
     """
     删除提示词
     

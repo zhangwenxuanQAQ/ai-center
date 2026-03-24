@@ -1,0 +1,464 @@
+// 提示词管理页面样式
+
+.prompt-layout {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+  min-height: 0;
+
+  .category-sider {
+    width: 260px !important;
+    flex-shrink: 0;
+    backdrop-filter: blur(20px);
+    position: relative;
+    animation: slideRight 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+
+    &.dark {
+      background: rgb(30, 30, 30);
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+
+      &::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 1px;
+        height: 100%;
+        background: linear-gradient(180deg, transparent, rgba(120, 119, 198, 0.3), transparent);
+      }
+    }
+
+    &.light {
+      background: #ffffff;
+      border-right: 1px solid rgba(0, 0, 0, 0.08);
+
+      &::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 1px;
+        height: 100%;
+        background: linear-gradient(180deg, transparent, rgba(102, 126, 234, 0.3), transparent);
+      }
+    }
+
+    @keyframes slideRight {
+      from {
+        opacity: 0;
+        transform: translateX(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    .sider-header {
+      padding: 20px 24px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      position: relative;
+      flex-shrink: 0;
+
+      &.dark {
+        color: rgba(255, 255, 255, 0.9);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      &.light {
+        color: rgba(0, 0, 0, 0.8);
+        border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+      }
+    }
+
+    .category-tree {
+      padding: 8px 5px;
+      background: transparent;
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      min-height: 0;
+
+      &::-webkit-scrollbar {
+        width: 6px;
+      }
+      
+      &::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      
+      &::-webkit-scrollbar-thumb {
+        background: rgba(102, 126, 234, 0.3);
+        border-radius: 3px;
+      }
+      
+      &::-webkit-scrollbar-thumb:hover {
+        background: rgba(102, 126, 234, 0.5);
+      }
+
+      &.dark {
+        color: rgba(255, 255, 255, 0.9);
+        :global {
+          .ant-tree {
+            color: rgba(255, 255, 255, 0.9);
+          }
+          .ant-tree-node-content-wrapper {
+            color: rgba(255, 255, 255, 0.9);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            font-size: 14px;
+            font-weight: 400;
+            box-sizing: border-box;
+            cursor: pointer;
+
+            &::before {
+              content: '';
+              position: absolute;
+              left: 0;
+              top: 0;
+              bottom: 0;
+              width: 3px;
+              background: transparent;
+              border-radius: 8px 0 0 8px;
+              transition: all 0.3s ease;
+            }
+
+            &:hover {
+              color: #fff;
+              background: transparent;
+              transform: translateX(4px);
+
+              &::before {
+                background: linear-gradient(180deg, #667eea, #764ba2);
+              }
+            }
+          }
+
+          .ant-tree-node-selected {
+            color: #ffffff !important;
+            background: transparent !important;
+            font-weight: 600;
+
+            &::before {
+              background: linear-gradient(180deg, #667eea, #764ba2);
+              box-shadow: 0 0 12px rgba(102, 126, 234, 0.8);
+            }
+          }
+
+          .ant-tree-switcher {
+            color: rgba(255, 255, 255, 0.6);
+            transition: all 0.3s ease;
+            background: transparent;
+            border-radius: 8px 0 0 8px;
+          }
+
+          .ant-tree-indent {
+            background: transparent;
+            border-radius: 8px 0 0 8px;
+            transition: background 0.3s ease;
+          }
+
+          .ant-tree-treenode:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+
+            .ant-tree-switcher,
+            .ant-tree-indent {
+              background: rgba(255, 255, 255, 0.08);
+            }
+          }
+
+          .ant-tree-treenode-selected {
+            background: linear-gradient(90deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2)) !important;
+            border-radius: 8px;
+          }
+        }
+      }
+
+      &.light {
+        :global {
+          .ant-tree-node-content-wrapper {
+            color: rgba(0, 0, 0, 0.75);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            font-size: 14px;
+            box-sizing: border-box;
+            cursor: pointer;
+
+            &::before {
+              content: '';
+              position: absolute;
+              left: 0;
+              top: 0;
+              bottom: 0;
+              width: 3px;
+              background: transparent;
+              border-radius: 8px 0 0 8px;
+              transition: all 0.3s ease;
+            }
+
+            &:hover {
+              color: #000;
+              background: transparent;
+              transform: translateX(4px);
+
+              &::before {
+                background: linear-gradient(180deg, #667eea, #764ba2);
+              }
+            }
+          }
+
+          .ant-tree-node-selected {
+            color: #667eea !important;
+            background: transparent !important;
+            font-weight: 500;
+
+            &::before {
+              background: linear-gradient(180deg, #667eea, #764ba2);
+            }
+          }
+
+          .ant-tree-switcher {
+            color: rgba(0, 0, 0, 0.4);
+            transition: all 0.3s ease;
+            background: transparent;
+            border-radius: 8px 0 0 8px;
+          }
+
+          .ant-tree-indent {
+            background: transparent;
+            border-radius: 8px 0 0 8px;
+            transition: background 0.3s ease;
+          }
+
+          .ant-tree-treenode:hover {
+            background: rgba(0, 0, 0, 0.06);
+            border-radius: 8px;
+
+            .ant-tree-switcher,
+            .ant-tree-indent {
+              background: rgba(0, 0, 0, 0.06);
+            }
+          }
+
+          .ant-tree-treenode-selected {
+            border-radius: 8px;
+          }
+        }
+      }
+
+      .category-tree-node {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+        position: relative;
+        min-height: 36px;
+
+        .category-name {
+          display: block;
+          flex: 1;
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font-size: 14px;
+          line-height: 36px;
+          text-align: left;
+        }
+
+        .category-actions {
+          display: block;
+          flex-shrink: 0;
+          margin-left: 8px;
+
+          .ant-btn {
+            padding: 4px 8px;
+            min-width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            background: transparent;
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+
+            &:hover {
+              border-color: rgba(102, 126, 234, 0.3);
+              transform: scale(1.05);
+            }
+
+            .anticon {
+              font-size: 12px;
+            }
+          }
+
+          .delete-category-btn,
+          .ant-btn-dangerous {
+            color: #ff4d4f !important;
+            
+            &:hover {
+              color: #ff7875 !important;
+              background: rgba(255, 77, 79, 0.1) !important;
+              border-color: rgba(255, 77, 79, 0.3) !important;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  .prompt-content {
+    flex: 1;
+    padding: 24px;
+    overflow-x: hidden;
+    position: relative;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+
+    &.dark {
+      background: #000000;
+    }
+
+    &.light {
+      background: #ffffff;
+    }
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+    
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+
+    .loading-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex: 1;
+      min-height: 0;
+
+      :global {
+        .ant-spin-dot-item {
+          background-color: #667eea;
+        }
+      }
+    }
+
+    .empty-container {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      flex: 1;
+      min-height: 0;
+      animation: fadeIn 0.6s ease;
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: scale(0.95);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+
+      &.dark {
+        :global {
+          .ant-empty {
+            color: #ffffff !important;
+          }
+
+          .ant-empty-description {
+            color: #ffffff !important;
+            font-size: 15px;
+          }
+
+          .ant-empty-image svg {
+            fill: rgba(255, 255, 255, 0.5) !important;
+          }
+        }
+      }
+
+      &.light {
+        :global {
+          .ant-empty {
+            color: rgba(0, 0, 0, 0.5) !important;
+          }
+
+          .ant-empty-description {
+            color: rgba(0, 0, 0, 0.5) !important;
+            font-size: 15px;
+          }
+        }
+      }
+    }
+
+    :global {
+      .ant-row {
+        flex: 1;
+        min-height: 0;
+      }
+    }
+  }
+}
+
+// 暗色主题下的树形组件样式
+.dark {
+  .category-tree {
+    .ant-tree {
+      color: rgba(255, 255, 255, 0.85);
+      background: transparent;
+
+      .ant-tree-node-content-wrapper {
+        &:hover {
+          background: rgba(255, 255, 255, 0.1);
+        }
+      }
+
+      .ant-tree-node-selected {
+        background: rgba(102, 126, 234, 0.3) !important;
+      }
+
+      .ant-tree-switcher {
+        color: rgba(255, 255, 255, 0.6);
+      }
+    }
+  }
+}
+
+// 亮色主题下的树形组件样式
+.light {
+  .category-tree {
+    .ant-tree {
+      color: rgba(0, 0, 0, 0.85);
+      background: transparent;
+
+      .ant-tree-node-content-wrapper {
+        &:hover {
+          background: rgba(0, 0, 0, 0.05);
+        }
+      }
+
+      .ant-tree-node-selected {
+        background: rgba(102, 126, 234, 0.15) !important;
+      }
+
+      .ant-tree-switcher {
+        color: rgba(0, 0, 0, 0.6);
+      }
+    }
+  }
+}

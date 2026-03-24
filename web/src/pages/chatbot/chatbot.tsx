@@ -436,7 +436,7 @@ const ChatbotManagement: React.FC = () => {
   };
 
   const handleCardClick = (chatbotId: number) => {
-    navigate(`/chatbots/${chatbotId}`);
+    navigate(`/chatbot/setting/${chatbotId}`);
   };
 
   const handleCardMouseMove = (chatbotId: number, e: React.MouseEvent<HTMLDivElement>) => {

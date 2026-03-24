@@ -6,7 +6,8 @@ from fastapi import APIRouter, Query, Body
 from app.services.llm_model.service import LLMModelService, LLMCategoryService
 from app.services.llm_model.dto import (
     LLMModelCreate, LLMModelUpdate, LLMModel as LLMModelSchema,
-    LLMCategoryCreate, LLMCategoryUpdate, LLMCategory as LLMCategorySchema
+    LLMCategoryCreate, LLMCategoryUpdate, LLMCategory as LLMCategorySchema,
+    LLMModelTest
 )
 from app.utils.response import ResponseUtil, ApiResponse
 from app.constants.llm_constants import MODEL_TYPE, MODEL_CONFIG_PARAMS
@@ -242,10 +243,31 @@ def delete_llm_model(llm_model_id: str):
     return ResponseUtil.success(data=db_llm_model.__data__, message="LLM模型删除成功")
 
 
+@router.post("/test_config", response_model=ApiResponse)
+def test_model_config(model_test: LLMModelTest):
+    """
+    测试模型配置（通过配置参数）
+    
+    Args:
+        model_test: 模型测试DTO，包含模型配置参数
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象，包含测试结果
+    """
+    try:
+        result = LLMModelService.test_model_config(model_test)
+        if result['success']:
+            return ResponseUtil.success(data=result, message="模型连接测试成功")
+        else:
+            return ResponseUtil.error(data=result, message=result['message'])
+    except Exception as e:
+        return ResponseUtil.error(message=str(e))
+
+
 @router.post("/model/{llm_model_id}/test", response_model=ApiResponse)
 def test_model_connection(llm_model_id: str):
     """
-    测试模型连接
+    测试模型连接（通过模型ID）
     
     Args:
         llm_model_id: LLM模型ID

@@ -187,11 +187,25 @@ const LLMModelSetting: React.FC = () => {
 
   const handleTestConnection = async () => {
     if (!model) return;
+    
+    const formValues = form.getFieldsValue();
+    
+    if (!formValues.name || !formValues.api_key || !formValues.endpoint || !formValues.model_type) {
+      message.error('请填写完整的模型配置信息');
+      return;
+    }
+    
     setTestingConnection(true);
     setConnectionTestResult(null);
     
     try {
-      const result = await llmModelService.testConnection(model.id);
+      const result = await llmModelService.testModelConfig({
+        name: formValues.name,
+        provider: formValues.provider,
+        api_key: formValues.api_key,
+        endpoint: formValues.endpoint,
+        model_type: formValues.model_type
+      });
       
       setConnectionTestResult({
         success: result.success,
@@ -838,7 +852,7 @@ const LLMModelSetting: React.FC = () => {
       <div className="llm-model-setting-container">
         <div className="setting-left-panel">
           <div className={`setting-section ${theme === 'dark' ? 'dark' : 'light'}`}>
-            <div className="section-header">
+            <div className={`section-header ${theme === 'dark' ? 'dark' : 'light'}`}>
               <h3>{showParams ? '模型参数' : '基本信息'}</h3>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {(hasChanges || configHasChanges) && (

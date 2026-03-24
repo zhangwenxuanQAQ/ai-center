@@ -53,6 +53,10 @@
   }
 }
 
+.ant-layout-content{
+  padding: 8px !important;
+}
+
 /* ==================== 公共页面内容区域样式 ==================== */
 
 .page-content {

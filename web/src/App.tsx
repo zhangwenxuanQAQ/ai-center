@@ -8,12 +8,14 @@ import './styles/themes/dark.css';
 import './styles/themes/light.css';
 import Home from './pages/home/home.tsx';
 import Chatbot from './pages/chatbot/chatbot.tsx';
+import ChatbotSetting from './pages/chatbot/chatbot_setting.tsx';
 import MCP from './pages/mcp/mcp.tsx';
 import MCPSetting from './pages/mcp/mcp_setting.tsx';
 import Knowledge from './pages/knowledge/knowledge.tsx';
 import LLMModel from './pages/llm_model/llm_model.tsx';
 import LLMModelSetting from './pages/llm_model/llm_model_setting.tsx';
 import Prompt from './pages/prompt/prompt.tsx';
+import PromptSetting from './pages/prompt/prompt_setting.tsx';
 import User from './pages/user/user.tsx';
 import Chat from './pages/chat/chat.tsx';
 
@@ -161,12 +163,14 @@ function App() {
                 <Routes>
                   <Route path="/" element={<Home />} />
                   <Route path="/chatbots" element={<Chatbot />} />
+                  <Route path="/chatbot/setting/:id" element={<ChatbotSetting />} />
                   <Route path="/mcps" element={<MCP />} />
                   <Route path="/mcp/setting/:id" element={<MCPSetting />} />
                   <Route path="/knowledges" element={<Knowledge />} />
                   <Route path="/llm_models" element={<LLMModel />} />
                   <Route path="/llm_model/setting/:id" element={<LLMModelSetting />} />
                   <Route path="/prompts" element={<Prompt />} />
+                  <Route path="/prompt/setting/:id" element={<PromptSetting />} />
                   <Route path="/users" element={<User />} />
                   <Route path="/chats" element={<Chat />} />
                 </Routes>

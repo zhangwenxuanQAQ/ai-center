@@ -120,10 +120,26 @@
             box-sizing: border-box;
             cursor: pointer;
 
+            &::before {
+              content: '';
+              position: absolute;
+              left: 0;
+              top: 0;
+              bottom: 0;
+              width: 3px;
+              background: transparent;
+              border-radius: 8px 0 0 8px;
+              transition: all 0.3s ease;
+            }
+
             &:hover {
               color: #fff;
               background: transparent;
               transform: translateX(4px);
+
+              &::before {
+                background: linear-gradient(180deg, #667eea, #764ba2);
+              }
             }
           }
 
@@ -131,16 +147,38 @@
             color: #ffffff !important;
             background: transparent !important;
             font-weight: 600;
+
+            &::before {
+              background: linear-gradient(180deg, #667eea, #764ba2);
+              box-shadow: 0 0 12px rgba(102, 126, 234, 0.8);
+            }
           }
 
           .ant-tree-switcher {
             color: rgba(255, 255, 255, 0.6);
             transition: all 0.3s ease;
             background: transparent;
+            border-radius: 8px 0 0 8px;
+          }
+
+          .ant-tree-indent {
+            background: transparent;
+            border-radius: 8px 0 0 8px;
+            transition: background 0.3s ease;
           }
 
           .ant-tree-treenode:hover {
             background: rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+
+            .ant-tree-switcher,
+            .ant-tree-indent {
+              background: rgba(255, 255, 255, 0.08);
+            }
+          }
+
+          .ant-tree-treenode-selected {
+            background: linear-gradient(90deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2)) !important;
             border-radius: 8px;
           }
         }
@@ -153,12 +191,29 @@
             transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
             position: relative;
             font-size: 14px;
+            box-sizing: border-box;
             cursor: pointer;
+
+            &::before {
+              content: '';
+              position: absolute;
+              left: 0;
+              top: 0;
+              bottom: 0;
+              width: 3px;
+              background: transparent;
+              border-radius: 8px 0 0 8px;
+              transition: all 0.3s ease;
+            }
 
             &:hover {
               color: #000;
               background: transparent;
               transform: translateX(4px);
+
+              &::before {
+                background: linear-gradient(180deg, #667eea, #764ba2);
+              }
             }
           }
 
@@ -166,16 +221,36 @@
             color: #667eea !important;
             background: transparent !important;
             font-weight: 500;
+
+            &::before {
+              background: linear-gradient(180deg, #667eea, #764ba2);
+            }
           }
 
           .ant-tree-switcher {
             color: rgba(0, 0, 0, 0.4);
             transition: all 0.3s ease;
             background: transparent;
+            border-radius: 8px 0 0 8px;
+          }
+
+          .ant-tree-indent {
+            background: transparent;
+            border-radius: 8px 0 0 8px;
+            transition: background 0.3s ease;
           }
 
           .ant-tree-treenode:hover {
             background: rgba(0, 0, 0, 0.06);
+            border-radius: 8px;
+
+            .ant-tree-switcher,
+            .ant-tree-indent {
+              background: rgba(0, 0, 0, 0.06);
+            }
+          }
+
+          .ant-tree-treenode-selected {
             border-radius: 8px;
           }
         }
