@@ -5,11 +5,13 @@ const { TextArea } = Input;
 import { ArrowLeftOutlined, SaveOutlined, UndoOutlined, ApiOutlined, ApiTwoTone, UploadOutlined, ImportOutlined, DeleteOutlined, EditOutlined, PlusOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, ClearOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { UploadProps } from 'antd';
+import { Resizable } from 'react-resizable';
 import { mcpService, MCPServer, MCPCategory, MCPTool } from '../../services/mcp';
 import PageHeader from '../../components/page-header';
 import MCPTesting from './mcp_testing';
 import '../../styles/common.css';
 import './mcp_setting.less';
+import 'react-resizable/css/styles.css';
 
 const { Option } = Select;
 
@@ -75,6 +77,15 @@ const MCPSetting: React.FC = () => {
   const [globalExtraConfig, setGlobalExtraConfig] = useState('{}');
   
   const [remoteTools, setRemoteTools] = useState<MCPTool[]>([]);
+  
+  const [toolColumnsWidth, setToolColumnsWidth] = useState([
+    { key: 'title', width: 150 },
+    { key: 'name', width: 150 },
+    { key: 'description', width: 150 },
+    { key: 'tool_type', width: 80 },
+    { key: 'status', width: 100 },
+    { key: 'action', width: 100 },
+  ]);
   const [remoteToolsLoading, setRemoteToolsLoading] = useState(false);
   const [remoteToolsPage, setRemoteToolsPage] = useState(1);
   const [remoteToolsPageSize, setRemoteToolsPageSize] = useState(20);
@@ -714,12 +725,49 @@ const MCPSetting: React.FC = () => {
     }
   };
 
+  const handleResize = (key: string) => (e: any, { size }: any) => {
+    setToolColumnsWidth(prev => 
+      prev.map(col => 
+        col.key === key ? { ...col, width: size.width } : col
+      )
+    );
+  };
+
+  const getColumnWidth = (key: string) => {
+    const col = toolColumnsWidth.find(c => c.key === key);
+    return col ? col.width : 150;
+  };
+
   const toolColumns: ColumnsType<MCPTool> = [
     {
-      title: '工具标题',
+      title: (
+        <Resizable
+          width={getColumnWidth('title')}
+          height={0}
+          handle={
+            <span
+              className="react-resizable-handle"
+              style={{
+                position: 'absolute',
+                right: -10,
+                top: 0,
+                bottom: 0,
+                width: 20,
+                cursor: 'col-resize',
+                zIndex: 1,
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          }
+          onResize={handleResize('title')}
+          draggableOpts={{ enableUserSelectHack: false }}
+        >
+          <span>工具标题</span>
+        </Resizable>
+      ),
       dataIndex: 'title',
       key: 'title',
-      width: 150,
+      width: getColumnWidth('title'),
       ellipsis: true,
       render: (title: string) => (
         <Tooltip title={title} placement="topLeft">
@@ -728,17 +776,70 @@ const MCPSetting: React.FC = () => {
       ),
     },
     {
-      title: '工具名称',
+      title: (
+        <Resizable
+          width={getColumnWidth('name')}
+          height={0}
+          handle={
+            <span
+              className="react-resizable-handle"
+              style={{
+                position: 'absolute',
+                right: -10,
+                top: 0,
+                bottom: 0,
+                width: 20,
+                cursor: 'col-resize',
+                zIndex: 1,
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          }
+          onResize={handleResize('name')}
+          draggableOpts={{ enableUserSelectHack: false }}
+        >
+          <span>工具名称</span>
+        </Resizable>
+      ),
       dataIndex: 'name',
       key: 'name',
-      width: 150,
+      width: getColumnWidth('name'),
       ellipsis: true,
+      render: (name: string) => (
+        <Tooltip title={name} placement="topLeft">
+          <span>{name || '-'}</span>
+        </Tooltip>
+      ),
     },
     {
-      title: '工具描述',
+      title: (
+        <Resizable
+          width={getColumnWidth('description')}
+          height={0}
+          handle={
+            <span
+              className="react-resizable-handle"
+              style={{
+                position: 'absolute',
+                right: -10,
+                top: 0,
+                bottom: 0,
+                width: 20,
+                cursor: 'col-resize',
+                zIndex: 1,
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          }
+          onResize={handleResize('description')}
+          draggableOpts={{ enableUserSelectHack: false }}
+        >
+          <span>工具描述</span>
+        </Resizable>
+      ),
       dataIndex: 'description',
       key: 'description',
-      width: 150,
+      width: getColumnWidth('description'),
       ellipsis: true,
       render: (description: string) => (
         <Tooltip title={description} placement="topLeft">
@@ -747,19 +848,67 @@ const MCPSetting: React.FC = () => {
       ),
     },
     {
-      title: '工具类型',
+      title: (
+        <Resizable
+          width={getColumnWidth('tool_type')}
+          height={0}
+          handle={
+            <span
+              className="react-resizable-handle"
+              style={{
+                position: 'absolute',
+                right: -10,
+                top: 0,
+                bottom: 0,
+                width: 20,
+                cursor: 'col-resize',
+                zIndex: 1,
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          }
+          onResize={handleResize('tool_type')}
+          draggableOpts={{ enableUserSelectHack: false }}
+        >
+          <span>工具类型</span>
+        </Resizable>
+      ),
       dataIndex: 'tool_type',
       key: 'tool_type',
-      width: 80,
+      width: getColumnWidth('tool_type'),
       render: (toolType: string) => (
         <span>{toolTypes[toolType] || toolType}</span>
       ),
     },
     {
-      title: '状态',
+      title: (
+        <Resizable
+          width={getColumnWidth('status')}
+          height={0}
+          handle={
+            <span
+              className="react-resizable-handle"
+              style={{
+                position: 'absolute',
+                right: -10,
+                top: 0,
+                bottom: 0,
+                width: 20,
+                cursor: 'col-resize',
+                zIndex: 1,
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          }
+          onResize={handleResize('status')}
+          draggableOpts={{ enableUserSelectHack: false }}
+        >
+          <span>状态</span>
+        </Resizable>
+      ),
       dataIndex: 'status',
       key: 'status',
-      width: 100,
+      width: getColumnWidth('status'),
       render: (status: boolean, record: MCPTool) => (
         <Switch
           checked={status}

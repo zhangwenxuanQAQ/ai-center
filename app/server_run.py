@@ -258,6 +258,21 @@ try:
     except Exception as e:
         print(f"  修改 prompt 表结构失败: {e}")
     
+    # 修改 llm_model 表结构
+    print("\n修改 llm_model 表结构...")
+    try:
+        cursor = db.execute_sql("DESCRIBE llm_model;")
+        columns = [column[0] for column in cursor.fetchall()]
+        
+        # 添加 support_image 字段
+        if 'support_image' not in columns:
+            db.execute_sql("ALTER TABLE llm_model ADD COLUMN support_image TINYINT DEFAULT 0")
+            print("  成功添加 support_image 字段")
+        else:
+            print("  support_image 字段已存在")
+    except Exception as e:
+        print(f"  修改 llm_model 表结构失败: {e}")
+    
     print("\n数据库迁移完成")
 except Exception as e:
     print(f"数据库迁移失败: {e}")

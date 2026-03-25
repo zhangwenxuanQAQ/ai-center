@@ -21,6 +21,7 @@ export interface Prompt {
   id: string;
   name: string;
   content: string;
+  description?: string;
   category_id?: string;
   tags?: string[];
   status: boolean;
@@ -121,5 +122,12 @@ export const promptService = {
    */
   deletePrompt: async (id: string): Promise<Prompt> => {
     return http.post<Prompt>(`/aicenter/v1/prompt/${id}/delete`);
+  },
+
+  /**
+   * 更新提示词状态
+   */
+  updatePromptStatus: async (id: string, status: boolean): Promise<Prompt> => {
+    return http.post<Prompt>(`/aicenter/v1/prompt/${id}/status`, { status });
   },
 };

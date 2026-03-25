@@ -16,12 +16,13 @@ class ModelTestUtils:
     """
     
     @staticmethod
-    def test_text_model(model_config: Dict[str, Any]) -> Dict[str, Any]:
+    def test_text_model(model_config: Dict[str, Any], support_image: bool = False) -> Dict[str, Any]:
         """
         测试文本模型
         
         Args:
             model_config: 模型配置
+            support_image: 是否支持图片
             
         Returns:
             测试结果
@@ -29,6 +30,51 @@ class ModelTestUtils:
         try:
             # 创建文本模型实例
             model = LLMFactory.create_model('text', model_config)
+            
+            # 如果支持图片，先测试图片能力
+            if support_image:
+                image_path = os.path.join(os.getcwd(), 'assets', 'llm', 'test', 'support_image_test.jpg')
+                
+                if not os.path.exists(image_path):
+                    return {
+                        'success': False,
+                        'message': "测试失败: support_image_test.jpg文件不存在"
+                    }
+                
+                # 测试图片识别
+                test_prompt = "请描述这张图片的内容"
+                try:
+                    # 将图片转换为base64
+                    import base64
+                    with open(image_path, 'rb') as f:
+                        image_data = f.read()
+                    image_base64 = base64.b64encode(image_data).decode('utf-8')
+                    
+                    # 调用模型识别图片
+                    response = model.generate(test_prompt, image=image_base64, max_tokens=10)
+                    
+                    if 'error' in response:
+                        return {
+                            'success': False,
+                            'message': f"图片识别测试失败: {response['error']}"
+                        }
+                    
+                    if 'text' in response and response['text'].strip():
+                        return {
+                            'success': True,
+                            'message': "测试成功！模型支持图片识别",
+                            'result': response['text'][:100] + '...' if len(response['text']) > 100 else response['text']
+                        }
+                    else:
+                        return {
+                            'success': False,
+                            'message': "图片识别测试失败: 模型返回了空结果"
+                        }
+                except Exception as e:
+                    return {
+                        'success': False,
+                        'message': f"图片识别测试失败: {str(e)}"
+                    }
             
             # 测试简单的文本生成
             test_prompt = "请简要介绍一下你自己"
@@ -296,13 +342,14 @@ class ModelTestUtils:
             }
     
     @staticmethod
-    def test_model(model_type: str, model_config: Dict[str, Any]) -> Dict[str, Any]:
+    def test_model(model_type: str, model_config: Dict[str, Any], support_image: bool = False) -> Dict[str, Any]:
         """
         根据模型类型测试模型
         
         Args:
             model_type: 模型类型
             model_config: 模型配置
+            support_image: 是否支持图片
             
         Returns:
             测试结果
@@ -317,7 +364,10 @@ class ModelTestUtils:
         }
         
         if model_type in test_functions:
-            return test_functions[model_type](model_config)
+            if model_type == 'text':
+                return test_functions[model_type](model_config, support_image)
+            else:
+                return test_functions[model_type](model_config)
         else:
             return {
                 'success': False,

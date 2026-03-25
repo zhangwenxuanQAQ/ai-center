@@ -67,15 +67,6 @@ MODEL_CONFIG_PARAMS = {
             "description": "核采样参数，控制候选词的概率累积阈值"
         },
         {
-            "key": "top_k",
-            "label": "Top K",
-            "type": "number",
-            "min": 1,
-            "max": 100,
-            "default": 10,
-            "description": "限制每步生成的候选词数量"
-        },
-        {
             "key": "max_tokens",
             "label": "最大Token数",
             "type": "number",
@@ -203,15 +194,6 @@ MODEL_CONFIG_PARAMS = {
             "step": 0.01,
             "default": 0.9,
             "description": "核采样参数"
-        },
-        {
-            "key": "top_k",
-            "label": "Top K",
-            "type": "number",
-            "min": 1,
-            "max": 100,
-            "default": 10,
-            "description": "限制每步生成的候选词数量"
         },
         {
             "key": "max_tokens",

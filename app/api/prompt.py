@@ -231,3 +231,31 @@ def delete_prompt(prompt_id: str):
     """
     db_prompt = PromptService.delete_prompt(prompt_id)
     return ResponseUtil.success(data=db_prompt.__data__, message="提示词删除成功")
+
+
+@router.post("/{prompt_id}/status", response_model=ApiResponse)
+def update_prompt_status(prompt_id: str, status_data: dict):
+    """
+    更新提示词状态
+    
+    Args:
+        prompt_id: 提示词ID
+        status_data: 状态数据，包含status字段
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    status = status_data.get('status')
+    if status is None:
+        return ResponseUtil.error(message="状态不能为空")
+    
+    db_prompt = PromptService.update_prompt_status(prompt_id, status)
+    
+    prompt_dict = db_prompt.__data__
+    if prompt_dict.get('tags') and isinstance(prompt_dict['tags'], str):
+        try:
+            prompt_dict['tags'] = json.loads(prompt_dict['tags'])
+        except json.JSONDecodeError:
+            prompt_dict['tags'] = []
+    
+    return ResponseUtil.success(data=prompt_dict, message="提示词状态更新成功")

@@ -26,7 +26,8 @@ export interface LLMModel {
   model_type: string;
   category_id?: string;
   tags?: string;
-  config?: string;
+  config?: Record<string, any>;
+  support_image: boolean;
   status: boolean;
   created_at: string;
   updated_at?: string;
@@ -126,7 +127,14 @@ export const llmModelService = {
   /**
    * 测试模型配置（通过配置参数）
    */
-  testModelConfig: async (data: { name: string; provider?: string; api_key: string; endpoint: string; model_type: string }): Promise<{ success: boolean; message: string; result?: string }> => {
+  testModelConfig: async (data: { 
+    name: string; 
+    provider?: string; 
+    api_key: string; 
+    endpoint: string; 
+    model_type: string;
+    support_image?: boolean;
+  }): Promise<{ success: boolean; message: string; result?: string }> => {
     return http.post<{ success: boolean; message: string; result?: string }>('/aicenter/v1/llm_model/test_config', data);
   },
   

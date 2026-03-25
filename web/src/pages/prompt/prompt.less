@@ -341,6 +341,23 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
 
+    // 修改表格cell的padding为8px
+    :global {
+      // 支持列宽动态调整
+      .ant-table-column-sorter {
+        margin: 0 4px;
+      }
+
+      // 确保表格列可以调整宽度
+      .ant-table-header {
+        overflow: auto;
+      }
+
+      .ant-table-column-title {
+        white-space: nowrap;
+      }
+    }
+
     .loading-container {
       display: flex;
       justify-content: center;
@@ -459,6 +476,87 @@
       .ant-tree-switcher {
         color: rgba(0, 0, 0, 0.6);
       }
+    }
+  }
+}
+
+// Markdown编辑器样式
+.md-editor-container {
+  &.dark {
+    .wmde-markdown {
+      background: transparent;
+      color: #fff;
+      
+      strong,
+      b {
+        color: #ffffff !important;
+        font-weight: 600 !important;
+      }
+      
+      em,
+      i {
+        color: #ffffff !important;
+      }
+      
+      code {
+        background: rgba(255, 255, 255, 0.1) !important;
+        color: #ffffff !important;
+      }
+      
+      pre {
+        background: rgba(255, 255, 255, 0.05) !important;
+        color: #ffffff !important;
+      }
+      
+      h1, h2, h3, h4, h5, h6 {
+        color: #fff !important;
+        border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+      }
+      
+      a {
+        color: #667eea !important;
+      }
+      
+      blockquote {
+        border-left-color: #667eea !important;
+        color: rgba(255, 255, 255, 0.85) !important;
+      }
+      
+      table {
+        th, td {
+          border-color: rgba(255, 255, 255, 0.1) !important;
+        }
+        
+        th {
+          background: rgba(255, 255, 255, 0.05) !important;
+          color: #fff !important;
+        }
+        
+        tr:nth-child(2n) {
+          background: rgba(255, 255, 255, 0.02) !important;
+        }
+      }
+      
+      hr {
+        border-color: rgba(255, 255, 255, 0.1) !important;
+      }
+      
+      img {
+        border-radius: 8px;
+      }
+      
+      ul, ol {
+        li {
+          color: #fff !important;
+        }
+      }
+    }
+  }
+  
+  &.light {
+    .wmde-markdown {
+      background: transparent;
+      color: #000;
     }
   }
 }

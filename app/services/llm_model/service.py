@@ -540,4 +540,4 @@ class LLMModelService:
         }
         
         # 测试模型
-        return ModelTestUtils.test_model(model_test.model_type, model_config)
+        return ModelTestUtils.test_model(model_test.model_type, model_config, model_test.support_image)

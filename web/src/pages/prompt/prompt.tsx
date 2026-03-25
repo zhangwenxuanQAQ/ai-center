@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Layout, Tree, Empty, Spin, Button, Modal, Form, Input, Select, Tag, message, Popconfirm, Table, Pagination, Switch, Space, TreeSelect } from 'antd';
+import { Layout, Tree, Empty, Spin, Button, Modal, Form, Input, Select, Tag, message, Popconfirm, Table, Pagination, Switch, Space, TreeSelect, Checkbox, Tooltip, Drawer, Descriptions } from 'antd';
 const { TextArea } = Input;
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, FileTextOutlined, CheckCircleOutlined, CloseCircleOutlined, PlusSquareOutlined, UpOutlined, DownOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, FileTextOutlined, CheckCircleOutlined, CloseCircleOutlined, PlusSquareOutlined, UpOutlined, DownOutlined, CloseOutlined, EyeOutlined } from '@ant-design/icons';
 import type { TreeDataNode } from 'antd';
+import MDEditor from '@uiw/react-md-editor';
 import { promptService, Prompt, PromptCategory, PromptListResponse } from '../../services/prompt';
 import PageHeader from '../../components/page-header';
 import '../../styles/common.css';
@@ -26,6 +27,7 @@ const PromptManagement: React.FC = () => {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [searchName, setSearchName] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   const [isCategoryModalVisible, setIsCategoryModalVisible] = useState(false);
   const [isPromptModalVisible, setIsPromptModalVisible] = useState(false);
@@ -37,6 +39,9 @@ const PromptManagement: React.FC = () => {
   const [editForm] = Form.useForm();
   const [categoryForm] = Form.useForm();
   const [editCategoryForm] = Form.useForm();
+  const [viewDrawerVisible, setViewDrawerVisible] = useState(false);
+  const [viewingPrompt, setViewingPrompt] = useState<Prompt | null>(null);
+  const viewDrawerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const currentTheme = document.body.getAttribute('data-theme') || 'light';
@@ -69,6 +74,27 @@ const PromptManagement: React.FC = () => {
       });
     }
   }, [isCategoryModalVisible, editingCategory]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (viewDrawerVisible) {
+        const target = event.target as Node;
+        const drawerContent = document.querySelector('.prompt-view-drawer .ant-drawer-content-wrapper');
+        if (drawerContent && !drawerContent.contains(target)) {
+          setViewDrawerVisible(false);
+          setViewingPrompt(null);
+        }
+      }
+    };
+
+    if (viewDrawerVisible) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [viewDrawerVisible]);
 
   const fetchCategoryTree = async () => {
     try {
@@ -271,8 +297,34 @@ const PromptManagement: React.FC = () => {
     });
   };
 
-  const handleStatusToggle = (promptId: string, newStatus: boolean) => {
-    promptService.updatePrompt(promptId, { status: newStatus }).then(() => {
+  const handleBatchDelete = () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning('请选择要删除的提示词');
+      return;
+    }
+    Modal.confirm({
+      title: '批量删除',
+      content: `确定要删除选中的 ${selectedRowKeys.length} 个提示词吗？`,
+      okText: '确定',
+      cancelText: '取消',
+      onOk: () => {
+        const deletePromises = selectedRowKeys.map(key => 
+          promptService.deletePrompt(key as string)
+        );
+        Promise.all(deletePromises).then(() => {
+          message.success('批量删除成功');
+          setSelectedRowKeys([]);
+          fetchPrompts();
+        }).catch(error => {
+          console.error('Failed to batch delete prompts:', error);
+          message.error('批量删除失败');
+        });
+      }
+    });
+  };
+
+  const handleStatusToggle = (promptId: string, status: boolean) => {
+    promptService.updatePromptStatus(promptId, status).then(() => {
       message.success('状态更新成功');
       fetchPrompts();
     }).catch(error => {
@@ -302,13 +354,47 @@ const PromptManagement: React.FC = () => {
       dataIndex: 'name',
       key: 'name',
       width: 200,
+      ellipsis: true,
+      render: (name: string, record: Prompt) => (
+        <Tooltip title={name}>
+          <span 
+            style={{ cursor: 'pointer', color: '#1890ff' }}
+            onClick={() => navigate(`/prompt/setting/${record.id}`)}
+          >
+            {name}
+          </span>
+        </Tooltip>
+      ),
     },
     {
       title: '分类',
       dataIndex: 'category_id',
       key: 'category_id',
       width: 150,
-      render: (categoryId: string) => getCategoryName(categoryId),
+      ellipsis: true,
+      render: (categoryId: string) => {
+        const categoryName = getCategoryName(categoryId);
+        return (
+          <Tooltip title={categoryName}>
+            <span>{categoryName}</span>
+          </Tooltip>
+        );
+      },
+    },
+    {
+      title: '描述',
+      dataIndex: 'description',
+      key: 'description',
+      width: 250,
+      ellipsis: true,
+      render: (description: string) => {
+        const desc = description || '-';
+        return (
+          <Tooltip title={desc}>
+            <span>{desc}</span>
+          </Tooltip>
+        );
+      },
     },
     {
       title: '标签',
@@ -343,10 +429,11 @@ const PromptManagement: React.FC = () => {
       key: 'status',
       width: 100,
       render: (status: boolean, record: Prompt) => (
-        <Switch 
-          checked={status} 
+        <Switch
+          checked={status}
           onChange={(checked) => handleStatusToggle(record.id, checked)}
-          size="small"
+          checkedChildren="启用"
+          unCheckedChildren="禁用"
         />
       ),
     },
@@ -355,27 +442,46 @@ const PromptManagement: React.FC = () => {
       dataIndex: 'created_at',
       key: 'created_at',
       width: 180,
+      ellipsis: true,
+      render: (createdAt: string) => {
+        const formattedDate = createdAt ? createdAt.replace('T', ' ') : '-';
+        return (
+          <Tooltip title={formattedDate}>
+            <span>{formattedDate}</span>
+          </Tooltip>
+        );
+      },
     },
     {
       title: '操作',
       key: 'action',
-      width: 100,
+      width: 150,
       fixed: 'right',
       render: (_: any, record: Prompt) => (
         <Space size="small">
-          <Button 
-            type="link" 
-            icon={<EditOutlined />} 
-            onClick={() => navigate(`/prompt/setting/${record.id}`)}
-            title="编辑"
-          />
+          <Tooltip title="查看">
+            <Button 
+              type="text" 
+              icon={<EyeOutlined />} 
+              onClick={() => {
+                setViewingPrompt(record);
+                setViewDrawerVisible(true);
+              }} 
+              size="small" 
+            />
+          </Tooltip>
+          <Tooltip title="编辑">
+            <Button type="text" icon={<EditOutlined />} onClick={() => navigate(`/prompt/setting/${record.id}`)} size="small" />
+          </Tooltip>
           <Popconfirm
             title="确定要删除该提示词吗？"
             onConfirm={() => handleDeletePrompt(record.id)}
             okText="确定"
             cancelText="取消"
           >
-            <Button type="link" danger icon={<DeleteOutlined />} title="删除" />
+            <Tooltip title="删除">
+              <Button type="text" danger icon={<DeleteOutlined />} size="small" />
+            </Tooltip>
           </Popconfirm>
         </Space>
       ),
@@ -477,6 +583,15 @@ const PromptManagement: React.FC = () => {
             >
               新增提示词
             </Button>
+            <Button 
+              danger
+              icon={<DeleteOutlined />}
+              onClick={handleBatchDelete}
+              className="batch-delete-button"
+              disabled={selectedRowKeys.length === 0}
+            >
+              批量删除 ({selectedRowKeys.length})
+            </Button>
             <Input
               placeholder="搜索提示词名称"
               value={searchName}
@@ -485,12 +600,21 @@ const PromptManagement: React.FC = () => {
                 setCurrentPage(1);
               }}
               prefix={<SearchOutlined />}
+              suffix={searchName ? (
+                <CloseOutlined 
+                  onClick={() => {
+                    setSearchName('');
+                    setCurrentPage(1);
+                  }} 
+                  style={{ cursor: 'pointer' }}
+                />
+              ) : null}
               style={{ width: '200px', height: '36px', borderRadius: '18px', background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff', border: 'none' }}
               className="no-border-input"
             />
             <Select
-              placeholder="筛选状态"
-              value={filterStatus}
+              placeholder="请选择状态"
+              value={filterStatus || undefined}
               onChange={(value) => {
                 setFilterStatus(value);
                 setCurrentPage(1);
@@ -503,11 +627,23 @@ const PromptManagement: React.FC = () => {
                 color: theme === 'dark' ? '#ffffff' : '#000000',
                 height: '36px'
               }}
+              className="no-border-input"
             >
-              <Option value="">全部</Option>
               <Option value="true">启用</Option>
               <Option value="false">禁用</Option>
             </Select>
+            <Button 
+              icon={<CloseOutlined />}
+              onClick={() => {
+                setSearchName('');
+                setFilterStatus('');
+                setSelectedRowKeys([]);
+                setCurrentPage(1);
+              }}
+              style={{ height: '36px' }}
+            >
+              清空
+            </Button>
           </div>
           
           <div style={{ 
@@ -526,6 +662,22 @@ const PromptManagement: React.FC = () => {
               scroll={{ y: 'calc(100vh - 300px)' }}
               loading={loading}
               locale={{ emptyText: '暂无提示词' }}
+              rowSelection={{
+                selectedRowKeys,
+                onChange: (selectedKeys) => setSelectedRowKeys(selectedKeys),
+              }}
+              onHeaderRow={(columns, index) => ({
+                onDoubleClick: () => {
+                  // 双击表头可以重置列宽
+                  console.log('Double clicked header row');
+                },
+              })}
+              onRow={(record, index) => ({
+                onClick: () => {
+                  console.log('Clicked row:', record);
+                },
+              })}
+              size="small"
             />
           </div>
           
@@ -692,6 +844,99 @@ const PromptManagement: React.FC = () => {
           </Form.Item>
         </Form>
       </Modal>
+
+      {/* 查看提示词抽屉 */}
+      <Drawer
+        title="提示词详情"
+        placement="right"
+        width={600}
+        open={viewDrawerVisible}
+        onClose={() => {
+          setViewDrawerVisible(false);
+          setViewingPrompt(null);
+        }}
+        getContainer={false}
+        mask={false}
+        className={`prompt-view-drawer ${theme === 'dark' ? 'dark' : 'light'}`}
+        styles={{
+          header: { background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fff', color: theme === 'dark' ? '#fff' : '#000' },
+          body: { background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5', padding: '24px' },
+          footer: { display: 'none' }
+        }}
+      >
+        {viewingPrompt && (
+          <div>
+            <Descriptions 
+              column={1} 
+              bordered={false}
+              labelStyle={{ 
+                fontWeight: 'bold',
+                color: theme === 'dark' ? '#fff' : '#000',
+                width: '120px'
+              }}
+              contentStyle={{
+                color: theme === 'dark' ? '#fff' : '#000'
+              }}
+            >
+              <Descriptions.Item label="提示词名称">{viewingPrompt.name}</Descriptions.Item>
+              <Descriptions.Item label="分类">{getCategoryName(viewingPrompt.category_id)}</Descriptions.Item>
+              <Descriptions.Item label="状态">
+                {viewingPrompt.status ? (
+                  <Tag color="success">启用</Tag>
+                ) : (
+                  <Tag color="error">禁用</Tag>
+                )}
+              </Descriptions.Item>
+              <Descriptions.Item label="标签">
+                {viewingPrompt.tags && viewingPrompt.tags.length > 0 ? (
+                  viewingPrompt.tags.map(tag => (
+                    <Tag key={tag} color="blue" style={{ marginBottom: '4px' }}>{tag}</Tag>
+                  ))
+                ) : (
+                  <span style={{ color: theme === 'dark' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(0, 0, 0, 0.45)' }}>-</span>
+                )}
+              </Descriptions.Item>
+              <Descriptions.Item label="描述">
+                {viewingPrompt.description || <span style={{ color: theme === 'dark' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(0, 0, 0, 0.45)' }}>-</span>}
+              </Descriptions.Item>
+              <Descriptions.Item label="创建时间">
+                {viewingPrompt.created_at ? viewingPrompt.created_at.replace('T', ' ') : '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="更新时间">
+                {viewingPrompt.updated_at ? viewingPrompt.updated_at.replace('T', ' ') : '-'}
+              </Descriptions.Item>
+            </Descriptions>
+            
+            <div style={{ marginTop: '24px' }}>
+              <div style={{ 
+                fontWeight: 'bold', 
+                marginBottom: '12px',
+                color: theme === 'dark' ? '#fff' : '#000',
+                fontSize: '14px'
+              }}>
+                提示词内容
+              </div>
+              <div 
+                className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}
+                style={{
+                  background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fff',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #d9d9d9'
+                }}
+              >
+                <MDEditor.Markdown 
+                  source={viewingPrompt.content || ''} 
+                  style={{ 
+                    background: 'transparent',
+                    color: theme === 'dark' ? '#fff' : '#000'
+                  }} 
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </Drawer>
     </div>
   );
 };

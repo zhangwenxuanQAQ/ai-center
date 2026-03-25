@@ -2,9 +2,10 @@
 LLM模型数据传输对象（DTO）
 """
 
-from pydantic import BaseModel, Field
-from typing import Optional, List
+from pydantic import BaseModel, Field, field_validator
+from typing import Optional, List, Dict, Any
 from app.services.base_dto import BaseDTO
+import json
 
 
 class LLMCategoryBase(BaseModel):
@@ -72,6 +73,7 @@ class LLMModelBase(BaseModel):
         category_id: 分类ID
         tags: 标签数组
         config: 模型参数配置
+        support_image: 是否支持图片
         status: 状态
     """
     name: str = Field(..., min_length=1, max_length=100, description="模型名称，长度1-100个字符")
@@ -82,6 +84,7 @@ class LLMModelBase(BaseModel):
     category_id: Optional[str] = Field(None, description="分类ID，UUID格式")
     tags: Optional[str] = Field(None, description="标签数组，JSON格式字符串")
     config: Optional[str] = Field(None, description="模型参数配置，JSON格式字符串")
+    support_image: bool = Field(default=False, description="是否支持图片")
     status: bool = Field(default=True, description="状态，True表示启用，False表示禁用")
 
 
@@ -105,6 +108,7 @@ class LLMModelUpdate(BaseModel):
         category_id: 分类ID
         tags: 标签数组
         config: 模型参数配置
+        support_image: 是否支持图片
         status: 状态
     """
     name: Optional[str] = Field(None, min_length=1, max_length=100, description="模型名称，长度1-100个字符")
@@ -115,6 +119,7 @@ class LLMModelUpdate(BaseModel):
     category_id: Optional[str] = Field(None, description="分类ID，UUID格式")
     tags: Optional[str] = Field(None, description="标签数组，JSON格式字符串")
     config: Optional[str] = Field(None, description="模型参数配置，JSON格式字符串")
+    support_image: Optional[bool] = Field(None, description="是否支持图片")
     status: Optional[bool] = Field(None, description="状态，True表示启用，False表示禁用")
 
 
@@ -124,6 +129,28 @@ class LLMModel(LLMModelBase, BaseDTO):
     
     继承自LLMModelBase和BaseDTO，包含LLM模型基本信息和公共字段
     """
+    config: Optional[Dict[str, Any]] = Field(None, description="模型参数配置")
+    
+    @field_validator('config', mode='before')
+    @classmethod
+    def parse_config(cls, v):
+        """
+        将config字段从字符串解析为字典
+        
+        Args:
+            v: config字段的值
+            
+        Returns:
+            dict: 解析后的字典，如果解析失败则返回None
+        """
+        if v is None:
+            return None
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                return None
+        return v
     
     class Config:
         from_attributes = True
@@ -140,3 +167,4 @@ class LLMModelTest(BaseModel):
     api_key: str = Field(..., min_length=1, max_length=200, description="API密钥，长度1-200个字符")
     endpoint: str = Field(..., min_length=1, max_length=500, description="端点URL，长度1-500个字符")
     model_type: str = Field(..., min_length=1, max_length=50, description="模型类型，长度1-50个字符")
+    support_image: bool = Field(default=False, description="是否支持图片")

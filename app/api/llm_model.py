@@ -191,7 +191,8 @@ def get_llm_models(
     tag_list = tags.split(',') if tags else None
     llm_models = LLMModelService.get_llm_models(skip, page_size, category_id, name, model_type, status, tag_list)
     total = LLMModelService.count_llm_models(category_id, name, model_type, status, tag_list)
-    llm_models_data = [llm_model.__data__ for llm_model in llm_models]
+    from app.services.llm_model.dto import LLMModel as LLMModelDTO
+    llm_models_data = [LLMModelDTO.model_validate(llm_model).model_dump() for llm_model in llm_models]
     return ResponseUtil.success(data={"data": llm_models_data, "total": total}, message="获取LLM模型列表成功")
 
 
@@ -209,7 +210,9 @@ def get_llm_model(llm_model_id: str):
     llm_model = LLMModelService.get_llm_model(llm_model_id)
     if llm_model is None:
         return ResponseUtil.not_found(message=f"LLM模型 {llm_model_id} 不存在")
-    return ResponseUtil.success(data=llm_model.__data__, message="获取LLM模型成功")
+    from app.services.llm_model.dto import LLMModel as LLMModelDTO
+    llm_model_data = LLMModelDTO.model_validate(llm_model).model_dump()
+    return ResponseUtil.success(data=llm_model_data, message="获取LLM模型成功")
 
 
 @router.post("/model/{llm_model_id}", response_model=ApiResponse)
@@ -300,17 +303,28 @@ async def chat_with_model(llm_model_id: str, request: dict = Body(...)):
     from fastapi.responses import StreamingResponse
     from fastapi import HTTPException
     import json
+    import logging
     from app.core.llm_model.factory import LLMFactory
     
+    logger = logging.getLogger(__name__)
+    
     try:
+        logger.info(f"Chat request for model {llm_model_id}")
+        logger.info(f"Request body: {request}")
+        
         db_llm_model = LLMModelService.get_llm_model(llm_model_id)
         if not db_llm_model:
+            logger.error(f"Model {llm_model_id} not found")
             raise HTTPException(status_code=404, detail="模型不存在")
         
         messages = request.get('messages', [])
         config = request.get('config', {})
         
+        logger.info(f"Messages: {messages}")
+        logger.info(f"Config: {config}")
+        
         if not messages:
+            logger.error("Messages is empty")
             raise HTTPException(status_code=400, detail="消息不能为空")
         
         model_config = {
@@ -320,18 +334,27 @@ async def chat_with_model(llm_model_id: str, request: dict = Body(...)):
             'provider': db_llm_model.provider
         }
         
+        logger.info(f"Model config: {model_config}")
+        
         model_type = db_llm_model.model_type or 'text'
+        logger.info(f"Model type: {model_type}")
+        
         model_instance = LLMFactory.create_model(model_type, model_config)
+        logger.info(f"Model instance created successfully")
         
         def generate():
             try:
+                logger.info("Starting stream generation")
                 for chunk in model_instance.stream_generate_with_messages(messages, **config):
                     if 'error' in chunk:
+                        logger.error(f"Error in chunk: {chunk['error']}")
                         yield f"data: {json.dumps({'error': chunk['error']})}\n\n"
                         break
                     yield f"data: {json.dumps(chunk)}\n\n"
                 yield "data: [DONE]\n\n"
+                logger.info("Stream generation completed")
             except Exception as e:
+                logger.error(f"Error in generate: {str(e)}", exc_info=True)
                 yield f"data: {json.dumps({'error': str(e)})}\n\n"
         
         return StreamingResponse(
@@ -346,4 +369,5 @@ async def chat_with_model(llm_model_id: str, request: dict = Body(...)):
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Error in chat_with_model: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

@@ -141,6 +141,7 @@ class LLMModel(SoftDeleteModel):
     category_id = CharField(max_length=40, null=True, index=True, verbose_name="分类ID")
     tags = TextField(null=True, verbose_name="标签数组JSON")
     config = TextField(null=True, verbose_name="模型参数配置JSON")
+    support_image = BooleanField(default=False, verbose_name="是否支持图片")
     status = BooleanField(default=True, verbose_name="状态")
     
     class Meta:

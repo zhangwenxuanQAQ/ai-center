@@ -59,176 +59,55 @@
 }
 
 // Quill 富文本编辑器样式
-.quill-container {
+.ql-container {
   &.dark {
-    .ql-toolbar {
-      background: rgba(255, 255, 255, 0.05);
-      border-color: rgba(255, 255, 255, 0.15);
-      border-radius: 4px 4px 0 0;
-
-      .ql-picker {
-        color: rgba(255, 255, 255, 0.85);
-
-        .ql-picker-label {
-          color: rgba(255, 255, 255, 0.85);
-          border-color: rgba(255, 255, 255, 0.15);
-
-          &:hover {
-            border-color: #667eea;
-          }
-        }
-
-        .ql-picker-options {
-          background: #1a1a1a;
-          border-color: rgba(255, 255, 255, 0.15);
-          color: rgba(255, 255, 255, 0.85);
-
-          .ql-picker-item {
-            &:hover {
-              color: #667eea;
-            }
-
-            &.ql-selected {
-              color: #667eea;
-            }
-          }
-        }
+    .ql-editor {
+      color: #fff;
+      
+      strong,
+      b {
+        color: #ffffff;
+        font-weight: 600;
       }
-
-      button {
-        color: rgba(255, 255, 255, 0.85);
-
-        &:hover {
-          color: #667eea;
-
-          .ql-stroke {
-            stroke: #667eea;
-          }
-
-          .ql-fill {
-            fill: #667eea;
-          }
-        }
-
-        &.ql-active {
-          color: #667eea;
-
-          .ql-stroke {
-            stroke: #667eea;
-          }
-
-          .ql-fill {
-            fill: #667eea;
-          }
-        }
+      
+      em,
+      i {
+        color: #ffffff;
       }
-
-      .ql-stroke {
-        stroke: rgba(255, 255, 255, 0.85);
+      
+      u {
+        color: #ffffff;
       }
-
-      .ql-fill {
-        fill: rgba(255, 255, 255, 0.85);
-      }
-    }
-
-    .ql-container {
-      background: #1a1a1a;
-      border-color: rgba(255, 255, 255, 0.15);
-      border-radius: 0 0 4px 4px;
-
-      .ql-editor {
-        color: #fff;
-
-        &.ql-blank::before {
-          color: rgba(255, 255, 255, 0.4);
-        }
+      
+      code {
+        background: rgba(255, 255, 255, 0.1);
+        color: #ffffff;
       }
     }
   }
+}
 
-  &.light {
-    .ql-toolbar {
-      background: #fafafa;
-      border-color: #d9d9d9;
-      border-radius: 4px 4px 0 0;
-
-      .ql-picker {
-        color: rgba(0, 0, 0, 0.85);
-
-        .ql-picker-label {
-          color: rgba(0, 0, 0, 0.85);
-          border-color: #d9d9d9;
-
-          &:hover {
-            border-color: #667eea;
-          }
+// MDEditor 样式
+.md-editor-container {
+  &.dark {
+    :global {
+      .wmde-markdown {
+        color: #fff;
+        
+        strong,
+        b {
+          color: #ffffff !important;
+          font-weight: 600 !important;
         }
-
-        .ql-picker-options {
-          background: #fff;
-          border-color: #d9d9d9;
-          color: rgba(0, 0, 0, 0.85);
-
-          .ql-picker-item {
-            &:hover {
-              color: #667eea;
-            }
-
-            &.ql-selected {
-              color: #667eea;
-            }
-          }
+        
+        em,
+        i {
+          color: #ffffff !important;
         }
-      }
-
-      button {
-        color: rgba(0, 0, 0, 0.85);
-
-        &:hover {
-          color: #667eea;
-
-          .ql-stroke {
-            stroke: #667eea;
-          }
-
-          .ql-fill {
-            fill: #667eea;
-          }
-        }
-
-        &.ql-active {
-          color: #667eea;
-
-          .ql-stroke {
-            stroke: #667eea;
-          }
-
-          .ql-fill {
-            fill: #667eea;
-          }
-        }
-      }
-
-      .ql-stroke {
-        stroke: rgba(0, 0, 0, 0.85);
-      }
-
-      .ql-fill {
-        fill: rgba(0, 0, 0, 0.85);
-      }
-    }
-
-    .ql-container {
-      background: #fff;
-      border-color: #d9d9d9;
-      border-radius: 0 0 4px 4px;
-
-      .ql-editor {
-        color: #000;
-
-        &.ql-blank::before {
-          color: rgba(0, 0, 0, 0.4);
+        
+        code {
+          background: rgba(255, 255, 255, 0.1) !important;
+          color: #ffffff !important;
         }
       }
     }
@@ -241,5 +120,242 @@
     background: rgba(102, 126, 234, 0.2);
     border-color: rgba(102, 126, 234, 0.3);
     color: #fff;
+  }
+}
+
+// 提示词测试抽屉样式
+.prompt-test-drawer {
+  .chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    scrollbar-width: thin;
+
+    &.dark {
+      background: transparent;
+    }
+
+    &.light {
+      background: #f5f5f5;
+    }
+  }
+
+  .message {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+    animation: fadeIn 0.3s ease;
+
+    &.user {
+      flex-direction: row-reverse;
+
+      .message-content {
+        align-items: flex-end;
+      }
+
+      .message-text {
+        background: #667eea;
+        color: #fff;
+        border-radius: 16px 16px 4px 16px;
+      }
+    }
+
+    &.assistant {
+      .message-text {
+        border-radius: 16px 16px 16px 4px;
+        padding: 12px 16px;
+        font-size: 14px;
+        line-height: 1.6;
+        word-break: break-word;
+        white-space: pre-wrap;
+        
+        &.dark {
+          background: rgba(255, 255, 255, 0.1);
+          color: #fff;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        &.light {
+          background: #fff;
+          color: #000;
+          border: 1px solid #e8e8e8;
+        }
+      }
+    }
+  }
+
+  .message-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+
+    &.dark {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    &.light {
+      background: #e8e8e8;
+    }
+  }
+
+  .message-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: 70%;
+  }
+
+  .message-text {
+    padding: 12px 16px;
+    font-size: 14px;
+    line-height: 1.6;
+    word-break: break-word;
+    white-space: pre-wrap;
+  }
+
+  .message-time {
+    font-size: 12px;
+    opacity: 0.5;
+  }
+
+  .message-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .message-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+    
+    .message:hover & {
+      opacity: 1;
+    }
+    
+    .ant-btn {
+      &:hover {
+        color: #667eea;
+      }
+    }
+  }
+
+  .message-reasoning {
+    margin-bottom: 8px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+    background: rgba(102, 126, 234, 0.1);
+    border: 1px solid rgba(102, 126, 234, 0.2);
+  }
+
+  .reasoning-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 0;
+    font-weight: 500;
+    color: #667eea;
+    cursor: pointer;
+    user-select: none;
+    
+    &:hover {
+      opacity: 0.8;
+    }
+    
+    .reasoning-duration {
+      font-size: 12px;
+      opacity: 0.6;
+      margin-left: 4px;
+    }
+  }
+
+  .reasoning-text {
+    white-space: pre-wrap;
+    word-break: break-word;
+    opacity: 0.85;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed rgba(102, 126, 234, 0.3);
+  }
+
+  .message-edit-area {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: calc(100% + 200px);
+    
+    .ant-input {
+      min-width: 100%;
+    }
+    
+    .edit-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+  }
+
+  .avatar-image {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+  .message-usage {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    opacity: 0.7;
+    margin-top: 4px;
+
+    &.dark {
+      background: rgba(255, 255, 255, 0.05);
+      color: rgba(255, 255, 255, 0.65);
+    }
+
+    &.light {
+      background: rgba(0, 0, 0, 0.04);
+      color: rgba(0, 0, 0, 0.65);
+    }
+
+    .usage-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+
+      .usage-icon {
+        font-size: 14px;
+      }
+
+      .usage-value {
+        font-weight: 500;
+      }
+    }
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }

@@ -121,18 +121,13 @@ const LLMModelSetting: React.FC = () => {
         endpoint: data.endpoint,
         api_key: data.api_key,
         tags: data.tags,
+        support_image: data.support_image || false,
         status: data.status
       });
       
       if (data.config) {
-        try {
-          const config = JSON.parse(data.config);
-          setModelConfig(config);
-          setOriginalModelConfig(config);
-        } catch (e) {
-          setModelConfig({});
-          setOriginalModelConfig({});
-        }
+        setModelConfig(data.config);
+        setOriginalModelConfig(data.config);
       }
       setHasChanges(false);
       setConfigHasChanges(false);
@@ -204,7 +199,8 @@ const LLMModelSetting: React.FC = () => {
         provider: formValues.provider,
         api_key: formValues.api_key,
         endpoint: formValues.endpoint,
-        model_type: formValues.model_type
+        model_type: formValues.model_type,
+        support_image: formValues.support_image || false
       });
       
       setConnectionTestResult({
@@ -906,6 +902,13 @@ const LLMModelSetting: React.FC = () => {
                         <TreeSelect placeholder="请选择分类" treeData={buildCategoryTreeSelectData()} treeDefaultExpandAll allowClear />
                       </Form.Item>
                     </Col>
+                    <Col span={12}>
+                      <Form.Item name="support_image" label="支持图片" valuePropName="checked">
+                        <Switch checkedChildren="是" unCheckedChildren="否" />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+                  <Row gutter={16}>
                     <Col span={12}>
                       <Form.Item name="status" label="状态" valuePropName="checked">
                         <Switch checkedChildren="启用" unCheckedChildren="禁用" />

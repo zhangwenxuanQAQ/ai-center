@@ -2,9 +2,9 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Form, Input, Select, TreeSelect, Button, message, Row, Col, Switch, Modal, Spin, Drawer, Tag, Popover, Slider, InputNumber, Tooltip } from 'antd';
 const { TextArea } = Input;
-import { ArrowLeftOutlined, SaveOutlined, FileTextOutlined, TagsOutlined, PlayCircleOutlined, SendOutlined, PlusOutlined, SettingOutlined, ClearOutlined, BulbOutlined, CopyOutlined, EditOutlined, DownOutlined, RightOutlined, LoadingOutlined, InfoCircleOutlined } from '@ant-design/icons';
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
+const { Option } = Select;
+import { ArrowLeftOutlined, SaveOutlined, FileTextOutlined, TagsOutlined, PlayCircleOutlined, SendOutlined, PlusOutlined, SettingOutlined, ClearOutlined, BulbOutlined, CopyOutlined, EditOutlined, DownOutlined, RightOutlined, LoadingOutlined, InfoCircleOutlined, ReloadOutlined } from '@ant-design/icons';
+import MDEditor from '@uiw/react-md-editor';
 import { promptService, Prompt, PromptCategory } from '../../services/prompt';
 import { llmModelService, LLMModel } from '../../services/llm_model';
 import PageHeader from '../../components/page-header';
@@ -14,13 +14,13 @@ import './prompt_setting.less';
 interface ConfigParam {
   key: string;
   label: string;
-  type: 'slider' | 'input' | 'switch' | 'select';
+  type: string;
   min?: number;
   max?: number;
   step?: number;
   default: any;
-  description?: string;
-  options?: { value: string; label: string }[];
+  description: string;
+  options?: string[];
 }
 
 const PromptSetting: React.FC = () => {
@@ -44,8 +44,9 @@ const PromptSetting: React.FC = () => {
   const tagInputRef = useRef<HTMLInputElement>(null);
   const contentContainerRef = useRef<HTMLDivElement>(null);
   const promptSettingContainerRef = useRef<HTMLDivElement>(null);
+  const testDrawerRef = useRef<HTMLDivElement>(null);
   const [testDrawerVisible, setTestDrawerVisible] = useState(false);
-  const [testMessages, setTestMessages] = useState<{ id: string; role: 'user' | 'assistant'; content: string; reasoning_content?: string }[]>([]);
+  const [testMessages, setTestMessages] = useState<{ id: string; role: 'user' | 'assistant'; content: string; reasoning_content?: string; timestamp: Date; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }; stopped?: boolean }[]>([]);
   const [testInput, setTestInput] = useState('');
   const [models, setModels] = useState<LLMModel[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('');
@@ -55,11 +56,16 @@ const PromptSetting: React.FC = () => {
   const [expandedReasoning, setExpandedReasoning] = useState<Set<string>>(new Set());
   const [thinkingDuration, setThinkingDuration] = useState<Record<string, number>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatMessagesRef = useRef<HTMLDivElement>(null);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [isUserScrolling, setIsUserScrolling] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const thinkingStartTimeRef = useRef<Record<string, number>>({});
   const [configParams, setConfigParams] = useState<Record<string, ConfigParam[]>>({});
   const [modelConfig, setModelConfig] = useState<Record<string, any>>({});
   const [modelDropdownVisible, setModelDropdownVisible] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState('');
 
   useEffect(() => {
     const currentTheme = document.body.getAttribute('data-theme') || 'light';
@@ -84,6 +90,12 @@ const PromptSetting: React.FC = () => {
       setLoading(false);
     }
   }, [id]);
+
+  useEffect(() => {
+    if (!isUserScrolling) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [testMessages, isUserScrolling]);
 
   const fetchModels = async () => {
     try {
@@ -161,7 +173,7 @@ const PromptSetting: React.FC = () => {
     checkHasChanges();
   };
 
-  const checkHasChanges = () => {
+  const checkHasChanges = useCallback(() => {
     const currentValues = form.getFieldsValue();
     const nameChanged = currentValues.name !== originalData.name;
     const categoryChanged = currentValues.category_id !== originalData.category_id;
@@ -170,16 +182,44 @@ const PromptSetting: React.FC = () => {
     const tagsChanged = JSON.stringify(tags) !== JSON.stringify(originalData.tags || []);
     const descriptionChanged = description !== originalDescription;
     setHasChanges(nameChanged || categoryChanged || statusChanged || contentChanged || tagsChanged || descriptionChanged);
+  }, [content, description, tags, originalData, originalContent, originalDescription, form]);
+
+  useEffect(() => {
+    checkHasChanges();
+  }, [content, description, tags, checkHasChanges]);
+
+  useEffect(() => {
+    const chatMessages = chatMessagesRef.current;
+    if (!chatMessages) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = chatMessages;
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
+      
+      setShowScrollToBottom(!isAtBottom);
+      
+      if (!isAtBottom) {
+        setIsUserScrolling(true);
+      }
+    };
+
+    chatMessages.addEventListener('scroll', handleScroll);
+    return () => {
+      chatMessages.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setIsUserScrolling(false);
   };
 
   const handleContentChange = (value: string) => {
     setContent(value);
-    checkHasChanges();
   };
 
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setDescription(e.target.value);
-    checkHasChanges();
   };
 
   const handleAddTag = () => {
@@ -187,14 +227,12 @@ const PromptSetting: React.FC = () => {
       setTags([...tags, newTag.trim()]);
       setNewTag('');
       setShowTagInput(false);
-      checkHasChanges();
     }
   };
 
   const handleTagClose = (removedTag: string) => {
     const newTags = tags.filter(tag => tag !== removedTag);
     setTags(newTags);
-    checkHasChanges();
   };
 
   const handleSave = async () => {
@@ -218,15 +256,22 @@ const PromptSetting: React.FC = () => {
       };
 
       if (id === 'new') {
-        await promptService.createPrompt(data);
+        const newPrompt = await promptService.createPrompt(data);
         message.success('提示词创建成功');
-        navigate('/prompts');
+        navigate(`/prompt/setting/${newPrompt.id}`);
       } else if (id) {
         await promptService.updatePrompt(id, data);
         message.success('提示词更新成功');
-        fetchPrompt(id);
+        setOriginalData({
+          name: values.name,
+          category_id: values.category_id,
+          status: values.status,
+          tags: tags
+        });
+        setOriginalContent(content);
+        setOriginalDescription(description);
+        setHasChanges(false);
       }
-      setHasChanges(false);
     } catch (error) {
       console.error('Failed to save prompt:', error);
       message.error('保存失败');
@@ -261,15 +306,22 @@ const PromptSetting: React.FC = () => {
     
     const userMessage = testInput.trim();
     const userMessageId = Date.now().toString();
-    setTestMessages(prev => [...prev, { id: userMessageId, role: 'user', content: userMessage }]);
+    setTestMessages(prev => [...prev, { 
+      id: userMessageId, 
+      role: 'user', 
+      content: userMessage,
+      timestamp: new Date()
+    }]);
     setTestInput('');
     setIsGenerating(true);
+    setIsUserScrolling(false);
     
     const assistantMessageId = (Date.now() + 1).toString();
     setTestMessages(prev => [...prev, { 
       id: assistantMessageId, 
       role: 'assistant', 
-      content: '' 
+      content: '',
+      timestamp: new Date()
     }]);
     setThinkingMessageId(assistantMessageId);
     
@@ -356,10 +408,10 @@ const PromptSetting: React.FC = () => {
             try {
               const parsed = JSON.parse(data);
               
-              if (parsed.content) {
+              if (parsed.text) {
                 setTestMessages(prev => prev.map(msg => 
                   msg.id === assistantMessageId 
-                    ? { ...msg, content: msg.content + parsed.content }
+                    ? { ...msg, content: msg.content + parsed.text }
                     : msg
                 ));
               }
@@ -372,11 +424,12 @@ const PromptSetting: React.FC = () => {
                 ));
               }
               
-              if (parsed.thinking_duration !== undefined) {
-                setThinkingDuration(prev => ({
-                  ...prev,
-                  [assistantMessageId]: parsed.thinking_duration
-                }));
+              if (parsed.usage) {
+                setTestMessages(prev => prev.map(msg => 
+                  msg.id === assistantMessageId 
+                    ? { ...msg, usage: parsed.usage }
+                    : msg
+                ));
               }
             } catch (e) {
               console.error('Failed to parse SSE data:', e);
@@ -396,6 +449,13 @@ const PromptSetting: React.FC = () => {
         ));
       }
     } finally {
+      if (deepThinking && thinkingStartTimeRef.current[assistantMessageId]) {
+        const duration = Date.now() - thinkingStartTimeRef.current[assistantMessageId];
+        setThinkingDuration(prev => ({
+          ...prev,
+          [assistantMessageId]: duration
+        }));
+      }
       setIsGenerating(false);
       setThinkingMessageId(null);
     }
@@ -414,9 +474,232 @@ const PromptSetting: React.FC = () => {
   };
 
   const copyToClipboard = (text: string, type: string) => {
-    navigator.clipboard.writeText(text).then(() => {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        message.success(`已复制${type}`);
+      }).catch(() => {
+        fallbackCopyToClipboard(text, type);
+      });
+    } else {
+      fallbackCopyToClipboard(text, type);
+    }
+  };
+
+  const fallbackCopyToClipboard = (text: string, type: string) => {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-9999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+      document.execCommand('copy');
       message.success(`已复制${type}`);
-    });
+    } catch (err) {
+      message.error('复制失败');
+    }
+    document.body.removeChild(textArea);
+  };
+
+  const handleEditMessage = (messageId: string, content: string) => {
+    setEditingMessageId(messageId);
+    setEditingContent(content);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingMessageId(null);
+    setEditingContent('');
+  };
+
+  const handleSaveEdit = async (messageId: string) => {
+    if (!editingContent.trim()) {
+      message.error('内容不能为空');
+      return;
+    }
+    
+    const messageIndex = testMessages.findIndex(m => m.id === messageId);
+    if (messageIndex === -1) return;
+    
+    const updatedMessages = testMessages.slice(0, messageIndex);
+    setTestMessages(updatedMessages);
+    setEditingMessageId(null);
+    setEditingContent('');
+    
+    setTestInput(editingContent);
+    setTimeout(() => {
+      handleSendMessageWithMessages(updatedMessages, editingContent);
+    }, 100);
+  };
+
+  const handleRegenerate = async (messageIndex: number) => {
+    if (messageIndex < 1) return;
+    
+    const userMessage = testMessages[messageIndex - 1];
+    if (userMessage.role !== 'user') return;
+    
+    const updatedMessages = testMessages.slice(0, messageIndex);
+    setTestMessages(updatedMessages);
+    
+    setTimeout(() => {
+      handleSendMessageWithMessages(updatedMessages.slice(0, -1), userMessage.content);
+    }, 100);
+  };
+
+  const handleSendMessageWithMessages = async (previousMessages: { id: string; role: 'user' | 'assistant'; content: string; reasoning_content?: string; timestamp: Date; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }[], content: string) => {
+    if (!selectedModel || isGenerating) return;
+    
+    const userMessageId = Date.now().toString();
+    const userMessage = { id: userMessageId, role: 'user' as const, content: content.trim(), timestamp: new Date() };
+    const newMessages = [...previousMessages, userMessage];
+    setTestMessages(newMessages);
+    setTestInput('');
+    setIsGenerating(true);
+    setIsUserScrolling(false);
+    
+    const assistantMessageId = (Date.now() + 1).toString();
+    setTestMessages(prev => [...prev, { 
+      id: assistantMessageId, 
+      role: 'assistant', 
+      content: '',
+      timestamp: new Date()
+    }]);
+    setThinkingMessageId(assistantMessageId);
+    
+    if (deepThinking) {
+      thinkingStartTimeRef.current[assistantMessageId] = Date.now();
+    }
+
+    try {
+      abortControllerRef.current = new AbortController();
+      
+      const chatMessages = [];
+      
+      if (content && content.trim()) {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = content;
+        const textContent = tempDiv.textContent || tempDiv.innerText || '';
+        chatMessages.push({
+          role: 'system',
+          content: textContent
+        });
+      }
+      
+      previousMessages.forEach(msg => {
+        chatMessages.push({
+          role: msg.role,
+          content: msg.content
+        });
+      });
+      
+      chatMessages.push({
+        role: 'user',
+        content: userMessage.content
+      });
+      
+      const requestBody = {
+        messages: chatMessages,
+        config: {
+          ...modelConfig,
+          deep_thinking: deepThinking
+        }
+      };
+      
+      const url = '/aicenter/v1/llm_model/model/' + selectedModel + '/chat';
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+        signal: abortControllerRef.current.signal
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error('No reader available');
+      }
+
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') {
+              setIsGenerating(false);
+              setThinkingMessageId(null);
+              break;
+            }
+
+            try {
+              const parsed = JSON.parse(data);
+              
+              if (parsed.text) {
+                setTestMessages(prev => prev.map(msg => 
+                  msg.id === assistantMessageId 
+                    ? { ...msg, content: msg.content + parsed.text }
+                    : msg
+                ));
+              }
+              
+              if (parsed.reasoning_content) {
+                setTestMessages(prev => prev.map(msg => 
+                  msg.id === assistantMessageId 
+                    ? { ...msg, reasoning_content: (msg.reasoning_content || '') + parsed.reasoning_content }
+                    : msg
+                ));
+              }
+              
+              if (parsed.usage) {
+                setTestMessages(prev => prev.map(msg => 
+                  msg.id === assistantMessageId 
+                    ? { ...msg, usage: parsed.usage }
+                    : msg
+                ));
+              }
+            } catch (e) {
+              console.error('Failed to parse SSE data:', e);
+            }
+          }
+        }
+      }
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.log('Request was aborted');
+      } else {
+        console.error('Chat error:', error);
+        setTestMessages(prev => prev.map(msg => 
+          msg.id === assistantMessageId 
+            ? { ...msg, content: '抱歉，发生了错误：' + error.message }
+            : msg
+        ));
+      }
+    } finally {
+      if (deepThinking && thinkingStartTimeRef.current[assistantMessageId]) {
+        const duration = Date.now() - thinkingStartTimeRef.current[assistantMessageId];
+        setThinkingDuration(prev => ({
+          ...prev,
+          [assistantMessageId]: duration
+        }));
+      }
+      setIsGenerating(false);
+      setThinkingMessageId(null);
+    }
   };
 
   const getProviderAvatar = (provider: string): string => {
@@ -508,7 +791,29 @@ const PromptSetting: React.FC = () => {
             <Select
               value={value}
               onChange={(v) => setModelConfig({ ...modelConfig, [param.key]: v })}
-              options={param.options}
+              style={{ width: '100%' }}
+            >
+              {param.options?.map(opt => (
+                <Option key={opt} value={opt}>{opt}</Option>
+              ))}
+            </Select>
+          </div>
+        );
+      case 'number':
+        return (
+          <div key={param.key} style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontWeight: 500, marginRight: 8 }}>{param.label}</span>
+              <Tooltip title={param.description}>
+                <InfoCircleOutlined style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)' }} />
+              </Tooltip>
+            </div>
+            <InputNumber
+              min={param.min}
+              max={param.max}
+              step={param.step || 1}
+              value={value}
+              onChange={(v) => setModelConfig({ ...modelConfig, [param.key]: v })}
               style={{ width: '100%' }}
             />
           </div>
@@ -521,7 +826,7 @@ const PromptSetting: React.FC = () => {
   const currentConfigParams = configParams[getSelectedModelInfo()?.model_type || 'text'] || [];
 
   const configPopoverContent = (
-    <div style={{ width: 280, maxHeight: 400, overflowY: 'auto' }}>
+    <div style={{ width: 350 }}>
       {currentConfigParams.length > 0 ? (
         currentConfigParams.map(param => renderConfigParam(param))
       ) : (
@@ -542,27 +847,6 @@ const PromptSetting: React.FC = () => {
     };
     return buildTree(categories);
   };
-
-  const quillModules = {
-    toolbar: [
-      [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
-      ['bold', 'italic', 'underline', 'strike'],
-      [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-      [{ 'color': [] }, { 'background': [] }],
-      [{ 'align': [] }],
-      ['link', 'image'],
-      ['clean']
-    ]
-  };
-
-  const quillFormats = [
-    'header',
-    'bold', 'italic', 'underline', 'strike',
-    'list', 'bullet',
-    'color', 'background',
-    'align',
-    'link', 'image'
-  ];
 
   if (loading) {
     return (
@@ -714,19 +998,17 @@ const PromptSetting: React.FC = () => {
                   测试提示词
                 </Button>
               </div>
-              <div style={{ flex: 1, minHeight: '300px', maxHeight: 'calc(100vh - 10px)' }} className={`quill-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                <ReactQuill
-                  theme="snow"
+              <div style={{ flex: 1, minHeight: '300px', maxHeight: 'calc(100vh - 10px)' }} className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                <MDEditor
                   value={content}
-                  onChange={handleContentChange}
-                  modules={quillModules}
-                  formats={quillFormats}
+                  onChange={(value) => handleContentChange(value || '')}
+                  height="100%"
+                  preview="edit"
                   style={{
-                    height: 'calc(100% - 42px)',
                     background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fff',
+                    height: '100%',
                     color: theme === 'dark' ? '#fff' : '#000'
                   }}
-                  placeholder="请输入提示词内容..."
                 />
               </div>
             </div>
@@ -738,8 +1020,14 @@ const PromptSetting: React.FC = () => {
           borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8',
           display: 'flex',
           justifyContent: 'center',
+          alignItems: 'center',
           gap: '16px'
         }}>
+          {hasChanges && (
+            <span style={{ color: '#faad14', fontSize: 12 }}>
+              • 有未保存的变动
+            </span>
+          )}
           <Button onClick={handleBack}>
             返回
           </Button>
@@ -748,6 +1036,7 @@ const PromptSetting: React.FC = () => {
             icon={<SaveOutlined />}
             onClick={handleSave}
             loading={saving}
+            disabled={!hasChanges}
           >
             保存
           </Button>
@@ -761,16 +1050,17 @@ const PromptSetting: React.FC = () => {
         open={testDrawerVisible}
         onClose={() => setTestDrawerVisible(false)}
         getContainer={false}
-        mask={false}
+        mask={true}
+        maskClosable={true}
         className={`prompt-test-drawer ${theme === 'dark' ? 'dark' : 'light'}`}
         styles={{
-          header: { background: theme === 'dark' ? '#1a1a1a' : '#fff', color: theme === 'dark' ? '#fff' : '#000' },
-          body: { background: theme === 'dark' ? '#0d0d0d' : '#f5f5f5', padding: 0, display: 'flex', flexDirection: 'column', height: '100%' },
+          header: { background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fff', color: theme === 'dark' ? '#fff' : '#000' },
+          body: { background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5', padding: 0, display: 'flex', flexDirection: 'column', height: '100%' },
           footer: { display: 'none' }
         }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <div style={{ padding: '12px 16px', borderBottom: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div ref={testDrawerRef} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div style={{ padding: '12px 16px', borderBottom: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: theme === 'dark' ? 'none' : '#fff' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative' }}>
               <div 
                 style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '4px 8px', borderRadius: '4px' }}
@@ -813,6 +1103,11 @@ const PromptSetting: React.FC = () => {
                       onClick={() => {
                         setSelectedModel(model.id);
                         setModelDropdownVisible(false);
+                        if (model.config) {
+                          setModelConfig(model.config);
+                        } else {
+                          setModelConfig({});
+                        }
                       }}
                       style={{
                         display: 'flex',
@@ -821,7 +1116,14 @@ const PromptSetting: React.FC = () => {
                         padding: '8px 12px',
                         cursor: 'pointer',
                         whiteSpace: 'nowrap',
-                        background: selectedModel === model.id ? (theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#f5f5f5') : 'transparent'
+                        background: selectedModel === model.id ? (theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#f5f5f5') : 'transparent',
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#f5f5f5';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = selectedModel === model.id ? (theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#f5f5f5') : 'transparent';
                       }}
                     >
                       <img 
@@ -857,91 +1159,175 @@ const PromptSetting: React.FC = () => {
             </div>
           </div>
           
-          <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+          <div ref={chatMessagesRef} className={`chat-messages ${theme === 'dark' ? 'dark' : 'light'}`} style={{ position: 'relative' }}>
             {testMessages.length === 0 ? (
-              <div style={{ textAlign: 'center', color: theme === 'dark' ? '#666' : '#999', padding: '40px 0' }}>
-                <PlayCircleOutlined style={{ fontSize: '48px', marginBottom: '16px', opacity: 0.3 }} />
+              <div style={{ textAlign: 'center', color: theme === 'dark' ? '#fff' : '#999', padding: '40px 0' }}>
+                <PlayCircleOutlined style={{ fontSize: '48px', marginBottom: '0px', opacity: 0.3 }} />
                 <p>输入消息开始测试提示词</p>
               </div>
             ) : (
-              testMessages.map((msg) => (
+              testMessages.map((msg, index) => (
                 <div
                   key={msg.id}
-                  style={{
-                    marginBottom: '12px',
-                    display: 'flex',
-                    justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start'
-                  }}
+                  className={`message ${msg.role}`}
                 >
-                  <div
-                    style={{
-                      maxWidth: '80%',
-                      padding: '10px 14px',
-                      borderRadius: '12px',
-                      background: msg.role === 'user'
-                        ? '#1890ff'
-                        : (theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#fff'),
-                      color: msg.role === 'user' ? '#fff' : (theme === 'dark' ? '#fff' : '#000'),
-                      border: msg.role === 'user' ? 'none' : (theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8')
-                    }}
-                  >
-                    <div style={{ fontSize: '12px', opacity: 0.7, marginBottom: '4px' }}>
-                      {msg.role === 'user' ? '用户' : '助手'}
-                    </div>
-                    {msg.role === 'assistant' && (thinkingMessageId === msg.id) && (
-                      <div style={{ marginBottom: '8px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#666' }}>
-                          <LoadingOutlined spin style={{ fontSize: '12px' }} />
-                          <BulbOutlined style={{ fontSize: '12px' }} />
-                          <span>正在思考中...</span>
+                  <div className="message-avatar">
+                    {msg.role === 'user' ? '👤' : (
+                      <img 
+                        src={getProviderAvatar(getSelectedModelInfo()?.provider || '')} 
+                        alt={getSelectedModelInfo()?.provider || 'AI'} 
+                        className="avatar-image"
+                      />
+                    )}
+                  </div>
+                  <div className="message-content">
+                    {msg.role === 'assistant' && (thinkingMessageId === msg.id && deepThinking) && (
+                      <div className="message-reasoning">
+                        <div className="reasoning-header" onClick={() => toggleReasoning(msg.id)}>
+                          <LoadingOutlined spin />
+                          <BulbOutlined /> 正在思考中
                         </div>
+                        {expandedReasoning.has(msg.id) && msg.reasoning_content && (
+                          <div className="reasoning-text">{msg.reasoning_content}</div>
+                        )}
                       </div>
                     )}
-                    {msg.role === 'assistant' && msg.reasoning_content && !(thinkingMessageId === msg.id) && (
-                      <div style={{ marginBottom: '8px' }}>
-                        <div 
-                          style={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            gap: '8px', 
-                            fontSize: '12px', 
-                            color: theme === 'dark' ? '#aaa' : '#666',
-                            cursor: 'pointer'
-                          }}
-                          onClick={() => toggleReasoning(msg.id)}
-                        >
-                          {expandedReasoning.has(msg.id) ? <DownOutlined style={{ fontSize: '12px' }} /> : <RightOutlined style={{ fontSize: '12px' }} />}
-                          <BulbOutlined style={{ fontSize: '12px' }} />
-                          <span>思考过程</span>
+                    {msg.role === 'assistant' && msg.reasoning_content && !(thinkingMessageId === msg.id && deepThinking) && (
+                      <div className="message-reasoning">
+                        <div className="reasoning-header" onClick={() => toggleReasoning(msg.id)}>
+                          {expandedReasoning.has(msg.id) ? (
+                            <DownOutlined />
+                          ) : (
+                            <RightOutlined />
+                          )}
+                          <BulbOutlined /> 思考过程
                           {thinkingDuration[msg.id] && (
-                            <span style={{ fontSize: '10px' }}>
+                            <span className="reasoning-duration">
                               ({(thinkingDuration[msg.id] / 1000).toFixed(1)}s)
                             </span>
                           )}
                         </div>
                         {expandedReasoning.has(msg.id) && (
-                          <div style={{ 
-                            fontSize: '12px', 
-                            color: theme === 'dark' ? '#aaa' : '#666',
-                            marginTop: '4px',
-                            padding: '8px',
-                            background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5',
-                            borderRadius: '4px'
-                          }}>
-                            {msg.reasoning_content}
-                          </div>
+                          <div className="reasoning-text">{msg.reasoning_content}</div>
                         )}
                       </div>
                     )}
-                    <div style={{ whiteSpace: 'pre-wrap', fontSize: '13px' }}>{msg.content}</div>
+                    {editingMessageId === msg.id ? (
+                      <div className="message-edit-area">
+                        <TextArea
+                          value={editingContent}
+                          onChange={(e) => setEditingContent(e.target.value)}
+                          autoSize={{ minRows: 3, maxRows: 8 }}
+                          style={{ width: '100%' }}
+                        />
+                        <div className="edit-actions">
+                          <Button size="small" onClick={handleCancelEdit}>取消</Button>
+                          <Button size="small" type="primary" onClick={() => handleSaveEdit(msg.id)}>发送</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {msg.content && (
+                          <div 
+                            className="message-text"
+                          >
+                            {msg.content}
+                          </div>
+                        )}
+                        {msg.stopped && (
+                          <div 
+                            style={{
+                              fontSize: '12px',
+                              color: theme === 'dark' ? '#ff4d4f' : '#ff4d4f',
+                              marginTop: '4px',
+                              fontStyle: 'italic'
+                            }}
+                          >
+                            [已停止生成]
+                          </div>
+                        )}
+                      </>
+                    )}
+                    <div className="message-footer">
+                      <span className="message-time">
+                        {msg.timestamp.toLocaleTimeString()}
+                      </span>
+                      {msg.role === 'assistant' && msg.usage && !isGenerating && (
+                        <span className="message-usage">
+                          Token: {msg.usage.total_tokens || 0} | 耗时: {thinkingDuration[msg.id] ? (thinkingDuration[msg.id] / 1000).toFixed(1) : '0.0'}s
+                        </span>
+                      )}
+                      <div className="message-actions">
+                        {msg.role === 'assistant' && msg.content && !isGenerating && (
+                          <>
+                            <Tooltip title="重新回答">
+                              <Button 
+                                type="text" 
+                                size="small"
+                                icon={<ReloadOutlined />} 
+                                onClick={() => handleRegenerate(index)}
+                              />
+                            </Tooltip>
+                            <Tooltip title="复制回答">
+                              <Button 
+                                type="text" 
+                                size="small"
+                                icon={<CopyOutlined />} 
+                                onClick={() => copyToClipboard(msg.content, '回答')}
+                              />
+                            </Tooltip>
+                          </>
+                        )}
+                        {msg.role === 'user' && !editingMessageId && !isGenerating && (
+                          <>
+                            <Tooltip title="编辑问题">
+                              <Button 
+                                type="text" 
+                                size="small"
+                                icon={<EditOutlined />} 
+                                onClick={() => handleEditMessage(msg.id, msg.content)}
+                              />
+                            </Tooltip>
+                            <Tooltip title="复制问题">
+                              <Button 
+                                type="text" 
+                                size="small"
+                                icon={<CopyOutlined />} 
+                                onClick={() => copyToClipboard(msg.content, '问题')}
+                              />
+                            </Tooltip>
+                          </>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))
             )}
+            {showScrollToBottom && (
+              <Button
+                className="scroll-to-bottom-btn"
+                icon={<DownOutlined />}
+                onClick={scrollToBottom}
+                style={{
+                  position: 'absolute',
+                  bottom: '20px',
+                  right: '20px',
+                  zIndex: 10,
+                  borderRadius: '50%',
+                  width: '40px',
+                  height: '40px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
+                }}
+              />
+            )}
             <div ref={messagesEndRef} />
           </div>
           
-          <div className="chat-input-area" style={{ borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8', padding: '12px 16px', background: theme === 'dark' ? '#1a1a1a' : '#fff' }}>
+          <div className="chat-input-area" style={{ borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8', padding: '12px 16px', background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fff' }}>
             <div className="chat-input-wrapper" style={{ position: 'relative' }}>
               <TextArea
                 placeholder="输入消息... (Shift+Enter换行，Enter发送)"
@@ -992,6 +1378,24 @@ const PromptSetting: React.FC = () => {
                   type="primary" 
                   danger
                   onClick={() => {
+                    if (abortControllerRef.current) {
+                      abortControllerRef.current.abort();
+                    }
+                    // 更新当前生成的消息，添加[已停止生成]提示
+                    if (thinkingMessageId) {
+                      setTestMessages(prevMessages => {
+                        return prevMessages.map(msg => {
+                          if (msg.id === thinkingMessageId && msg.role === 'assistant') {
+                            return {
+                              ...msg,
+                              content: msg.content || '',
+                              stopped: true
+                            };
+                          }
+                          return msg;
+                        });
+                      });
+                    }
                     setIsGenerating(false);
                     setThinkingMessageId(null);
                   }}

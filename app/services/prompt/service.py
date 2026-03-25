@@ -407,3 +407,31 @@ class PromptService:
         db_prompt.deleted_at = datetime.now()
         db_prompt.save()
         return db_prompt
+
+    @staticmethod
+    @handle_transaction
+    def update_prompt_status(prompt_id: str, status: bool):
+        """
+        更新提示词状态
+        
+        Args:
+            prompt_id: 提示词ID
+            status: 状态
+            
+        Returns:
+            Prompt: 更新后的提示词对象
+            
+        Raises:
+            ResourceNotFoundError: 提示词不存在
+        """
+        try:
+            db_prompt = Prompt.get_by_id(prompt_id)
+            if db_prompt.deleted:
+                raise ResourceNotFoundError(message=f"提示词 {prompt_id} 不存在")
+        except Prompt.DoesNotExist:
+            raise ResourceNotFoundError(message=f"提示词 {prompt_id} 不存在")
+        
+        db_prompt.status = status
+        db_prompt.updated_at = datetime.now()
+        db_prompt.save()
+        return db_prompt
