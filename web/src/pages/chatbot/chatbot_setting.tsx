@@ -113,6 +113,7 @@ const ChatbotSetting: React.FC = () => {
   const [isToolSelectModalVisible, setIsToolSelectModalVisible] = useState(false);
   const [mcpServersWithTools, setMcpServersWithTools] = useState<any[]>([]);
   const [expandedServers, setExpandedServers] = useState<string[]>([]);
+  const [expandedModalServers, setExpandedModalServers] = useState<string[]>([]);
   const [selectedTools, setSelectedTools] = useState<Record<string, string[]>>({});
   const [serverFilter, setServerFilter] = useState<string>('');
   const [toolFilter, setToolFilter] = useState<string>('');
@@ -200,7 +201,7 @@ const ChatbotSetting: React.FC = () => {
         })
       );
       setMcpServersWithTools(serversWithTools);
-      setExpandedServers([]);
+      setExpandedModalServers([]);
       setSelectedTools({});
       setIsToolSelectModalVisible(true);
     } catch (error) {
@@ -993,7 +994,10 @@ const ChatbotSetting: React.FC = () => {
           }}>
             <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <ApiOutlined style={{ fontSize: '14px', color: theme === 'dark' ? '#fff' : '#000' }} />
-              <span style={{ fontWeight: 500, fontSize: '13px', color: theme === 'dark' ? '#fff' : '#000' }}>绑定模型</span>
+              <span style={{ fontWeight: 500, fontSize: '14px', color: theme === 'dark' ? '#fff' : '#000' }}>绑定模型</span>
+              {!Object.keys(boundModels).length && (
+                <span style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999' }}>（至少绑定一个模型）</span>
+              )}
             </div>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -1197,7 +1201,7 @@ const ChatbotSetting: React.FC = () => {
           }}>
             <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <FileTextOutlined style={{ fontSize: '14px', color: theme === 'dark' ? '#fff' : '#000' }} />
-              <span style={{ fontWeight: 500, fontSize: '13px', color: theme === 'dark' ? '#fff' : '#000' }}>提示词</span>
+              <span style={{ fontWeight: 500, fontSize: '14px', color: theme === 'dark' ? '#fff' : '#000' }}>提示词</span>
             </div>
             
             {/* 系统提示词 */}
@@ -1468,14 +1472,14 @@ const ChatbotSetting: React.FC = () => {
           }}>
             <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <ToolOutlined style={{ fontSize: '14px', color: theme === 'dark' ? '#fff' : '#000' }} />
-              <span style={{ fontWeight: 500, fontSize: '13px', color: theme === 'dark' ? '#fff' : '#000' }}>关联工具</span>
+              <span style={{ fontWeight: 500, fontSize: '14px', color: theme === 'dark' ? '#fff' : '#000' }}>关联工具</span>
             </div>
             
             {boundTools.length === 0 ? (
               <div 
                 style={{ 
                   textAlign: 'center', 
-                  padding: '48px 0', 
+                  padding: '32px 0', 
                   color: theme === 'dark' ? '#aaa' : '#999', 
                   fontSize: '14px',
                   border: theme === 'dark' ? '2px dashed rgba(255, 255, 255, 0.2)' : '2px dashed #d9d9d9',
@@ -1493,7 +1497,7 @@ const ChatbotSetting: React.FC = () => {
                   e.currentTarget.style.color = theme === 'dark' ? '#aaa' : '#999';
                 }}
               >
-                <div style={{ fontSize: '48px', marginBottom: '16px' }}>
+                <div style={{ fontSize: '32px', marginBottom: '12px' }}>
                   <PlusOutlined />
                 </div>
                 <div>点击添加工具</div>
@@ -1544,27 +1548,41 @@ const ChatbotSetting: React.FC = () => {
                           {server.tools.map((tool: any) => (
                             <div key={tool.id} style={{
                               display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px',
-                              padding: '8px',
+                              flexDirection: 'column',
+                              gap: '4px',
+                              padding: '12px',
                               border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.05)' : '1px solid #f0f0f0',
                               borderRadius: '4px',
                               background: theme === 'dark' ? 'rgba(255, 255, 255, 0.02)' : '#fafafa'
                             }}>
-                              <div style={{ fontSize: '13px', color: theme === 'dark' ? '#fff' : '#000', flex: 1 }}>
-                                {tool.tool_name}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'space-between' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' }}>
+                                  <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', textAlign: 'left' }}>
+                                    {tool.tool_title || tool.tool_name}
+                                  </div>
+                                  <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999', textAlign: 'left' }}>
+                                    {tool.tool_name}
+                                  </div>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <div style={{ fontSize: '11px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+                                    {tool.tool_type}
+                                  </div>
+                                  <Button
+                                    type="text"
+                                    icon={<DeleteOutlined />}
+                                    size="small"
+                                    danger
+                                    onClick={() => handleUnbindTool(tool.id)}
+                                    title="解绑工具"
+                                  />
+                                </div>
                               </div>
-                              <div style={{ fontSize: '11px', color: theme === 'dark' ? '#aaa' : '#999' }}>
-                                {tool.tool_type}
-                              </div>
-                              <Button
-                                type="text"
-                                icon={<DeleteOutlined />}
-                                size="small"
-                                danger
-                                onClick={() => handleUnbindTool(tool.id)}
-                                title="解绑工具"
-                              />
+                              {tool.tool_description && (
+                                <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999', marginTop: '4px', textAlign: 'left' }}>
+                                  {tool.tool_description}
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -1593,7 +1611,7 @@ const ChatbotSetting: React.FC = () => {
           }}>
             <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <DatabaseOutlined style={{ fontSize: '14px', color: theme === 'dark' ? '#fff' : '#000' }} />
-              <span style={{ fontWeight: 500, fontSize: '13px', color: theme === 'dark' ? '#fff' : '#000' }}>关联知识库</span>
+              <span style={{ fontWeight: 500, fontSize: '14px', color: theme === 'dark' ? '#fff' : '#000' }}>关联知识库</span>
               <span style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999' }}>（多选）</span>
             </div>
             
@@ -2069,7 +2087,10 @@ const ChatbotSetting: React.FC = () => {
               .map(server => {
                 // 过滤工具
                 const filteredTools = server.tools.filter((tool: any) => 
+                  (tool.title || tool.name).toLowerCase().includes(toolFilter.toLowerCase()) ||
                   tool.name.toLowerCase().includes(toolFilter.toLowerCase()) ||
+                  (tool.description || tool.tool_description)?.toLowerCase().includes(toolFilter.toLowerCase()) ||
+                  (tool.code || tool.tool_code)?.toLowerCase().includes(toolFilter.toLowerCase()) ||
                   (tool.tool_type && tool.tool_type.toLowerCase().includes(toolFilter.toLowerCase()))
                 );
                 
@@ -2093,7 +2114,11 @@ const ChatbotSetting: React.FC = () => {
                         cursor: 'pointer',
                         borderBottom: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8'
                       }}
-                      onClick={() => handleToggleServerExpand(server.id)}
+                      onClick={() => setExpandedModalServers(prev => 
+                        prev.includes(server.id) 
+                          ? prev.filter(id => id !== server.id) 
+                          : [...prev, server.id]
+                      )}
                     >
                       <Avatar 
                         size={24} 
@@ -2113,10 +2138,10 @@ const ChatbotSetting: React.FC = () => {
                         {filteredTools.length} 个工具
                       </div>
                       <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999' }}>
-                        {expandedServers.includes(server.id) ? '▼' : '▶'}
+                        {expandedModalServers.includes(server.id) ? '▼' : '▶'}
                       </div>
                     </div>
-                    {expandedServers.includes(server.id) && (
+                    {expandedModalServers.includes(server.id) && (
                       <div style={{ padding: '8px 12px', borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8' }}>
                         {filteredTools.length > 0 && (
                           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginBottom: '8px' }}>
@@ -2162,32 +2187,38 @@ const ChatbotSetting: React.FC = () => {
                                 display: 'flex',
                                 flexDirection: 'column',
                                 gap: '4px',
-                                padding: '8px',
+                                padding: '12px',
                                 border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.05)' : '1px solid #f0f0f0',
                                 borderRadius: '4px',
                                 background: theme === 'dark' ? 'rgba(255, 255, 255, 0.02)' : '#fafafa'
                               }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
                                   <input
                                     type="checkbox"
                                     checked={(selectedTools[server.id] || []).includes(tool.id)}
                                     onChange={() => handleToolSelect(server.id, tool.id)}
                                     style={{
-                                      accentColor: '#667eea'
+                                      accentColor: '#667eea',
+                                      marginTop: '2px'
                                     }}
                                   />
-                                  <div style={{ fontSize: '13px', color: theme === 'dark' ? '#fff' : '#000', flex: 1 }}>
-                                    {tool.name}
+                                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                    <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>
+                                      {tool.title || tool.name}
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+                                      {tool.name}
+                                    </div>
+                                    {(tool.description || tool.tool_description) && (
+                                      <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999', marginTop: '4px' }}>
+                                        {tool.description || tool.tool_description}
+                                      </div>
+                                    )}
                                   </div>
-                                  <div style={{ fontSize: '11px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+                                  <div style={{ fontSize: '11px', color: theme === 'dark' ? '#aaa' : '#999', alignSelf: 'flex-start', marginTop: '2px' }}>
                                     {tool.tool_type}
                                   </div>
                                 </div>
-                                {tool.description && (
-                                  <div style={{ marginLeft: '24px', fontSize: '11px', color: theme === 'dark' ? '#aaa' : '#999' }}>
-                                    {tool.description}
-                                  </div>
-                                )}
                               </div>
                             ))
                           )}

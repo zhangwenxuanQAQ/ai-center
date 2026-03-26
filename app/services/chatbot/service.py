@@ -830,6 +830,7 @@ class ChatbotService:
                     tools_by_server[server_id]["tools"].append({
                         "id": str(chatbot_tool.id),
                         "tool_id": str(mcp_tool.id),
+                        "tool_title": mcp_tool.title,
                         "tool_name": mcp_tool.name,
                         "tool_description": mcp_tool.description,
                         "tool_type": mcp_tool.tool_type
