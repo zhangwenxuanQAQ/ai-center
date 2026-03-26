@@ -340,6 +340,26 @@ class ChatbotPrompt(BaseModel):
         )
 
 
+class ChatbotTool(BaseModel):
+    """
+    机器人工具关联模型
+    
+    存储机器人与MCP工具的绑定关系
+    """
+    deleted = BooleanField(default=False, verbose_name="是否删除")
+    deleted_at = DateTimeField(null=True, verbose_name="删除时间")
+    deleted_user_id = CharField(max_length=40, null=True, verbose_name="删除用户ID")
+    chatbot_id = CharField(max_length=40, index=True, verbose_name="机器人ID")
+    mcp_tool_id = CharField(max_length=40, index=True, verbose_name="MCP工具ID")
+    mcp_server_id = CharField(max_length=40, index=True, verbose_name="MCP服务ID")
+    
+    class Meta:
+        table_name = 'chatbot_tool'
+        indexes = (
+            (('chatbot_id', 'mcp_tool_id'), True),
+        )
+
+
 def create_tables():
     """
     创建所有数据表
@@ -359,7 +379,8 @@ def create_tables():
         MCPTool,
         ChatbotMCP,
         ChatbotModel,
-        ChatbotPrompt
+        ChatbotPrompt,
+        ChatbotTool
     ]
     
     for table in tables:

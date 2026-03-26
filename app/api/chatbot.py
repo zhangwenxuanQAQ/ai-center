@@ -285,6 +285,21 @@ class UpdatePromptSortOrderRequest(BaseModel):
     sort_order: int = Field(..., description="排序序号")
 
 
+class BindToolRequest(BaseModel):
+    """
+    绑定工具请求DTO
+    """
+    mcp_server_id: str = Field(..., description="MCP服务ID")
+    mcp_tool_id: str = Field(..., description="MCP工具ID")
+
+
+class UnbindToolRequest(BaseModel):
+    """
+    解绑工具请求DTO
+    """
+    tool_binding_id: str = Field(..., description="工具绑定ID")
+
+
 @router.get("/{chatbot_id}/prompts", response_model=ApiResponse)
 def get_chatbot_prompts(chatbot_id: str, prompt_type: str = None):
     """
@@ -356,3 +371,50 @@ def update_prompt_sort_order(chatbot_id: str, request: UpdatePromptSortOrderRequ
     """
     chatbot_prompt = ChatbotService.update_prompt_sort_order(chatbot_id, request.prompt_binding_id, request.sort_order)
     return ResponseUtil.success(data={"binding_id": str(chatbot_prompt.id)}, message="提示词排序更新成功")
+
+
+@router.get("/{chatbot_id}/tools", response_model=ApiResponse)
+def get_chatbot_tools(chatbot_id: str):
+    """
+    获取机器人绑定的工具列表
+    
+    Args:
+        chatbot_id: 机器人ID
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象，包含绑定的工具列表
+    """
+    tools = ChatbotService.get_chatbot_tools(chatbot_id)
+    return ResponseUtil.success(data=tools, message="获取机器人绑定工具成功")
+
+
+@router.post("/{chatbot_id}/tools/bind", response_model=ApiResponse)
+def bind_tool_to_chatbot(chatbot_id: str, request: BindToolRequest):
+    """
+    绑定工具到机器人
+    
+    Args:
+        chatbot_id: 机器人ID
+        request: 绑定工具请求DTO
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    chatbot_tool = ChatbotService.bind_tool_to_chatbot(chatbot_id, request.mcp_server_id, request.mcp_tool_id)
+    return ResponseUtil.success(data={"binding_id": str(chatbot_tool.id)}, message="工具绑定成功")
+
+
+@router.post("/{chatbot_id}/tools/unbind", response_model=ApiResponse)
+def unbind_tool_from_chatbot(chatbot_id: str, request: UnbindToolRequest):
+    """
+    解绑机器人的工具
+    
+    Args:
+        chatbot_id: 机器人ID
+        request: 解绑工具请求DTO
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    ChatbotService.unbind_tool_from_chatbot(chatbot_id, request.tool_binding_id)
+    return ResponseUtil.success(message="工具解绑成功")

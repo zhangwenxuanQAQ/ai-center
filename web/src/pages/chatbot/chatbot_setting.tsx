@@ -107,6 +107,15 @@ const ChatbotSetting: React.FC = () => {
   const [isPromptEditModalVisible, setIsPromptEditModalVisible] = useState(false);
   const [editingPrompt, setEditingPrompt] = useState<any>(null);
   const [editingPromptContent, setEditingPromptContent] = useState<string>('');
+  
+  // 工具绑定相关state
+  const [boundTools, setBoundTools] = useState<any[]>([]);
+  const [isToolSelectModalVisible, setIsToolSelectModalVisible] = useState(false);
+  const [mcpServersWithTools, setMcpServersWithTools] = useState<any[]>([]);
+  const [expandedServers, setExpandedServers] = useState<string[]>([]);
+  const [selectedTools, setSelectedTools] = useState<Record<string, string[]>>({});
+  const [serverFilter, setServerFilter] = useState<string>('');
+  const [toolFilter, setToolFilter] = useState<string>('');
 
   useEffect(() => {
     const currentTheme = document.body.getAttribute('data-theme') || 'light';
@@ -133,6 +142,7 @@ const ChatbotSetting: React.FC = () => {
       fetchBoundModels(id);
       fetchConfigParams();
       fetchBoundPrompts(id);
+      fetchBoundTools(id);
     }
   }, [id]);
 
@@ -156,6 +166,96 @@ const ChatbotSetting: React.FC = () => {
       });
     } catch (error) {
       console.error('Failed to fetch bound prompts:', error);
+    }
+  };
+
+  const fetchBoundTools = async (chatbotId: string) => {
+    try {
+      const tools = await chatbotService.getChatbotTools(chatbotId);
+      setBoundTools(tools);
+    } catch (error) {
+      console.error('Failed to fetch bound tools:', error);
+    }
+  };
+
+  const handleSelectTool = async () => {
+    try {
+      // 获取所有MCP服务及其工具
+      const servers = await mcpService.getServers(1, 100);
+      const serversWithTools = await Promise.all(
+        servers.data.map(async (server: any) => {
+          try {
+            const tools = await mcpService.getTools(1, 100, server.id);
+            return {
+              ...server,
+              tools: tools.data || []
+            };
+          } catch (error) {
+            console.error(`Failed to fetch tools for server ${server.id}:`, error);
+            return {
+              ...server,
+              tools: []
+            };
+          }
+        })
+      );
+      setMcpServersWithTools(serversWithTools);
+      setExpandedServers([]);
+      setSelectedTools({});
+      setIsToolSelectModalVisible(true);
+    } catch (error) {
+      console.error('Failed to fetch MCP servers:', error);
+      message.error('获取MCP服务失败');
+    }
+  };
+
+  const handleToggleServerExpand = (serverId: string) => {
+    setExpandedServers(prev => 
+      prev.includes(serverId) 
+        ? prev.filter(id => id !== serverId) 
+        : [...prev, serverId]
+    );
+  };
+
+  const handleToolSelect = (serverId: string, toolId: string) => {
+    setSelectedTools(prev => {
+      const serverTools = prev[serverId] || [];
+      return {
+        ...prev,
+        [serverId]: serverTools.includes(toolId)
+          ? serverTools.filter(id => id !== toolId)
+          : [...serverTools, toolId]
+      };
+    });
+  };
+
+  const handleBindTools = async () => {
+    if (!chatbot) return;
+    try {
+      // 绑定所有选中的工具
+      for (const [serverId, toolIds] of Object.entries(selectedTools)) {
+        for (const toolId of toolIds) {
+          await chatbotService.bindToolToChatbot(chatbot.id, serverId, toolId);
+        }
+      }
+      message.success('工具绑定成功');
+      setIsToolSelectModalVisible(false);
+      fetchBoundTools(chatbot.id);
+    } catch (error) {
+      console.error('Failed to bind tools:', error);
+      message.error('工具绑定失败');
+    }
+  };
+
+  const handleUnbindTool = async (toolBindingId: string) => {
+    if (!chatbot) return;
+    try {
+      await chatbotService.unbindToolFromChatbot(chatbot.id, toolBindingId);
+      message.success('工具解绑成功');
+      fetchBoundTools(chatbot.id);
+    } catch (error) {
+      console.error('Failed to unbind tool:', error);
+      message.error('工具解绑失败');
     }
   };
 
@@ -1369,52 +1469,117 @@ const ChatbotSetting: React.FC = () => {
             <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <ToolOutlined style={{ fontSize: '14px', color: theme === 'dark' ? '#fff' : '#000' }} />
               <span style={{ fontWeight: 500, fontSize: '13px', color: theme === 'dark' ? '#fff' : '#000' }}>关联工具</span>
-              <span style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999' }}>（多选）</span>
             </div>
             
-            {mcpServers.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '16px', color: theme === 'dark' ? '#aaa' : '#999', fontSize: '12px' }}>
-                暂无可用工具
+            {boundTools.length === 0 ? (
+              <div 
+                style={{ 
+                  textAlign: 'center', 
+                  padding: '48px 0', 
+                  color: theme === 'dark' ? '#aaa' : '#999', 
+                  fontSize: '14px',
+                  border: theme === 'dark' ? '2px dashed rgba(255, 255, 255, 0.2)' : '2px dashed #d9d9d9',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s'
+                }}
+                onClick={handleSelectTool}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = '#667eea';
+                  e.currentTarget.style.color = '#667eea';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = theme === 'dark' ? 'rgba(255, 255, 255, 0.2)' : '#d9d9d9';
+                  e.currentTarget.style.color = theme === 'dark' ? '#aaa' : '#999';
+                }}
+              >
+                <div style={{ fontSize: '48px', marginBottom: '16px' }}>
+                  <PlusOutlined />
+                </div>
+                <div>点击添加工具</div>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {mcpServers.map(server => (
-                  <div
-                    key={server.id}
-                    onClick={() => {
-                      const newSelectedIds = selectedMcpIds.includes(server.id)
-                        ? selectedMcpIds.filter(id => id !== server.id)
-                        : [...selectedMcpIds, server.id];
-                      setSelectedMcpIds(newSelectedIds);
-                      setHasChanges(true);
-                    }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '8px 12px',
-                      border: `1px solid ${selectedMcpIds.includes(server.id) ? '#667eea' : (theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#d9d9d9')}`,
-                      borderRadius: '4px',
-                      background: selectedMcpIds.includes(server.id) 
-                        ? (theme === 'dark' ? 'rgba(102, 126, 234, 0.1)' : 'rgba(102, 126, 234, 0.05)')
-                        : 'transparent',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <Avatar 
-                      size={24} 
-                      src={server.avatar} 
-                      icon={<ApiOutlined />}
-                      style={{ backgroundColor: '#667eea', flexShrink: 0 }}
-                    />
-                    <div style={{ flex: 1, minWidth: 0, fontSize: '13px', color: theme === 'dark' ? '#fff' : '#000' }}>
-                      {server.name}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {boundTools.map(server => (
+                  <div key={server.server_id} style={{
+                    border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8',
+                    borderRadius: '4px',
+                    background: theme === 'dark' ? 'rgba(255, 255, 255, 0.02)' : '#fff'
+                  }}>
+                    <div 
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '12px',
+                        cursor: 'pointer',
+                        borderBottom: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8'
+                      }}
+                      onClick={() => handleToggleServerExpand(server.server_id)}
+                    >
+                      <Avatar 
+                        size={24} 
+                        src={server.server_avatar} 
+                        icon={<ApiOutlined />}
+                        style={{ backgroundColor: '#667eea', flexShrink: 0 }}
+                      />
+                      <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>
+                          {server.server_name}
+                        </div>
+                        <div style={{ fontSize: '11px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+                          {server.server_code}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+                        {server.tools.length} 个工具
+                      </div>
+                      <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+                        {expandedServers.includes(server.server_id) ? '▼' : '▶'}
+                      </div>
                     </div>
-                    {selectedMcpIds.includes(server.id) && (
-                      <CheckCircleOutlined style={{ color: '#667eea', fontSize: '14px' }} />
+                    {expandedServers.includes(server.server_id) && (
+                      <div style={{ padding: '8px 12px', borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          {server.tools.map((tool: any) => (
+                            <div key={tool.id} style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              padding: '8px',
+                              border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.05)' : '1px solid #f0f0f0',
+                              borderRadius: '4px',
+                              background: theme === 'dark' ? 'rgba(255, 255, 255, 0.02)' : '#fafafa'
+                            }}>
+                              <div style={{ fontSize: '13px', color: theme === 'dark' ? '#fff' : '#000', flex: 1 }}>
+                                {tool.tool_name}
+                              </div>
+                              <div style={{ fontSize: '11px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+                                {tool.tool_type}
+                              </div>
+                              <Button
+                                type="text"
+                                icon={<DeleteOutlined />}
+                                size="small"
+                                danger
+                                onClick={() => handleUnbindTool(tool.id)}
+                                title="解绑工具"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     )}
                   </div>
                 ))}
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  size="small"
+                  onClick={handleSelectTool}
+                >
+                  添加工具
+                </Button>
               </div>
             )}
           </div>
@@ -1848,6 +2013,192 @@ const ChatbotSetting: React.FC = () => {
             }}
           />
         </div>
+      </Modal>
+
+      {/* 工具选择弹窗 */}
+      <Modal
+        title="选择工具"
+        open={isToolSelectModalVisible}
+        onCancel={() => {
+          setIsToolSelectModalVisible(false);
+          setServerFilter('');
+          setToolFilter('');
+        }}
+        footer={[
+          <Button key="cancel" onClick={() => {
+            setIsToolSelectModalVisible(false);
+            setServerFilter('');
+            setToolFilter('');
+          }}>
+            取消
+          </Button>,
+          <Button key="submit" type="primary" onClick={handleBindTools}>
+            绑定
+          </Button>
+        ]}
+        width={800}
+        className={`chatbot-modal ${theme === 'dark' ? 'dark' : 'light'}`}
+      >
+        {/* 过滤输入框 */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+          <Input
+            placeholder="搜索服务名称"
+            value={serverFilter}
+            onChange={(e) => setServerFilter(e.target.value)}
+            style={{ flex: 1 }}
+          />
+          <Input
+            placeholder="搜索工具名称"
+            value={toolFilter}
+            onChange={(e) => setToolFilter(e.target.value)}
+            style={{ flex: 1 }}
+          />
+        </div>
+        
+        {mcpServersWithTools.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '24px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+            暂无可用MCP服务
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
+            {mcpServersWithTools
+              .filter(server => 
+                server.name.toLowerCase().includes(serverFilter.toLowerCase()) ||
+                server.code.toLowerCase().includes(serverFilter.toLowerCase())
+              )
+              .map(server => {
+                // 过滤工具
+                const filteredTools = server.tools.filter((tool: any) => 
+                  tool.name.toLowerCase().includes(toolFilter.toLowerCase()) ||
+                  (tool.tool_type && tool.tool_type.toLowerCase().includes(toolFilter.toLowerCase()))
+                );
+                
+                // 如果工具过滤后为空，且用户输入了工具过滤条件，则不显示该服务
+                if (toolFilter && filteredTools.length === 0) {
+                  return null;
+                }
+                
+                return (
+                  <div key={server.id} style={{
+                    border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8',
+                    borderRadius: '4px',
+                    background: theme === 'dark' ? 'rgba(255, 255, 255, 0.02)' : '#fff'
+                  }}>
+                    <div 
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '12px',
+                        cursor: 'pointer',
+                        borderBottom: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8'
+                      }}
+                      onClick={() => handleToggleServerExpand(server.id)}
+                    >
+                      <Avatar 
+                        size={24} 
+                        src={server.avatar} 
+                        icon={<ApiOutlined />}
+                        style={{ backgroundColor: '#667eea', flexShrink: 0 }}
+                      />
+                      <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ fontSize: '14px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>
+                          {server.name}
+                        </div>
+                        <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+                          {server.code}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+                        {filteredTools.length} 个工具
+                      </div>
+                      <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+                        {expandedServers.includes(server.id) ? '▼' : '▶'}
+                      </div>
+                    </div>
+                    {expandedServers.includes(server.id) && (
+                      <div style={{ padding: '8px 12px', borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8' }}>
+                        {filteredTools.length > 0 && (
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginBottom: '8px' }}>
+                            <Button
+                              type="text"
+                              size="small"
+                              onClick={() => {
+                                // 全选
+                                setSelectedTools(prev => ({
+                                  ...prev,
+                                  [server.id]: filteredTools.map(tool => tool.id)
+                                }));
+                              }}
+                            >
+                              全选
+                            </Button>
+                            <Button
+                              type="text"
+                              size="small"
+                              onClick={() => {
+                                // 反选
+                                const currentSelected = selectedTools[server.id] || [];
+                                const allToolIds = filteredTools.map(tool => tool.id);
+                                const newSelected = allToolIds.filter(id => !currentSelected.includes(id));
+                                setSelectedTools(prev => ({
+                                  ...prev,
+                                  [server.id]: newSelected
+                                }));
+                              }}
+                            >
+                              反选
+                            </Button>
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          {filteredTools.length === 0 ? (
+                            <div style={{ padding: '16px', textAlign: 'center', color: theme === 'dark' ? '#aaa' : '#999', fontSize: '12px' }}>
+                              没有匹配的工具
+                            </div>
+                          ) : (
+                            filteredTools.map((tool: any) => (
+                              <div key={tool.id} style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '4px',
+                                padding: '8px',
+                                border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.05)' : '1px solid #f0f0f0',
+                                borderRadius: '4px',
+                                background: theme === 'dark' ? 'rgba(255, 255, 255, 0.02)' : '#fafafa'
+                              }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={(selectedTools[server.id] || []).includes(tool.id)}
+                                    onChange={() => handleToolSelect(server.id, tool.id)}
+                                    style={{
+                                      accentColor: '#667eea'
+                                    }}
+                                  />
+                                  <div style={{ fontSize: '13px', color: theme === 'dark' ? '#fff' : '#000', flex: 1 }}>
+                                    {tool.name}
+                                  </div>
+                                  <div style={{ fontSize: '11px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+                                    {tool.tool_type}
+                                  </div>
+                                </div>
+                                {tool.description && (
+                                  <div style={{ marginLeft: '24px', fontSize: '11px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+                                    {tool.description}
+                                  </div>
+                                )}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+          </div>
+        )}
       </Modal>
     </div>
   );

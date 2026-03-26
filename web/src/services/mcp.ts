@@ -201,7 +201,7 @@ export const mcpService = {
   /**
    * 获取MCP工具列表（分页）
    */
-  getTools: async (page: number = 0, pageSize: number = 10, server_id?: string, name?: string, description?: string, status?: string): Promise<{ data: MCPTool[], total: number }> => {
+  getTools: async (page: number = 1, pageSize: number = 10, server_id?: string, name?: string, description?: string, status?: string): Promise<{ data: MCPTool[], total: number }> => {
     let params = [`page=${page}`, `page_size=${pageSize}`];
     if (server_id) params.push(`server_id=${server_id}`);
     if (name) params.push(`name=${encodeURIComponent(name)}`);

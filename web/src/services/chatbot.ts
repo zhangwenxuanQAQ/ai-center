@@ -260,4 +260,36 @@ export const chatbotService = {
       sort_order: sortOrder
     });
   },
+
+  /**
+   * 获取机器人绑定的工具列表
+   * @param chatbotId - 机器人ID
+   */
+  getChatbotTools: async (chatbotId: string): Promise<any[]> => {
+    return http.get<any[]>(`/aicenter/v1/chatbot/${chatbotId}/tools`);
+  },
+
+  /**
+   * 绑定工具到机器人
+   * @param chatbotId - 机器人ID
+   * @param mcpServerId - MCP服务ID
+   * @param mcpToolId - MCP工具ID
+   */
+  bindToolToChatbot: async (chatbotId: string, mcpServerId: string, mcpToolId: string): Promise<any> => {
+    return http.post<any>(`/aicenter/v1/chatbot/${chatbotId}/tools/bind`, {
+      mcp_server_id: mcpServerId,
+      mcp_tool_id: mcpToolId
+    });
+  },
+
+  /**
+   * 解绑机器人的工具
+   * @param chatbotId - 机器人ID
+   * @param toolBindingId - 工具绑定ID
+   */
+  unbindToolFromChatbot: async (chatbotId: string, toolBindingId: string): Promise<any> => {
+    return http.post<any>(`/aicenter/v1/chatbot/${chatbotId}/tools/unbind`, {
+      tool_binding_id: toolBindingId
+    });
+  },
 };

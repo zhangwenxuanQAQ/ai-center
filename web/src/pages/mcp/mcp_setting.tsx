@@ -199,7 +199,7 @@ const MCPSetting: React.FC = () => {
     if (!server) return;
     setToolsLoading(true);
     try {
-      const data = await mcpService.getTools(toolsPage - 1, toolsPageSize, server.id, searchName, searchDescription, searchStatus);
+      const data = await mcpService.getTools(toolsPage, toolsPageSize, server.id, searchName, searchDescription, searchStatus);
       setTools(data.data || data);
       setToolsTotal(data.total || (Array.isArray(data) ? data.length : 0));
     } catch (error) {

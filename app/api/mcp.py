@@ -399,7 +399,7 @@ def create_mcp_tool(tool: MCPToolCreate):
 
 @router.get("/tool", response_model=ApiResponse)
 def get_mcp_tools(
-    page: int = Query(0, description="页码，从0开始"),
+    page: int = Query(1, description="页码，从1开始"),
     page_size: int = Query(10, description="每页数量"),
     server_id: str = Query(None, description="MCP服务ID"),
     name: str = Query(None, description="工具名称（模糊查询）"),
@@ -410,7 +410,7 @@ def get_mcp_tools(
     获取MCP工具列表（分页）
     
     Args:
-        page: 页码，从0开始
+        page: 页码，从1开始
         page_size: 每页数量，默认10
         server_id: MCP服务ID，可选
         name: 工具名称（模糊查询，可选）
@@ -420,7 +420,7 @@ def get_mcp_tools(
     Returns:
         ApiResponse: 统一格式的响应对象，包含data和total
     """
-    skip = page * page_size
+    skip = (page - 1) * page_size
     tools = MCPToolService.get_tools(skip, page_size, server_id, name, description, status)
     total = MCPToolService.count_tools(server_id, name, description, status)
     tools_data = []

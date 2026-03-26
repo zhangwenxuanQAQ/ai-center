@@ -4,7 +4,7 @@
 
 import json
 from datetime import datetime
-from app.database.models import Chatbot, ChatbotMCP, ChatbotCategory, ChatbotModel, LLMModel, ChatbotPrompt, Prompt
+from app.database.models import Chatbot, ChatbotMCP, ChatbotCategory, ChatbotModel, LLMModel, ChatbotPrompt, Prompt, ChatbotTool, MCPServer, MCPTool
 from app.services.chatbot.dto import ChatbotCreate, ChatbotUpdate, Chatbot as ChatbotDTO
 from app.database.db_utils import handle_transaction
 from app.core.exceptions import ResourceNotFoundError, DuplicateResourceError
@@ -780,5 +780,163 @@ class ChatbotService:
             chatbot_prompt.save()
             
             return chatbot_prompt
+        except Exception as e:
+            raise
+    
+    @staticmethod
+    def get_chatbot_tools(chatbot_id: str):
+        """
+        获取机器人绑定的工具列表
+        
+        Args:
+            chatbot_id: 机器人ID
+            
+        Returns:
+            list: 绑定的工具信息列表，按服务分组
+        """
+        try:
+            # 获取机器人绑定的所有工具
+            chatbot_tools = ChatbotTool.select().where(
+                (ChatbotTool.chatbot_id == chatbot_id) &
+                (ChatbotTool.deleted == False)
+            )
+            
+            # 按服务分组
+            tools_by_server = {}
+            for chatbot_tool in chatbot_tools:
+                try:
+                    # 获取MCP工具信息
+                    mcp_tool = MCPTool.get_by_id(chatbot_tool.mcp_tool_id)
+                    if mcp_tool.deleted or not mcp_tool.status:
+                        continue
+                    
+                    # 获取MCP服务信息
+                    mcp_server = MCPServer.get_by_id(chatbot_tool.mcp_server_id)
+                    if mcp_server.deleted:
+                        continue
+                    
+                    # 按服务分组
+                    server_id = chatbot_tool.mcp_server_id
+                    if server_id not in tools_by_server:
+                        tools_by_server[server_id] = {
+                            "server_id": server_id,
+                            "server_name": mcp_server.name,
+                            "server_code": mcp_server.code,
+                            "server_avatar": mcp_server.avatar,
+                            "tools": []
+                        }
+                    
+                    # 添加工具信息
+                    tools_by_server[server_id]["tools"].append({
+                        "id": str(chatbot_tool.id),
+                        "tool_id": str(mcp_tool.id),
+                        "tool_name": mcp_tool.name,
+                        "tool_description": mcp_tool.description,
+                        "tool_type": mcp_tool.tool_type
+                    })
+                except (MCPTool.DoesNotExist, MCPServer.DoesNotExist):
+                    pass
+            
+            # 转换为列表格式
+            result = list(tools_by_server.values())
+            return result
+        except Exception as e:
+            return []
+    
+    @staticmethod
+    @handle_transaction
+    def bind_tool_to_chatbot(chatbot_id: str, mcp_server_id: str, mcp_tool_id: str):
+        """
+        绑定工具到机器人
+        
+        Args:
+            chatbot_id: 机器人ID
+            mcp_server_id: MCP服务ID
+            mcp_tool_id: MCP工具ID
+            
+        Returns:
+            ChatbotTool: 绑定关系对象
+            
+        Raises:
+            ResourceNotFoundError: 机器人、MCP服务或工具不存在
+        """
+        try:
+            # 检查机器人是否存在
+            try:
+                chatbot = Chatbot.get_by_id(chatbot_id)
+                if chatbot.deleted:
+                    raise ResourceNotFoundError(message=f"机器人 {chatbot_id} 不存在")
+            except Chatbot.DoesNotExist:
+                raise ResourceNotFoundError(message=f"机器人 {chatbot_id} 不存在")
+            
+            # 检查MCP服务是否存在
+            try:
+                mcp_server = MCPServer.get_by_id(mcp_server_id)
+                if mcp_server.deleted:
+                    raise ResourceNotFoundError(message=f"MCP服务 {mcp_server_id} 不存在")
+            except MCPServer.DoesNotExist:
+                raise ResourceNotFoundError(message=f"MCP服务 {mcp_server_id} 不存在")
+            
+            # 检查MCP工具是否存在
+            try:
+                mcp_tool = MCPTool.get_by_id(mcp_tool_id)
+                if mcp_tool.deleted or not mcp_tool.status:
+                    raise ResourceNotFoundError(message=f"MCP工具 {mcp_tool_id} 不存在或未启用")
+                if mcp_tool.server_id != mcp_server_id:
+                    raise ResourceNotFoundError(message=f"MCP工具 {mcp_tool_id} 不属于MCP服务 {mcp_server_id}")
+            except MCPTool.DoesNotExist:
+                raise ResourceNotFoundError(message=f"MCP工具 {mcp_tool_id} 不存在")
+            
+            # 检查是否已经绑定
+            existing_binding = ChatbotTool.select().where(
+                (ChatbotTool.chatbot_id == chatbot_id) &
+                (ChatbotTool.mcp_tool_id == mcp_tool_id) &
+                (ChatbotTool.deleted == False)
+            ).first()
+            
+            if existing_binding:
+                return existing_binding
+            
+            # 创建新的绑定关系
+            chatbot_tool = ChatbotTool(
+                chatbot_id=chatbot_id,
+                mcp_server_id=mcp_server_id,
+                mcp_tool_id=mcp_tool_id
+            )
+            chatbot_tool.save(force_insert=True)
+            
+            return chatbot_tool
+        except Exception as e:
+            raise
+    
+    @staticmethod
+    @handle_transaction
+    def unbind_tool_from_chatbot(chatbot_id: str, tool_binding_id: str):
+        """
+        解绑机器人的工具
+        
+        Args:
+            chatbot_id: 机器人ID
+            tool_binding_id: 工具绑定ID
+            
+        Returns:
+            bool: 解绑是否成功
+            
+        Raises:
+            ResourceNotFoundError: 绑定关系不存在
+        """
+        try:
+            chatbot_tool = ChatbotTool.select().where(
+                (ChatbotTool.id == tool_binding_id) &
+                (ChatbotTool.chatbot_id == chatbot_id) &
+                (ChatbotTool.deleted == False)
+            ).first()
+            
+            if not chatbot_tool:
+                raise ResourceNotFoundError(message=f"工具绑定关系 {tool_binding_id} 不存在")
+            
+            ChatbotTool.delete().where(ChatbotTool.id == chatbot_tool.id).execute()
+            
+            return True
         except Exception as e:
             raise
