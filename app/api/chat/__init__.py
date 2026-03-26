@@ -2,6 +2,4 @@
 API路由模块
 """
 
-from fastapi import APIRouter
-
-router = APIRouter()
+from .work_weixin_chat import router
