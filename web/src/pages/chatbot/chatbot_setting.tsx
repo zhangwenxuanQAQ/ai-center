@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Form, Input, Select, TreeSelect, Button, message, Row, Col, Upload, Spin, Tag, Avatar, Modal } from 'antd';
+import { Form, Input, Select, TreeSelect, Button, message, Row, Col, Upload, Spin, Tag, Avatar, Modal, Table, Slider, InputNumber, Switch, Drawer, Descriptions, Dropdown, Tooltip } from 'antd';
 const { TextArea } = Input;
-import { ArrowLeftOutlined, SaveOutlined, UndoOutlined, UploadOutlined, RobotOutlined, FileTextOutlined, DatabaseOutlined, ToolOutlined, ApiOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SaveOutlined, UndoOutlined, UploadOutlined, RobotOutlined, FileTextOutlined, DatabaseOutlined, ToolOutlined, ApiOutlined, CheckCircleOutlined, EyeOutlined, DeleteOutlined, PlusOutlined, SettingOutlined, CloseOutlined, EditOutlined, AppstoreOutlined, QuestionCircleOutlined, FormOutlined, UpOutlined, DownOutlined } from '@ant-design/icons';
 import type { UploadProps } from 'antd';
+import type { MenuProps } from 'antd';
+import MDEditor from '@uiw/react-md-editor';
 import { chatbotService, Chatbot, ChatbotCategory } from '../../services/chatbot';
 import { promptService, Prompt } from '../../services/prompt';
 import { knowledgeService, Knowledge } from '../../services/knowledge';
@@ -22,6 +24,26 @@ const sourceTypeIcons: Record<string, string> = {
 };
 
 const { Option } = Select;
+
+const MODEL_TYPES_TO_BIND = [
+  { type: 'text', name: '文本模型' },
+  { type: 'vision', name: '视觉模型' },
+  { type: 'multimodal', name: '全模态模型' }
+];
+
+const MODEL_TYPE_MAP: Record<string, string> = {
+  'text': '文本模型',
+  'vision': '视觉模型',
+  'multimodal': '全模态模型'
+};
+
+const getProviderAvatar = (provider: string): string => {
+  if (!provider) {
+    return '/src/assets/llm/default.svg';
+  }
+  const lowercaseProvider = provider.toLowerCase();
+  return `/src/assets/llm/${lowercaseProvider}.svg`;
+};
 
 const generateRandomString = (length: number): string => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -59,6 +81,32 @@ const ChatbotSetting: React.FC = () => {
   
   const [llmModels, setLlmModels] = useState<LLMModel[]>([]);
   const [selectedModelId, setSelectedModelId] = useState<number | undefined>(undefined);
+  
+  const [boundModels, setBoundModels] = useState<Record<string, any>>({});
+  const [isModelSelectModalVisible, setIsModelSelectModalVisible] = useState(false);
+  const [selectingModelType, setSelectingModelType] = useState<string>('');
+  const [availableModels, setAvailableModels] = useState<LLMModel[]>([]);
+  const [configPopoverVisible, setConfigPopoverVisible] = useState<string | null>(null);
+  const [modelConfig, setModelConfig] = useState<Record<string, any>>({});
+  const [editingModelType, setEditingModelType] = useState<string>('');
+  const [configParams, setConfigParams] = useState<Record<string, any[]>>({});
+  const [viewModelDrawerVisible, setViewModelDrawerVisible] = useState(false);
+  const [currentModel, setCurrentModel] = useState<any>(null);
+  
+  // 提示词相关state
+  const [boundPrompts, setBoundPrompts] = useState<Record<string, any[]>>({
+    system: [],
+    user: []
+  });
+  const [isPromptSelectModalVisible, setIsPromptSelectModalVisible] = useState(false);
+  const [selectingPromptType, setSelectingPromptType] = useState<string>('');
+  const [promptSelectMode, setPromptSelectMode] = useState<string>('');
+  const [manualPromptContent, setManualPromptContent] = useState<string>('');
+  const [isPromptViewModalVisible, setIsPromptViewModalVisible] = useState(false);
+  const [currentViewPrompt, setCurrentViewPrompt] = useState<Prompt | null>(null);
+  const [isPromptEditModalVisible, setIsPromptEditModalVisible] = useState(false);
+  const [editingPrompt, setEditingPrompt] = useState<any>(null);
+  const [editingPromptContent, setEditingPromptContent] = useState<string>('');
 
   useEffect(() => {
     const currentTheme = document.body.getAttribute('data-theme') || 'light';
@@ -82,8 +130,34 @@ const ChatbotSetting: React.FC = () => {
       fetchKnowledges();
       fetchMcpServers();
       fetchLLMModels();
+      fetchBoundModels(id);
+      fetchConfigParams();
+      fetchBoundPrompts(id);
     }
   }, [id]);
+
+  const fetchConfigParams = async () => {
+    try {
+      const params = await llmModelService.getConfigParams();
+      setConfigParams(params);
+    } catch (error) {
+      console.error('Failed to fetch config params:', error);
+    }
+  };
+
+  const fetchBoundPrompts = async (chatbotId: string) => {
+    try {
+      const prompts = await chatbotService.getChatbotPrompts(chatbotId);
+      const systemPrompts = prompts.filter((p: any) => p.prompt_type === 'system');
+      const userPrompts = prompts.filter((p: any) => p.prompt_type === 'user');
+      setBoundPrompts({
+        system: systemPrompts,
+        user: userPrompts
+      });
+    } catch (error) {
+      console.error('Failed to fetch bound prompts:', error);
+    }
+  };
 
   const handleBeforeUnload = useCallback((e: BeforeUnloadEvent) => {
     if (hasChanges) {
@@ -200,6 +274,279 @@ const ChatbotSetting: React.FC = () => {
     } catch (error) {
       console.error('Failed to fetch LLM models:', error);
     }
+  };
+
+  const fetchBoundModels = async (chatbotId: string) => {
+    try {
+      const models = await chatbotService.getChatbotModels(chatbotId);
+      const modelsMap: Record<string, any> = {};
+      models.forEach((model: any) => {
+        modelsMap[model.model_type] = model;
+      });
+      setBoundModels(modelsMap);
+    } catch (error) {
+      console.error('Failed to fetch bound models:', error);
+    }
+  };
+
+  const handleSelectModel = (modelType: string) => {
+    setSelectingModelType(modelType);
+    const models = llmModels.filter(m => m.model_type === modelType && m.status);
+    setAvailableModels(models);
+    setIsModelSelectModalVisible(true);
+  };
+
+  const handleBindModel = async (model: LLMModel) => {
+    if (!chatbot) return;
+    try {
+      // 获取默认config
+      const defaultConfig: Record<string, any> = {};
+      const params = configParams[selectingModelType] || [];
+      params.forEach((param: any) => {
+        defaultConfig[param.key] = param.default;
+      });
+      
+      // 用模型的config覆盖默认config
+      let modelConfig = {};
+      if (model.config) {
+        if (typeof model.config === 'string') {
+          try {
+            modelConfig = JSON.parse(model.config);
+          } catch (e) {
+            modelConfig = {};
+          }
+        } else {
+          modelConfig = model.config;
+        }
+      }
+      const configToUse = {
+        ...defaultConfig,
+        ...modelConfig
+      };
+      
+      await chatbotService.bindModelToChatbot(chatbot.id, model.id, selectingModelType, configToUse);
+      message.success('模型绑定成功');
+      setIsModelSelectModalVisible(false);
+      fetchBoundModels(chatbot.id);
+      // 绑定操作已经通过API保存，不需要提示用户
+    } catch (error) {
+      console.error('Failed to bind model:', error);
+      message.error('模型绑定失败');
+    }
+  };
+
+  const handleUnbindModel = async (modelType: string) => {
+    if (!chatbot) return;
+    try {
+      await chatbotService.unbindModelFromChatbot(chatbot.id, modelType);
+      message.success('模型解绑成功');
+      fetchBoundModels(chatbot.id);
+      // 解绑操作已经通过API保存，不需要提示用户
+    } catch (error) {
+      console.error('Failed to unbind model:', error);
+      message.error('模型解绑失败');
+    }
+  };
+
+  const handleViewModel = async (modelType: string) => {
+    if (!chatbot) return;
+    try {
+      const model = await chatbotService.getChatbotModelByType(chatbot.id, modelType);
+      setCurrentModel(model);
+      setViewModelDrawerVisible(true);
+    } catch (error) {
+      console.error('Failed to fetch model:', error);
+      message.error('获取模型信息失败');
+    }
+  };
+
+  const handleOpenConfig = (modelType: string, model: any) => {
+    setEditingModelType(modelType);
+    let config = {};
+    if (model.config) {
+      if (typeof model.config === 'string') {
+        try {
+          config = JSON.parse(model.config);
+        } catch (e) {
+          config = {};
+        }
+      } else {
+        config = model.config;
+      }
+    }
+    setModelConfig(config);
+    setConfigPopoverVisible(modelType);
+  };
+
+  const handleCloseConfig = () => {
+    setConfigPopoverVisible(null);
+  };
+
+  const handleSaveConfig = async () => {
+    if (!chatbot || !editingModelType) return;
+    try {
+      await chatbotService.updateModelConfig(chatbot.id, editingModelType, modelConfig);
+      message.success('模型配置更新成功');
+      setConfigPopoverVisible(null);
+      fetchBoundModels(chatbot.id);
+    } catch (error) {
+      console.error('Failed to update model config:', error);
+      message.error('模型配置更新失败');
+    }
+  };
+
+  const handleConfigChange = (key: string, value: any) => {
+    setModelConfig(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
+  // 提示词相关处理函数
+  const handleSelectPrompt = (promptType: string, mode: string) => {
+    setSelectingPromptType(promptType);
+    setPromptSelectMode(mode);
+    setIsPromptSelectModalVisible(true);
+    if (mode === 'manual') {
+      setManualPromptContent('');
+    }
+  };
+
+  const handleBindPromptFromLibrary = async (promptId: string) => {
+    if (!chatbot) return;
+    try {
+      await chatbotService.bindPromptToChatbot(chatbot.id, {
+        prompt_type: selectingPromptType,
+        prompt_source: 'library',
+        prompt_id: promptId
+      });
+      message.success('提示词绑定成功');
+      setIsPromptSelectModalVisible(false);
+      fetchBoundPrompts(chatbot.id);
+    } catch (error) {
+      console.error('Failed to bind prompt:', error);
+      message.error('提示词绑定失败');
+    }
+  };
+
+  const handleBindPromptManual = async () => {
+    if (!chatbot) return;
+    if (!manualPromptContent.trim()) {
+      message.error('请输入提示词内容');
+      return;
+    }
+    try {
+      await chatbotService.bindPromptToChatbot(chatbot.id, {
+        prompt_type: selectingPromptType,
+        prompt_source: 'manual',
+        prompt_content: manualPromptContent
+      });
+      message.success('提示词绑定成功');
+      setIsPromptSelectModalVisible(false);
+      setManualPromptContent('');
+      fetchBoundPrompts(chatbot.id);
+    } catch (error) {
+      console.error('Failed to bind prompt:', error);
+      message.error('提示词绑定失败');
+    }
+  };
+
+  const handleUnbindPrompt = async (promptBindingId: string) => {
+    if (!chatbot) return;
+    try {
+      await chatbotService.unbindPromptFromChatbot(chatbot.id, promptBindingId);
+      message.success('提示词解绑成功');
+      fetchBoundPrompts(chatbot.id);
+    } catch (error) {
+      console.error('Failed to unbind prompt:', error);
+      message.error('提示词解绑失败');
+    }
+  };
+
+  const handleViewPrompt = (prompt: Prompt) => {
+    setCurrentViewPrompt(prompt);
+    setIsPromptViewModalVisible(true);
+  };
+
+  const handleEditPrompt = (prompt: any) => {
+    setEditingPrompt(prompt);
+    setEditingPromptContent(prompt.prompt_content || '');
+    setIsPromptEditModalVisible(true);
+  };
+
+  const handleSaveEditPrompt = async () => {
+    if (!chatbot || !editingPrompt) return;
+    if (!editingPromptContent.trim()) {
+      message.error('请输入提示词内容');
+      return;
+    }
+    try {
+      await chatbotService.bindPromptToChatbot(chatbot.id, {
+        prompt_type: editingPrompt.prompt_type,
+        prompt_source: 'manual',
+        prompt_content: editingPromptContent,
+        prompt_binding_id: editingPrompt.id
+      });
+      message.success('提示词更新成功');
+      setIsPromptEditModalVisible(false);
+      setEditingPrompt(null);
+      setEditingPromptContent('');
+      fetchBoundPrompts(chatbot.id);
+    } catch (error) {
+      console.error('Failed to update prompt:', error);
+      message.error('提示词更新失败');
+    }
+  };
+
+  const handleMovePromptUp = async (prompt: any, promptType: string) => {
+    if (!chatbot) return;
+    try {
+      const prompts = boundPrompts[promptType];
+      const index = prompts.findIndex((p: any) => p.id === prompt.id);
+      if (index > 0) {
+        const newSortOrder = prompt.sort_order || 0;
+        await chatbotService.updatePromptSortOrder(chatbot.id, prompt.id, newSortOrder - 1);
+        await chatbotService.updatePromptSortOrder(chatbot.id, prompts[index - 1].id, newSortOrder + 1);
+        fetchBoundPrompts(chatbot.id);
+      }
+    } catch (error) {
+      console.error('Failed to move prompt:', error);
+      message.error('移动提示词失败');
+    }
+  };
+
+  const handleMovePromptDown = async (prompt: any, promptType: string) => {
+    if (!chatbot) return;
+    try {
+      const prompts = boundPrompts[promptType];
+      const index = prompts.findIndex((p: any) => p.id === prompt.id);
+      if (index < prompts.length - 1) {
+        const newSortOrder = prompt.sort_order || 0;
+        await chatbotService.updatePromptSortOrder(chatbot.id, prompt.id, newSortOrder + 1);
+        await chatbotService.updatePromptSortOrder(chatbot.id, prompts[index + 1].id, newSortOrder - 1);
+        fetchBoundPrompts(chatbot.id);
+      }
+    } catch (error) {
+      console.error('Failed to move prompt:', error);
+      message.error('移动提示词失败');
+    }
+  };
+
+  const getPromptAddMenu = (promptType: string): MenuProps['items'] => {
+    return [
+      {
+        key: 'manual',
+        icon: <EditOutlined />,
+        label: '手动输入',
+        onClick: () => handleSelectPrompt(promptType, 'manual')
+      },
+      {
+        key: 'library',
+        icon: <AppstoreOutlined />,
+        label: '从提示词库选择',
+        onClick: () => handleSelectPrompt(promptType, 'library')
+      }
+    ];
   };
 
   const getSourceConfigFields = () => {
@@ -547,53 +894,198 @@ const ChatbotSetting: React.FC = () => {
             <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <ApiOutlined style={{ fontSize: '14px', color: theme === 'dark' ? '#fff' : '#000' }} />
               <span style={{ fontWeight: 500, fontSize: '13px', color: theme === 'dark' ? '#fff' : '#000' }}>绑定模型</span>
-              <span style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999' }}>（单选）</span>
             </div>
             
-            {llmModels.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '16px', color: theme === 'dark' ? '#aaa' : '#999', fontSize: '12px' }}>
-                暂无可用模型
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {llmModels.map(model => (
-                  <div
-                    key={model.id}
-                    onClick={() => {
-                      setSelectedModelId(selectedModelId === parseInt(model.id) ? undefined : parseInt(model.id));
-                      setHasChanges(true);
-                    }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '8px 12px',
-                      border: `1px solid ${selectedModelId === parseInt(model.id) ? '#faad14' : (theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#d9d9d9')}`,
-                      borderRadius: '4px',
-                      background: selectedModelId === parseInt(model.id) 
-                        ? (theme === 'dark' ? 'rgba(250, 173, 20, 0.1)' : 'rgba(250, 173, 20, 0.05)')
-                        : 'transparent',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <Avatar 
-                      size={24} 
-                      icon={<ApiOutlined />}
-                      style={{ backgroundColor: '#faad14', flexShrink: 0 }}
-                    />
-                    <div style={{ flex: 1, minWidth: 0, fontSize: '13px', color: theme === 'dark' ? '#fff' : '#000' }}>
-                      {model.name}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {MODEL_TYPES_TO_BIND.map(modelTypeInfo => {
+                const boundModel = boundModels[modelTypeInfo.type];
+                return (
+                  <div key={modelTypeInfo.type} style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '12px',
+                    padding: '8px 12px',
+                    border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8',
+                    borderRadius: '4px',
+                    background: theme === 'dark' ? 'rgba(255, 255, 255, 0.02)' : '#fff'
+                  }}>
+                    <div style={{ 
+                      minWidth: '80px', 
+                      fontSize: '13px', 
+                      fontWeight: 500,
+                      color: theme === 'dark' ? '#fff' : '#000'
+                    }}>
+                      {modelTypeInfo.name}：
                     </div>
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                      <Tag color="blue" style={{ fontSize: '10px', padding: '0 4px', margin: 0 }}>{model.provider}</Tag>
-                    </div>
-                    {selectedModelId === parseInt(model.id) && (
-                      <CheckCircleOutlined style={{ color: '#faad14', fontSize: '14px' }} />
+                    
+                    {boundModel ? (
+                      <>
+                        <div style={{ 
+                          flex: 1, 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: '12px' 
+                        }}>
+                          <img 
+                            src={getProviderAvatar(boundModel.provider || '')}
+                            alt={boundModel.provider}
+                            style={{ 
+                              width: 28, 
+                              height: 28, 
+                              borderRadius: '50%',
+                              objectFit: 'cover',
+                              flexShrink: 0
+                            }}
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.src = '/src/assets/llm/default.svg';
+                            }}
+                          />
+                          <div style={{ 
+                            flex: 1, 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '8px' 
+                          }}>
+                            <span style={{ fontSize: '13px', color: theme === 'dark' ? '#fff' : '#000' }}>
+                              {boundModel.name}
+                            </span>
+                            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
+                              {boundModel.tags && boundModel.tags.map((tag: string, index: number) => (
+                                <Tag key={index} color="blue" style={{ fontSize: '10px', padding: '0 4px', margin: 0 }}>
+                                  {tag}
+                                </Tag>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          type="text"
+                          icon={<EyeOutlined />}
+                          size="small"
+                          onClick={() => handleViewModel(modelTypeInfo.type)}
+                          title="查看模型"
+                        />
+                        <div style={{ position: 'relative' }}>
+                          <Button
+                            type="text"
+                            icon={<SettingOutlined />}
+                            size="small"
+                            onClick={() => handleOpenConfig(modelTypeInfo.type, boundModel)}
+                            title="配置模型"
+                          />
+                          {/* 模型配置气泡卡片 */}
+                          {configPopoverVisible === modelTypeInfo.type && (
+                            <div style={{
+                              position: 'absolute',
+                              right: '0',
+                              top: '100%',
+                              marginTop: '4px',
+                              zIndex: 1000,
+                              backgroundColor: theme === 'dark' ? '#1f1f1f' : '#fff',
+                              border: '1px solid #d9d9d9',
+                              borderRadius: '4px',
+                              padding: '16px',
+                              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                              minWidth: '400px'
+                            }}>
+                              <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>
+                                  模型配置
+                                </h4>
+                                <Button
+                                  type="text"
+                                  icon={<CloseOutlined />}
+                                  size="small"
+                                  onClick={handleCloseConfig}
+                                />
+                              </div>
+                              <div style={{ marginBottom: '16px' }}>
+                                <Form layout="horizontal" labelCol={{ span: 8 }} wrapperCol={{ span: 16 }}>
+                                  {configParams[editingModelType]?.map((param: any) => {
+                                    const paramKey = param.key;
+                                    const value = modelConfig[paramKey] !== undefined ? modelConfig[paramKey] : param.default;
+                                    return (
+                                      <Form.Item key={paramKey} label={param.label} tooltip={param.description}>
+                                        {param.type === 'number' ? (
+                                          <InputNumber
+                                            min={param.min}
+                                            max={param.max}
+                                            step={param.step}
+                                            value={value}
+                                            onChange={(value) => handleConfigChange(paramKey, value)}
+                                            style={{ width: '100%' }}
+                                          />
+                                        ) : param.type === 'slider' ? (
+                                          <>
+                                            <Slider
+                                              min={param.min}
+                                              max={param.max}
+                                              step={param.step}
+                                              value={value}
+                                              onChange={(value) => handleConfigChange(paramKey, value)}
+                                              style={{ width: '100%' }}
+                                            />
+                                            <div style={{ marginTop: '8px', fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999', textAlign: 'center' }}>
+                                              {value}
+                                            </div>
+                                          </>
+                                        ) : param.type === 'boolean' ? (
+                                          <Switch
+                                            checked={value}
+                                            onChange={(checked) => handleConfigChange(paramKey, checked)}
+                                          />
+                                        ) : (
+                                          <Input
+                                            value={value}
+                                            onChange={(e) => handleConfigChange(paramKey, e.target.value)}
+                                            style={{ width: '100%' }}
+                                          />
+                                        )}
+                                      </Form.Item>
+                                    );
+                                  })}
+                                </Form>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                                <Button size="small" onClick={handleCloseConfig}>
+                                  取消
+                                </Button>
+                                <Button type="primary" size="small" onClick={handleSaveConfig}>
+                                  保存
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <Button
+                          type="text"
+                          icon={<DeleteOutlined />}
+                          size="small"
+                          danger
+                          onClick={() => handleUnbindModel(modelTypeInfo.type)}
+                          title="解绑模型"
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ flex: 1, fontSize: '13px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+                          未绑定
+                        </div>
+                        <Button
+                          type="primary"
+                          icon={<PlusOutlined />}
+                          size="small"
+                          onClick={() => handleSelectModel(modelTypeInfo.type)}
+                        >
+                          选择模型
+                        </Button>
+                      </>
                     )}
                   </div>
-                ))}
-              </div>
-            )}
+                );
+              })}
+            </div>
           </div>
 
           {/* 提示词 */}
@@ -607,25 +1099,264 @@ const ChatbotSetting: React.FC = () => {
               <FileTextOutlined style={{ fontSize: '14px', color: theme === 'dark' ? '#fff' : '#000' }} />
               <span style={{ fontWeight: 500, fontSize: '13px', color: theme === 'dark' ? '#fff' : '#000' }}>提示词</span>
             </div>
-            <Select
-              style={{ width: '100%' }}
-              placeholder="请选择提示词"
-              value={selectedPromptId}
-              onChange={(value) => {
-                setSelectedPromptId(value);
-                setHasChanges(true);
-              }}
-              allowClear
-              showSearch
-              size="small"
-              filterOption={(input, option) =>
-                (option?.children as unknown as string)?.toLowerCase().includes(input.toLowerCase())
-              }
-            >
-              {prompts.map(prompt => (
-                <Option key={prompt.id} value={prompt.id}>{prompt.name}</Option>
-              ))}
-            </Select>
+            
+            {/* 系统提示词 */}
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ 
+                marginBottom: '8px', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between' 
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>系统提示词</span>
+                  <Tooltip title="多个系统提示词会拼接成一个发送给大模型">
+                    <QuestionCircleOutlined style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999', cursor: 'help' }} />
+                  </Tooltip>
+                </div>
+                <Dropdown menu={{ items: getPromptAddMenu('system') }} placement="bottomRight">
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    size="small"
+                  >
+                    添加
+                  </Button>
+                </Dropdown>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {boundPrompts.system.length === 0 ? (
+                  <div style={{ 
+                    textAlign: 'center', 
+                    padding: '12px', 
+                    color: theme === 'dark' ? '#aaa' : '#999', 
+                    fontSize: '12px',
+                    border: theme === 'dark' ? '1px dashed rgba(255, 255, 255, 0.2)' : '1px dashed #d9d9d9',
+                    borderRadius: '4px'
+                  }}>
+                    暂未绑定系统提示词
+                  </div>
+                ) : (
+                  boundPrompts.system.map((prompt: any) => (
+                    <div key={prompt.id} style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '8px',
+                      padding: '8px 12px',
+                      border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8',
+                      borderRadius: '4px',
+                      background: theme === 'dark' ? 'rgba(255, 255, 255, 0.02)' : '#fff'
+                    }}>
+                      {prompt.prompt_source === 'library' ? (
+                        <>
+                          <FileTextOutlined style={{ fontSize: '14px', color: '#52c41a', flexShrink: 0 }} />
+                          <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-start' }}>
+                            <span style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>
+                              {prompt.name}
+                            </span>
+                            <span style={{ fontSize: '11px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+                              {prompt.description}
+                            </span>
+                            {prompt.tags && prompt.tags.length > 0 && (
+                              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                {prompt.tags.map((tag: string, index: number) => (
+                                  <Tag key={index} color="blue" style={{ fontSize: '10px', padding: '0 4px', margin: 0 }}>
+                                    {tag}
+                                  </Tag>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <Button
+                            type="text"
+                            icon={<EyeOutlined />}
+                            size="small"
+                            onClick={() => handleViewPrompt(prompt)}
+                            title="查看提示词"
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <FormOutlined style={{ fontSize: '14px', color: '#faad14', flexShrink: 0 }} />
+                          <Tooltip title={prompt.prompt_content || ''}>
+                            <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                              <div style={{ 
+                                fontSize: '13px', 
+                                color: theme === 'dark' ? '#fff' : '#000',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                textAlign: 'left'
+                              }}>
+                                {prompt.prompt_content}
+                              </div>
+                            </div>
+                          </Tooltip>
+                          <Button
+                            type="text"
+                            icon={<EditOutlined />}
+                            size="small"
+                            onClick={() => handleEditPrompt(prompt)}
+                            title="编辑提示词"
+                          />
+                        </>
+                      )}
+                      <Button
+                        type="text"
+                        icon={<UpOutlined />}
+                        size="small"
+                        onClick={() => handleMovePromptUp(prompt, 'system')}
+                        title="上移"
+                      />
+                      <Button
+                        type="text"
+                        icon={<DownOutlined />}
+                        size="small"
+                        onClick={() => handleMovePromptDown(prompt, 'system')}
+                        title="下移"
+                      />
+                      <Button
+                        type="text"
+                        icon={<DeleteOutlined />}
+                        size="small"
+                        danger
+                        onClick={() => handleUnbindPrompt(prompt.id)}
+                        title="解绑提示词"
+                      />
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+            
+            {/* 用户提示词 */}
+            <div>
+              <div style={{ 
+                marginBottom: '8px', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between' 
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000'  }}>用户提示词</span>
+                  <Tooltip title="多个用户提示词会组装成多条用户消息发送给大模型">
+                    <QuestionCircleOutlined style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999', cursor: 'help' }} />
+                  </Tooltip>
+                </div>
+                <Dropdown menu={{ items: getPromptAddMenu('user') }} placement="bottomRight">
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    size="small"
+                  >
+                    添加
+                  </Button>
+                </Dropdown>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {boundPrompts.user.length === 0 ? (
+                  <div style={{ 
+                    textAlign: 'center', 
+                    padding: '12px', 
+                    color: theme === 'dark' ? '#aaa' : '#999', 
+                    fontSize: '12px',
+                    border: theme === 'dark' ? '1px dashed rgba(255, 255, 255, 0.2)' : '1px dashed #d9d9d9',
+                    borderRadius: '4px'
+                  }}>
+                    暂未绑定用户提示词
+                  </div>
+                ) : (
+                  boundPrompts.user.map((prompt: any) => (
+                    <div key={prompt.id} style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '8px',
+                      padding: '8px 12px',
+                      border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8',
+                      borderRadius: '4px',
+                      background: theme === 'dark' ? 'rgba(255, 255, 255, 0.02)' : '#fff'
+                    }}>
+                      {prompt.prompt_source === 'library' ? (
+                        <>
+                          <FileTextOutlined style={{ fontSize: '14px', color: '#52c41a', flexShrink: 0 }} />
+                          <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-start' }}>
+                            <span style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>
+                              {prompt.name}
+                            </span>
+                            <span style={{ fontSize: '11px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+                              {prompt.description}
+                            </span>
+                            {prompt.tags && prompt.tags.length > 0 && (
+                              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                {prompt.tags.map((tag: string, index: number) => (
+                                  <Tag key={index} color="blue" style={{ fontSize: '10px', padding: '0 4px', margin: 0 }}>
+                                    {tag}
+                                  </Tag>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <Button
+                            type="text"
+                            icon={<EyeOutlined />}
+                            size="small"
+                            onClick={() => handleViewPrompt(prompt)}
+                            title="查看提示词"
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <FormOutlined style={{ fontSize: '14px', color: '#faad14', flexShrink: 0 }} />
+                          <Tooltip title={prompt.prompt_content || ''}>
+                            <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                              <div style={{ 
+                                fontSize: '13px', 
+                                color: theme === 'dark' ? '#fff' : '#000',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                textAlign: 'left'
+                              }}>
+                                {prompt.prompt_content}
+                              </div>
+                            </div>
+                          </Tooltip>
+                          <Button
+                            type="text"
+                            icon={<EditOutlined />}
+                            size="small"
+                            onClick={() => handleEditPrompt(prompt)}
+                            title="编辑提示词"
+                          />
+                        </>
+                      )}
+                      <Button
+                        type="text"
+                        icon={<UpOutlined />}
+                        size="small"
+                        onClick={() => handleMovePromptUp(prompt, 'user')}
+                        title="上移"
+                      />
+                      <Button
+                        type="text"
+                        icon={<DownOutlined />}
+                        size="small"
+                        onClick={() => handleMovePromptDown(prompt, 'user')}
+                        title="下移"
+                      />
+                      <Button
+                        type="text"
+                        icon={<DeleteOutlined />}
+                        size="small"
+                        danger
+                        onClick={() => handleUnbindPrompt(prompt.id)}
+                        title="解绑提示词"
+                      />
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
 
           {/* 关联工具 */}
@@ -749,6 +1480,375 @@ const ChatbotSetting: React.FC = () => {
 
         </div>
       </div>
+
+      {/* 模型选择弹窗 */}
+      <Modal
+        title={`选择${MODEL_TYPES_TO_BIND.find(t => t.type === selectingModelType)?.name || '模型'}`}
+        open={isModelSelectModalVisible}
+        onCancel={() => setIsModelSelectModalVisible(false)}
+        footer={null}
+        width={600}
+        className={`chatbot-modal ${theme === 'dark' ? 'dark' : 'light'}`}
+      >
+        {availableModels.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '24px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+            暂无可用模型
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
+            {availableModels.map(model => (
+              <div
+                key={model.id}
+                onClick={() => handleBindModel(model)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  padding: '12px',
+                  border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8',
+                  borderRadius: '4px',
+                  background: theme === 'dark' ? 'rgba(255, 255, 255, 0.02)' : '#fff',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5';
+                  e.currentTarget.style.borderColor = '#faad14';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = theme === 'dark' ? 'rgba(255, 255, 255, 0.02)' : '#fff';
+                  e.currentTarget.style.borderColor = theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#e8e8e8';
+                }}
+              >
+                <img 
+                  src={getProviderAvatar(model.provider || '')}
+                  alt={model.provider}
+                  style={{ 
+                    width: 32, 
+                    height: 32, 
+                    borderRadius: '50%',
+                    objectFit: 'cover',
+                    flexShrink: 0
+                  }}
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.src = '/src/assets/llm/default.svg';
+                  }}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '14px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>
+                    {model.name}
+                  </div>
+                  <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999', marginTop: '4px' }}>
+                    {model.provider}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  {model.tags && (Array.isArray(model.tags) ? model.tags : JSON.parse(model.tags)).map((tag: string, index: number) => (
+                    <Tag key={index} color="blue" style={{ fontSize: '10px', padding: '0 4px', margin: 0 }}>
+                      {tag}
+                    </Tag>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
+
+      {/* 提示词选择弹窗 */}
+      <Modal
+        title={promptSelectMode === 'manual' ? '手动输入提示词' : '从提示词库选择'}
+        open={isPromptSelectModalVisible}
+        onCancel={() => {
+          setIsPromptSelectModalVisible(false);
+          setManualPromptContent('');
+        }}
+        footer={promptSelectMode === 'manual' ? [
+          <Button key="cancel" onClick={() => {
+            setIsPromptSelectModalVisible(false);
+            setManualPromptContent('');
+          }}>
+            取消
+          </Button>,
+          <Button key="submit" type="primary" onClick={handleBindPromptManual}>
+            确定
+          </Button>
+        ] : null}
+        width={800}
+        className={`chatbot-modal ${theme === 'dark' ? 'dark' : 'light'}`}
+      >
+        {promptSelectMode === 'manual' ? (
+          <div style={{ minHeight: '400px' }} className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+            <MDEditor
+              value={manualPromptContent}
+              onChange={(value) => setManualPromptContent(value || '')}
+              height={400}
+              preview="edit"
+              placeholder="请输入提示词"
+              style={{
+                background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fff',
+                color: theme === 'dark' ? '#fff' : '#000'
+              }}
+            />
+          </div>
+        ) : (
+          <>
+            {prompts.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '24px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+                暂无可用提示词
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
+                {prompts.map(prompt => (
+                  <div
+                    key={prompt.id}
+                    onClick={() => handleBindPromptFromLibrary(prompt.id)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      padding: '12px',
+                      border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8',
+                      borderRadius: '4px',
+                      background: theme === 'dark' ? 'rgba(255, 255, 255, 0.02)' : '#fff',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5';
+                      e.currentTarget.style.borderColor = '#faad14';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = theme === 'dark' ? 'rgba(255, 255, 255, 0.02)' : '#fff';
+                      e.currentTarget.style.borderColor = theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#e8e8e8';
+                    }}
+                  >
+                    <Avatar 
+                      size={32} 
+                      icon={<FileTextOutlined />}
+                      style={{ backgroundColor: '#52c41a', flexShrink: 0 }}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '14px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>
+                        {prompt.name}
+                      </div>
+                      <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999', marginTop: '4px' }}>
+                        {prompt.description}
+                      </div>
+                    </div>
+                    {prompt.tags && prompt.tags.length > 0 && (
+                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
+                        {prompt.tags.map((tag: string, index: number) => (
+                          <Tag key={index} color="blue" style={{ fontSize: '10px', padding: '0 4px', margin: 0 }}>
+                            {tag}
+                          </Tag>
+                        ))}
+                      </div>
+                    )}
+                    <Button
+                      type="text"
+                      icon={<EyeOutlined />}
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleViewPrompt(prompt);
+                      }}
+                      title="查看提示词"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </Modal>
+
+      {/* 模型查看抽屉 */}
+      <Drawer
+        title="模型详情"
+        placement="right"
+        onClose={() => setViewModelDrawerVisible(false)}
+        open={viewModelDrawerVisible}
+        width={600}
+        getContainer={false}
+        className={`chatbot-drawer ${theme === 'dark' ? 'dark' : 'light'}`}
+      >
+        {currentModel && (
+          <div style={{ padding: '16px 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+              <img 
+                src={getProviderAvatar(currentModel.provider || '')}
+                alt={currentModel.provider}
+                style={{ 
+                  width: 48, 
+                  height: 48, 
+                  borderRadius: '50%',
+                  objectFit: 'cover'
+                }}
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.src = '/src/assets/llm/default.svg';
+                }}
+              />
+              <div>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>
+                  {currentModel.name}
+                </h3>
+                <p style={{ margin: '8px 0 0 0', fontSize: '13px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+                  {currentModel.provider} · {MODEL_TYPE_MAP[currentModel.model_type] || currentModel.model_type}
+                </p>
+              </div>
+            </div>
+            
+            <Descriptions column={1} bordered>
+              <Descriptions.Item label="模型类型">
+                {MODEL_TYPE_MAP[currentModel.model_type] || currentModel.model_type}
+              </Descriptions.Item>
+              <Descriptions.Item label="端点地址">
+                {currentModel.endpoint}
+              </Descriptions.Item>
+              <Descriptions.Item label="API Key">
+                {currentModel.api_key ? '••••••••' : '未设置'}
+              </Descriptions.Item>
+              <Descriptions.Item label="支持图片">
+                {currentModel.support_image ? '是' : '否'}
+              </Descriptions.Item>
+              <Descriptions.Item label="状态">
+                {currentModel.status ? '启用' : '禁用'}
+              </Descriptions.Item>
+              <Descriptions.Item label="标签">
+                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                  {currentModel.tags && Array.isArray(currentModel.tags) ? currentModel.tags.map((tag: string, index: number) => (
+                    <Tag key={index} color="blue" style={{ fontSize: '10px', padding: '0 4px' }}>
+                      {tag}
+                    </Tag>
+                  )) : currentModel.tags && typeof currentModel.tags === 'string' ? JSON.parse(currentModel.tags).map((tag: string, index: number) => (
+                    <Tag key={index} color="blue" style={{ fontSize: '10px', padding: '0 4px' }}>
+                      {tag}
+                    </Tag>
+                  )) : null}
+                </div>
+              </Descriptions.Item>
+              <Descriptions.Item label="配置">
+                <pre style={{ 
+                  fontSize: '12px', 
+                  color: theme === 'dark' ? '#ccc' : '#333',
+                  backgroundColor: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5',
+                  padding: '12px',
+                  borderRadius: '4px',
+                  overflowX: 'auto'
+                }}>
+                  {JSON.stringify(currentModel.config || {}, null, 2)}
+                </pre>
+              </Descriptions.Item>
+              <Descriptions.Item label="创建时间">
+                {currentModel.created_at}
+              </Descriptions.Item>
+              <Descriptions.Item label="更新时间">
+                {currentModel.updated_at || '未更新'}
+              </Descriptions.Item>
+            </Descriptions>
+          </div>
+        )}
+      </Drawer>
+
+      {/* 提示词查看弹窗 */}
+      <Modal
+        title="提示词详情"
+        open={isPromptViewModalVisible}
+        onCancel={() => setIsPromptViewModalVisible(false)}
+        footer={[
+          <Button key="close" onClick={() => setIsPromptViewModalVisible(false)}>
+            关闭
+          </Button>
+        ]}
+        width={800}
+        className={`chatbot-modal ${theme === 'dark' ? 'dark' : 'light'}`}
+      >
+        {currentViewPrompt && (
+          <div style={{ minHeight: '400px' }}>
+            <div style={{ marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>
+                {currentViewPrompt.name}
+              </h3>
+              <p style={{ margin: '8px 0 0 0', fontSize: '13px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+                {currentViewPrompt.description}
+              </p>
+              {currentViewPrompt.tags && currentViewPrompt.tags.length > 0 && (
+                <div style={{ display: 'flex', gap: '4px', marginTop: '8px', flexWrap: 'wrap' }}>
+                  {currentViewPrompt.tags.map((tag: string, index: number) => (
+                    <Tag key={index} color="blue" style={{ fontSize: '10px', padding: '0 4px' }}>
+                      {tag}
+                    </Tag>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div style={{ marginBottom: '16px' }}>
+              <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', marginBottom: '8px' }}>
+                提示词内容
+              </h4>
+              <div 
+                className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}
+                style={{
+                  background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fff',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #d9d9d9'
+                }}
+              >
+                <MDEditor.Markdown 
+                  source={currentViewPrompt.prompt_content || currentViewPrompt.content || ''} 
+                  style={{ 
+                    background: 'transparent',
+                    color: theme === 'dark' ? '#fff' : '#000'
+                  }} 
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* 提示词编辑弹窗 */}
+      <Modal
+        title="编辑提示词"
+        open={isPromptEditModalVisible}
+        onCancel={() => {
+          setIsPromptEditModalVisible(false);
+          setEditingPrompt(null);
+          setEditingPromptContent('');
+        }}
+        footer={[
+          <Button key="cancel" onClick={() => {
+            setIsPromptEditModalVisible(false);
+            setEditingPrompt(null);
+            setEditingPromptContent('');
+          }}>
+            取消
+          </Button>,
+          <Button key="submit" type="primary" onClick={handleSaveEditPrompt}>
+            保存
+          </Button>
+        ]}
+        width={800}
+        className={`chatbot-modal ${theme === 'dark' ? 'dark' : 'light'}`}
+      >
+        <div style={{ minHeight: '400px' }} className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+          <MDEditor
+            value={editingPromptContent}
+            onChange={(value) => setEditingPromptContent(value || '')}
+            height={400}
+            preview="edit"
+            placeholder="请输入提示词内容"
+            style={{
+              background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fff',
+              color: theme === 'dark' ? '#fff' : '#000'
+            }}
+          />
+        </div>
+      </Modal>
     </div>
   );
 };

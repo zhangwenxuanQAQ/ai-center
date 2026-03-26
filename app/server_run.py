@@ -273,6 +273,56 @@ try:
     except Exception as e:
         print(f"  修改 llm_model 表结构失败: {e}")
     
+    # 为 chatbot_model 表添加 config 字段
+    print("\n为 chatbot_model 表添加 config 字段...")
+    try:
+        if 'chatbot_model' in table_names:
+            cursor = db.execute_sql("DESCRIBE chatbot_model;")
+            columns = [column[0] for column in cursor.fetchall()]
+            
+            if 'config' not in columns:
+                db.execute_sql("ALTER TABLE chatbot_model ADD COLUMN config TEXT DEFAULT NULL")
+                print("  成功添加 config 字段")
+            else:
+                print("  config 字段已存在，跳过")
+        else:
+            print("  chatbot_model 表不存在，跳过")
+    except Exception as e:
+        print(f"  添加 config 字段失败: {e}")
+    
+    # 创建 chatbot_prompt 表
+    print("\n创建 chatbot_prompt 表...")
+    try:
+        if 'chatbot_prompt' not in table_names:
+            db.execute_sql("""
+                CREATE TABLE chatbot_prompt (
+                    id CHAR(36) NOT NULL PRIMARY KEY,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    create_user_id VARCHAR(40) DEFAULT NULL,
+                    update_user_id VARCHAR(40) DEFAULT NULL,
+                    deleted TINYINT DEFAULT 0,
+                    deleted_at DATETIME DEFAULT NULL,
+                    deleted_user_id VARCHAR(36) DEFAULT NULL,
+                    chatbot_id VARCHAR(40) NOT NULL,
+                    prompt_id VARCHAR(40) DEFAULT NULL,
+                    prompt_type VARCHAR(50) NOT NULL,
+                    prompt_source VARCHAR(50) NOT NULL,
+                    prompt_name VARCHAR(255) DEFAULT NULL,
+                    prompt_content TEXT DEFAULT NULL,
+                    sort_order INT DEFAULT 0,
+                    INDEX idx_chatbot_id (chatbot_id),
+                    INDEX idx_prompt_id (prompt_id),
+                    INDEX idx_prompt_type (prompt_type),
+                    INDEX idx_deleted (deleted)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+            print("  成功创建 chatbot_prompt 表")
+        else:
+            print("  chatbot_prompt 表已存在，跳过")
+    except Exception as e:
+        print(f"  创建 chatbot_prompt 表失败: {e}")
+    
     print("\n数据库迁移完成")
 except Exception as e:
     print(f"数据库迁移失败: {e}")

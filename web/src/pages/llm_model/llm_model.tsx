@@ -90,6 +90,11 @@ const LLMModelManagement: React.FC = () => {
   const [showEditTagInput, setShowEditTagInput] = useState(false);
   const [newTag, setNewTag] = useState('');
   const [newEditTag, setNewEditTag] = useState('');
+  const [hasTestedConnection, setHasTestedConnection] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [hasTestedEditConnection, setHasTestedEditConnection] = useState(false);
+  const [testingEditConnection, setTestingEditConnection] = useState(false);
+  const [originalEditModel, setOriginalEditModel] = useState<any>(null);
   
   const cardRefs = useRef<{ [key: string]: HTMLDivElement }>({});
   const tagInputRef = useRef<HTMLInputElement>(null);
@@ -399,6 +404,7 @@ const LLMModelManagement: React.FC = () => {
     setTags([]);
     setShowTagInput(false);
     setNewTag('');
+    setHasTestedConnection(false);
     form.setFieldsValue({ status: true, model_type: 'text' });
     setIsModalVisible(true);
   };
@@ -409,6 +415,13 @@ const LLMModelManagement: React.FC = () => {
     setEditTags(modelTags);
     setShowEditTagInput(false);
     setNewEditTag('');
+    setHasTestedEditConnection(false);
+    setOriginalEditModel({
+      name: model.name,
+      endpoint: model.endpoint,
+      api_key: model.api_key,
+      model_type: model.model_type
+    });
     editForm.setFieldsValue({
       name: model.name,
       model_type: model.model_type,
@@ -424,13 +437,47 @@ const LLMModelManagement: React.FC = () => {
     try {
       const values = await form.validateFields();
       
-      // 根据模型名称解析提供商
+      let supportImage = false;
+      
+      if (!hasTestedConnection) {
+        const testData = {
+          name: values.name,
+          provider: getProviderFromModelName(values.name),
+          endpoint: values.endpoint,
+          api_key: values.api_key,
+          model_type: values.model_type
+        };
+        
+        setTestingConnection(true);
+        const key = `test-new-model`;
+        message.loading({ content: `正在测试连接...`, key, duration: 0 });
+        
+        try {
+          const result = await llmModelService.testModelConfig(testData);
+          setTestingConnection(false);
+          
+          if (!result.success) {
+            message.error({ content: `连接测试失败: ${result.message}`, key });
+            return;
+          }
+          
+          message.success({ content: `连接测试成功！`, key });
+          supportImage = result.support_image || false;
+        } catch (error: any) {
+          setTestingConnection(false);
+          message.error({ content: `测试失败: ${error.message}`, key });
+          return;
+        }
+      }
+      
       const provider = getProviderFromModelName(values.name);
       
-      // 将提供商添加到tags中
       const updatedTags = [...tags];
       if (provider && !updatedTags.includes(provider)) {
         updatedTags.push(provider);
+      }
+      if (supportImage && !updatedTags.includes('图片支持')) {
+        updatedTags.push('图片支持');
       }
       
       const submitData = {
@@ -442,7 +489,8 @@ const LLMModelManagement: React.FC = () => {
         endpoint: values.endpoint,
         api_key: values.api_key,
         tags: JSON.stringify(updatedTags),
-        config: '{}'
+        config: '{}',
+        support_image: supportImage
       };
       
       await llmModelService.createLLMModel(submitData);
@@ -450,8 +498,8 @@ const LLMModelManagement: React.FC = () => {
       setIsModalVisible(false);
       form.resetFields();
       setTags([]);
+      setHasTestedConnection(false);
       fetchModels(selectedCategory, currentPage, pageSize);
-      // 更新模型标签
       await fetchModelTags();
     } catch (error) {
       console.error('创建失败:', error);
@@ -463,16 +511,58 @@ const LLMModelManagement: React.FC = () => {
     try {
       const values = await editForm.validateFields();
       
-      // 根据模型名称解析提供商
+      const hasParamsChanged = originalEditModel && (
+        originalEditModel.name !== values.name ||
+        originalEditModel.endpoint !== values.endpoint ||
+        originalEditModel.api_key !== values.api_key ||
+        originalEditModel.model_type !== values.model_type
+      );
+      
+      let supportImage = false;
+      
+      if (hasParamsChanged && !hasTestedEditConnection) {
+        const testData = {
+          name: values.name,
+          provider: getProviderFromModelName(values.name),
+          endpoint: values.endpoint,
+          api_key: values.api_key,
+          model_type: values.model_type
+        };
+        
+        setTestingEditConnection(true);
+        const key = `test-edit-model-${editingModelId}`;
+        message.loading({ content: `正在测试连接...`, key, duration: 0 });
+        
+        try {
+          const result = await llmModelService.testModelConfig(testData);
+          
+          setTestingEditConnection(false);
+          
+          if (result.success) {
+            message.success({ content: `连接测试成功！`, key });
+            supportImage = result.support_image || false;
+          } else {
+            message.error({ content: `连接测试失败: ${result.message}`, key });
+            return;
+          }
+        } catch (error: any) {
+          setTestingEditConnection(false);
+          message.error({ content: `测试失败: ${error.message}`, key });
+          return;
+        }
+      }
+      
       const provider = getProviderFromModelName(values.name);
       
-      // 将提供商添加到tags中
       const updatedTags = [...editTags];
       if (provider && !updatedTags.includes(provider)) {
         updatedTags.push(provider);
       }
+      if (supportImage && !updatedTags.includes('图片支持')) {
+        updatedTags.push('图片支持');
+      }
       
-      const submitData = {
+      const submitData: any = {
         name: values.name,
         provider: provider,
         model_type: values.model_type,
@@ -484,14 +574,19 @@ const LLMModelManagement: React.FC = () => {
         config: '{}'
       };
       
+      if (hasParamsChanged) {
+        submitData.support_image = supportImage;
+      }
+      
       await llmModelService.updateLLMModel(editingModelId, submitData);
       message.success('LLM模型更新成功！');
       setIsEditModalVisible(false);
       editForm.resetFields();
       setEditTags([]);
       setEditingModelId(null);
+      setHasTestedEditConnection(false);
+      setOriginalEditModel(null);
       fetchModels(selectedCategory, currentPage, pageSize);
-      // 更新模型标签
       await fetchModelTags();
     } catch (error) {
       console.error('更新失败:', error);
@@ -953,36 +1048,37 @@ const LLMModelManagement: React.FC = () => {
           </Button>
           <Button 
             icon={<ApiTwoTone />}
+            loading={testingConnection}
             onClick={async () => {
               try {
                 const values = await form.validateFields();
                 const testData = {
                   name: values.name,
+                  provider: getProviderFromModelName(values.name),
                   endpoint: values.endpoint,
                   api_key: values.api_key,
                   model_type: values.model_type
                 };
                 
+                setTestingConnection(true);
                 const key = `test-new-model`;
                 message.loading({ content: `正在测试连接...`, key, duration: 0 });
                 
-                const tempModel = await llmModelService.createLLMModel({
-                  ...testData,
-                  tags: JSON.stringify(tags),
-                  status: false
-                });
+                const result = await llmModelService.testModelConfig(testData);
                 
-                const result = await llmModelService.testConnection(tempModel.id);
-                
-                await llmModelService.deleteLLMModel(tempModel.id);
+                setTestingConnection(false);
                 
                 if (result.success) {
                   message.success({ content: `连接测试成功！`, key });
+                  setHasTestedConnection(true);
                 } else {
                   message.error({ content: `连接测试失败: ${result.message}`, key });
+                  setHasTestedConnection(false);
                 }
               } catch (error: any) {
+                setTestingConnection(false);
                 message.error({ content: `测试失败: ${error.message}`, key: 'test-new-model' });
+                setHasTestedConnection(false);
               }
             }}
           >

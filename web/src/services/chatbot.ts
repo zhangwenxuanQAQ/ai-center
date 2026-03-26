@@ -150,4 +150,114 @@ export const chatbotService = {
   deleteChatbot: async (id: number): Promise<Chatbot> => {
     return http.post<Chatbot>(`/aicenter/v1/chatbot/${id}/delete`);
   },
+
+  /**
+   * 获取机器人绑定的模型列表
+   * @param chatbotId - 机器人ID
+   */
+  getChatbotModels: async (chatbotId: string): Promise<any[]> => {
+    return http.get<any[]>(`/aicenter/v1/chatbot/${chatbotId}/models`);
+  },
+
+  /**
+   * 获取机器人指定类型的绑定模型
+   * @param chatbotId - 机器人ID
+   * @param modelType - 模型类型
+   */
+  getChatbotModelByType: async (chatbotId: string, modelType: string): Promise<any> => {
+    return http.get<any>(`/aicenter/v1/chatbot/${chatbotId}/models/${modelType}`);
+  },
+
+  /**
+   * 绑定模型到机器人
+   * @param chatbotId - 机器人ID
+   * @param modelId - 模型ID
+   * @param modelType - 模型类型
+   * @param config - 模型配置
+   */
+  bindModelToChatbot: async (chatbotId: string, modelId: string, modelType: string, config?: any): Promise<any> => {
+    return http.post<any>(`/aicenter/v1/chatbot/${chatbotId}/models/bind`, {
+      model_id: modelId,
+      model_type: modelType,
+      config: config
+    });
+  },
+
+  /**
+   * 解绑机器人的模型
+   * @param chatbotId - 机器人ID
+   * @param modelType - 模型类型
+   */
+  unbindModelFromChatbot: async (chatbotId: string, modelType: string): Promise<any> => {
+    return http.post<any>(`/aicenter/v1/chatbot/${chatbotId}/models/unbind`, {
+      model_type: modelType
+    });
+  },
+
+  /**
+   * 更新机器人模型配置
+   * @param chatbotId - 机器人ID
+   * @param modelType - 模型类型
+   * @param config - 模型配置
+   */
+  updateModelConfig: async (chatbotId: string, modelType: string, config: any): Promise<any> => {
+    return http.post<any>(`/aicenter/v1/chatbot/${chatbotId}/models/config`, {
+      model_type: modelType,
+      config: config
+    });
+  },
+
+  /**
+   * 获取机器人绑定的提示词列表
+   * @param chatbotId - 机器人ID
+   * @param promptType - 提示词类型（可选）
+   */
+  getChatbotPrompts: async (chatbotId: string, promptType?: string): Promise<any[]> => {
+    let url = `/aicenter/v1/chatbot/${chatbotId}/prompts`;
+    if (promptType) {
+      url += `?prompt_type=${promptType}`;
+    }
+    return http.get<any[]>(url);
+  },
+
+  /**
+   * 绑定提示词到机器人
+   * @param chatbotId - 机器人ID
+   * @param data - 绑定数据
+   */
+  bindPromptToChatbot: async (chatbotId: string,    data: {
+      prompt_type: string;
+      prompt_source: string;
+      prompt_id?: string;
+      prompt_name?: string;
+      prompt_content?: string;
+      sort_order?: number;
+    }
+  ): Promise<any> => {
+    return http.post<any>(`/aicenter/v1/chatbot/${chatbotId}/prompts/bind`, data);
+  },
+
+  /**
+   * 解绑机器人的提示词
+   * @param chatbotId - 机器人ID
+   * @param promptBindingId - 提示词绑定ID
+   */
+  unbindPromptFromChatbot: async (chatbotId: string, promptBindingId: string): Promise<any> => {
+    return http.post<any>(`/aicenter/v1/chatbot/${chatbotId}/prompts/unbind`, {
+      prompt_binding_id: promptBindingId
+    });
+  },
+
+  /**
+   * 更新提示词排序
+   * @param chatbotId - 机器人ID
+   * @param promptBindingId - 提示词绑定ID
+   * @param sortOrder - 排序序号
+   */
+  updatePromptSortOrder: async (chatbotId: string, promptBindingId: string, sortOrder: number): Promise<any> => {
+    return http.post<any>(`/aicenter/v1/chatbot/${chatbotId}/prompts/sort`, {
+      prompt_binding_id: promptBindingId,
+      sort_order: sortOrder
+    });
+  },
 };

@@ -49,7 +49,7 @@ class TextModel(BaseLLM):
         
         Args:
             prompt: 提示词
-            **kwargs: 其他参数，如temperature、top_p、max_tokens等
+            **kwargs: 其他参数，如temperature、top_p、max_tokens、image等
             
         Returns:
             生成结果
@@ -58,11 +58,31 @@ class TextModel(BaseLLM):
             return {'error': 'Invalid configuration'}
         
         try:
+            image = kwargs.pop('image', None)
+            
+            if image:
+                messages = [
+                    {
+                        'role': 'user', 
+                        'content': [
+                            {'type': 'text', 'text': prompt},
+                            {
+                                'type': 'image_url',
+                                'image_url': {
+                                    'url': f'data:image/jpeg;base64,{image}'
+                                }
+                            }
+                        ]
+                    }
+                ]
+            else:
+                messages = [
+                    {'role': 'user', 'content': prompt}
+                ]
+            
             params = {
                 'model': self.model_name,
-                'messages': [
-                    {'role': 'user', 'content': prompt}
-                ],
+                'messages': messages,
                 'temperature': 0.7,
                 'max_tokens': 4096,
                 'top_p': 0.1,
@@ -94,7 +114,7 @@ class TextModel(BaseLLM):
         
         Args:
             prompt: 提示词
-            **kwargs: 其他参数
+            **kwargs: 其他参数，如temperature、top_p、max_tokens、image等
             
         Yields:
             流式生成的结果
@@ -104,11 +124,31 @@ class TextModel(BaseLLM):
             return
         
         try:
+            image = kwargs.pop('image', None)
+            
+            if image:
+                messages = [
+                    {
+                        'role': 'user', 
+                        'content': [
+                            {'type': 'text', 'text': prompt},
+                            {
+                                'type': 'image_url',
+                                'image_url': {
+                                    'url': f'data:image/jpeg;base64,{image}'
+                                }
+                            }
+                        ]
+                    }
+                ]
+            else:
+                messages = [
+                    {'role': 'user', 'content': prompt}
+                ]
+            
             params = {
                 'model': self.model_name,
-                'messages': [
-                    {'role': 'user', 'content': prompt}
-                ],
+                'messages': messages,
                 'temperature': 0.7,
                 'max_tokens': 4096,
                 'top_p': 0.1,

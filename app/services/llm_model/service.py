@@ -529,7 +529,7 @@ class LLMModelService:
             model_test: 模型测试DTO
             
         Returns:
-            Dict[str, Any]: 测试结果
+            Dict[str, Any]: 测试结果，包含support_image字段
         """
         # 构建模型配置
         model_config = {
@@ -540,4 +540,4 @@ class LLMModelService:
         }
         
         # 测试模型
-        return ModelTestUtils.test_model(model_test.model_type, model_config, model_test.support_image)
+        return ModelTestUtils.test_model(model_test.model_type, model_config)

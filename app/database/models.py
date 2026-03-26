@@ -295,6 +295,51 @@ class ChatbotMCP(BaseModel):
         table_name = 'chatbot_mcp'
 
 
+class ChatbotModel(BaseModel):
+    """
+    机器人模型关联模型
+    
+    存储机器人与LLM模型的绑定关系
+    """
+    deleted = BooleanField(default=False, verbose_name="是否删除")
+    deleted_at = DateTimeField(null=True, verbose_name="删除时间")
+    deleted_user_id = CharField(max_length=40, null=True, verbose_name="删除用户ID")
+    chatbot_id = CharField(max_length=40, index=True, verbose_name="机器人ID")
+    model_id = CharField(max_length=40, index=True, verbose_name="模型ID")
+    model_type = CharField(max_length=50, index=True, verbose_name="模型类型")
+    config = TextField(null=True, verbose_name="模型配置JSON")
+    
+    class Meta:
+        table_name = 'chatbot_model'
+        indexes = (
+            (('chatbot_id', 'model_type'), True),
+        )
+
+
+class ChatbotPrompt(BaseModel):
+    """
+    机器人提示词关联模型
+    
+    存储机器人与提示词的绑定关系
+    """
+    deleted = BooleanField(default=False, verbose_name="是否删除")
+    deleted_at = DateTimeField(null=True, verbose_name="删除时间")
+    deleted_user_id = CharField(max_length=40, null=True, verbose_name="删除用户ID")
+    chatbot_id = CharField(max_length=40, index=True, verbose_name="机器人ID")
+    prompt_id = CharField(max_length=40, null=True, index=True, verbose_name="提示词ID（来自提示词库）")
+    prompt_type = CharField(max_length=50, index=True, verbose_name="提示词类型：system/user")
+    prompt_source = CharField(max_length=50, verbose_name="提示词来源：library/manual")
+    prompt_name = CharField(max_length=255, null=True, verbose_name="提示词名称（手动输入时）")
+    prompt_content = TextField(null=True, verbose_name="提示词内容（手动输入时）")
+    sort_order = IntegerField(default=0, verbose_name="排序序号")
+    
+    class Meta:
+        table_name = 'chatbot_prompt'
+        indexes = (
+            (('chatbot_id', 'prompt_type'), False),
+        )
+
+
 def create_tables():
     """
     创建所有数据表
@@ -312,7 +357,9 @@ def create_tables():
         MCPCategory,
         MCPServer,
         MCPTool,
-        ChatbotMCP
+        ChatbotMCP,
+        ChatbotModel,
+        ChatbotPrompt
     ]
     
     for table in tables:

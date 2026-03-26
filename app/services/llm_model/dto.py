@@ -167,4 +167,3 @@ class LLMModelTest(BaseModel):
     api_key: str = Field(..., min_length=1, max_length=200, description="API密钥，长度1-200个字符")
     endpoint: str = Field(..., min_length=1, max_length=500, description="端点URL，长度1-500个字符")
     model_type: str = Field(..., min_length=1, max_length=50, description="模型类型，长度1-50个字符")
-    support_image: bool = Field(default=False, description="是否支持图片")

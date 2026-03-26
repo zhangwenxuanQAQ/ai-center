@@ -4,7 +4,7 @@
 
 import json
 from datetime import datetime
-from app.database.models import Chatbot, ChatbotMCP, ChatbotCategory
+from app.database.models import Chatbot, ChatbotMCP, ChatbotCategory, ChatbotModel, LLMModel, ChatbotPrompt, Prompt
 from app.services.chatbot.dto import ChatbotCreate, ChatbotUpdate, Chatbot as ChatbotDTO
 from app.database.db_utils import handle_transaction
 from app.core.exceptions import ResourceNotFoundError, DuplicateResourceError
@@ -341,5 +341,444 @@ class ChatbotService:
             db_chatbot.save()
             
             return deleted_chatbot
+        except Exception as e:
+            raise
+    
+    @staticmethod
+    def get_chatbot_models(chatbot_id: str):
+        """
+        获取机器人绑定的模型列表
+        
+        Args:
+            chatbot_id: 机器人ID
+            
+        Returns:
+            list: 绑定的模型信息列表
+        """
+        try:
+            chatbot_models = ChatbotModel.select().where(
+                (ChatbotModel.chatbot_id == chatbot_id) & 
+                (ChatbotModel.deleted == False)
+            )
+            
+            result = []
+            for chatbot_model in chatbot_models:
+                try:
+                    llm_model = LLMModel.get_by_id(chatbot_model.model_id)
+                    if not llm_model.deleted and llm_model.status:
+                        model_info = {
+                            "id": str(llm_model.id),
+                            "name": llm_model.name,
+                            "provider": llm_model.provider,
+                            "model_type": llm_model.model_type,
+                            "tags": json.loads(llm_model.tags) if llm_model.tags else [],
+                            "avatar": llm_model.avatar if hasattr(llm_model, 'avatar') else None,
+                            "binding_id": str(chatbot_model.id),
+                            "config": json.loads(chatbot_model.config) if chatbot_model.config else {}
+                        }
+                        result.append(model_info)
+                except LLMModel.DoesNotExist:
+                    pass
+            
+            return result
+        except Exception as e:
+            return []
+    
+    @staticmethod
+    def get_chatbot_model_by_type(chatbot_id: str, model_type: str):
+        """
+        获取机器人指定类型的绑定模型
+        
+        Args:
+            chatbot_id: 机器人ID
+            model_type: 模型类型
+            
+        Returns:
+            dict: 绑定的模型信息，未绑定则返回None
+        """
+        try:
+            chatbot_model = ChatbotModel.select().where(
+                (ChatbotModel.chatbot_id == chatbot_id) & 
+                (ChatbotModel.model_type == model_type) &
+                (ChatbotModel.deleted == False)
+            ).first()
+            
+            if not chatbot_model:
+                return None
+            
+            llm_model = LLMModel.get_by_id(chatbot_model.model_id)
+            if llm_model.deleted or not llm_model.status:
+                return None
+            
+            model_info = {
+                "id": str(llm_model.id),
+                "name": llm_model.name,
+                "provider": llm_model.provider,
+                "model_type": llm_model.model_type,
+                "endpoint": llm_model.endpoint,
+                "api_key": llm_model.api_key,
+                "support_image": llm_model.support_image,
+                "status": llm_model.status,
+                "tags": json.loads(llm_model.tags) if llm_model.tags else [],
+                "avatar": llm_model.avatar if hasattr(llm_model, 'avatar') else None,
+                "binding_id": str(chatbot_model.id),
+                "config": json.loads(chatbot_model.config) if chatbot_model.config else {},
+                "created_at": llm_model.created_at.strftime('%Y-%m-%d %H:%M:%S') if llm_model.created_at else None,
+                "updated_at": llm_model.updated_at.strftime('%Y-%m-%d %H:%M:%S') if llm_model.updated_at else None
+            }
+            
+            return model_info
+        except Exception as e:
+            return None
+    
+    @staticmethod
+    @handle_transaction
+    def bind_model_to_chatbot(chatbot_id: str, model_id: str, model_type: str, config: dict = None):
+        """
+        绑定模型到机器人
+        
+        Args:
+            chatbot_id: 机器人ID
+            model_id: 模型ID
+            model_type: 模型类型
+            config: 模型配置（可选）
+            
+        Returns:
+            ChatbotModel: 绑定关系对象
+            
+        Raises:
+            ResourceNotFoundError: 机器人或模型不存在
+            Exception: 模型未启用或类型不匹配
+        """
+        try:
+            try:
+                chatbot = Chatbot.get_by_id(chatbot_id)
+                if chatbot.deleted:
+                    raise ResourceNotFoundError(message=f"机器人 {chatbot_id} 不存在")
+            except Chatbot.DoesNotExist:
+                raise ResourceNotFoundError(message=f"机器人 {chatbot_id} 不存在")
+            
+            try:
+                llm_model = LLMModel.get_by_id(model_id)
+                if llm_model.deleted:
+                    raise ResourceNotFoundError(message=f"模型 {model_id} 不存在")
+            except LLMModel.DoesNotExist:
+                raise ResourceNotFoundError(message=f"模型 {model_id} 不存在")
+            
+            if not llm_model.status:
+                raise Exception("模型未启用，无法绑定")
+            
+            if llm_model.model_type != model_type:
+                raise Exception(f"模型类型不匹配，期望类型：{model_type}，实际类型：{llm_model.model_type}")
+            
+            existing_binding = ChatbotModel.select().where(
+                (ChatbotModel.chatbot_id == chatbot_id) & 
+                (ChatbotModel.model_type == model_type) &
+                (ChatbotModel.deleted == False)
+            ).first()
+            
+            if existing_binding:
+                existing_binding.model_id = model_id
+                existing_binding.config = json.dumps(config) if config else None
+                existing_binding.updated_at = datetime.now()
+                existing_binding.save()
+                return existing_binding
+            
+            chatbot_model = ChatbotModel(
+                chatbot_id=chatbot_id,
+                model_id=model_id,
+                model_type=model_type,
+                config=json.dumps(config) if config else None
+            )
+            chatbot_model.save(force_insert=True)
+            
+            return chatbot_model
+        except Exception as e:
+            raise
+    
+    @staticmethod
+    @handle_transaction
+    def unbind_model_from_chatbot(chatbot_id: str, model_type: str):
+        """
+        解绑机器人的模型
+        
+        Args:
+            chatbot_id: 机器人ID
+            model_type: 模型类型
+            
+        Returns:
+            bool: 解绑是否成功
+            
+        Raises:
+            ResourceNotFoundError: 绑定关系不存在
+        """
+        try:
+            chatbot_model = ChatbotModel.select().where(
+                (ChatbotModel.chatbot_id == chatbot_id) & 
+                (ChatbotModel.model_type == model_type) &
+                (ChatbotModel.deleted == False)
+            ).first()
+            
+            if not chatbot_model:
+                raise ResourceNotFoundError(message=f"机器人 {chatbot_id} 未绑定类型为 {model_type} 的模型")
+            
+            ChatbotModel.delete().where(ChatbotModel.id == chatbot_model.id).execute()
+            
+            return True
+        except Exception as e:
+            raise
+    
+    @staticmethod
+    @handle_transaction
+    def update_model_config(chatbot_id: str, model_type: str, config: dict):
+        """
+        更新机器人模型配置
+        
+        Args:
+            chatbot_id: 机器人ID
+            model_type: 模型类型
+            config: 模型配置
+            
+        Returns:
+            ChatbotModel: 绑定关系对象
+            
+        Raises:
+            ResourceNotFoundError: 绑定关系不存在
+        """
+        try:
+            chatbot_model = ChatbotModel.select().where(
+                (ChatbotModel.chatbot_id == chatbot_id) & 
+                (ChatbotModel.model_type == model_type) &
+                (ChatbotModel.deleted == False)
+            ).first()
+            
+            if not chatbot_model:
+                raise ResourceNotFoundError(message=f"机器人 {chatbot_id} 未绑定类型为 {model_type} 的模型")
+            
+            chatbot_model.config = json.dumps(config) if config else None
+            chatbot_model.updated_at = datetime.now()
+            chatbot_model.save()
+            
+            return chatbot_model
+        except Exception as e:
+            raise
+    
+    @staticmethod
+    def get_chatbot_prompts(chatbot_id: str, prompt_type: str = None):
+        """
+        获取机器人绑定的提示词列表
+        
+        Args:
+            chatbot_id: 机器人ID
+            prompt_type: 提示词类型（可选）：system/user
+            
+        Returns:
+            list: 绑定的提示词信息列表
+        """
+        try:
+            query = ChatbotPrompt.select().where(
+                (ChatbotPrompt.chatbot_id == chatbot_id) & 
+                (ChatbotPrompt.deleted == False)
+            )
+            
+            if prompt_type:
+                query = query.where(ChatbotPrompt.prompt_type == prompt_type)
+            
+            query = query.order_by(ChatbotPrompt.sort_order, ChatbotPrompt.created_at)
+            
+            result = []
+            for chatbot_prompt in query:
+                prompt_info = {
+                    "id": str(chatbot_prompt.id),
+                    "prompt_type": chatbot_prompt.prompt_type,
+                    "prompt_source": chatbot_prompt.prompt_source,
+                    "sort_order": chatbot_prompt.sort_order,
+                    "created_at": chatbot_prompt.created_at.strftime('%Y-%m-%d %H:%M:%S') if chatbot_prompt.created_at else None
+                }
+                
+                if chatbot_prompt.prompt_source == 'library':
+                    try:
+                        prompt = Prompt.get_by_id(chatbot_prompt.prompt_id)
+                        if not prompt.deleted and prompt.status:
+                            prompt_info.update({
+                                "prompt_id": str(prompt.id),
+                                "name": prompt.name,
+                                "description": prompt.description,
+                                "prompt_content": prompt.content,
+                                "tags": json.loads(prompt.tags) if prompt.tags else []
+                            })
+                            result.append(prompt_info)
+                    except Prompt.DoesNotExist:
+                        pass
+                else:
+                    prompt_info.update({
+                        "name": chatbot_prompt.prompt_name,
+                        "prompt_content": chatbot_prompt.prompt_content
+                    })
+                    result.append(prompt_info)
+            
+            return result
+        except Exception as e:
+            return []
+    
+    @staticmethod
+    @handle_transaction
+    def bind_prompt_to_chatbot(chatbot_id: str, prompt_type: str, prompt_source: str, 
+                               prompt_id: str = None, prompt_name: str = None, 
+                               prompt_content: str = None, sort_order: int = 0,
+                               prompt_binding_id: str = None):
+        """
+        绑定提示词到机器人
+        
+        Args:
+            chatbot_id: 机器人ID
+            prompt_type: 提示词类型：system/user
+            prompt_source: 提示词来源：library/manual
+            prompt_id: 提示词ID（来自提示词库时必填）
+            prompt_name: 提示词名称（手动输入时必填）
+            prompt_content: 提示词内容（手动输入时必填）
+            sort_order: 排序序号
+            prompt_binding_id: 提示词绑定ID（编辑时必填）
+            
+        Returns:
+            ChatbotPrompt: 绑定关系对象
+            
+        Raises:
+            ResourceNotFoundError: 机器人或提示词不存在
+        """
+        try:
+            try:
+                chatbot = Chatbot.get_by_id(chatbot_id)
+                if chatbot.deleted:
+                    raise ResourceNotFoundError(message=f"机器人 {chatbot_id} 不存在")
+            except Chatbot.DoesNotExist:
+                raise ResourceNotFoundError(message=f"机器人 {chatbot_id} 不存在")
+            
+            if prompt_source == 'library':
+                if not prompt_id:
+                    raise ValueError("提示词来源为library时，prompt_id不能为空")
+                try:
+                    prompt = Prompt.get_by_id(prompt_id)
+                    if prompt.deleted or not prompt.status:
+                        raise ResourceNotFoundError(message=f"提示词 {prompt_id} 不存在或未启用")
+                except Prompt.DoesNotExist:
+                    raise ResourceNotFoundError(message=f"提示词 {prompt_id} 不存在")
+            else:
+                if not prompt_content:
+                    raise ValueError("提示词来源为manual时，prompt_content不能为空")
+            
+            # 计算排序号
+            if sort_order <= 0:
+                # 获取相同类型下的最大排序号
+                from peewee import fn
+                max_sort_order = ChatbotPrompt.select(fn.MAX(ChatbotPrompt.sort_order)).where(
+                    (ChatbotPrompt.chatbot_id == chatbot_id) &
+                    (ChatbotPrompt.prompt_type == prompt_type) &
+                    (ChatbotPrompt.deleted == False)
+                ).scalar() or 0
+                sort_order = max_sort_order + 1
+            else:
+                # 确保排序号不能小于1
+                sort_order = max(1, sort_order)
+            
+            if prompt_binding_id:
+                try:
+                    chatbot_prompt = ChatbotPrompt.get_by_id(prompt_binding_id)
+                    if chatbot_prompt.chatbot_id != chatbot_id:
+                        raise ResourceNotFoundError(message=f"绑定关系不存在")
+                    
+                    chatbot_prompt.prompt_type = prompt_type
+                    chatbot_prompt.prompt_source = prompt_source
+                    chatbot_prompt.prompt_id = prompt_id if prompt_source == 'library' else None
+                    chatbot_prompt.prompt_name = prompt_name if prompt_source == 'manual' else None
+                    chatbot_prompt.prompt_content = prompt_content if prompt_source == 'manual' else None
+                    chatbot_prompt.sort_order = sort_order
+                    chatbot_prompt.save()
+                    
+                    return chatbot_prompt
+                except ChatbotPrompt.DoesNotExist:
+                    raise ResourceNotFoundError(message=f"绑定关系 {prompt_binding_id} 不存在")
+            else:
+                chatbot_prompt = ChatbotPrompt(
+                    chatbot_id=chatbot_id,
+                    prompt_type=prompt_type,
+                    prompt_source=prompt_source,
+                    prompt_id=prompt_id if prompt_source == 'library' else None,
+                    prompt_name=prompt_name if prompt_source == 'manual' else None,
+                    prompt_content=prompt_content if prompt_source == 'manual' else None,
+                    sort_order=sort_order
+                )
+                chatbot_prompt.save(force_insert=True)
+                
+                return chatbot_prompt
+        except Exception as e:
+            raise
+    
+    @staticmethod
+    @handle_transaction
+    def unbind_prompt_from_chatbot(chatbot_id: str, prompt_binding_id: str):
+        """
+        解绑机器人的提示词
+        
+        Args:
+            chatbot_id: 机器人ID
+            prompt_binding_id: 提示词绑定ID
+            
+        Returns:
+            bool: 解绑是否成功
+            
+        Raises:
+            ResourceNotFoundError: 绑定关系不存在
+        """
+        try:
+            chatbot_prompt = ChatbotPrompt.select().where(
+                (ChatbotPrompt.id == prompt_binding_id) &
+                (ChatbotPrompt.chatbot_id == chatbot_id) &
+                (ChatbotPrompt.deleted == False)
+            ).first()
+            
+            if not chatbot_prompt:
+                raise ResourceNotFoundError(message=f"提示词绑定关系 {prompt_binding_id} 不存在")
+            
+            ChatbotPrompt.delete().where(ChatbotPrompt.id == chatbot_prompt.id).execute()
+            
+            return True
+        except Exception as e:
+            raise
+    
+    @staticmethod
+    @handle_transaction
+    def update_prompt_sort_order(chatbot_id: str, prompt_binding_id: str, sort_order: int):
+        """
+        更新提示词排序
+        
+        Args:
+            chatbot_id: 机器人ID
+            prompt_binding_id: 提示词绑定ID
+            sort_order: 新的排序值
+            
+        Returns:
+            ChatbotPrompt: 绑定关系对象
+            
+        Raises:
+            ResourceNotFoundError: 绑定关系不存在
+        """
+        try:
+            chatbot_prompt = ChatbotPrompt.select().where(
+                (ChatbotPrompt.id == prompt_binding_id) &
+                (ChatbotPrompt.chatbot_id == chatbot_id) &
+                (ChatbotPrompt.deleted == False)
+            ).first()
+            
+            if not chatbot_prompt:
+                raise ResourceNotFoundError(message=f"提示词绑定关系 {prompt_binding_id} 不存在")
+            
+            # 确保排序号不能小于1
+            sort_order = max(1, sort_order)
+            chatbot_prompt.sort_order = sort_order
+            chatbot_prompt.updated_at = datetime.now()
+            chatbot_prompt.save()
+            
+            return chatbot_prompt
         except Exception as e:
             raise

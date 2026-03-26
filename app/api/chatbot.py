@@ -3,7 +3,9 @@
 """
 
 import socket
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
+from pydantic import BaseModel, Field
+from typing import Optional
 from app.services.chatbot.service import ChatbotService
 from app.services.chatbot.dto import ChatbotCreate, ChatbotUpdate, Chatbot as ChatbotSchema
 from app.utils.response import ResponseUtil, ApiResponse
@@ -11,6 +13,30 @@ from app.constants.chatbot_constants import SOURCE_TYPE, SOURCE_CONFIG_FIELDS
 from app.configs.config import config
 
 router = APIRouter()
+
+
+class BindModelRequest(BaseModel):
+    """
+    绑定模型请求DTO
+    """
+    model_id: str = Field(..., description="模型ID")
+    model_type: str = Field(..., description="模型类型")
+    config: Optional[dict] = Field(None, description="模型配置")
+
+
+class UnbindModelRequest(BaseModel):
+    """
+    解绑模型请求DTO
+    """
+    model_type: str = Field(..., description="模型类型")
+
+
+class UpdateModelConfigRequest(BaseModel):
+    """
+    更新模型配置请求DTO
+    """
+    model_type: str = Field(..., description="模型类型")
+    config: dict = Field(..., description="模型配置")
 
 
 def get_local_ip():
@@ -148,3 +174,185 @@ def delete_chatbot(chatbot_id: str):
     """
     db_chatbot = ChatbotService.delete_chatbot(chatbot_id)
     return ResponseUtil.success(data=db_chatbot.__data__, message="聊天机器人删除成功")
+
+
+@router.get("/{chatbot_id}/models", response_model=ApiResponse)
+def get_chatbot_models(chatbot_id: str):
+    """
+    获取机器人绑定的模型列表
+    
+    Args:
+        chatbot_id: 机器人ID
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象，包含绑定的模型列表
+    """
+    models = ChatbotService.get_chatbot_models(chatbot_id)
+    return ResponseUtil.success(data=models, message="获取机器人绑定模型成功")
+
+
+@router.get("/{chatbot_id}/models/{model_type}", response_model=ApiResponse)
+def get_chatbot_model_by_type(chatbot_id: str, model_type: str):
+    """
+    获取机器人指定类型的绑定模型
+    
+    Args:
+        chatbot_id: 机器人ID
+        model_type: 模型类型
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象，包含绑定的模型信息
+    """
+    model = ChatbotService.get_chatbot_model_by_type(chatbot_id, model_type)
+    if model is None:
+        return ResponseUtil.success(data=None, message="该类型模型未绑定")
+    return ResponseUtil.success(data=model, message="获取机器人绑定模型成功")
+
+
+@router.post("/{chatbot_id}/models/bind", response_model=ApiResponse)
+def bind_model_to_chatbot(chatbot_id: str, request: BindModelRequest):
+    """
+    绑定模型到机器人
+    
+    Args:
+        chatbot_id: 机器人ID
+        request: 绑定模型请求DTO
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    chatbot_model = ChatbotService.bind_model_to_chatbot(chatbot_id, request.model_id, request.model_type, request.config)
+    return ResponseUtil.success(data={"binding_id": str(chatbot_model.id)}, message="模型绑定成功")
+
+
+@router.post("/{chatbot_id}/models/unbind", response_model=ApiResponse)
+def unbind_model_from_chatbot(chatbot_id: str, request: UnbindModelRequest):
+    """
+    解绑机器人的模型
+    
+    Args:
+        chatbot_id: 机器人ID
+        request: 解绑模型请求DTO
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    ChatbotService.unbind_model_from_chatbot(chatbot_id, request.model_type)
+    return ResponseUtil.success(message="模型解绑成功")
+
+
+@router.post("/{chatbot_id}/models/config", response_model=ApiResponse)
+def update_model_config(chatbot_id: str, request: UpdateModelConfigRequest):
+    """
+    更新机器人模型配置
+    
+    Args:
+        chatbot_id: 机器人ID
+        request: 更新模型配置请求DTO
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    chatbot_model = ChatbotService.update_model_config(chatbot_id, request.model_type, request.config)
+    return ResponseUtil.success(data={"binding_id": str(chatbot_model.id)}, message="模型配置更新成功")
+
+
+class BindPromptRequest(BaseModel):
+    """
+    绑定提示词请求DTO
+    """
+    prompt_type: str = Field(..., description="提示词类型：system/user")
+    prompt_source: str = Field(..., description="提示词来源：library/manual")
+    prompt_id: Optional[str] = Field(None, description="提示词ID（来自提示词库时必填）")
+    prompt_name: Optional[str] = Field(None, description="提示词名称（手动输入时必填）")
+    prompt_content: Optional[str] = Field(None, description="提示词内容（手动输入时必填）")
+    sort_order: Optional[int] = Field(0, description="排序序号")
+    prompt_binding_id: Optional[str] = Field(None, description="提示词绑定ID（编辑时必填）")
+
+
+class UnbindPromptRequest(BaseModel):
+    """
+    解绑提示词请求DTO
+    """
+    prompt_binding_id: str = Field(..., description="提示词绑定ID")
+
+
+class UpdatePromptSortOrderRequest(BaseModel):
+    """
+    更新提示词排序请求DTO
+    """
+    prompt_binding_id: str = Field(..., description="提示词绑定ID")
+    sort_order: int = Field(..., description="排序序号")
+
+
+@router.get("/{chatbot_id}/prompts", response_model=ApiResponse)
+def get_chatbot_prompts(chatbot_id: str, prompt_type: str = None):
+    """
+    获取机器人绑定的提示词列表
+    
+    Args:
+        chatbot_id: 机器人ID
+        prompt_type: 提示词类型（可选）：system/user
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象，包含绑定的提示词列表
+    """
+    prompts = ChatbotService.get_chatbot_prompts(chatbot_id, prompt_type)
+    return ResponseUtil.success(data=prompts, message="获取机器人绑定提示词成功")
+
+
+@router.post("/{chatbot_id}/prompts/bind", response_model=ApiResponse)
+def bind_prompt_to_chatbot(chatbot_id: str, request: BindPromptRequest):
+    """
+    绑定提示词到机器人
+    
+    Args:
+        chatbot_id: 机器人ID
+        request: 绑定提示词请求DTO
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    chatbot_prompt = ChatbotService.bind_prompt_to_chatbot(
+        chatbot_id, 
+        request.prompt_type, 
+        request.prompt_source,
+        request.prompt_id,
+        request.prompt_name,
+        request.prompt_content,
+        request.sort_order,
+        request.prompt_binding_id
+    )
+    return ResponseUtil.success(data={"binding_id": str(chatbot_prompt.id)}, message="提示词绑定成功")
+
+
+@router.post("/{chatbot_id}/prompts/unbind", response_model=ApiResponse)
+def unbind_prompt_from_chatbot(chatbot_id: str, request: UnbindPromptRequest):
+    """
+    解绑机器人的提示词
+    
+    Args:
+        chatbot_id: 机器人ID
+        request: 解绑提示词请求DTO
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    ChatbotService.unbind_prompt_from_chatbot(chatbot_id, request.prompt_binding_id)
+    return ResponseUtil.success(message="提示词解绑成功")
+
+
+@router.post("/{chatbot_id}/prompts/sort", response_model=ApiResponse)
+def update_prompt_sort_order(chatbot_id: str, request: UpdatePromptSortOrderRequest):
+    """
+    更新提示词排序
+    
+    Args:
+        chatbot_id: 机器人ID
+        request: 更新提示词排序请求DTO
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    chatbot_prompt = ChatbotService.update_prompt_sort_order(chatbot_id, request.prompt_binding_id, request.sort_order)
+    return ResponseUtil.success(data={"binding_id": str(chatbot_prompt.id)}, message="提示词排序更新成功")

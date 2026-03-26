@@ -133,9 +133,8 @@ export const llmModelService = {
     api_key: string; 
     endpoint: string; 
     model_type: string;
-    support_image?: boolean;
-  }): Promise<{ success: boolean; message: string; result?: string }> => {
-    return http.post<{ success: boolean; message: string; result?: string }>('/aicenter/v1/llm_model/test_config', data);
+  }): Promise<{ success: boolean; message: string; result?: string; support_image?: boolean }> => {
+    return http.post<{ success: boolean; message: string; result?: string; support_image?: boolean }>('/aicenter/v1/llm_model/test_config', data);
   },
   
   /**

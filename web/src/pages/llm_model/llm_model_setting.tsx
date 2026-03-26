@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Form, Input, Select, TreeSelect, Button, Switch, message, Row, Col, Spin, Slider, InputNumber, Tooltip, Tag } from 'antd';
 const { TextArea } = Input;
-import { ArrowLeftOutlined, SaveOutlined, UndoOutlined, ApiTwoTone, SettingOutlined, ClearOutlined, SendOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, InfoCircleOutlined, BulbOutlined, CopyOutlined, ReloadOutlined, EditOutlined, DownOutlined, RightOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SaveOutlined, UndoOutlined, ApiTwoTone, SettingOutlined, ClearOutlined, SendOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, InfoCircleOutlined, BulbOutlined, CopyOutlined, ReloadOutlined, EditOutlined, DownOutlined, RightOutlined, PlusOutlined } from '@ant-design/icons';
 import { llmModelService, LLMModel, LLMCategory } from '../../services/llm_model';
 import { request, post } from '../../utils/request';
 import PageHeader from '../../components/page-header';
@@ -57,6 +57,11 @@ const LLMModelSetting: React.FC = () => {
   const [modelConfig, setModelConfig] = useState<Record<string, any>>({});
   const [originalModelConfig, setOriginalModelConfig] = useState<Record<string, any>>({});
   const [configHasChanges, setConfigHasChanges] = useState(false);
+  
+  const [tags, setTags] = useState<string[]>([]);
+  const [showTagInput, setShowTagInput] = useState(false);
+  const [newTag, setNewTag] = useState('');
+  const tagInputRef = useRef<HTMLInputElement>(null);
   
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -120,10 +125,12 @@ const LLMModelSetting: React.FC = () => {
         category_id: data.category_id,
         endpoint: data.endpoint,
         api_key: data.api_key,
-        tags: data.tags,
         support_image: data.support_image || false,
         status: data.status
       });
+      
+      const modelTags = data.tags ? (Array.isArray(data.tags) ? data.tags : JSON.parse(data.tags)) : [];
+      setTags(modelTags);
       
       if (data.config) {
         setModelConfig(data.config);
@@ -199,8 +206,7 @@ const LLMModelSetting: React.FC = () => {
         provider: formValues.provider,
         api_key: formValues.api_key,
         endpoint: formValues.endpoint,
-        model_type: formValues.model_type,
-        support_image: formValues.support_image || false
+        model_type: formValues.model_type
       });
       
       setConnectionTestResult({
@@ -210,6 +216,10 @@ const LLMModelSetting: React.FC = () => {
       
       if (result.success) {
         message.success('连接测试成功！');
+        if (result.support_image !== undefined) {
+          form.setFieldsValue({ support_image: result.support_image });
+          setHasChanges(true);
+        }
       } else {
         message.error(result.message || '连接测试失败');
       }
@@ -224,8 +234,21 @@ const LLMModelSetting: React.FC = () => {
     }
   };
 
+  const handleAddTag = () => {
+    if (newTag.trim()) {
+      if (!tags.includes(newTag.trim())) {
+        setTags([...tags, newTag.trim()]);
+        setHasChanges(true);
+      }
+      setNewTag('');
+      setShowTagInput(false);
+    }
+  };
+
   const handleRestore = () => {
+    const originalTags = originalData.tags ? (Array.isArray(originalData.tags) ? originalData.tags : JSON.parse(originalData.tags)) : [];
     form.setFieldsValue(originalData);
+    setTags(originalTags);
     setModelConfig(originalModelConfig);
     setConnectionTestResult(null);
     setHasChanges(false);
@@ -494,11 +517,73 @@ const LLMModelSetting: React.FC = () => {
         setConfigHasChanges(false);
       } else {
         const values = await form.validateFields();
+        
+        const hasParamsChanged = originalData && (
+          originalData.name !== values.name ||
+          originalData.endpoint !== values.endpoint ||
+          originalData.api_key !== values.api_key ||
+          originalData.model_type !== values.model_type
+        );
+        
+        let supportImage = model.support_image || false;
+        
+        if (hasParamsChanged && !connectionTestResult?.success) {
+          const testData = {
+            name: values.name,
+            provider: model.provider,
+            endpoint: values.endpoint,
+            api_key: values.api_key,
+            model_type: values.model_type
+          };
+          
+          setTestingConnection(true);
+          const key = `test-model-${model.id}`;
+          message.loading({ content: `正在测试连接...`, key, duration: 0 });
+          
+          try {
+            const result = await llmModelService.testModelConfig(testData);
+            
+            setTestingConnection(false);
+            
+            if (result.success) {
+              message.success({ content: `连接测试成功！`, key });
+              supportImage = result.support_image || false;
+              setConnectionTestResult({
+                success: true,
+                message: '连接测试成功'
+              });
+            } else {
+              message.error({ content: `连接测试失败: ${result.message}`, key });
+              setSaving(false);
+              return;
+            }
+          } catch (error: any) {
+            setTestingConnection(false);
+            message.error({ content: `测试失败: ${error.message}`, key });
+            setSaving(false);
+            return;
+          }
+        }
+        
         const configStr = JSON.stringify(modelConfig);
-        await llmModelService.updateLLMModel(model.id, {
+        
+        let tagsArray = values.tags || [];
+        if (supportImage && !tagsArray.includes('图片支持')) {
+          tagsArray.push('图片支持');
+        }
+        const tags = JSON.stringify(tagsArray);
+        
+        const updateData: any = {
           ...values,
+          tags: tags,
           config: configStr
-        });
+        };
+        
+        if (hasParamsChanged) {
+          updateData.support_image = supportImage;
+        }
+        
+        await llmModelService.updateLLMModel(model.id, updateData);
         message.success('保存成功');
         
         setModel(prev => prev ? {
@@ -508,8 +593,9 @@ const LLMModelSetting: React.FC = () => {
           category_id: values.category_id,
           endpoint: values.endpoint,
           api_key: values.api_key,
-          tags: values.tags,
+          tags: tags,
           status: values.status,
+          support_image: supportImage,
           config: configStr
         } : null);
         
@@ -520,7 +606,7 @@ const LLMModelSetting: React.FC = () => {
           category_id: values.category_id,
           endpoint: values.endpoint,
           api_key: values.api_key,
-          tags: values.tags,
+          tags: tags,
           config: configStr,
           status: values.status
         });
@@ -903,15 +989,8 @@ const LLMModelSetting: React.FC = () => {
                       </Form.Item>
                     </Col>
                     <Col span={12}>
-                      <Form.Item name="support_image" label="支持图片" valuePropName="checked">
-                        <Switch checkedChildren="是" unCheckedChildren="否" />
-                      </Form.Item>
-                    </Col>
-                  </Row>
-                  <Row gutter={16}>
-                    <Col span={12}>
-                      <Form.Item name="status" label="状态" valuePropName="checked">
-                        <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+                      <Form.Item name="support_image" label="支持图片" valuePropName="checked" tooltip="通过测试连接自动检测">
+                        <Switch checkedChildren="是" unCheckedChildren="否" disabled />
                       </Form.Item>
                     </Col>
                   </Row>
@@ -920,6 +999,61 @@ const LLMModelSetting: React.FC = () => {
                   </Form.Item>
                   <Form.Item name="api_key" label="API密钥" rules={[{ required: true, message: '请输入API密钥' }]}>
                     <Input.Password placeholder="请输入API密钥" />
+                  </Form.Item>
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Form.Item name="status" label="状态" valuePropName="checked">
+                        <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+                  <Form.Item label="标签">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        {tags.map((tag, index) => (
+                          <Tag
+                            key={index}
+                            closable
+                            onClose={() => {
+                              const newTags = tags.filter((_, i) => i !== index);
+                              setTags(newTags);
+                              setHasChanges(true);
+                            }}
+                            style={{ marginBottom: 4 }}
+                          >
+                            {tag}
+                          </Tag>
+                        ))}
+                        {showTagInput ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <Input
+                              ref={tagInputRef}
+                              type="text"
+                              size="small"
+                              value={newTag}
+                              onChange={(e) => setNewTag(e.target.value)}
+                              onKeyPress={(e) => e.key === 'Enter' && handleAddTag()}
+                              placeholder="输入标签"
+                              style={{ width: 120, height: 24 }}
+                            />
+                            <Button size="small" onClick={handleAddTag} style={{ height: 24 }}>添加</Button>
+                            <Button size="small" onClick={() => setShowTagInput(false)} style={{ height: 24 }}>取消</Button>
+                          </div>
+                        ) : (
+                          <Button 
+                            type="dashed" 
+                            icon={<PlusOutlined />} 
+                            onClick={() => {
+                              setShowTagInput(true);
+                              setTimeout(() => tagInputRef.current?.focus(), 100);
+                            }}
+                            style={{ borderStyle: 'dashed', height: 24, minWidth: 80 }}
+                          >
+                            添加标签
+                          </Button>
+                        )}
+                      </div>
+                    </div>
                   </Form.Item>
                 </Form>
               </>
