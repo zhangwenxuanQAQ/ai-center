@@ -1,22 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Input, Button, Dropdown, Menu, Modal, Select, message, Popconfirm, Empty, Spin } from 'antd';
-import { PlusOutlined, SearchOutlined, DeleteOutlined, PushpinOutlined, FolderOutlined, MenuFoldOutlined, MenuUnfoldOutlined, MoreOutlined, MessageOutlined } from '@ant-design/icons';
+import { Input, Button, Dropdown, Menu, Modal, message, Empty, Spin } from 'antd';
+import { PlusOutlined, SearchOutlined, DeleteOutlined, PushpinOutlined, MenuFoldOutlined, MenuUnfoldOutlined, MoreOutlined, MessageOutlined, EditOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
-
-interface Conversation {
-  id: string;
-  title: string;
-  created_at: string;
-  updated_at: string;
-  is_pinned: boolean;
-  group_id?: string;
-  group_name?: string;
-}
-
-interface ConversationGroup {
-  id: string;
-  name: string;
-}
+import { chatService, Conversation } from '../../services/chat';
 
 interface ChatListProps {
   theme: 'light' | 'dark';
@@ -25,6 +11,7 @@ interface ChatListProps {
   onSelectConversation: (conversation: Conversation | null) => void;
   onNewConversation: () => void;
   onToggleCollapse: () => void;
+  refreshConversations?: boolean;
 }
 
 const ChatList: React.FC<ChatListProps> = ({
@@ -33,34 +20,44 @@ const ChatList: React.FC<ChatListProps> = ({
   selectedConversation,
   onSelectConversation,
   onNewConversation,
-  onToggleCollapse
+  onToggleCollapse,
+  refreshConversations
 }) => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [groups, setGroups] = useState<ConversationGroup[]>([]);
+  const [showNewConversation, setShowNewConversation] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [isMoveModalVisible, setIsMoveModalVisible] = useState(false);
-  const [selectedGroupId, setSelectedGroupId] = useState<string | undefined>();
-  const [movingConversation, setMovingConversation] = useState<Conversation | null>(null);
+  const [isRenameModalVisible, setIsRenameModalVisible] = useState(false);
+  const [renamingConversation, setRenamingConversation] = useState<Conversation | null>(null);
+  const [newTitle, setNewTitle] = useState('');
 
   useEffect(() => {
     fetchConversations();
-    fetchGroups();
   }, []);
+
+  useEffect(() => {
+    // 当refreshConversations变化时，重新获取对话列表
+    if (refreshConversations) {
+      fetchConversations();
+      // 重置showNewConversation，因为新对话已经创建并添加到列表中
+      setShowNewConversation(false);
+    }
+  }, [refreshConversations]);
+
+  useEffect(() => {
+    // 当没有对话数据时，默认显示"新对话"且选中
+    if (conversations.length === 0 && !showNewConversation) {
+      setShowNewConversation(true);
+      onSelectConversation(null);
+    }
+  }, [conversations.length, showNewConversation, onSelectConversation]);
 
   const fetchConversations = async () => {
     setLoading(true);
     try {
-      const mockConversations: Conversation[] = [
-        { id: '1', title: '如何使用React Hooks', created_at: '2024-01-15 10:30:00', updated_at: '2024-01-15 12:00:00', is_pinned: true, group_id: '1', group_name: '技术讨论' },
-        { id: '2', title: 'Python数据分析入门', created_at: '2024-01-14 09:00:00', updated_at: '2024-01-14 11:30:00', is_pinned: false, group_id: '1', group_name: '技术讨论' },
-        { id: '3', title: '机器学习基础概念', created_at: '2024-01-13 14:20:00', updated_at: '2024-01-13 16:45:00', is_pinned: true },
-        { id: '4', title: '深度学习框架对比', created_at: '2024-01-12 11:00:00', updated_at: '2024-01-12 13:30:00', is_pinned: false, group_id: '2', group_name: '学习笔记' },
-        { id: '5', title: '自然语言处理应用', created_at: '2024-01-11 16:00:00', updated_at: '2024-01-11 18:00:00', is_pinned: false },
-        { id: '6', title: '计算机视觉项目实战', created_at: '2024-01-10 10:00:00', updated_at: '2024-01-10 12:00:00', is_pinned: false },
-      ];
-      setConversations(mockConversations);
+      const result = await chatService.getConversations(1, 20);
+      setConversations(result.items);
     } catch (error) {
       console.error('Failed to fetch conversations:', error);
     } finally {
@@ -68,26 +65,23 @@ const ChatList: React.FC<ChatListProps> = ({
     }
   };
 
-  const fetchGroups = async () => {
-    try {
-      const mockGroups: ConversationGroup[] = [
-        { id: '1', name: '技术讨论' },
-        { id: '2', name: '学习笔记' },
-        { id: '3', name: '项目相关' },
-      ];
-      setGroups(mockGroups);
-    } catch (error) {
-      console.error('Failed to fetch groups:', error);
-    }
+  const handleNewConversation = () => {
+    setShowNewConversation(true);
+    onNewConversation();
   };
 
   const handleDeleteConversation = async (conversation: Conversation) => {
     try {
-      setConversations(conversations.filter(c => c.id !== conversation.id));
-      if (selectedConversation?.id === conversation.id) {
-        onSelectConversation(null);
+      const success = await chatService.deleteConversation(conversation.id);
+      if (success) {
+        setConversations(conversations.filter(c => c.id !== conversation.id));
+        if (selectedConversation?.id === conversation.id) {
+          onSelectConversation(null);
+        }
+        message.success('对话已删除');
+      } else {
+        message.error('删除失败');
       }
-      message.success('对话已删除');
     } catch (error) {
       console.error('Failed to delete conversation:', error);
       message.error('删除失败');
@@ -96,42 +90,43 @@ const ChatList: React.FC<ChatListProps> = ({
 
   const handlePinConversation = async (conversation: Conversation) => {
     try {
+      const updatedConversation = await chatService.togglePinConversation(conversation.id);
       const updatedConversations = conversations.map(c => 
-        c.id === conversation.id ? { ...c, is_pinned: !c.is_pinned } : c
+        c.id === conversation.id ? updatedConversation : c
       );
       setConversations(updatedConversations);
-      message.success(conversation.is_pinned ? '已取消置顶' : '已置顶');
+      message.success(updatedConversation.is_pinned ? '已置顶' : '已取消置顶');
     } catch (error) {
       console.error('Failed to pin conversation:', error);
       message.error('操作失败');
     }
   };
 
-  const handleMoveToGroup = (conversation: Conversation) => {
-    setMovingConversation(conversation);
-    setSelectedGroupId(conversation.group_id);
-    setIsMoveModalVisible(true);
+  const handleRenameConversation = (conversation: Conversation) => {
+    setRenamingConversation(conversation);
+    setNewTitle(conversation.title);
+    setIsRenameModalVisible(true);
   };
 
-  const handleMoveConfirm = async () => {
-    if (!movingConversation) return;
+  const handleRenameConfirm = async () => {
+    if (!renamingConversation || !newTitle.trim()) {
+      message.error('请输入对话名称');
+      return;
+    }
     
     try {
-      const group = groups.find(g => g.id === selectedGroupId);
+      const updatedConversation = await chatService.updateConversation(renamingConversation.id, newTitle.trim());
       const updatedConversations = conversations.map(c => 
-        c.id === movingConversation.id ? { 
-          ...c, 
-          group_id: selectedGroupId, 
-          group_name: group?.name 
-        } : c
+        c.id === renamingConversation.id ? updatedConversation : c
       );
       setConversations(updatedConversations);
-      message.success('已移动到分组');
-      setIsMoveModalVisible(false);
-      setMovingConversation(null);
+      message.success('对话名称已修改');
+      setIsRenameModalVisible(false);
+      setRenamingConversation(null);
+      setNewTitle('');
     } catch (error) {
-      console.error('Failed to move conversation:', error);
-      message.error('移动失败');
+      console.error('Failed to rename conversation:', error);
+      message.error('修改失败');
     }
   };
 
@@ -143,10 +138,10 @@ const ChatList: React.FC<ChatListProps> = ({
       onClick: () => handlePinConversation(conversation),
     },
     {
-      key: 'move',
-      icon: <FolderOutlined />,
-      label: '移动到分组',
-      onClick: () => handleMoveToGroup(conversation),
+      key: 'rename',
+      icon: <EditOutlined />,
+      label: '修改名称',
+      onClick: () => handleRenameConversation(conversation),
     },
     {
       type: 'divider',
@@ -208,9 +203,6 @@ const ChatList: React.FC<ChatListProps> = ({
         <div className="conversation-title">{conversation.title}</div>
         <div className="conversation-meta">
           <span className="conversation-date">{formatDate(conversation.updated_at)}</span>
-          {conversation.group_name && (
-            <span className="conversation-group">{conversation.group_name}</span>
-          )}
         </div>
       </div>
       <div className="conversation-actions" onClick={e => e.stopPropagation()}>
@@ -221,13 +213,31 @@ const ChatList: React.FC<ChatListProps> = ({
     </div>
   );
 
+  const renderNewConversationItem = () => (
+    <div
+      key="new"
+      className={`conversation-item ${theme === 'dark' ? 'dark' : 'light'} ${selectedConversation === null ? 'selected' : ''}`}
+      onClick={() => onSelectConversation(null)}
+    >
+      <div className="conversation-icon">
+        <MessageOutlined />
+      </div>
+      <div className="conversation-content">
+        <div className="conversation-title">新对话</div>
+        <div className="conversation-meta">
+          <span className="conversation-date">刚刚</span>
+        </div>
+      </div>
+    </div>
+  );
+
   if (collapsed) {
     return (
       <div className={`chat-list-collapsed ${theme === 'dark' ? 'dark' : 'light'}`}>
         <Button
           type="primary"
           icon={<PlusOutlined />}
-          onClick={onNewConversation}
+          onClick={handleNewConversation}
           className="new-chat-btn-collapsed"
         />
         <Button
@@ -246,7 +256,7 @@ const ChatList: React.FC<ChatListProps> = ({
         <Button
           type="primary"
           icon={<PlusOutlined />}
-          onClick={onNewConversation}
+          onClick={handleNewConversation}
           className="new-chat-btn"
           id="new-conversation-button"
         >
@@ -289,55 +299,46 @@ const ChatList: React.FC<ChatListProps> = ({
           <div className="loading-container">
             <Spin />
           </div>
-        ) : filteredConversations.length === 0 ? (
-          <Empty description="暂无对话" className={`empty-container ${theme === 'dark' ? 'dark' : 'light'}`} />
         ) : (
           <>
-            {pinnedConversations.length > 0 && (
-              <div className="conversation-section">
-                <div className="section-title">
-                  <PushpinOutlined /> 置顶对话
-                </div>
-                {pinnedConversations.map(renderConversationItem)}
+            <div className="conversation-section">
+              <div className="section-title">
+                <PushpinOutlined /> 置顶对话
               </div>
-            )}
-            {unpinnedConversations.length > 0 && (
-              <div className="conversation-section">
-                {pinnedConversations.length > 0 && (
-                  <div className="section-title">全部对话</div>
-                )}
-                {unpinnedConversations.map(renderConversationItem)}
-              </div>
+              {pinnedConversations.map(renderConversationItem)}
+            </div>
+            <div className="conversation-section">
+              <div className="section-title">全部对话</div>
+              {showNewConversation && renderNewConversationItem()}
+              {unpinnedConversations.map(renderConversationItem)}
+            </div>
+            {!showNewConversation && conversations.length === 0 && (
+              <Empty description="暂无对话" className={`empty-container ${theme === 'dark' ? 'dark' : 'light'}`} />
             )}
           </>
         )}
       </div>
 
       <Modal
-        title="移动到分组"
-        open={isMoveModalVisible}
-        onOk={handleMoveConfirm}
+        title="修改对话名称"
+        open={isRenameModalVisible}
+        onOk={handleRenameConfirm}
         onCancel={() => {
-          setIsMoveModalVisible(false);
-          setMovingConversation(null);
+          setIsRenameModalVisible(false);
+          setRenamingConversation(null);
+          setNewTitle('');
         }}
         okText="确认"
         cancelText="取消"
         className={`chat-modal ${theme === 'dark' ? 'dark' : 'light'}`}
       >
-        <Select
-          style={{ width: '100%' }}
-          placeholder="选择分组"
-          value={selectedGroupId}
-          onChange={setSelectedGroupId}
-          allowClear
-        >
-          {groups.map(group => (
-            <Select.Option key={group.id} value={group.id}>
-              {group.name}
-            </Select.Option>
-          ))}
-        </Select>
+        <Input
+          placeholder="请输入对话名称"
+          value={newTitle}
+          onChange={e => setNewTitle(e.target.value)}
+          onPressEnter={handleRenameConfirm}
+          autoFocus
+        />
       </Modal>
     </div>
   );

@@ -4,6 +4,7 @@ import { SendOutlined, ClearOutlined, SettingOutlined, RobotOutlined, BulbOutlin
 import type { MenuProps } from 'antd';
 import { llmModelService, LLMModel } from '../../services/llm_model';
 import { chatbotService, Chatbot } from '../../services/chatbot';
+import { chatService, Conversation, Message } from '../../services/chat';
 
 const { TextArea } = Input;
 
@@ -33,11 +34,13 @@ interface Conversation {
 interface ChatConversationProps {
   theme: 'light' | 'dark';
   conversation: Conversation | null;
+  onConversationCreated?: (newConversation?: Conversation) => void;
 }
 
 const ChatConversation: React.FC<ChatConversationProps> = ({
   theme,
-  conversation
+  conversation,
+  onConversationCreated
 }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -119,34 +122,12 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
   const fetchMessages = async (conversationId: string) => {
     setLoading(true);
     try {
-      const mockMessages: Message[] = [
-        { 
-          id: '1', 
-          role: 'user', 
-          content: '你好，请介绍一下React Hooks的基本用法', 
-          created_at: '2024-01-15 10:30:00' 
-        },
-        { 
-          id: '2', 
-          role: 'assistant', 
-          content: `React Hooks是React 16.8引入的新特性，它允许你在函数组件中使用状态和其他React特性。以下是几个最常用的Hooks：
-
-1. **useState**: 用于在函数组件中添加状态
-2. **useEffect**: 用于处理副作用，如数据获取、订阅等
-3. **useContext**: 用于访问React Context
-4. **useReducer**: 用于复杂的状态逻辑
-5. **useCallback**: 用于缓存回调函数
-6. **useMemo**: 用于缓存计算结果
-
-这些Hooks让函数组件变得更加强大，可以完全替代类组件的功能。`, 
-          created_at: '2024-01-15 10:30:05',
-          reasoning_content: '用户询问React Hooks的基本用法，我需要提供一个清晰、全面的介绍。首先列出最常用的Hooks，然后简要说明每个的作用。',
-          usage: { prompt_tokens: 20, completion_tokens: 150, total_tokens: 170 }
-        },
-      ];
-      setMessages(mockMessages);
+      const result = await chatService.getMessages(conversationId, 1, 50);
+      setMessages(result.items);
     } catch (error) {
       console.error('Failed to fetch messages:', error);
+      // 失败时显示空消息列表
+      setMessages([]);
     } finally {
       setLoading(false);
     }
@@ -154,6 +135,43 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
 
   const handleSend = async () => {
     if (!inputValue.trim()) return;
+
+    let currentConversation = conversation;
+
+    // 如果没有选中的对话，先创建一个新对话
+    if (!currentConversation) {
+      try {
+        // 标题为用户问题的前20个字符
+        const title = inputValue.trim().substring(0, 20);
+        // 模型参数配置
+        const config = {
+          temperature,
+          max_tokens: maxTokens,
+          top_p: topP
+        };
+        
+        currentConversation = await chatService.createConversation(
+          title,
+          selectedModel?.id,
+          selectedChatbot?.id,
+          config
+        );
+        // 通知父组件更新对话列表并选中新创建的对话
+        if (onConversationCreated) {
+          onConversationCreated({
+            id: currentConversation.id,
+            title: currentConversation.title,
+            created_at: currentConversation.created_at,
+            updated_at: currentConversation.updated_at,
+            is_pinned: currentConversation.is_pinned || false
+          });
+        }
+      } catch (error) {
+        console.error('Failed to create conversation:', error);
+        message.error('创建对话失败，请重试');
+        return;
+      }
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -181,25 +199,31 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     }
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // 发送消息到后端
+      const responseMessage = await chatService.sendMessage(currentConversation.id, inputValue);
       
-      const replyContent = `这是一个模拟的回复。您的问题是：${inputValue}
-
-在实际应用中，这里会调用后端API获取真实的AI回复。`;
-
       setMessages(prev => prev.map(msg => 
         msg.id === assistantMessageId 
-          ? { 
-              ...msg, 
-              content: replyContent,
-              reasoning_content: deepThinking ? '正在分析用户的问题，生成合适的回答...' : undefined,
-              usage: { prompt_tokens: 50, completion_tokens: 100, total_tokens: 150 }
+          ? {
+              ...responseMessage,
+              id: assistantMessageId // 保持前端生成的ID一致
             }
           : msg
       ));
     } catch (error) {
       console.error('Failed to send message:', error);
       message.error('发送失败，请重试');
+      
+      // 失败时显示错误消息
+      setMessages(prev => prev.map(msg => 
+        msg.id === assistantMessageId 
+          ? { 
+              ...msg, 
+              content: '抱歉，发送消息时出现错误，请重试',
+              reasoning_content: undefined
+            }
+          : msg
+      ));
     } finally {
       if (deepThinking && thinkingStartTimeRef.current[assistantMessageId]) {
         const duration = Date.now() - thinkingStartTimeRef.current[assistantMessageId];
@@ -652,7 +676,9 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       <div className="welcome-icon">💬</div>
       <div className="welcome-text">
         {currentSelection 
-          ? `开始与 ${currentSelection.name} 对话`
+          ? (currentSelection.type === 'chatbot' && selectedChatbot?.greeting 
+              ? selectedChatbot.greeting 
+              : `开始与 ${currentSelection.name} 对话`)
           : '请选择模型或机器人'
         }
       </div>

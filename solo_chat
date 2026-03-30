@@ -195,7 +195,32 @@
 
 
 接下来实现后端:
-1. 修改chat表，添加title , model_id,chatbot_id, config , sort_order , is_top字段，删除response字段。
-2. 新建chat_message表，存储每次对话的消息。
+1. 修改chat表，添加title , model_id,chatbot_id, config , sort_order , is_top , system_prompt字段，修改message字段为messages ，删除response字段。
+2. 新建chat_message表，存储每次对话的消息。需要有message_id , chat_id , config , messages , role , content , model_id , chatbot_id字段。
 3. 实现分页查询对话接口
-4. 实现
+4. 实现对话新增，删除，修改，置顶，排序接口
+5. 实现根据对话查询对话消息接口
+6. 实现聊天接口，入参传递config , query , model_id , chatbot_id , chat_id , stream字段。
+   其中query为json数组，例如：
+   ```
+   [
+    {
+      "type": "file_base64",
+      "content": "文件的base64字符串"
+      "mime_type": "image/jpeg"
+   },
+   {
+      "type": "text",
+      "content": "你好"
+      "mime_type": "text/plain"
+   }
+   ]
+  ```
+   当没有传chat_id时，默认创建一个新的对话，title取问题的前20个字符。
+   需要将query数组转为大模型的user消息（如果是file_base64类型，需要根据mime_type放到用户信息合适位置）。
+   本次用户消息需要和对话的messages字段合并，作为新的messages字段，messages需要符合openai的api要求。
+   前置处理完成后调用模型实现类，返回模型输出给前端。
+   如果stream字段为true，需要返回模型输出的流式数据。
+   如果stream字段为false，需要返回模型输出的完整数据。
+   回答完毕后，需要更新最新对话的messages字段，在chat_messages中添加2条记录，分别是：用户消息和系统回复，message_id系统生成。
+  

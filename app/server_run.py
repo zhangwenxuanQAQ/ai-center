@@ -323,6 +323,111 @@ try:
     except Exception as e:
         print(f"  创建 chatbot_prompt 表失败: {e}")
     
+    # 修改 chat 表结构
+    print("\n修改 chat 表结构...")
+    try:
+        if 'chat' in table_names:
+            cursor = db.execute_sql("DESCRIBE chat;")
+            columns = [column[0] for column in cursor.fetchall()]
+            
+            # 添加 title 字段
+            if 'title' not in columns:
+                db.execute_sql("ALTER TABLE chat ADD COLUMN title VARCHAR(255) DEFAULT NULL")
+                print("  成功添加 title 字段")
+            else:
+                print("  title 字段已存在")
+            
+            # 添加 model_id 字段
+            if 'model_id' not in columns:
+                db.execute_sql("ALTER TABLE chat ADD COLUMN model_id VARCHAR(40) DEFAULT NULL")
+                print("  成功添加 model_id 字段")
+            else:
+                print("  model_id 字段已存在")
+            
+            # 添加 config 字段
+            if 'config' not in columns:
+                db.execute_sql("ALTER TABLE chat ADD COLUMN config TEXT DEFAULT NULL")
+                print("  成功添加 config 字段")
+            else:
+                print("  config 字段已存在")
+            
+            # 添加 sort_order 字段
+            if 'sort_order' not in columns:
+                db.execute_sql("ALTER TABLE chat ADD COLUMN sort_order INT DEFAULT 0")
+                print("  成功添加 sort_order 字段")
+            else:
+                print("  sort_order 字段已存在")
+            
+            # 添加 is_top 字段
+            if 'is_top' not in columns:
+                db.execute_sql("ALTER TABLE chat ADD COLUMN is_top TINYINT DEFAULT 0")
+                print("  成功添加 is_top 字段")
+            else:
+                print("  is_top 字段已存在")
+            
+            # 添加 system_prompt 字段
+            if 'system_prompt' not in columns:
+                db.execute_sql("ALTER TABLE chat ADD COLUMN system_prompt TEXT DEFAULT NULL")
+                print("  成功添加 system_prompt 字段")
+            else:
+                print("  system_prompt 字段已存在")
+            
+            # 添加 messages 字段
+            if 'messages' not in columns:
+                db.execute_sql("ALTER TABLE chat ADD COLUMN messages TEXT DEFAULT NULL")
+                print("  成功添加 messages 字段")
+            else:
+                print("  messages 字段已存在")
+            
+            # 删除 message 字段
+            if 'message' in columns:
+                db.execute_sql("ALTER TABLE chat DROP COLUMN message")
+                print("  成功删除 message 字段")
+            
+            # 删除 response 字段
+            if 'response' in columns:
+                db.execute_sql("ALTER TABLE chat DROP COLUMN response")
+                print("  成功删除 response 字段")
+        else:
+            print("  chat 表不存在，跳过")
+    except Exception as e:
+        print(f"  修改 chat 表结构失败: {e}")
+    
+    # 创建 chat_message 表
+    print("\n创建 chat_message 表...")
+    try:
+        if 'chat_message' not in table_names:
+            db.execute_sql("""
+                CREATE TABLE chat_message (
+                    id CHAR(36) NOT NULL PRIMARY KEY,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    create_user_id VARCHAR(40) DEFAULT NULL,
+                    update_user_id VARCHAR(40) DEFAULT NULL,
+                    deleted TINYINT DEFAULT 0,
+                    deleted_at DATETIME DEFAULT NULL,
+                    deleted_user_id VARCHAR(36) DEFAULT NULL,
+                    message_id VARCHAR(40) NOT NULL,
+                    chat_id VARCHAR(40) NOT NULL,
+                    config TEXT DEFAULT NULL,
+                    messages TEXT DEFAULT NULL,
+                    role VARCHAR(20) NOT NULL,
+                    content TEXT NOT NULL,
+                    model_id VARCHAR(40) DEFAULT NULL,
+                    chatbot_id VARCHAR(40) DEFAULT NULL,
+                    INDEX idx_message_id (message_id),
+                    INDEX idx_chat_id (chat_id),
+                    INDEX idx_model_id (model_id),
+                    INDEX idx_chatbot_id (chatbot_id),
+                    INDEX idx_deleted (deleted)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+            print("  成功创建 chat_message 表")
+        else:
+            print("  chat_message 表已存在，跳过")
+    except Exception as e:
+        print(f"  创建 chat_message 表失败: {e}")
+    
     print("\n数据库迁移完成")
 except Exception as e:
     print(f"数据库迁移失败: {e}")

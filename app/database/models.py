@@ -208,17 +208,47 @@ class Chatbot(SoftDeleteModel):
 
 class Chat(SoftDeleteModel):
     """
-    聊天记录模型
+    对话模型
     
-    存储用户与机器人的聊天记录
+    存储用户对话信息
     """
-    user_id = CharField(max_length=40, index=True, verbose_name="用户ID")
-    chatbot_id = CharField(max_length=40, index=True, verbose_name="机器人ID")
-    message = TextField(verbose_name="用户消息")
-    response = TextField(verbose_name="机器人回复")
+    user_id = CharField(max_length=40, index=True, null=True, verbose_name="用户ID")
+    title = CharField(max_length=255, verbose_name="对话标题")
+    model_id = CharField(max_length=40, null=True, index=True, verbose_name="模型ID")
+    chatbot_id = CharField(max_length=40, null=True, index=True, verbose_name="机器人ID")
+    config = TextField(null=True, verbose_name="对话配置JSON")
+    sort_order = IntegerField(default=0, verbose_name="排序序号")
+    is_top = BooleanField(default=False, verbose_name="是否置顶")
+    system_prompt = TextField(null=True, verbose_name="系统提示词")
+    messages = TextField(null=True, verbose_name="对话消息列表JSON")
     
     class Meta:
         table_name = 'chat'
+        indexes = (
+            (('user_id', 'is_top', 'sort_order'), False),
+        )
+
+
+class ChatMessage(SoftDeleteModel):
+    """
+    对话消息模型
+    
+    存储对话中的每条消息
+    """
+    message_id = CharField(max_length=40, index=True, verbose_name="消息ID")
+    chat_id = CharField(max_length=40, index=True, verbose_name="对话ID")
+    config = TextField(null=True, verbose_name="消息配置JSON")
+    messages = TextField(null=True, verbose_name="消息内容JSON")
+    role = CharField(max_length=20, verbose_name="角色：user/assistant/system")
+    content = TextField(verbose_name="消息内容")
+    model_id = CharField(max_length=40, null=True, index=True, verbose_name="模型ID")
+    chatbot_id = CharField(max_length=40, null=True, index=True, verbose_name="机器人ID")
+    
+    class Meta:
+        table_name = 'chat_message'
+        indexes = (
+            (('chat_id', 'created_at'), False),
+        )
 
 
 class MCPCategory(SoftDeleteModel):
@@ -371,9 +401,11 @@ def create_tables():
         Knowledge,
         LLMCategory,
         LLMModel,
+        PromptCategory,
         Prompt,
         Chatbot,
         Chat,
+        ChatMessage,
         MCPCategory,
         MCPServer,
         MCPTool,

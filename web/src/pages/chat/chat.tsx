@@ -4,18 +4,9 @@ import ChatList from './chat_list';
 import ChatConversation from './chat_conversation';
 import '../../styles/common.css';
 import './chat.less';
+import { Conversation } from '../services/chat';
 
 const { Sider, Content } = Layout;
-
-interface Conversation {
-  id: string;
-  title: string;
-  created_at: string;
-  updated_at: string;
-  is_pinned: boolean;
-  group_id?: string;
-  group_name?: string;
-}
 
 const Chat: React.FC = () => {
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
@@ -23,6 +14,7 @@ const Chat: React.FC = () => {
   const [siderWidth, setSiderWidth] = useState(280);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [refreshConversations, setRefreshConversations] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -78,6 +70,15 @@ const Chat: React.FC = () => {
     setSelectedConversation(null);
   };
 
+  const handleConversationCreated = (newConversation?: Conversation) => {
+    // 如果传入了新创建的对话，设置为选中状态
+    if (newConversation) {
+      setSelectedConversation(newConversation);
+    }
+    // 通知ChatList组件刷新对话列表
+    setRefreshConversations(prev => !prev);
+  };
+
   const handleToggleCollapse = () => {
     setCollapsed(!collapsed);
   };
@@ -101,6 +102,7 @@ const Chat: React.FC = () => {
             onSelectConversation={handleSelectConversation}
             onNewConversation={handleNewConversation}
             onToggleCollapse={handleToggleCollapse}
+            refreshConversations={refreshConversations}
           />
         </Sider>
         
@@ -115,6 +117,7 @@ const Chat: React.FC = () => {
           <ChatConversation
             theme={theme}
             conversation={selectedConversation}
+            onConversationCreated={handleConversationCreated}
           />
         </Content>
       </Layout>

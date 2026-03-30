@@ -1,57 +1,200 @@
 """
-聊天数据传输对象（DTO）
+对话数据传输对象（DTO）
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List, Any
 from app.services.base_dto import BaseDTO
 
 
 class ChatBase(BaseModel):
     """
-    聊天基础DTO
+    对话基础DTO
     
     Attributes:
-        user_id: 用户ID
-        chatbot_id: 聊天机器人ID
-        message: 用户消息
-        response: 机器人回复
+        title: 对话标题
+        model_id: 模型ID
+        chatbot_id: 机器人ID
+        config: 对话配置JSON
+        sort_order: 排序序号
+        is_top: 是否置顶
+        system_prompt: 系统提示词
+        messages: 对话消息列表JSON
     """
-    user_id: str = Field(..., description="用户ID，UUID格式")
-    chatbot_id: str = Field(..., description="聊天机器人ID，UUID格式")
-    message: str = Field(..., min_length=1, max_length=5000, description="用户消息，长度1-5000个字符")
-    response: str = Field(..., min_length=1, max_length=10000, description="机器人回复，长度1-10000个字符")
+    title: Optional[str] = Field(None, max_length=255, description="对话标题")
+    model_id: Optional[str] = Field(None, max_length=40, description="模型ID")
+    chatbot_id: Optional[str] = Field(None, max_length=40, description="机器人ID")
+    config: Optional[dict] = Field(None, description="对话配置JSON")
+    sort_order: Optional[int] = Field(0, description="排序序号")
+    is_top: Optional[bool] = Field(False, description="是否置顶")
+    system_prompt: Optional[str] = Field(None, description="系统提示词")
+    messages: Optional[str] = Field(None, description="对话消息列表JSON")
 
 
-class ChatCreate(ChatBase):
+class ChatCreate(BaseModel):
     """
-    聊天创建DTO
+    对话创建DTO
+    
+    Attributes:
+        title: 对话标题
+        model_id: 模型ID
+        chatbot_id: 机器人ID
+        config: 对话配置JSON
+        system_prompt: 系统提示词
     """
-    pass
+    title: str = Field(..., max_length=255, description="对话标题")
+    model_id: Optional[str] = Field(None, max_length=40, description="模型ID")
+    chatbot_id: Optional[str] = Field(None, max_length=40, description="机器人ID")
+    config: Optional[dict] = Field(None, description="对话配置JSON")
+    system_prompt: Optional[str] = Field(None, description="系统提示词")
 
 
 class ChatUpdate(BaseModel):
     """
-    聊天更新DTO
+    对话更新DTO
     
     Attributes:
-        user_id: 用户ID
-        chatbot_id: 聊天机器人ID
-        message: 用户消息
-        response: 机器人回复
+        title: 对话标题
+        model_id: 模型ID
+        chatbot_id: 机器人ID
+        config: 对话配置JSON
+        system_prompt: 系统提示词
     """
-    user_id: Optional[str] = Field(None, description="用户ID，UUID格式")
-    chatbot_id: Optional[str] = Field(None, description="聊天机器人ID，UUID格式")
-    message: Optional[str] = Field(None, min_length=1, max_length=5000, description="用户消息，长度1-5000个字符")
-    response: Optional[str] = Field(None, min_length=1, max_length=10000, description="机器人回复，长度1-10000个字符")
+    title: Optional[str] = Field(None, max_length=255, description="对话标题")
+    model_id: Optional[str] = Field(None, max_length=40, description="模型ID")
+    chatbot_id: Optional[str] = Field(None, max_length=40, description="机器人ID")
+    config: Optional[dict] = Field(None, description="对话配置JSON")
+    system_prompt: Optional[str] = Field(None, description="系统提示词")
 
 
 class Chat(ChatBase, BaseDTO):
     """
-    聊天响应DTO
+    对话响应DTO
     
-    继承自ChatBase和BaseDTO，包含聊天基本信息和公共字段
+    继承自ChatBase和BaseDTO，包含对话基本信息和公共字段
+    """
+    user_id: str = Field(..., description="用户ID")
+    
+    class Config:
+        from_attributes = True
+
+
+class ChatMessageBase(BaseModel):
+    """
+    对话消息基础DTO
+    
+    Attributes:
+        message_id: 消息ID
+        chat_id: 对话ID
+        config: 消息配置JSON
+        messages: 消息内容JSON
+        role: 角色
+        content: 消息内容
+        model_id: 模型ID
+        chatbot_id: 机器人ID
+    """
+    message_id: str = Field(..., max_length=40, description="消息ID")
+    chat_id: str = Field(..., max_length=40, description="对话ID")
+    config: Optional[str] = Field(None, description="消息配置JSON")
+    messages: Optional[str] = Field(None, description="消息内容JSON")
+    role: str = Field(..., max_length=20, description="角色：user/assistant/system")
+    content: str = Field(..., description="消息内容")
+    model_id: Optional[str] = Field(None, max_length=40, description="模型ID")
+    chatbot_id: Optional[str] = Field(None, max_length=40, description="机器人ID")
+
+
+class ChatMessageCreate(BaseModel):
+    """
+    对话消息创建DTO
+    
+    Attributes:
+        message_id: 消息ID
+        chat_id: 对话ID
+        config: 消息配置JSON
+        messages: 消息内容JSON
+        role: 角色
+        content: 消息内容
+        model_id: 模型ID
+        chatbot_id: 机器人ID
+    """
+    message_id: str = Field(..., max_length=40, description="消息ID")
+    chat_id: str = Field(..., max_length=40, description="对话ID")
+    config: Optional[str] = Field(None, description="消息配置JSON")
+    messages: Optional[str] = Field(None, description="消息内容JSON")
+    role: str = Field(..., max_length=20, description="角色：user/assistant/system")
+    content: str = Field(..., description="消息内容")
+    model_id: Optional[str] = Field(None, max_length=40, description="模型ID")
+    chatbot_id: Optional[str] = Field(None, max_length=40, description="机器人ID")
+
+
+class ChatMessage(ChatMessageBase, BaseDTO):
+    """
+    对话消息响应DTO
+    
+    继承自ChatMessageBase和BaseDTO，包含消息基本信息和公共字段
     """
     
     class Config:
         from_attributes = True
+
+
+class QueryItem(BaseModel):
+    """
+    查询项DTO
+    
+    Attributes:
+        type: 类型（text/file_base64）
+        content: 内容
+        mime_type: MIME类型
+    """
+    type: str = Field(..., description="类型：text/file_base64")
+    content: str = Field(..., description="内容")
+    mime_type: Optional[str] = Field(None, description="MIME类型")
+
+
+class ChatRequest(BaseModel):
+    """
+    聊天请求DTO
+    
+    Attributes:
+        config: 对话配置JSON
+        query: 查询数组
+        model_id: 模型ID
+        chatbot_id: 机器人ID
+        chat_id: 对话ID
+        stream: 是否流式输出
+    """
+    config: Optional[dict] = Field(None, description="对话配置JSON")
+    query: List[QueryItem] = Field(..., description="查询数组")
+    model_id: Optional[str] = Field(None, max_length=40, description="模型ID")
+    chatbot_id: Optional[str] = Field(None, max_length=40, description="机器人ID")
+    chat_id: Optional[str] = Field(None, max_length=40, description="对话ID")
+    stream: bool = Field(True, description="是否流式输出")
+
+
+class ChatListResponse(BaseModel):
+    """
+    对话列表响应DTO
+    
+    Attributes:
+        items: 对话列表
+        total: 总数
+        page: 当前页
+        page_size: 每页数量
+    """
+    items: List[Chat] = Field(default_factory=list, description="对话列表")
+    total: int = Field(0, description="总数")
+    page: int = Field(1, description="当前页")
+    page_size: int = Field(20, description="每页数量")
+
+
+class ChatMessageListResponse(BaseModel):
+    """
+    对话消息列表响应DTO
+    
+    Attributes:
+        items: 消息列表
+        total: 总数
+    """
+    items: List[ChatMessage] = Field(default_factory=list, description="消息列表")
+    total: int = Field(0, description="总数")
