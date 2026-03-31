@@ -182,8 +182,8 @@ const ChatList: React.FC<ChatListProps> = ({
     c.title.toLowerCase().includes(searchText.toLowerCase())
   );
 
-  const pinnedConversations = filteredConversations.filter(c => c.is_pinned);
-  const unpinnedConversations = filteredConversations.filter(c => !c.is_pinned);
+  const pinnedConversations = filteredConversations.filter(c => c.is_top);
+  const unpinnedConversations = filteredConversations.filter(c => !c.is_top);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
