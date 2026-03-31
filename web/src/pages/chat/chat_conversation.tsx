@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Input, Button, Switch, Modal, Slider, message, Popconfirm, Tooltip, Dropdown, Empty, Spin } from 'antd';
-import { SendOutlined, ClearOutlined, SettingOutlined, RobotOutlined, BulbOutlined, LoadingOutlined, DownOutlined, RightOutlined, CopyOutlined, ReloadOutlined, EditOutlined } from '@ant-design/icons';
+import { Input, Button, Switch, Modal, Slider, message, Popconfirm, Tooltip, Dropdown, Empty, Spin, Popover, InputNumber, Select } from 'antd';
+import { SendOutlined, ClearOutlined, SettingOutlined, RobotOutlined, BulbOutlined, LoadingOutlined, DownOutlined, RightOutlined, CopyOutlined, ReloadOutlined, EditOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { llmModelService, LLMModel } from '../../services/llm_model';
 import { chatbotService, Chatbot } from '../../services/chatbot';
@@ -8,12 +8,25 @@ import { chatService, Conversation, Message } from '../../services/chat';
 
 const { TextArea } = Input;
 
+interface ConfigParam {
+  key: string;
+  label: string;
+  type: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  default: any;
+  description: string;
+  options?: string[];
+}
+
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   created_at: string;
   reasoning_content?: string;
+  reasoning_time?: number;
   usage?: {
     prompt_tokens?: number;
     completion_tokens?: number;
@@ -54,15 +67,16 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
   const [loadingModels, setLoadingModels] = useState(false);
   const [loadingChatbots, setLoadingChatbots] = useState(false);
   const [isConfigModalVisible, setIsConfigModalVisible] = useState(false);
-  const [temperature, setTemperature] = useState(0.7);
-  const [maxTokens, setMaxTokens] = useState(2048);
-  const [topP, setTopP] = useState(0.9);
+  const [configParams, setConfigParams] = useState<Record<string, ConfigParam[]>>({});
+  const [modelConfig, setModelConfig] = useState<Record<string, any>>({});
+  const [systemPrompt, setSystemPrompt] = useState<string>('');
   const [expandedReasoning, setExpandedReasoning] = useState<Set<string>>(new Set());
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState('');
   const [thinkingMessageId, setThinkingMessageId] = useState<string | null>(null);
   const [thinkingDuration, setThinkingDuration] = useState<Record<string, number>>({});
   const thinkingStartTimeRef = useRef<Record<string, number>>({});
+  const isCreatingNewConversation = useRef(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -70,15 +84,77 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
   useEffect(() => {
     fetchModels();
     fetchChatbots();
+    fetchConfigParams();
   }, []);
 
   useEffect(() => {
+    if (isCreatingNewConversation.current) {
+      isCreatingNewConversation.current = false;
+      return;
+    }
+    
     if (conversation) {
       fetchMessages(conversation.id);
+      fetchConversationConfig(conversation.id);
     } else {
+      // 新建对话时，清空消息列表
       setMessages([]);
+      // 清空系统提示词
+      setSystemPrompt('');
+      // 恢复模型配置参数为选中模型的默认配置
+      if (selectedModel && selectedModel.config) {
+        setModelConfig(selectedModel.config);
+      } else {
+        setModelConfig({});
+      }
     }
-  }, [conversation]);
+  }, [conversation, models, chatbots]);
+
+  const fetchConversationConfig = async (conversationId: string) => {
+    try {
+      const detail = await chatService.getConversation(conversationId);
+      
+      // 加载系统提示词
+      setSystemPrompt(detail.system_prompt || '');
+      
+      if (detail.model_id) {
+        const model = models.find(m => m.id === detail.model_id);
+        if (model) {
+          setSelectedModel(model);
+          setSelectedChatbot(null);
+          setSelectedType('model');
+          if (detail.config) {
+            const configObj = typeof detail.config === 'string' ? JSON.parse(detail.config) : detail.config;
+            setModelConfig(configObj);
+          } else if (model.config) {
+            setModelConfig(model.config);
+          } else {
+            setModelConfig({});
+          }
+        }
+      } else if (detail.chatbot_id) {
+        const chatbot = chatbots.find(c => c.id === detail.chatbot_id);
+        if (chatbot) {
+          setSelectedChatbot(chatbot);
+          setSelectedModel(null);
+          setSelectedType('chatbot');
+          if (detail.config) {
+            const configObj = typeof detail.config === 'string' ? JSON.parse(detail.config) : detail.config;
+            setModelConfig(configObj);
+          } else if (chatbot.model_id) {
+            const model = models.find(m => m.id === chatbot.model_id);
+            if (model && model.config) {
+              setModelConfig(model.config);
+            }
+          } else {
+            setModelConfig({});
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch conversation config:', error);
+    }
+  };
 
   useEffect(() => {
     scrollToBottom();
@@ -92,13 +168,13 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     setLoadingModels(true);
     try {
       const result = await llmModelService.getLLMModels(1, 100, undefined, undefined, undefined, 'true');
+      console.log('Fetched models:', result.data);
       const textModels = result.data.filter((model: LLMModel) => 
         model.model_type === 'text' || model.model_type === 'vision' || model.model_type === 'multimodal'
       );
       setModels(textModels);
       if (textModels.length > 0) {
-        setSelectedModel(textModels[0]);
-        setSelectedType('model');
+        handleSelectModel(textModels[0]);
       }
     } catch (error) {
       console.error('Failed to fetch models:', error);
@@ -119,14 +195,39 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     }
   };
 
+  const fetchConfigParams = async () => {
+    try {
+      const data = await llmModelService.getConfigParams();
+      setConfigParams(data);
+    } catch (error) {
+      console.error('Failed to fetch config params:', error);
+    }
+  };
+
   const fetchMessages = async (conversationId: string) => {
     setLoading(true);
     try {
       const result = await chatService.getMessages(conversationId, 1, 50);
-      setMessages(result.items);
+      const mappedMessages = result.items.map((msg: any) => ({
+        id: msg.message_id || msg.id,
+        role: msg.role,
+        content: msg.content,
+        created_at: msg.created_at,
+        reasoning_content: msg.reasoning_content,
+        reasoning_time: msg.reasoning_time,
+        usage: msg.usage
+      }));
+      setMessages(mappedMessages);
+      
+      const durations: Record<string, number> = {};
+      mappedMessages.forEach((msg: Message) => {
+        if (msg.reasoning_time) {
+          durations[msg.id] = msg.reasoning_time;
+        }
+      });
+      setThinkingDuration(durations);
     } catch (error) {
       console.error('Failed to fetch messages:', error);
-      // 失败时显示空消息列表
       setMessages([]);
     } finally {
       setLoading(false);
@@ -143,18 +244,16 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       try {
         // 标题为用户问题的前20个字符
         const title = inputValue.trim().substring(0, 20);
-        // 模型参数配置
-        const config = {
-          temperature,
-          max_tokens: maxTokens,
-          top_p: topP
-        };
+        
+        // 标记正在创建新对话，防止 useEffect 清空消息
+        isCreatingNewConversation.current = true;
         
         currentConversation = await chatService.createConversation(
           title,
           selectedModel?.id,
           selectedChatbot?.id,
-          config
+          modelConfig,
+          systemPrompt
         );
         // 通知父组件更新对话列表并选中新创建的对话
         if (onConversationCreated) {
@@ -200,16 +299,67 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
 
     try {
       // 发送消息到后端
-      const responseMessage = await chatService.sendMessage(currentConversation.id, inputValue);
+      console.log('Sending message with config:', modelConfig);
       
-      setMessages(prev => prev.map(msg => 
-        msg.id === assistantMessageId 
-          ? {
-              ...responseMessage,
-              id: assistantMessageId // 保持前端生成的ID一致
-            }
-          : msg
-      ));
+      // 使用流式发送
+      chatService.sendMessageStream(
+        inputValue,
+        selectedModel?.id,
+        selectedChatbot?.id,
+        currentConversation?.id,
+        { ...modelConfig, deep_thinking: deepThinking },
+        undefined, // messageId is undefined for new messages
+        systemPrompt, // 系统提示词
+        (data) => {
+          // 流式更新消息内容
+          setMessages(prev => prev.map(msg => 
+            msg.id === assistantMessageId 
+              ? {
+                  ...msg,
+                  content: data.full_text,
+                  reasoning_content: data.full_reasoning
+                }
+              : msg
+          ));
+        },
+        (error) => {
+          console.error('Failed to send message:', error);
+          message.error('发送失败，请重试');
+          
+          // 失败时显示错误消息
+          setMessages(prev => prev.map(msg => 
+            msg.id === assistantMessageId 
+              ? { 
+                  ...msg, 
+                  content: '抱歉，发送消息时出现错误，请重试',
+                  reasoning_content: undefined
+                }
+              : msg
+          ));
+          
+          if (deepThinking && thinkingStartTimeRef.current[assistantMessageId]) {
+            const duration = Date.now() - thinkingStartTimeRef.current[assistantMessageId];
+            setThinkingDuration(prev => ({
+              ...prev,
+              [assistantMessageId]: duration
+            }));
+          }
+          setLoading(false);
+          setThinkingMessageId(null);
+        },
+        () => {
+          // 完成时的处理
+          if (deepThinking && thinkingStartTimeRef.current[assistantMessageId]) {
+            const duration = Date.now() - thinkingStartTimeRef.current[assistantMessageId];
+            setThinkingDuration(prev => ({
+              ...prev,
+              [assistantMessageId]: duration
+            }));
+          }
+          setLoading(false);
+          setThinkingMessageId(null);
+        }
+      );
     } catch (error) {
       console.error('Failed to send message:', error);
       message.error('发送失败，请重试');
@@ -224,7 +374,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             }
           : msg
       ));
-    } finally {
+      
       if (deepThinking && thinkingStartTimeRef.current[assistantMessageId]) {
         const duration = Date.now() - thinkingStartTimeRef.current[assistantMessageId];
         setThinkingDuration(prev => ({
@@ -244,18 +394,20 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     }
   };
 
-  const handleClearMessages = () => {
-    Modal.confirm({
-      title: '确认清空',
-      content: '确定要清空当前对话的所有消息吗？',
-      okText: '确认',
-      cancelText: '取消',
-      okButtonProps: { danger: true },
-      onOk: () => {
-        setMessages([]);
-        message.success('已清空对话');
-      },
-    });
+  const handleClearMessages = async () => {
+    if (!conversation) {
+      message.warning('请先选择对话');
+      return;
+    }
+    
+    try {
+      await chatService.clearMessages(conversation.id);
+      setMessages([]);
+      message.success('已清空对话');
+    } catch (error) {
+      console.error('Failed to clear messages:', error);
+      message.error('清空对话失败，请重试');
+    }
   };
 
   const toggleReasoning = (messageId: string) => {
@@ -321,32 +473,41 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       message.error('内容不能为空');
       return;
     }
-    
+
     const messageIndex = messages.findIndex(m => m.id === messageId);
     if (messageIndex === -1) return;
-    
+
     const updatedMessages = messages.slice(0, messageIndex);
     setMessages(updatedMessages);
     setEditingMessageId(null);
     setEditingContent('');
-    
+
     setInputValue(editingContent);
     setTimeout(() => {
-      handleSendMessageWithMessages(updatedMessages, editingContent);
+      handleSendMessageWithMessages(updatedMessages, editingContent, messageId);
     }, 100);
   };
 
-  const handleSendMessageWithMessages = async (previousMessages: Message[], content: string) => {
+  const handleSendMessageWithMessages = async (
+    previousMessages: Message[],
+    content: string,
+    messageId?: string
+  ) => {
     if (loading) return;
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: content.trim(),
-      created_at: new Date().toISOString()
-    };
-
-    const newMessages = [...previousMessages, userMessage];
+    let newMessages = [...previousMessages];
+    
+    // 只在发送新消息时创建用户消息，重新回答时不创建
+    if (!messageId) {
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        role: 'user',
+        content: content.trim(),
+        created_at: new Date().toISOString()
+      };
+      newMessages = [...previousMessages, userMessage];
+    }
+    
     setMessages(newMessages);
     setInputValue('');
     setLoading(true);
@@ -365,35 +526,68 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     }
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      const replyContent = `这是一个模拟的回复。您的问题是：${content}`;
+      chatService.sendMessageStream(
+        content,
+        selectedModel?.id,
+        selectedChatbot?.id,
+        conversation?.id,
+        { ...modelConfig, deep_thinking: deepThinking },
+        messageId,
+        systemPrompt, // 系统提示词
+        (data) => {
+          setMessages(prev => prev.map(msg =>
+            msg.id === assistantMessageId
+              ? {
+                  ...msg,
+                  content: data.full_text,
+                  reasoning_content: data.full_reasoning
+                }
+              : msg
+          ));
+        },
+        (error) => {
+          console.error('Failed to send message:', error);
+          message.error('发送失败，请重试');
 
-      setMessages(prev => prev.map(msg => 
-        msg.id === assistantMessageId 
-          ? { 
-              ...msg, 
-              content: replyContent,
-              reasoning_content: deepThinking ? '正在分析用户的问题...' : undefined,
-              usage: { prompt_tokens: 50, completion_tokens: 100, total_tokens: 150 }
-            }
-          : msg
-      ));
+          setMessages(prev => prev.map(msg =>
+            msg.id === assistantMessageId
+              ? {
+                  ...msg,
+                  content: '抱歉，发送消息时出现错误，请重试',
+                  reasoning_content: undefined
+                }
+              : msg
+          ));
+
+          if (deepThinking && thinkingStartTimeRef.current[assistantMessageId]) {
+            const duration = Date.now() - thinkingStartTimeRef.current[assistantMessageId];
+            setThinkingDuration(prev => ({
+              ...prev,
+              [assistantMessageId]: duration
+            }));
+          }
+          setLoading(false);
+          setThinkingMessageId(null);
+        },
+        () => {
+          if (deepThinking && thinkingStartTimeRef.current[assistantMessageId]) {
+            const duration = Date.now() - thinkingStartTimeRef.current[assistantMessageId];
+            setThinkingDuration(prev => ({
+              ...prev,
+              [assistantMessageId]: duration
+            }));
+          }
+          setLoading(false);
+          setThinkingMessageId(null);
+        }
+      );
     } catch (error) {
       console.error('Chat error:', error);
-      setMessages(prev => prev.map(msg => 
-        msg.id === assistantMessageId 
+      setMessages(prev => prev.map(msg =>
+        msg.id === assistantMessageId
           ? { ...msg, content: '抱歉，生成回复时出现错误' }
           : msg
       ));
-    } finally {
-      if (deepThinking && thinkingStartTimeRef.current[assistantMessageId]) {
-        const duration = Date.now() - thinkingStartTimeRef.current[assistantMessageId];
-        setThinkingDuration(prev => ({
-          ...prev,
-          [assistantMessageId]: duration
-        }));
-      }
       setLoading(false);
       setThinkingMessageId(null);
     }
@@ -401,15 +595,18 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
 
   const handleRegenerate = async (messageIndex: number) => {
     if (messageIndex < 1) return;
-    
+
     const userMessage = messages[messageIndex - 1];
     if (userMessage.role !== 'user') return;
-    
-    const updatedMessages = messages.slice(0, messageIndex);
+
+    // Only remove the specific assistant message being regenerated, not all messages after
+    const updatedMessages = [...messages];
+    // Remove just the assistant message at the current index
+    updatedMessages.splice(messageIndex, 1);
     setMessages(updatedMessages);
-    
+
     setTimeout(() => {
-      handleSendMessageWithMessages(updatedMessages.slice(0, -1), userMessage.content);
+      handleSendMessageWithMessages(updatedMessages, userMessage.content, userMessage.id);
     }, 100);
   };
 
@@ -428,10 +625,126 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     return '/src/assets/llm/default.svg';
   };
 
+  const renderConfigParam = (param: ConfigParam) => {
+    const value = modelConfig[param.key] ?? param.default;
+    
+    switch (param.type) {
+      case 'slider':
+        return (
+          <div key={param.key} style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontWeight: 500, marginRight: 8 }}>{param.label}</span>
+              <Tooltip title={param.description}>
+                <InfoCircleOutlined style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)' }} />
+              </Tooltip>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <Slider
+                style={{ flex: 1 }}
+                min={param.min}
+                max={param.max}
+                step={param.step}
+                value={value}
+                onChange={(v) => setModelConfig({ ...modelConfig, [param.key]: v })}
+              />
+              <InputNumber
+                min={param.min}
+                max={param.max}
+                step={param.step}
+                value={value}
+                onChange={(v) => setModelConfig({ ...modelConfig, [param.key]: v })}
+                style={{ width: 80 }}
+              />
+            </div>
+          </div>
+        );
+      case 'input':
+        return (
+          <div key={param.key} style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontWeight: 500, marginRight: 8 }}>{param.label}</span>
+              <Tooltip title={param.description}>
+                <InfoCircleOutlined style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)' }} />
+              </Tooltip>
+            </div>
+            <Input
+              value={value}
+              onChange={(e) => setModelConfig({ ...modelConfig, [param.key]: e.target.value })}
+            />
+          </div>
+        );
+      case 'switch':
+        return (
+          <div key={param.key} style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <span style={{ fontWeight: 500, marginRight: 8 }}>{param.label}</span>
+                <Tooltip title={param.description}>
+                  <InfoCircleOutlined style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)' }} />
+                </Tooltip>
+              </div>
+              <Switch
+                checked={value}
+                onChange={(v) => setModelConfig({ ...modelConfig, [param.key]: v })}
+              />
+            </div>
+          </div>
+        );
+      case 'select':
+        return (
+          <div key={param.key} style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontWeight: 500, marginRight: 8 }}>{param.label}</span>
+              <Tooltip title={param.description}>
+                <InfoCircleOutlined style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)' }} />
+              </Tooltip>
+            </div>
+            <Select
+              value={value}
+              onChange={(v) => setModelConfig({ ...modelConfig, [param.key]: v })}
+              style={{ width: '100%' }}
+            >
+              {param.options?.map(opt => (
+                <Select.Option key={opt} value={opt}>{opt}</Select.Option>
+              ))}
+            </Select>
+          </div>
+        );
+      case 'number':
+        return (
+          <div key={param.key} style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontWeight: 500, marginRight: 8 }}>{param.label}</span>
+              <Tooltip title={param.description}>
+                <InfoCircleOutlined style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)' }} />
+              </Tooltip>
+            </div>
+            <InputNumber
+              min={param.min}
+              max={param.max}
+              step={param.step || 1}
+              value={value}
+              onChange={(v) => setModelConfig({ ...modelConfig, [param.key]: v })}
+              style={{ width: '100%' }}
+            />
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
+  const currentConfigParams = configParams[selectedModel?.model_type || 'text'] || [];
+
   const handleSelectModel = (model: LLMModel) => {
     setSelectedModel(model);
     setSelectedChatbot(null);
     setSelectedType('model');
+    if (model.config) {
+      setModelConfig(model.config);
+    } else {
+      setModelConfig({});
+    }
   };
 
   const handleSelectChatbot = (chatbot: Chatbot) => {
@@ -572,18 +885,23 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           )}
         </div>
         <div className="message-content">
-          {msg.role === 'assistant' && (thinkingMessageId === msg.id && deepThinking) && (
+          {msg.role === 'assistant' && thinkingMessageId === msg.id && (
             <div className="message-reasoning">
               <div className="reasoning-header" onClick={() => toggleReasoning(msg.id)}>
                 <LoadingOutlined spin />
                 <BulbOutlined /> 正在思考中
+                {thinkingDuration[msg.id] && (
+                  <span className="reasoning-duration">
+                    ({(thinkingDuration[msg.id] / 1000).toFixed(1)}s)
+                  </span>
+                )}
               </div>
               {expandedReasoning.has(msg.id) && msg.reasoning_content && (
                 <div className="reasoning-text">{msg.reasoning_content}</div>
               )}
             </div>
           )}
-          {msg.role === 'assistant' && msg.reasoning_content && !(thinkingMessageId === msg.id && deepThinking) && (
+          {msg.role === 'assistant' && msg.reasoning_content && thinkingMessageId !== msg.id && (
             <div className="message-reasoning">
               <div className="reasoning-header" onClick={() => toggleReasoning(msg.id)}>
                 {expandedReasoning.has(msg.id) ? (
@@ -616,9 +934,9 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 <Button size="small" type="primary" onClick={() => handleSaveEdit(msg.id)}>发送</Button>
               </div>
             </div>
-          ) : (
+          ) : msg.content ? (
             <div className={`message-text ${theme === 'dark' ? 'dark' : 'light'}`}>{msg.content}</div>
-          )}
+          ) : null}
           <div className="message-footer">
             <span className="message-time">
               {new Date(msg.created_at).toLocaleTimeString()}
@@ -762,26 +1080,6 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         ) : (
           <>
             {messages.map((msg, index) => renderMessage(msg, index))}
-            {loading && thinkingMessageId && !messages.find(m => m.id === thinkingMessageId)?.content && (
-              <div className="message assistant">
-                <div className={`message-avatar ${theme === 'dark' ? 'dark' : 'light'}`}>
-                  <img 
-                    src={currentSelection?.avatar || '/src/assets/llm/default.svg'} 
-                    alt="AI" 
-                    className="avatar-image"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = '/src/assets/llm/default.svg';
-                    }}
-                  />
-                </div>
-                <div className="message-content">
-                  <div className="thinking-indicator">
-                    <LoadingOutlined spin />
-                    <BulbOutlined /> 正在思考中...
-                  </div>
-                </div>
-              </div>
-            )}
             <div ref={messagesEndRef} />
           </>
         )}
@@ -827,46 +1125,47 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         width={500}
         className={`chat-modal ${theme === 'dark' ? 'dark' : 'light'}`}
       >
-        <div className="config-item">
-          <label>Temperature (温度)</label>
-          <Slider
-            min={0}
-            max={2}
-            step={0.1}
-            value={temperature}
-            onChange={setTemperature}
-            marks={{ 0: '0', 1: '1', 2: '2' }}
-          />
-          <span className="config-value">{temperature}</span>
-        </div>
-        <div className="config-item">
-          <label>Max Tokens (最大令牌数)</label>
-          <Slider
-            min={256}
-            max={8192}
-            step={256}
-            value={maxTokens}
-            onChange={setMaxTokens}
-            marks={{ 256: '256', 4096: '4096', 8192: '8192' }}
-          />
-          <span className="config-value">{maxTokens}</span>
-        </div>
-        <div className="config-item">
-          <label>Top P</label>
-          <Slider
-            min={0}
-            max={1}
-            step={0.1}
-            value={topP}
-            onChange={setTopP}
-            marks={{ 0: '0', 0.5: '0.5', 1: '1' }}
-          />
-          <span className="config-value">{topP}</span>
+        <div style={{ width: '100%' }}>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontWeight: 500, marginRight: 8 }}>系统提示词</span>
+              <Tooltip title="设置AI助手的角色和行为方式">
+                <InfoCircleOutlined style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)' }} />
+              </Tooltip>
+            </div>
+            <TextArea
+              value={systemPrompt}
+              onChange={(e) => setSystemPrompt(e.target.value)}
+              placeholder="请输入系统提示词，定义AI助手的角色和行为方式..."
+              autoSize={{ minRows: 3, maxRows: 6 }}
+              style={{ width: '100%' }}
+            />
+          </div>
+          {currentConfigParams.length > 0 ? (
+            currentConfigParams.map(param => renderConfigParam(param))
+          ) : (
+          <div style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)', textAlign: 'center' }}>
+            该模型类型暂无可配置参数
+          </div>
+          )}
         </div>
         <div className="config-actions">
           <Button onClick={() => setIsConfigModalVisible(false)}>取消</Button>
-          <Button type="primary" onClick={() => {
-            message.success('配置已保存');
+          <Button type="primary" onClick={async () => {
+            // 如果有对话，更新对话的系统提示词
+            if (conversation) {
+              try {
+                await chatService.updateConversationConfig(conversation.id, {
+                  system_prompt: systemPrompt,
+                  config: modelConfig
+                });
+                message.success('配置已保存');
+              } catch (error) {
+                console.error('Failed to save config:', error);
+                message.error('保存配置失败，请重试');
+                return;
+              }
+            }
             setIsConfigModalVisible(false);
           }}>
             保存

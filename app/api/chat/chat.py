@@ -246,6 +246,33 @@ async def get_chat_messages(
     return ResponseUtil.success(data=result.model_dump())
 
 
+@router.post("/{chat_id}/clear_messages", summary="清空对话消息")
+async def clear_chat_messages(
+    request: Request,
+    chat_id: str
+) -> ApiResponse:
+    """
+    清空对话的所有消息
+    
+    Args:
+        request: 请求对象
+        chat_id: 对话ID
+        
+    Returns:
+        ApiResponse: 清空结果
+        
+    错误码:
+        - 200: 成功
+        - 404: 对话不存在
+    """
+    user_id = get_user_id(request)
+    try:
+        ChatMessageService.clear_messages_by_chat(chat_id)
+        return ResponseUtil.success(message="对话消息已清空")
+    except ResourceNotFoundError as e:
+        return ResponseUtil.not_found(message=e.message)
+
+
 @router.post("/completions", summary="聊天接口")
 async def chat_completions(
     request: Request,
@@ -286,16 +313,18 @@ async def chat_completions(
                     model_id=chat_request.model_id,
                     chatbot_id=chat_request.chatbot_id,
                     chat_id=chat_request.chat_id,
-                    config=chat_request.config
+                    config=chat_request.config,
+                    message_id=chat_request.message_id,
+                    system_prompt=chat_request.system_prompt
                 ):
                     if 'error' in chunk:
                         yield f"data: {json.dumps({'error': chunk['error'], 'chat_id': chunk.get('chat_id')}, ensure_ascii=False)}\n\n"
                         return
-                    
+
                     yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
-                
+
                 yield "data: [DONE]\n\n"
-            
+
             return StreamingResponse(
                 generate(),
                 media_type="text/event-stream",
@@ -312,12 +341,14 @@ async def chat_completions(
                 model_id=chat_request.model_id,
                 chatbot_id=chat_request.chatbot_id,
                 chat_id=chat_request.chat_id,
-                config=chat_request.config
+                config=chat_request.config,
+                message_id=chat_request.message_id,
+                system_prompt=chat_request.system_prompt
             )
-            
+
             if 'error' in result:
                 return ResponseUtil.error(message=result['error'])
-            
+
             return ResponseUtil.success(data=result)
             
     except ResourceNotFoundError as e:

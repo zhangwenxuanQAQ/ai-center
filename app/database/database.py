@@ -13,7 +13,8 @@ db = MySQLDatabase(
     user=config['mysql']['user'],
     password=config['mysql']['password'],
     host=config['mysql']['host'],
-    port=config['mysql']['port']
+    port=config['mysql']['port'],
+    charset='utf8mb4'
 )
 
 # 尝试连接数据库

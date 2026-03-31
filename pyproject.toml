@@ -21,6 +21,7 @@ dependencies = [
     "email-validator",
     "httpx",
     "openai",
+    "fastmcp",
 ]
 
 [tool.setuptools.packages.find]

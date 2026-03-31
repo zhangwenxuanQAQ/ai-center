@@ -85,18 +85,18 @@ class ChatCoreService:
         config = {
             'api_key': model.api_key,
             'endpoint': model.endpoint,
-            'model_name': model.name,
+            'name': model.name,
             'provider': model.provider
         }
         
+        llm_config = {}
         if model.config:
             try:
-                model_config = json.loads(model.config)
-                config.update(model_config)
+                llm_config = json.loads(model.config)
             except json.JSONDecodeError:
                 pass
         
-        return config, model.model_type
+        return config, llm_config, model.model_type
     
     @staticmethod
     def get_chatbot_system_prompt(chatbot_id: str) -> Optional[str]:
@@ -166,24 +166,39 @@ class ChatCoreService:
         model_id: Optional[str] = None,
         chatbot_id: Optional[str] = None,
         chat_id: Optional[str] = None,
-        config: Optional[str] = None
+        config: Optional[Any] = None,
+        message_id: Optional[str] = None,
+        system_prompt: Optional[str] = None
     ) -> Generator[Dict[str, Any], None, None]:
         """
         流式聊天
-        
+
         Args:
             user_id: 用户ID
             query: 查询数组
             model_id: 模型ID
             chatbot_id: 机器人ID
             chat_id: 对话ID
-            config: 配置JSON
-            
+            config: 配置（支持字符串或字典）
+            message_id: 消息ID，用于标识重新回答或编辑问题
+            system_prompt: 系统提示词
+
         Yields:
             Dict: 流式响应数据
         """
         user_message = ChatCoreService.convert_query_to_message(query)
         user_text = ChatCoreService.extract_text_from_query(query)
+        
+        # 处理config参数，统一转换为字典
+        config_dict = {}
+        if config:
+            if isinstance(config, str):
+                try:
+                    config_dict = json.loads(config)
+                except json.JSONDecodeError:
+                    pass
+            elif isinstance(config, dict):
+                config_dict = config
         
         if not chat_id:
             title = user_text[:20] if len(user_text) > 20 else user_text
@@ -191,11 +206,11 @@ class ChatCoreService:
                 'title': title,
                 'model_id': model_id,
                 'chatbot_id': chatbot_id,
-                'config': config
+                'config': json.dumps(config_dict) if config_dict else None,
+                'system_prompt': system_prompt
             })
             chat_id = chat.id
             history_messages = []
-            system_prompt = None
         else:
             chat = ChatService.get_chat(chat_id, user_id)
             if not chat:
@@ -208,6 +223,26 @@ class ChatCoreService:
             
             system_prompt = chat.system_prompt
         
+        # 检查是否是重新回答（使用message_id或内容匹配）
+        if message_id:
+            # 使用message_id精确定位要重新回答的消息
+            # 从数据库中获取消息，找到其在历史消息中的位置
+            try:
+                target_message = ChatMessage.get(
+                    (ChatMessage.message_id == message_id) &
+                    (ChatMessage.chat_id == chat_id) &
+                    (ChatMessage.deleted == False)
+                )
+                # 查找历史消息中对应的消息
+                for i in reversed(range(len(history_messages))):
+                    msg = history_messages[i]
+                    if msg.get('role') == 'user' and msg.get('content') == target_message.content and msg.get('message_id') == message_id:
+                        # 移除从该用户消息开始的所有消息
+                        history_messages = history_messages[:i]
+                        break
+            except ChatMessage.DoesNotExist:
+                pass
+
         if chatbot_id and not system_prompt:
             system_prompt = ChatCoreService.get_chatbot_system_prompt(chatbot_id)
         
@@ -218,23 +253,36 @@ class ChatCoreService:
                 yield {'error': '未指定模型', 'chat_id': chat_id}
                 return
         
-        model_config, model_type = ChatCoreService.get_model_config(model_id)
+        model_config, llm_config , model_type = ChatCoreService.get_model_config(model_id)
         model = LLMFactory.create_model(model_type, model_config)
         
         messages = ChatCoreService.build_messages(system_prompt, history_messages, user_message)
         
         model_params = {}
-        if config:
-            try:
-                config_dict = json.loads(config)
-                if 'temperature' in config_dict:
-                    model_params['temperature'] = config_dict['temperature']
-                if 'max_tokens' in config_dict:
-                    model_params['max_tokens'] = config_dict['max_tokens']
-                if 'top_p' in config_dict:
-                    model_params['top_p'] = config_dict['top_p']
-            except json.JSONDecodeError:
-                pass
+        if llm_config:
+            model_params.update(llm_config)
+        if config_dict:
+            model_params.update(config_dict)
+        
+        ChatService.update_chat_config(
+            chat_id=chat_id,
+            model_id=model_id,
+            chatbot_id=chatbot_id,
+            config=config
+        )
+        
+        ChatMessageService.create_user_message(
+            chat_id=chat_id,
+            user_content=user_text,
+            model_id=model_id,
+            chatbot_id=chatbot_id,
+            config=config,
+            message_id=message_id
+        )
+        
+        import time
+        start_time = time.time()
+        reasoning_end_time = None
         
         full_response = ''
         reasoning_content = ''
@@ -245,6 +293,8 @@ class ChatCoreService:
                 return
             
             if chunk.get('text'):
+                if reasoning_end_time is None and reasoning_content:
+                    reasoning_end_time = time.time()
                 full_response += chunk['text']
             
             if chunk.get('reasoning_content'):
@@ -258,17 +308,45 @@ class ChatCoreService:
                 'chat_id': chat_id
             }
         
-        updated_messages = history_messages + [user_message, {'role': 'assistant', 'content': full_response}]
-        ChatService.update_messages(chat_id, updated_messages)
+        reasoning_time = None
+        if reasoning_content and reasoning_end_time:
+            reasoning_time = int((reasoning_end_time - start_time) * 1000)
         
-        ChatMessageService.create_user_and_assistant_messages(
+        assistant_message_dict = {'role': 'assistant', 'content': full_response}
+        if reasoning_content:
+            assistant_message_dict['reasoning_content'] = reasoning_content
+
+        avatar = None
+        if chatbot_id:
+            try:
+                chatbot = Chatbot.get(Chatbot.id == chatbot_id)
+                avatar = chatbot.avatar
+            except Chatbot.DoesNotExist:
+                pass
+        elif model_id:
+            try:
+                model = LLMModel.get(LLMModel.id == model_id)
+                if model.provider:
+                    avatar = f"/src/assets/llm/{model.provider.lower()}.png"
+                else:
+                    avatar = f"/src/assets/llm/default.png"
+            except LLMModel.DoesNotExist:
+                pass
+        
+        ChatMessageService.create_assistant_message(
             chat_id=chat_id,
-            user_content=json.dumps(user_message, ensure_ascii=False),
             assistant_content=full_response,
             model_id=model_id,
             chatbot_id=chatbot_id,
-            config=config
+            config=config,
+            reasoning_content=reasoning_content if reasoning_content else None,
+            reasoning_time=reasoning_time,
+            avatar=avatar
         )
+
+        chat_messages = ChatMessageService.get_messages_by_chat(chat_id) # 最新的历史消息
+        updated_messages = [{"role": msg.role, "content": msg.content , "reasoning_content": msg.reasoning_content , "message_id": msg.message_id} for msg in chat_messages.items]
+        ChatService.update_messages(chat_id, updated_messages)
     
     @staticmethod
     def chat(
@@ -277,24 +355,39 @@ class ChatCoreService:
         model_id: Optional[str] = None,
         chatbot_id: Optional[str] = None,
         chat_id: Optional[str] = None,
-        config: Optional[str] = None
+        config: Optional[Any] = None,
+        message_id: Optional[str] = None,
+        system_prompt: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         非流式聊天
-        
+
         Args:
             user_id: 用户ID
             query: 查询数组
             model_id: 模型ID
             chatbot_id: 机器人ID
             chat_id: 对话ID
-            config: 配置JSON
-            
+            config: 配置（支持字符串或字典）
+            message_id: 消息ID，用于标识重新回答或编辑问题
+            system_prompt: 系统提示词
+
         Returns:
             Dict: 响应数据
         """
         user_message = ChatCoreService.convert_query_to_message(query)
         user_text = ChatCoreService.extract_text_from_query(query)
+        
+        # 处理config参数，统一转换为字典
+        config_dict = {}
+        if config:
+            if isinstance(config, str):
+                try:
+                    config_dict = json.loads(config)
+                except json.JSONDecodeError:
+                    pass
+            elif isinstance(config, dict):
+                config_dict = config
         
         if not chat_id:
             title = user_text[:20] if len(user_text) > 20 else user_text
@@ -302,11 +395,11 @@ class ChatCoreService:
                 'title': title,
                 'model_id': model_id,
                 'chatbot_id': chatbot_id,
-                'config': config
+                'config': json.dumps(config_dict) if config_dict else None,
+                'system_prompt': system_prompt
             })
             chat_id = chat.id
             history_messages = []
-            system_prompt = None
         else:
             chat = ChatService.get_chat(chat_id, user_id)
             if not chat:
@@ -319,6 +412,26 @@ class ChatCoreService:
             
             system_prompt = chat.system_prompt
         
+        # 检查是否是重新回答（使用message_id或内容匹配）
+        if message_id:
+            # 使用message_id精确定位要重新回答的消息
+            # 从数据库中获取消息，找到其在历史消息中的位置
+            try:
+                target_message = ChatMessage.get(
+                    (ChatMessage.message_id == message_id) &
+                    (ChatMessage.chat_id == chat_id) &
+                    (ChatMessage.deleted == False)
+                )
+                # 查找历史消息中对应的消息
+                for i in reversed(range(len(history_messages))):
+                    msg = history_messages[i]
+                    if msg.get('role') == 'user' and msg.get('content') == target_message.content and msg.get('message_id') == message_id:
+                        # 移除从该用户消息开始的所有消息
+                        history_messages = history_messages[:i]
+                        break
+            except ChatMessage.DoesNotExist:
+                pass
+        
         if chatbot_id and not system_prompt:
             system_prompt = ChatCoreService.get_chatbot_system_prompt(chatbot_id)
         
@@ -328,23 +441,35 @@ class ChatCoreService:
             else:
                 return {'error': '未指定模型', 'chat_id': chat_id}
         
-        model_config, model_type = ChatCoreService.get_model_config(model_id)
+        model_config, llm_config, model_type = ChatCoreService.get_model_config(model_id)
         model = LLMFactory.create_model(model_type, model_config)
         
         messages = ChatCoreService.build_messages(system_prompt, history_messages, user_message)
         
         model_params = {}
-        if config:
-            try:
-                config_dict = json.loads(config)
-                if 'temperature' in config_dict:
-                    model_params['temperature'] = config_dict['temperature']
-                if 'max_tokens' in config_dict:
-                    model_params['max_tokens'] = config_dict['max_tokens']
-                if 'top_p' in config_dict:
-                    model_params['top_p'] = config_dict['top_p']
-            except json.JSONDecodeError:
-                pass
+        if llm_config:
+            model_params.update(llm_config)
+        if config_dict:
+            model_params.update(config_dict)
+        
+        ChatService.update_chat_config(
+            chat_id=chat_id,
+            model_id=model_id,
+            chatbot_id=chatbot_id,
+            config=config
+        )
+        
+        ChatMessageService.create_user_message(
+            chat_id=chat_id,
+            user_content=user_text,
+            model_id=model_id,
+            chatbot_id=chatbot_id,
+            config=config,
+            message_id=message_id
+        )
+        
+        import time
+        start_time = time.time()
         
         result = model.generate('', messages=messages, **model_params)
         
@@ -352,18 +477,49 @@ class ChatCoreService:
             return {'error': result['error'], 'chat_id': chat_id}
         
         full_response = result.get('text', '')
+        full_reasoning = result.get('reasoning_content', '')
         
-        updated_messages = history_messages + [user_message, {'role': 'assistant', 'content': full_response}]
+        reasoning_time = None
+        if full_reasoning:
+            reasoning_time = int((time.time() - start_time) * 1000)
+        
+        assistant_message_dict = {'role': 'assistant', 'content': full_response}
+        if full_reasoning:
+            assistant_message_dict['reasoning_content'] = full_reasoning
+
+        updated_messages = history_messages + [user_message, assistant_message_dict]
         ChatService.update_messages(chat_id, updated_messages)
         
-        ChatMessageService.create_user_and_assistant_messages(
+        avatar = None
+        if chatbot_id:
+            try:
+                chatbot = Chatbot.get(Chatbot.id == chatbot_id)
+                avatar = chatbot.avatar
+            except Chatbot.DoesNotExist:
+                pass
+        elif model_id:
+            try:
+                model = LLMModel.get(LLMModel.id == model_id)
+                if model.provider:
+                    avatar = f"/src/assets/llm/{model.provider.lower()}.png"
+                else:
+                    avatar = f"/src/assets/llm/default.png"
+            except LLMModel.DoesNotExist:
+                pass
+        
+        ChatMessageService.create_assistant_message(
             chat_id=chat_id,
-            user_content=json.dumps(user_message, ensure_ascii=False),
             assistant_content=full_response,
             model_id=model_id,
             chatbot_id=chatbot_id,
-            config=config
+            config=config,
+            reasoning_content=full_reasoning if full_reasoning else None,
+            reasoning_time=reasoning_time,
+            avatar=avatar
         )
+
+        chat_messages = ChatMessageService.get_messages_by_chat(chat_id) # 最新的历史消息
+        updated_messages = [{"role": msg.role, "content": msg.content , "reasoning_content": msg.reasoning_content , "message_id": msg.message_id} for msg in chat_messages.items]
         
         return {
             'text': full_response,

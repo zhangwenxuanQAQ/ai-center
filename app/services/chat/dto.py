@@ -2,7 +2,8 @@
 对话数据传输对象（DTO）
 """
 
-from pydantic import BaseModel, Field
+import json
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Any
 from app.services.base_dto import BaseDTO
 
@@ -28,7 +29,37 @@ class ChatBase(BaseModel):
     sort_order: Optional[int] = Field(0, description="排序序号")
     is_top: Optional[bool] = Field(False, description="是否置顶")
     system_prompt: Optional[str] = Field(None, description="系统提示词")
-    messages: Optional[str] = Field(None, description="对话消息列表JSON")
+    messages: Optional[list] = Field(None, description="对话消息列表JSON")
+    
+    @field_validator('config', mode='before')
+    @classmethod
+    def parse_config(cls, v):
+        """解析config字段，支持字符串和字典类型"""
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return v
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                return None
+        return None
+    
+    @field_validator('messages', mode='before')
+    @classmethod
+    def parse_messages(cls, v):
+        """解析messages字段，支持字符串和列表类型"""
+        if v is None:
+            return None
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                return None
+        return None
 
 
 class ChatCreate(BaseModel):
@@ -90,6 +121,9 @@ class ChatMessageBase(BaseModel):
         messages: 消息内容JSON
         role: 角色
         content: 消息内容
+        reasoning_content: 思考过程内容
+        reasoning_time: 思考耗时（毫秒）
+        avatar: 头像URL
         model_id: 模型ID
         chatbot_id: 机器人ID
     """
@@ -99,6 +133,9 @@ class ChatMessageBase(BaseModel):
     messages: Optional[str] = Field(None, description="消息内容JSON")
     role: str = Field(..., max_length=20, description="角色：user/assistant/system")
     content: str = Field(..., description="消息内容")
+    reasoning_content: Optional[str] = Field(None, description="思考过程内容")
+    reasoning_time: Optional[int] = Field(None, description="思考耗时（毫秒）")
+    avatar: Optional[str] = Field(None, max_length=500, description="头像URL")
     model_id: Optional[str] = Field(None, max_length=40, description="模型ID")
     chatbot_id: Optional[str] = Field(None, max_length=40, description="机器人ID")
 
@@ -155,7 +192,7 @@ class QueryItem(BaseModel):
 class ChatRequest(BaseModel):
     """
     聊天请求DTO
-    
+
     Attributes:
         config: 对话配置JSON
         query: 查询数组
@@ -163,6 +200,8 @@ class ChatRequest(BaseModel):
         chatbot_id: 机器人ID
         chat_id: 对话ID
         stream: 是否流式输出
+        message_id: 消息ID，用于标识重新回答或编辑问题
+        system_prompt: 系统提示词
     """
     config: Optional[dict] = Field(None, description="对话配置JSON")
     query: List[QueryItem] = Field(..., description="查询数组")
@@ -170,6 +209,8 @@ class ChatRequest(BaseModel):
     chatbot_id: Optional[str] = Field(None, max_length=40, description="机器人ID")
     chat_id: Optional[str] = Field(None, max_length=40, description="对话ID")
     stream: bool = Field(True, description="是否流式输出")
+    message_id: Optional[str] = Field(None, max_length=40, description="消息ID，用于标识重新回答或编辑问题")
+    system_prompt: Optional[str] = Field(None, description="系统提示词")
 
 
 class ChatListResponse(BaseModel):

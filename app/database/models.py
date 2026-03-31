@@ -241,6 +241,9 @@ class ChatMessage(SoftDeleteModel):
     messages = TextField(null=True, verbose_name="消息内容JSON")
     role = CharField(max_length=20, verbose_name="角色：user/assistant/system")
     content = TextField(verbose_name="消息内容")
+    reasoning_content = TextField(null=True, verbose_name="思考过程内容")
+    reasoning_time = IntegerField(null=True, verbose_name="思考耗时（毫秒）")
+    avatar = CharField(max_length=500, null=True, verbose_name="头像URL")
     model_id = CharField(max_length=40, null=True, index=True, verbose_name="模型ID")
     chatbot_id = CharField(max_length=40, null=True, index=True, verbose_name="机器人ID")
     

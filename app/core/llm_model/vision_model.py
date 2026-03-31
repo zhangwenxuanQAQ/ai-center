@@ -103,7 +103,7 @@ class VisionModel(BaseLLM):
         except Exception as e:
             return {'error': str(e)}
     
-    def stream_generate(self, prompt: str, **kwargs) -> Generator[Dict[str, Any], None]:
+    def stream_generate(self, prompt: str, **kwargs) -> Generator[Dict[str, Any], None, None]:
         """
         流式分析图像
         

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Input, Button, Dropdown, Menu, Modal, message, Empty, Spin } from 'antd';
-import { PlusOutlined, SearchOutlined, DeleteOutlined, PushpinOutlined, MenuFoldOutlined, MenuUnfoldOutlined, MoreOutlined, MessageOutlined, EditOutlined } from '@ant-design/icons';
+import { PlusOutlined, SearchOutlined, DeleteOutlined, PushpinOutlined, CommentOutlined , MenuFoldOutlined, MenuUnfoldOutlined, MoreOutlined, MessageOutlined, EditOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { chatService, Conversation } from '../../services/chat';
 
@@ -31,6 +31,7 @@ const ChatList: React.FC<ChatListProps> = ({
   const [isRenameModalVisible, setIsRenameModalVisible] = useState(false);
   const [renamingConversation, setRenamingConversation] = useState<Conversation | null>(null);
   const [newTitle, setNewTitle] = useState('');
+  const userCreatedNew = useRef(false);
 
   useEffect(() => {
     fetchConversations();
@@ -42,16 +43,28 @@ const ChatList: React.FC<ChatListProps> = ({
       fetchConversations();
       // 重置showNewConversation，因为新对话已经创建并添加到列表中
       setShowNewConversation(false);
+      userCreatedNew.current = false;
     }
   }, [refreshConversations]);
 
   useEffect(() => {
     // 当没有对话数据时，默认显示"新对话"且选中
-    if (conversations.length === 0 && !showNewConversation) {
+    // 只有在加载完成后才判断是否显示"新对话"
+    if (!loading && conversations.length === 0 && !showNewConversation) {
       setShowNewConversation(true);
       onSelectConversation(null);
+    } else if (!loading && conversations.length > 0 && showNewConversation && !userCreatedNew.current) {
+      // 如果有对话数据且"新对话"项显示，且不是用户主动新建的，则隐藏它
+      setShowNewConversation(false);
     }
-  }, [conversations.length, showNewConversation, onSelectConversation]);
+  }, [conversations.length, showNewConversation, onSelectConversation, loading]);
+
+  useEffect(() => {
+    // 当选中了一个实际对话时，隐藏"新对话"项（用户主动新建的除外）
+    if (selectedConversation && selectedConversation.id && !userCreatedNew.current) {
+      setShowNewConversation(false);
+    }
+  }, [selectedConversation]);
 
   const fetchConversations = async () => {
     setLoading(true);
@@ -66,6 +79,7 @@ const ChatList: React.FC<ChatListProps> = ({
   };
 
   const handleNewConversation = () => {
+    userCreatedNew.current = true;
     setShowNewConversation(true);
     onNewConversation();
   };
@@ -173,19 +187,68 @@ const ChatList: React.FC<ChatListProps> = ({
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
+    return date.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getTimeGroup = (dateString: string): string => {
+    const date = new Date(dateString);
     const now = new Date();
     const diff = now.getTime() - date.getTime();
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
     
+    // 如果是未来时间或时间差为负数，归为"今天"
+    if (diff < 0 || days < 0) {
+      return '今天';
+    }
+    
     if (days === 0) {
       return '今天';
-    } else if (days === 1) {
-      return '昨天';
-    } else if (days < 7) {
-      return `${days}天前`;
+    } else if (days <= 7) {
+      return '7天内';
+    } else if (days <= 30) {
+      return '30天内';
     } else {
-      return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
+      // 超过30天按日期分组
+      return date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long' });
     }
+  };
+
+  const groupConversationsByTime = (conversations: Conversation[]) => {
+    const groups: { [key: string]: Conversation[] } = {};
+    
+    conversations.forEach(conversation => {
+      const group = getTimeGroup(conversation.created_at);
+      if (!groups[group]) {
+        groups[group] = [];
+      }
+      groups[group].push(conversation);
+    });
+    
+    // 定义分组顺序
+    const groupOrder = ['今天', '7天内', '30天内'];
+    const orderedGroups: { [key: string]: Conversation[] } = {};
+    
+    // 先添加有序分组
+    groupOrder.forEach(group => {
+      if (groups[group]) {
+        orderedGroups[group] = groups[group];
+      }
+    });
+    
+    // 再添加超过30天的分组（按日期排序）
+    Object.keys(groups).forEach(group => {
+      if (!groupOrder.includes(group)) {
+        orderedGroups[group] = groups[group];
+      }
+    });
+    
+    return orderedGroups;
   };
 
   const renderConversationItem = (conversation: Conversation) => (
@@ -202,7 +265,7 @@ const ChatList: React.FC<ChatListProps> = ({
       <div className="conversation-content">
         <div className="conversation-title">{conversation.title}</div>
         <div className="conversation-meta">
-          <span className="conversation-date">{formatDate(conversation.updated_at)}</span>
+          <span className="conversation-date">{formatDate(conversation.created_at)}</span>
         </div>
       </div>
       <div className="conversation-actions" onClick={e => e.stopPropagation()}>
@@ -302,15 +365,20 @@ const ChatList: React.FC<ChatListProps> = ({
         ) : (
           <>
             <div className="conversation-section">
-              <div className="section-title">
+              <div className="section-title" style={{ fontSize: '14px', fontWeight: 500 }}>
                 <PushpinOutlined /> 置顶对话
               </div>
               {pinnedConversations.map(renderConversationItem)}
             </div>
             <div className="conversation-section">
-              <div className="section-title">全部对话</div>
-              {showNewConversation && renderNewConversationItem()}
-              {unpinnedConversations.map(renderConversationItem)}
+              <div className="section-title" style={{ fontSize: '14px', fontWeight: 500 }}><CommentOutlined />全部对话</div>
+              {Object.entries(groupConversationsByTime(unpinnedConversations)).map(([group, convs]) => (
+                <div key={group} className="conversation-group">
+                  <div className="group-title" style={{ textAlign: 'left', paddingLeft: '12px', fontSize: '12px' }}>{group}</div>
+                  {group === '今天' && showNewConversation && renderNewConversationItem()}
+                  {convs.map(renderConversationItem)}
+                </div>
+              ))}
             </div>
             {!showNewConversation && conversations.length === 0 && (
               <Empty description="暂无对话" className={`empty-container ${theme === 'dark' ? 'dark' : 'light'}`} />

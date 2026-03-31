@@ -280,20 +280,12 @@ const PromptManagement: React.FC = () => {
   };
 
   const handleDeletePrompt = (promptId: string) => {
-    Modal.confirm({
-      title: '确认删除',
-      content: '确定要删除该提示词吗？',
-      okText: '确定',
-      cancelText: '取消',
-      onOk: () => {
-        promptService.deletePrompt(promptId).then(() => {
-          message.success('提示词删除成功');
-          fetchPrompts();
-        }).catch(error => {
-          console.error('Failed to delete prompt:', error);
-          message.error('提示词删除失败');
-        });
-      }
+    promptService.deletePrompt(promptId).then(() => {
+      message.success('提示词删除成功');
+      fetchPrompts();
+    }).catch(error => {
+      console.error('Failed to delete prompt:', error);
+      message.error('提示词删除失败');
     });
   };
 
