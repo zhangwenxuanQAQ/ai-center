@@ -272,3 +272,140 @@
 2.在app/core/llm_mode/utils/tool_util.py中实现一个将mcp工具转换为openai的tool要求的格式的方法。
 3.模型实现类需要支持传递tools参数。
 4.模型实现类需要支持工具调用，当工具缺少参数时需要提示用户输入参数。当工具调用失败时需要提示用户工具调用失败。当工具调用成功时需要将工具调用结果添加到模型的messages中进行下一轮对话。
+
+解决这个问题：
+我使用机器人聊天询问“当前时间是多少”，应该要执行工具调用，但是大模型没有返回tool_calls，机器人确实绑定了工具。而我直接用postman调用模型原生接口返回了tool_calls。
+我发送聊天接口请求体如下：
+```
+{
+
+"query": [
+
+{
+
+"type": "text",
+
+"content": "现在的时间是"
+
+}
+
+],
+
+"chatbot_id": "7111d1687abd47408ab2ee1a6ab30635",
+
+"chat_id": "64528c0cfca64c539a1ed174e0acb1fb",
+
+"config": {
+
+"deep_thinking": true,
+
+"temperature": 0.7,
+
+"top_p": 0.1,
+
+"max_tokens": 4096,
+
+"presence_penalty": 0,
+
+"frequency_penalty": 0
+
+},
+
+"stream": true,
+
+"message_id": "84e1c4cb1bee4a179e2094f299ee6ad4",
+
+"system_prompt": ""
+
+}
+```
+
+我发送给原生模型的请求体如下：
+POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
+```
+{
+    "model": "qwen3-vl-32b-instruct",
+    "messages": [
+        {
+            "role": "system",
+            "content": "**你是一个政务助手** ，专注于湖南省内的政务知识处理，请以专业的政务服务人员口吻回答问题。"
+        },
+        {
+            "role": "user",
+            "content": "只回答残疾人一件事相关问题，其他问题礼貌拒答"
+        },
+        {
+            "role": "user",
+            "content": "当前时间是几点？"
+        }
+    ],
+    "tools": [
+        {
+            "type": "function",
+            "function": {
+                "name": "get_source_types_aicenter_v1_chatbot_source_types_get",
+                "description": "获取支持的机器人来源类型\n\nReturns:\n    ApiResponse: 统一格式的响应对象，包含来源类型和配置参数",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_current_time",
+                "description": "获取当前时间",
+                "parameters": {
+                    "additionalProperties": false,
+                    "properties": {},
+                    "type": "object"
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_chatbots_aicenter_v1_chatbot_get",
+                "description": "获取聊天机器人列表\n\nArgs:\n    category_id: 分类ID（可选）\n    page: 页码，默认1\n    page_size: 每页数量，默认12\n    name: 机器人名称（模糊查询）\n    source_type: 来源类型\n    code: 机器人编码（模糊查询）\n    \nReturns:\n    ApiResponse: 统一格式的响应对象",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "category_id": {
+                            "type": "string",
+                            "description": ""
+                        },
+                        "page": {
+                            "type": "integer",
+                            "description": "",
+                            "default": 1
+                        },
+                        "page_size": {
+                            "type": "integer",
+                            "description": "",
+                            "default": 12
+                        },
+                        "name": {
+                            "type": "string",
+                            "description": ""
+                        },
+                        "source_type": {
+                            "type": "string",
+                            "description": ""
+                        },
+                        "code": {
+                            "type": "string",
+                            "description": ""
+                        }
+                    },
+                    "required": []
+                }
+            }
+        }
+    ],
+    "stream": true,
+    "top_k": 5
+}
+```
+解决后单元测试下这个功能。

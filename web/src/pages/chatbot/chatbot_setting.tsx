@@ -6,6 +6,10 @@ import { ArrowLeftOutlined, SaveOutlined, UndoOutlined, UploadOutlined, RobotOut
 import type { UploadProps } from 'antd';
 import type { MenuProps } from 'antd';
 import MDEditor from '@uiw/react-md-editor';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { chatbotService, Chatbot, ChatbotCategory } from '../../services/chatbot';
 import { promptService, Prompt } from '../../services/prompt';
 import { knowledgeService, Knowledge } from '../../services/knowledge';
@@ -14,6 +18,41 @@ import { llmModelService, LLMModel } from '../../services/llm_model';
 import PageHeader from '../../components/page-header';
 import '../../styles/common.css';
 import './chatbot_setting.less';
+
+interface CodeBlockProps {
+  node: any;
+  inline: boolean;
+  className: string;
+  children: React.ReactNode;
+}
+
+const CodeBlock: React.FC<CodeBlockProps> = ({ node, inline, className, children, ...props }) => {
+  const match = /language-(\w+)/.exec(className || '');
+  const language = match ? match[1] : '';
+  
+  const [theme] = useState<'light' | 'dark'>(() => {
+    return document.body.getAttribute('data-theme') as 'light' | 'dark' || 'light';
+  });
+
+  if (!inline && (className || language)) {
+    return (
+      <SyntaxHighlighter
+        style={theme === 'dark' ? oneDark : oneLight}
+        language={language}
+        PreTag="div"
+        {...props}
+      >
+        {String(children).replace(/\n$/, '')}
+      </SyntaxHighlighter>
+    );
+  }
+
+  return (
+    <code className={className} {...props}>
+      {children}
+    </code>
+  );
+};
 
 import WorkWeixinIcon from '../../assets/svg/企业微信.svg';
 import LocalBotIcon from '../../assets/svg/本地机器人.svg';
@@ -1981,13 +2020,14 @@ const ChatbotSetting: React.FC = () => {
                   border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #d9d9d9'
                 }}
               >
-                <MDEditor.Markdown 
-                  source={currentViewPrompt.prompt_content || currentViewPrompt.content || ''} 
-                  style={{ 
-                    background: 'transparent',
-                    color: theme === 'dark' ? '#fff' : '#000'
-                  }} 
-                />
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    code: CodeBlock as any
+                  }}
+                >
+                  {currentViewPrompt.prompt_content || currentViewPrompt.content || ''}
+                </ReactMarkdown>
               </div>
             </div>
           </div>

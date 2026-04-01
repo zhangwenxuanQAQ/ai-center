@@ -72,7 +72,7 @@ mcp: FastMCP = FastMCP("AI-Center-MCP-Server")
 
 
 # 导入工具模块，触发装饰器注册
-# from app.core.mcp.tool import get_current_time, call_restful_api
+from app.core.mcp.tool import *
 
 
 def create_mcp_http_app_with_middleware():

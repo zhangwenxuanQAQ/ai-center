@@ -20,7 +20,7 @@ export interface Conversation {
 
 export interface Message {
   id: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'tool';
   content: string;
   created_at: string;
   reasoning_content?: string;

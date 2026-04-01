@@ -2,6 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Input, Button, Switch, Modal, Slider, message, Popconfirm, Tooltip, Dropdown, Empty, Spin, Popover, InputNumber, Select } from 'antd';
 import { SendOutlined, ClearOutlined, SettingOutlined, RobotOutlined, BulbOutlined, LoadingOutlined, DownOutlined, RightOutlined, CopyOutlined, ReloadOutlined, EditOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { llmModelService, LLMModel } from '../../services/llm_model';
 import { chatbotService, Chatbot } from '../../services/chatbot';
 import { chatService, Conversation, Message } from '../../services/chat';
@@ -22,7 +26,7 @@ interface ConfigParam {
 
 interface Message {
   id: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'tool';
   content: string;
   created_at: string;
   reasoning_content?: string;
@@ -49,6 +53,41 @@ interface ChatConversationProps {
   conversation: Conversation | null;
   onConversationCreated?: (newConversation?: Conversation) => void;
 }
+
+interface CodeBlockProps {
+  node: any;
+  inline: boolean;
+  className: string;
+  children: React.ReactNode;
+}
+
+const CodeBlock: React.FC<CodeBlockProps> = ({ node, inline, className, children, ...props }) => {
+  const match = /language-(\w+)/.exec(className || '');
+  const language = match ? match[1] : '';
+  
+  const [theme] = useState<'light' | 'dark'>(() => {
+    return document.body.getAttribute('data-theme') as 'light' | 'dark' || 'light';
+  });
+
+  if (!inline && (className || language)) {
+    return (
+      <SyntaxHighlighter
+        style={theme === 'dark' ? oneDark : oneLight}
+        language={language}
+        PreTag="div"
+        {...props}
+      >
+        {String(children).replace(/\n$/, '')}
+      </SyntaxHighlighter>
+    );
+  }
+
+  return (
+    <code className={className} {...props}>
+      {children}
+    </code>
+  );
+};
 
 const ChatConversation: React.FC<ChatConversationProps> = ({
   theme,
@@ -599,10 +638,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     const userMessage = messages[messageIndex - 1];
     if (userMessage.role !== 'user') return;
 
-    // Only remove the specific assistant message being regenerated, not all messages after
-    const updatedMessages = [...messages];
-    // Remove just the assistant message at the current index
-    updatedMessages.splice(messageIndex, 1);
+    // Remove all messages after and including the current assistant message
+    const updatedMessages = messages.slice(0, messageIndex);
     setMessages(updatedMessages);
 
     setTimeout(() => {
@@ -868,6 +905,11 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
   const hasModelsOrChatbots = models.length > 0 || chatbots.length > 0;
 
   const renderMessage = (msg: Message, index: number) => {
+    // 跳过工具消息的显示
+    if (msg.role === 'tool') {
+      return null;
+    }
+    
     const isUser = msg.role === 'user';
     
     return (
@@ -897,7 +939,18 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 )}
               </div>
               {expandedReasoning.has(msg.id) && msg.reasoning_content && (
-                <div className="reasoning-text">{msg.reasoning_content}</div>
+                <div className="reasoning-text">
+                  <div className="markdown-content">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        code: CodeBlock as any
+                      }}
+                    >
+                      {msg.reasoning_content}
+                    </ReactMarkdown>
+                  </div>
+                </div>
               )}
             </div>
           )}
@@ -916,8 +969,19 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                   </span>
                 )}
               </div>
-              {expandedReasoning.has(msg.id) && (
-                <div className="reasoning-text">{msg.reasoning_content}</div>
+              {expandedReasoning.has(msg.id) && msg.reasoning_content && (
+                <div className="reasoning-text">
+                  <div className="markdown-content">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        code: CodeBlock as any
+                      }}
+                    >
+                      {msg.reasoning_content}
+                    </ReactMarkdown>
+                  </div>
+                </div>
               )}
             </div>
           )}
@@ -935,7 +999,18 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               </div>
             </div>
           ) : msg.content ? (
-            <div className={`message-text ${theme === 'dark' ? 'dark' : 'light'}`}>{msg.content}</div>
+            <div className={`message-text ${theme === 'dark' ? 'dark' : 'light'}`}>
+              <div className="markdown-content">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    code: CodeBlock as any
+                  }}
+                >
+                  {msg.content}
+                </ReactMarkdown>
+              </div>
+            </div>
           ) : null}
           <div className="message-footer">
             <span className="message-time">

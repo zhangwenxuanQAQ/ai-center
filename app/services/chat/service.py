@@ -558,6 +558,44 @@ class ChatMessageService:
         )
         assistant_message.save(force_insert=True)
         return assistant_message
+    
+    @staticmethod
+    @handle_transaction
+    def create_tool_message(
+        chat_id: str,
+        tool_content: str,
+        model_id: Optional[str] = None,
+        chatbot_id: Optional[str] = None,
+        config: Optional[str] = None
+    ) -> ChatMessage:
+        """
+        创建工具消息
+        
+        Args:
+            chat_id: 对话ID
+            tool_content: 工具消息内容
+            model_id: 模型ID
+            chatbot_id: 机器人ID
+            config: 配置JSON
+            
+        Returns:
+            ChatMessage: 工具消息对象
+        """
+        # 确保工具消息的创建时间总是晚于助手消息
+        import time
+        time.sleep(0.001)  # 1毫秒延迟
+        tool_message = ChatMessage(
+            message_id=uuid.uuid4().hex,
+            chat_id=chat_id,
+            config=config,
+            role='tool',
+            content=tool_content,
+            model_id=model_id,
+            chatbot_id=chatbot_id,
+            created_at=datetime.now()
+        )
+        tool_message.save(force_insert=True)
+        return tool_message
 
     @staticmethod
     @handle_transaction

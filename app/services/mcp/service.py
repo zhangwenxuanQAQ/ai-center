@@ -918,3 +918,62 @@ class MCPToolService:
         )
         
         return result
+    
+    @staticmethod
+    async def call_tool(tool_id: str, params: dict) -> dict:
+        """
+        调用MCP工具
+        
+        Args:
+            tool_id: MCP工具ID
+            params: 工具调用参数
+            
+        Returns:
+            dict: 调用结果，包含success、result或error字段
+            
+        Raises:
+            ResourceNotFoundError: MCP工具不存在
+        """
+        try:
+            db_tool = MCPTool.get_by_id(tool_id)
+            if db_tool.deleted:
+                raise ResourceNotFoundError(message=f"MCP工具 {tool_id} 不存在")
+        except MCPTool.DoesNotExist:
+            raise ResourceNotFoundError(message=f"MCP工具 {tool_id} 不存在")
+        
+        try:
+            db_server = MCPServer.get_by_id(db_tool.server_id)
+            if db_server.deleted:
+                raise ResourceNotFoundError(message=f"MCP服务 {db_tool.server_id} 不存在")
+        except MCPServer.DoesNotExist:
+            raise ResourceNotFoundError(message=f"MCP服务 {db_tool.server_id} 不存在")
+        
+        parsed_config = parse_mcp_config(db_server.config, db_server.transport_type)
+        
+        full_params = {**params}
+        if db_tool.extra_config:
+            try:
+                extra_config = json.loads(db_tool.extra_config)
+                if isinstance(extra_config, dict):
+                    full_params.update(extra_config)
+            except json.JSONDecodeError:
+                pass
+        
+        from app.core.mcp.client.client import call_mcp_tool
+        
+        headers = {**(parsed_config['headers'] or {})}
+        headers['X-MCP-Server-ID'] = db_server.id
+        
+        result = await call_mcp_tool(
+            transport_type=db_server.transport_type,
+            tool_name=db_tool.name,
+            arguments=full_params,
+            url=db_server.url,
+            headers=headers,
+            command=parsed_config['command'],
+            args=parsed_config['args'],
+            env=parsed_config['env'],
+            cwd=parsed_config['cwd']
+        )
+        
+        return result

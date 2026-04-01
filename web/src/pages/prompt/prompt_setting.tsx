@@ -1004,6 +1004,7 @@ const PromptSetting: React.FC = () => {
                   onChange={(value) => handleContentChange(value || '')}
                   height="100%"
                   preview="edit"
+                  className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                   style={{
                     background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fff',
                     height: '100%',

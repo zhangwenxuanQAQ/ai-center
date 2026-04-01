@@ -109,7 +109,7 @@ const ChatList: React.FC<ChatListProps> = ({
         c.id === conversation.id ? updatedConversation : c
       );
       setConversations(updatedConversations);
-      message.success(updatedConversation.is_pinned ? '已置顶' : '已取消置顶');
+      message.success(updatedConversation.is_top ? '已置顶' : '已取消置顶');
     } catch (error) {
       console.error('Failed to pin conversation:', error);
       message.error('操作失败');

@@ -12,7 +12,16 @@ from app.services.mcp.dto import (
     MCPConnectionTest, MCPConnectionTestResult
 )
 from app.utils.response import ResponseUtil, ApiResponse
-from app.core.mcp.utils import convert_swagger_url_to_mcp_tools, convert_swagger_json_to_mcp_tools
+
+# 动态导入，避免触发fastmcp依赖
+def get_swagger_converter():
+    import importlib.util
+    import os
+    utils_path = os.path.join(os.path.dirname(__file__), '..', 'core', 'mcp', 'utils', 'swagger_converter.py')
+    spec = importlib.util.spec_from_file_location("swagger_converter", utils_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 router = APIRouter()
 
@@ -336,7 +345,7 @@ def parse_swagger(
     Returns:
         ApiResponse: 统一格式的响应对象，包含工具列表和总数
     """
-    from app.core.mcp.utils import convert_swagger_url_to_mcp_tools, convert_swagger_json_to_mcp_tools
+    swagger_converter = get_swagger_converter()
     
     server = MCPServerService.get_server(server_id)
     if server is None:
@@ -346,14 +355,14 @@ def parse_swagger(
         from app.constants.mcp_constants import TOOL_TYPE
         
         if swagger_url:
-            tools = convert_swagger_url_to_mcp_tools(
+            tools = swagger_converter.convert_swagger_url_to_mcp_tools(
                 swagger_url=swagger_url,
                 server_id=server_id,
                 include_patterns=include_patterns,
                 exclude_patterns=exclude_patterns
             )
         elif swagger_json:
-            tools = convert_swagger_json_to_mcp_tools(
+            tools = swagger_converter.convert_swagger_json_to_mcp_tools(
                 swagger_json=swagger_json,
                 server_id=server_id,
                 include_patterns=include_patterns,

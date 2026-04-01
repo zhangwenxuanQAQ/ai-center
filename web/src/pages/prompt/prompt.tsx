@@ -5,6 +5,10 @@ const { TextArea } = Input;
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, FileTextOutlined, CheckCircleOutlined, CloseCircleOutlined, PlusSquareOutlined, UpOutlined, DownOutlined, CloseOutlined, EyeOutlined } from '@ant-design/icons';
 import type { TreeDataNode } from 'antd';
 import MDEditor from '@uiw/react-md-editor';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { promptService, Prompt, PromptCategory, PromptListResponse } from '../../services/prompt';
 import PageHeader from '../../components/page-header';
 import '../../styles/common.css';
@@ -12,6 +16,41 @@ import './prompt.less';
 
 const { Sider: LeftSider, Content } = Layout;
 const { Option } = Select;
+
+interface CodeBlockProps {
+  node: any;
+  inline: boolean;
+  className: string;
+  children: React.ReactNode;
+}
+
+const CodeBlock: React.FC<CodeBlockProps> = ({ node, inline, className, children, ...props }) => {
+  const match = /language-(\w+)/.exec(className || '');
+  const language = match ? match[1] : '';
+  
+  const [theme] = useState<'light' | 'dark'>(() => {
+    return document.body.getAttribute('data-theme') as 'light' | 'dark' || 'light';
+  });
+
+  if (!inline && (className || language)) {
+    return (
+      <SyntaxHighlighter
+        style={theme === 'dark' ? oneDark : oneLight}
+        language={language}
+        PreTag="div"
+        {...props}
+      >
+        {String(children).replace(/\n$/, '')}
+      </SyntaxHighlighter>
+    );
+  }
+
+  return (
+    <code className={className} {...props}>
+      {children}
+    </code>
+  );
+};
 
 const PromptManagement: React.FC = () => {
   const navigate = useNavigate();
@@ -917,13 +956,14 @@ const PromptManagement: React.FC = () => {
                   border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #d9d9d9'
                 }}
               >
-                <MDEditor.Markdown 
-                  source={viewingPrompt.content || ''} 
-                  style={{ 
-                    background: 'transparent',
-                    color: theme === 'dark' ? '#fff' : '#000'
-                  }} 
-                />
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    code: CodeBlock as any
+                  }}
+                >
+                  {viewingPrompt.content || ''}
+                </ReactMarkdown>
               </div>
             </div>
           </div>
