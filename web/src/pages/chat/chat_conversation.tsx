@@ -363,14 +363,15 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         },
         (error) => {
           console.error('Failed to send message:', error);
-          message.error('发送失败，请重试');
+          const errorMessage = typeof error === 'string' ? error : (error?.message || error?.error || '发送失败，请重试');
+          message.error(errorMessage);
           
           // 失败时显示错误消息
           setMessages(prev => prev.map(msg => 
             msg.id === assistantMessageId 
               ? { 
                   ...msg, 
-                  content: '抱歉，发送消息时出现错误，请重试',
+                  content: `抱歉，发送消息时出现错误：${errorMessage}`,
                   reasoning_content: undefined
                 }
               : msg
@@ -401,14 +402,15 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       );
     } catch (error) {
       console.error('Failed to send message:', error);
-      message.error('发送失败，请重试');
+      const errorMessage = typeof error === 'string' ? error : (error?.message || error?.error || '发送失败，请重试');
+      message.error(errorMessage);
       
       // 失败时显示错误消息
       setMessages(prev => prev.map(msg => 
         msg.id === assistantMessageId 
           ? { 
               ...msg, 
-              content: '抱歉，发送消息时出现错误，请重试',
+              content: `抱歉，发送消息时出现错误：${errorMessage}`,
               reasoning_content: undefined
             }
           : msg
@@ -586,13 +588,14 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         },
         (error) => {
           console.error('Failed to send message:', error);
-          message.error('发送失败，请重试');
+          const errorMessage = typeof error === 'string' ? error : (error?.message || error?.error || '发送失败，请重试');
+          message.error(errorMessage);
 
           setMessages(prev => prev.map(msg =>
             msg.id === assistantMessageId
               ? {
                   ...msg,
-                  content: '抱歉，发送消息时出现错误，请重试',
+                  content: `抱歉，发送消息时出现错误：${errorMessage}`,
                   reasoning_content: undefined
                 }
               : msg

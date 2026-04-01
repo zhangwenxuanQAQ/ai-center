@@ -163,7 +163,7 @@ class ChatCoreService:
         try:
             chatbot = Chatbot.get(Chatbot.id == chatbot_id)
         except Chatbot.DoesNotExist:
-            raise ResourceNotFoundError(message=f"机器人 {chatbot_id} 不存在")
+            raise ResourceNotFoundError(message=f"机器人不存在")
         
         from app.database.models import ChatbotModel
         model_bindings = list(ChatbotModel.select().where(
@@ -172,7 +172,7 @@ class ChatCoreService:
         ))
         
         if not model_bindings:
-            raise ResourceNotFoundError(message=f"机器人 {chatbot_id} 未绑定任何模型")
+            raise ResourceNotFoundError(message=f"机器人未绑定任何模型")
         
         text_model_id = None
         vision_model_id = None
@@ -189,7 +189,7 @@ class ChatCoreService:
         model_id = text_model_id or multimodal_model_id or vision_model_id
         
         if not model_id:
-            raise ResourceNotFoundError(message=f"机器人 {chatbot_id} 未绑定有效的模型")
+            raise ResourceNotFoundError(message=f"机器人未绑定有效的模型")
         
         system_prompts = list(ChatbotPrompt.select().where(
             (ChatbotPrompt.chatbot_id == chatbot_id) &
