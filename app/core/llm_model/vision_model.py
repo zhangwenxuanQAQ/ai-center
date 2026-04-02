@@ -49,7 +49,7 @@ class VisionModel(BaseLLM):
         
         Args:
             prompt: 提示词
-            **kwargs: 其他参数，如image_url等
+            **kwargs: 其他参数，如image_url、tools等
             
         Returns:
             分析结果
@@ -62,6 +62,8 @@ class VisionModel(BaseLLM):
             return {'error': 'No image URL provided'}
         
         try:
+            tools = kwargs.pop('tools', None)
+            
             params = {
                 'model': self.model_name,
                 'messages': [
@@ -79,10 +81,11 @@ class VisionModel(BaseLLM):
                     }
                 ],
                 'temperature': 0.7,
-                'max_tokens': 4096,
-                'stream': True,
-                'stream_options': {'include_usage': True}
+                'max_tokens': 4096
             }
+            
+            if tools:
+                params['tools'] = tools
             
             params = self._handle_deep_thinking(params, kwargs)
             params.update(kwargs)
@@ -99,6 +102,9 @@ class VisionModel(BaseLLM):
             if hasattr(response.choices[0].message, 'reasoning_content') and response.choices[0].message.reasoning_content:
                 result['reasoning_content'] = response.choices[0].message.reasoning_content
             
+            if hasattr(response.choices[0].message, 'tool_calls') and response.choices[0].message.tool_calls:
+                result['tool_calls'] = response.choices[0].message.tool_calls
+            
             return result
         except Exception as e:
             return {'error': str(e)}
@@ -109,7 +115,7 @@ class VisionModel(BaseLLM):
         
         Args:
             prompt: 提示词
-            **kwargs: 其他参数
+            **kwargs: 其他参数，如image_url、tools等
             
         Yields:
             流式分析结果
@@ -124,6 +130,8 @@ class VisionModel(BaseLLM):
             return
         
         try:
+            tools = kwargs.pop('tools', None)
+            
             params = {
                 'model': self.model_name,
                 'messages': [
@@ -146,11 +154,16 @@ class VisionModel(BaseLLM):
                 'stream_options': {'include_usage': True}
             }
             
+            if tools:
+                params['tools'] = tools
+            
             params = self._handle_deep_thinking(params, kwargs)
             params.update(kwargs)
             params.pop('image_url', None)
             
             stream = self.client.chat.completions.create(**params)
+            
+            tool_calls_data = {}
             
             for chunk in stream:
                 if chunk.choices:
@@ -162,6 +175,28 @@ class VisionModel(BaseLLM):
                     }
                     if hasattr(choice.delta, 'reasoning_content') and choice.delta.reasoning_content:
                         result['reasoning_content'] = choice.delta.reasoning_content
+                    
+                    if hasattr(choice.delta, 'tool_calls') and choice.delta.tool_calls:
+                        for tool_call in choice.delta.tool_calls:
+                            idx = tool_call.index
+                            if idx not in tool_calls_data:
+                                tool_calls_data[idx] = {
+                                    'id': tool_call.id,
+                                    'type': tool_call.type,
+                                    'function': {
+                                        'name': '',
+                                        'arguments': ''
+                                    }
+                                }
+                            if tool_call.function:
+                                if tool_call.function.name:
+                                    tool_calls_data[idx]['function']['name'] += tool_call.function.name
+                                if tool_call.function.arguments:
+                                    tool_calls_data[idx]['function']['arguments'] += tool_call.function.arguments
+                        
+                        if tool_calls_data:
+                            result['tool_calls'] = list(tool_calls_data.values())
+                    
                     yield result
                 elif chunk.usage:
                     yield {
@@ -177,16 +212,18 @@ class VisionModel(BaseLLM):
         
         Args:
             messages: 消息列表
-            **kwargs: 其他参数
+            **kwargs: 其他参数，如temperature、top_p、max_tokens、tools等
             
         Yields:
-            流式生成的结果
+            流式生成的结果，包含text、reasoning_content（思考过程）、usage（token消耗）、tool_calls（工具调用）
         """
         if not self._validate_config():
             yield {'error': 'Invalid configuration'}
             return
         
         try:
+            tools = kwargs.pop('tools', None)
+            
             params = {
                 'model': self.model_name,
                 'messages': messages,
@@ -196,10 +233,15 @@ class VisionModel(BaseLLM):
                 'stream_options': {'include_usage': True}
             }
             
+            if tools:
+                params['tools'] = tools
+            
             params = self._handle_deep_thinking(params, kwargs)
             params.update(kwargs)
             
             stream = self.client.chat.completions.create(**params)
+            
+            tool_calls_data = {}
             
             for chunk in stream:
                 if chunk.choices:
@@ -211,6 +253,28 @@ class VisionModel(BaseLLM):
                     }
                     if hasattr(choice.delta, 'reasoning_content') and choice.delta.reasoning_content:
                         result['reasoning_content'] = choice.delta.reasoning_content
+                    
+                    if hasattr(choice.delta, 'tool_calls') and choice.delta.tool_calls:
+                        for tool_call in choice.delta.tool_calls:
+                            idx = tool_call.index
+                            if idx not in tool_calls_data:
+                                tool_calls_data[idx] = {
+                                    'id': tool_call.id,
+                                    'type': tool_call.type,
+                                    'function': {
+                                        'name': '',
+                                        'arguments': ''
+                                    }
+                                }
+                            if tool_call.function:
+                                if tool_call.function.name:
+                                    tool_calls_data[idx]['function']['name'] += tool_call.function.name
+                                if tool_call.function.arguments:
+                                    tool_calls_data[idx]['function']['arguments'] += tool_call.function.arguments
+                        
+                        if tool_calls_data:
+                            result['tool_calls'] = list(tool_calls_data.values())
+                    
                     yield result
                 elif chunk.usage:
                     yield {
@@ -233,6 +297,7 @@ class VisionModel(BaseLLM):
             'type': 'vision',
             'capabilities': {
                 'streaming': True,
-                'non_streaming': True
+                'non_streaming': True,
+                'tools': True
             }
         }

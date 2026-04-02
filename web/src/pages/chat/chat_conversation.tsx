@@ -2,10 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Input, Button, Switch, Modal, Slider, message, Popconfirm, Tooltip, Dropdown, Empty, Spin, Popover, InputNumber, Select } from 'antd';
 import { SendOutlined, ClearOutlined, SettingOutlined, RobotOutlined, BulbOutlined, LoadingOutlined, DownOutlined, RightOutlined, CopyOutlined, ReloadOutlined, EditOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import MDEditor from '@uiw/react-md-editor';
 import { llmModelService, LLMModel } from '../../services/llm_model';
 import { chatbotService, Chatbot } from '../../services/chatbot';
 import { chatService, Conversation, Message } from '../../services/chat';
@@ -54,40 +51,7 @@ interface ChatConversationProps {
   onConversationCreated?: (newConversation?: Conversation) => void;
 }
 
-interface CodeBlockProps {
-  node: any;
-  inline: boolean;
-  className: string;
-  children: React.ReactNode;
-}
 
-const CodeBlock: React.FC<CodeBlockProps> = ({ node, inline, className, children, ...props }) => {
-  const match = /language-(\w+)/.exec(className || '');
-  const language = match ? match[1] : '';
-  
-  const [theme] = useState<'light' | 'dark'>(() => {
-    return document.body.getAttribute('data-theme') as 'light' | 'dark' || 'light';
-  });
-
-  if (!inline && (className || language)) {
-    return (
-      <SyntaxHighlighter
-        style={theme === 'dark' ? oneDark : oneLight}
-        language={language}
-        PreTag="div"
-        {...props}
-      >
-        {String(children).replace(/\n$/, '')}
-      </SyntaxHighlighter>
-    );
-  }
-
-  return (
-    <code className={className} {...props}>
-      {children}
-    </code>
-  );
-};
 
 const ChatConversation: React.FC<ChatConversationProps> = ({
   theme,
@@ -953,15 +917,11 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               </div>
               {expandedReasoning.has(msg.id) && msg.reasoning_content && (
                 <div className="reasoning-text">
-                  <div className="markdown-content">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        code: CodeBlock as any
-                      }}
-                    >
-                      {msg.reasoning_content}
-                    </ReactMarkdown>
+                  <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                    <MDEditor.Markdown
+                      source={msg.reasoning_content}
+                      className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                    />
                   </div>
                 </div>
               )}
@@ -984,15 +944,11 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               </div>
               {expandedReasoning.has(msg.id) && msg.reasoning_content && (
                 <div className="reasoning-text">
-                  <div className="markdown-content">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        code: CodeBlock as any
-                      }}
-                    >
-                      {msg.reasoning_content}
-                    </ReactMarkdown>
+                  <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                    <MDEditor.Markdown
+                      source={msg.reasoning_content}
+                      className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                    />
                   </div>
                 </div>
               )}
@@ -1012,17 +968,11 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               </div>
             </div>
           ) : msg.content ? (
-            <div className={`message-text ${theme === 'dark' ? 'dark' : 'light'}`}>
-              <div className="markdown-content">
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    code: CodeBlock as any
-                  }}
-                >
-                  {msg.content}
-                </ReactMarkdown>
-              </div>
+            <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+              <MDEditor.Markdown
+                source={msg.content}
+                className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+              />
             </div>
           ) : null}
           <div className="message-footer">

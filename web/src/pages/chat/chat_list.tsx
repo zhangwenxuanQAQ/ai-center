@@ -148,7 +148,7 @@ const ChatList: React.FC<ChatListProps> = ({
     {
       key: 'pin',
       icon: <PushpinOutlined />,
-      label: conversation.is_pinned ? '取消置顶' : '置顶对话',
+      label: conversation.is_top ? '取消置顶' : '置顶对话',
       onClick: () => handlePinConversation(conversation),
     },
     {

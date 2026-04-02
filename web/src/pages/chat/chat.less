@@ -808,6 +808,24 @@
         color: #000;
       }
     }
+
+    .md-editor-container {
+      padding: 12px 16px;
+      border-radius: 16px 16px 16px 4px;
+      font-size: 13px;
+      line-height: 1.6;
+      word-break: break-word;
+
+      &.dark {
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+      }
+
+      &.light {
+        background: #fff;
+        color: #000;
+      }
+    }
   }
 }
 
@@ -995,8 +1013,14 @@
     }
   }
   
+  .md-editor-container {
+    .wmde-markdown {
+      font-size: 12px;
+    }
+  }
+  
   .markdown-content {
-    font-size: 13px;
+    font-size: 12px;
     line-height: 1.5;
     
     p {
@@ -1330,6 +1354,108 @@
     :global {
       .ant-empty-description {
         color: rgba(0, 0, 0, 0.45);
+      }
+    }
+  }
+}
+
+.md-editor-container {
+  &.dark {
+    .wmde-markdown {
+      background: transparent;
+      color: #fff;
+      text-align: left;
+      font-size: 13px;
+      
+      strong,
+      b {
+        color: #ffffff !important;
+        font-weight: 600 !important;
+      }
+      
+      em,
+      i {
+        color: #ffffff !important;
+      }
+      
+      code {
+        background: rgba(255, 255, 255, 0.1) !important;
+        color: #ffffff !important;
+      }
+      
+      pre {
+        background: rgba(255, 255, 255, 0.05) !important;
+        color: #ffffff !important;
+      }
+      
+      h1, h2, h3, h4, h5, h6 {
+        color: #fff !important;
+        border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+      }
+      
+      a {
+        color: #667eea !important;
+      }
+      
+      .anchor {
+        display: none !important;
+      }
+      
+      blockquote {
+        border-left-color: #667eea !important;
+        color: rgba(255, 255, 255, 0.85) !important;
+      }
+      
+      table {
+        th, td {
+          border-color: rgba(255, 255, 255, 0.1) !important;
+        }
+        
+        th {
+          background: rgba(255, 255, 255, 0.05) !important;
+          color: #fff !important;
+        }
+        
+        tr {
+          background: transparent;
+        }
+      }
+      
+      hr {
+        border-color: rgba(255, 255, 255, 0.1) !important;
+      }
+      
+      img {
+        border-radius: 8px;
+      }
+      
+      ul, ol {
+        li {
+          color: #fff !important;
+        }
+      }
+    }
+  }
+  
+  &.light {
+    .wmde-markdown {
+      background: transparent;
+      color: #000;
+      text-align: left;
+      font-size: 13px;
+
+      a {
+        color: #667eea !important;
+      }
+
+      .anchor {
+        display: none !important;
+      }
+
+      table {
+        tr:nth-child(2n) {
+          background: transparent;
+        }
       }
     }
   }

@@ -279,12 +279,15 @@ class ChatCoreService:
         Returns:
             List[Dict]: 完整的消息列表
         """
+        from app.core.prompt.utils.system_prompt_builder import build_system_prompt
+        
         messages = []
         
         if system_prompt:
+            built_system_prompt = build_system_prompt(system_prompt)
             messages.append({
                 'role': 'system',
-                'content': system_prompt
+                'content': built_system_prompt
             })
         
         if user_prompt_messages:
