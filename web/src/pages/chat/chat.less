@@ -228,6 +228,7 @@
   overflow-x: hidden;
   min-height: 0;
   max-height: calc(100% - 48px);
+  position: relative;
 
   &::-webkit-scrollbar {
     display: none;
@@ -235,6 +236,28 @@
 
   scrollbar-width: none;
   -ms-overflow-style: none;
+}
+
+.loading-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  font-size: 14px;
+  color: rgba(150, 150, 150, 0.8);
+}
+
+.back-top-button {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  z-index: 100;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    transform: translateY(-2px);
+  }
 }
 
 .conversation-section {

@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Input, Button, Dropdown, Menu, Modal, message, Empty, Spin } from 'antd';
-import { PlusOutlined, SearchOutlined, DeleteOutlined, PushpinOutlined, CommentOutlined , MenuFoldOutlined, MenuUnfoldOutlined, MoreOutlined, MessageOutlined, EditOutlined } from '@ant-design/icons';
+import { PlusOutlined, SearchOutlined, DeleteOutlined, PushpinOutlined, CommentOutlined , MenuFoldOutlined, MenuUnfoldOutlined, MoreOutlined, MessageOutlined, EditOutlined, VerticalAlignTopOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { chatService, Conversation } from '../../services/chat';
 
@@ -28,53 +28,99 @@ const ChatList: React.FC<ChatListProps> = ({
   const [searchText, setSearchText] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [showBackTop, setShowBackTop] = useState(false);
   const [isRenameModalVisible, setIsRenameModalVisible] = useState(false);
   const [renamingConversation, setRenamingConversation] = useState<Conversation | null>(null);
   const [newTitle, setNewTitle] = useState('');
   const userCreatedNew = useRef(false);
+  const listRef = useRef<HTMLDivElement>(null);
+  const pageSize = 20;
 
   useEffect(() => {
     fetchConversations();
   }, []);
 
   useEffect(() => {
-    // 当refreshConversations变化时，重新获取对话列表
     if (refreshConversations) {
       fetchConversations();
-      // 重置showNewConversation，因为新对话已经创建并添加到列表中
       setShowNewConversation(false);
       userCreatedNew.current = false;
     }
   }, [refreshConversations]);
 
   useEffect(() => {
-    // 当没有对话数据时，默认显示"新对话"且选中
-    // 只有在加载完成后才判断是否显示"新对话"
     if (!loading && conversations.length === 0 && !showNewConversation) {
       setShowNewConversation(true);
       onSelectConversation(null);
     } else if (!loading && conversations.length > 0 && showNewConversation && !userCreatedNew.current) {
-      // 如果有对话数据且"新对话"项显示，且不是用户主动新建的，则隐藏它
       setShowNewConversation(false);
     }
   }, [conversations.length, showNewConversation, onSelectConversation, loading]);
 
   useEffect(() => {
-    // 当选中了一个实际对话时，隐藏"新对话"项（用户主动新建的除外）
     if (selectedConversation && selectedConversation.id && !userCreatedNew.current) {
       setShowNewConversation(false);
     }
   }, [selectedConversation]);
 
-  const fetchConversations = async () => {
-    setLoading(true);
+  const fetchConversations = async (page: number = 1, append: boolean = false) => {
+    if (page === 1) {
+      setLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
+    
     try {
-      const result = await chatService.getConversations(1, 20);
-      setConversations(result.items);
+      const result = await chatService.getConversations(page, pageSize);
+      
+      if (append) {
+        setConversations(prev => [...prev, ...result.items]);
+      } else {
+        setConversations(result.items);
+      }
+      
+      setHasMore(result.items.length === pageSize);
+      setCurrentPage(page);
     } catch (error) {
       console.error('Failed to fetch conversations:', error);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
+  const loadMore = useCallback(() => {
+    if (!loadingMore && hasMore) {
+      fetchConversations(currentPage + 1, true);
+    }
+  }, [loadingMore, hasMore, currentPage]);
+
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLDivElement;
+    const scrollTop = target.scrollTop;
+    const scrollHeight = target.scrollHeight;
+    const clientHeight = target.clientHeight;
+    
+    if (scrollTop > 300) {
+      setShowBackTop(true);
+    } else {
+      setShowBackTop(false);
+    }
+    
+    if (scrollHeight - scrollTop - clientHeight < 100 && hasMore && !loadingMore) {
+      loadMore();
+    }
+  }, [hasMore, loadingMore, loadMore]);
+
+  const scrollToTop = () => {
+    if (listRef.current) {
+      listRef.current.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      });
     }
   };
 
@@ -202,7 +248,6 @@ const ChatList: React.FC<ChatListProps> = ({
     const diff = now.getTime() - date.getTime();
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
     
-    // 如果是未来时间或时间差为负数，归为"今天"
     if (diff < 0 || days < 0) {
       return '今天';
     }
@@ -214,7 +259,6 @@ const ChatList: React.FC<ChatListProps> = ({
     } else if (days <= 30) {
       return '30天内';
     } else {
-      // 超过30天按日期分组
       return date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long' });
     }
   };
@@ -230,18 +274,15 @@ const ChatList: React.FC<ChatListProps> = ({
       groups[group].push(conversation);
     });
     
-    // 定义分组顺序
     const groupOrder = ['今天', '7天内', '30天内'];
     const orderedGroups: { [key: string]: Conversation[] } = {};
     
-    // 先添加有序分组
     groupOrder.forEach(group => {
       if (groups[group]) {
         orderedGroups[group] = groups[group];
       }
     });
     
-    // 再添加超过30天的分组（按日期排序）
     Object.keys(groups).forEach(group => {
       if (!groupOrder.includes(group)) {
         orderedGroups[group] = groups[group];
@@ -357,7 +398,11 @@ const ChatList: React.FC<ChatListProps> = ({
         </div>
       )}
 
-      <div className="conversation-list">
+      <div 
+        className="conversation-list" 
+        ref={listRef}
+        onScroll={handleScroll}
+      >
         {loading ? (
           <div className="loading-container">
             <Spin />
@@ -383,9 +428,26 @@ const ChatList: React.FC<ChatListProps> = ({
             {!showNewConversation && conversations.length === 0 && (
               <Empty description="暂无对话" className={`empty-container ${theme === 'dark' ? 'dark' : 'light'}`} />
             )}
+            {loadingMore && (
+              <div className="loading-more">
+                <Spin size="small" />
+                <span style={{ marginLeft: 8 }}>加载中...</span>
+              </div>
+            )}
           </>
         )}
       </div>
+
+      {showBackTop && (
+        <div className="back-top-button" onClick={scrollToTop}>
+          <Button
+            type="primary"
+            icon={<VerticalAlignTopOutlined />}
+            shape="circle"
+            size="large"
+          />
+        </div>
+      )}
 
       <Modal
         title="修改对话名称"
@@ -398,13 +460,11 @@ const ChatList: React.FC<ChatListProps> = ({
         }}
         okText="确认"
         cancelText="取消"
-        className={`chat-modal ${theme === 'dark' ? 'dark' : 'light'}`}
       >
         <Input
-          placeholder="请输入对话名称"
           value={newTitle}
           onChange={e => setNewTitle(e.target.value)}
-          onPressEnter={handleRenameConfirm}
+          placeholder="请输入新的对话名称"
           autoFocus
         />
       </Modal>

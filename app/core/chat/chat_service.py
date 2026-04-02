@@ -283,12 +283,11 @@ class ChatCoreService:
         
         messages = []
         
-        if system_prompt:
-            built_system_prompt = build_system_prompt(system_prompt)
-            messages.append({
-                'role': 'system',
-                'content': built_system_prompt
-            })
+        built_system_prompt = build_system_prompt(system_prompt)
+        messages.append({
+            'role': 'system',
+            'content': built_system_prompt
+        })
         
         if user_prompt_messages:
             messages.extend(user_prompt_messages)
@@ -677,7 +676,11 @@ class ChatCoreService:
         )
 
         chat_messages = ChatMessageService.get_messages_by_chat(chat_id)
+        system_message = messages[0] if messages else None
         updated_messages = [{"role": msg.role, "content": msg.content , "reasoning_content": msg.reasoning_content , "message_id": msg.message_id} for msg in chat_messages.items]
+        if system_message:
+            updated_messages.insert(0, system_message)
+        updated_messages.append(assistant_message_dict)
         ChatService.update_messages(chat_id, updated_messages)
     
     @staticmethod
@@ -947,9 +950,6 @@ class ChatCoreService:
         if full_reasoning:
             assistant_message_dict['reasoning_content'] = full_reasoning
 
-        updated_messages = history_messages + [user_message, assistant_message_dict]
-        ChatService.update_messages(chat_id, updated_messages)
-        
         avatar = None
         if chatbot_id:
             try:
@@ -978,9 +978,14 @@ class ChatCoreService:
             avatar=avatar
         )
 
-        chat_messages = ChatMessageService.get_messages_by_chat(chat_id) # 最新的历史消息
+        chat_messages = ChatMessageService.get_messages_by_chat(chat_id)
+        system_message = messages[0] if messages else None
         updated_messages = [{"role": msg.role, "content": msg.content , "reasoning_content": msg.reasoning_content , "message_id": msg.message_id} for msg in chat_messages.items]
-        
+        if system_message:
+            updated_messages.insert(0, system_message)
+        updated_messages.append(assistant_message_dict)
+        ChatService.update_messages(chat_id, updated_messages)
+
         return {
             'text': full_response,
             'reasoning_content': result.get('reasoning_content'),
