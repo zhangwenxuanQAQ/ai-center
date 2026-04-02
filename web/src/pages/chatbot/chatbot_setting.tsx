@@ -2017,17 +2017,14 @@ const ChatbotSetting: React.FC = () => {
                   background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fff',
                   borderRadius: '8px',
                   padding: '16px',
-                  border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #d9d9d9'
+                  border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #d9d9d9',
+                  minHeight: '300px'
                 }}
               >
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    code: CodeBlock as any
-                  }}
-                >
-                  {currentViewPrompt.prompt_content || currentViewPrompt.content || ''}
-                </ReactMarkdown>
+                <MDEditor.Markdown
+                  source={currentViewPrompt.prompt_content || currentViewPrompt.content || ''}
+                  className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                />
               </div>
             </div>
           </div>

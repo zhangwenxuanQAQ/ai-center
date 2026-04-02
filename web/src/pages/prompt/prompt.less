@@ -486,6 +486,7 @@
     .wmde-markdown {
       background: transparent;
       color: #fff;
+      text-align: left;
       
       strong,
       b {
@@ -517,6 +518,10 @@
         color: #667eea !important;
       }
       
+      .anchor {
+        display: none !important;
+      }
+      
       blockquote {
         border-left-color: #667eea !important;
         color: rgba(255, 255, 255, 0.85) !important;
@@ -532,8 +537,8 @@
           color: #fff !important;
         }
         
-        tr:nth-child(2n) {
-          background: rgba(255, 255, 255, 0.02) !important;
+        tr {
+          background: transparent;
         }
       }
       
@@ -557,6 +562,21 @@
     .wmde-markdown {
       background: transparent;
       color: #000;
+      text-align: left;
+
+      a {
+        color: #667eea !important;
+      }
+
+      .anchor {
+        display: none !important;
+      }
+
+      table {
+        tr:nth-child(2n) {
+          background: transparent;
+        }
+      }
     }
   }
 }

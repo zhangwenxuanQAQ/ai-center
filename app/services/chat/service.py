@@ -15,6 +15,7 @@ from app.services.chat.dto import (
     ChatListResponse, ChatMessageListResponse
 )
 from app.database.db_utils import handle_transaction
+from app.database.database import get_db_connection
 from app.core.exceptions import ResourceNotFoundError
 
 
@@ -89,6 +90,7 @@ class ChatService:
         Returns:
             ChatListResponse: 对话列表响应
         """
+        
         query = Chat.select().where(
             (Chat.user_id == user_id) & 
             (Chat.deleted == False)

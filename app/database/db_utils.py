@@ -4,8 +4,8 @@
 
 from contextlib import contextmanager
 from typing import Callable, TypeVar
-from peewee import IntegrityError, OperationalError
-from app.database.database import db
+from peewee import IntegrityError, OperationalError, InterfaceError
+from app.database.database import db, get_db_connection
 from app.core.exceptions import (
     ResourceNotFoundError,
     DuplicateResourceError,
@@ -27,18 +27,17 @@ def transaction_scope():
             # 退出上下文时自动提交，异常时自动回滚
     """
     try:
+        get_db_connection()
         db.begin()
         yield
         db.commit()
     except IntegrityError as e:
         db.rollback()
-        # 判断是否是唯一约束冲突
         if 'Duplicate entry' in str(e) or 'UNIQUE constraint' in str(e):
             raise DuplicateResourceError(
                 message="资源已存在",
                 detail=str(e)
             ) from e
-        # 判断是否是外键约束失败
         elif 'foreign key constraint' in str(e).lower():
             raise ResourceNotFoundError(
                 message="关联资源不存在",
@@ -55,9 +54,19 @@ def transaction_scope():
             message="数据库操作失败",
             detail=str(e)
         ) from e
+    except InterfaceError as e:
+        db.rollback()
+        try:
+            db.close()
+            get_db_connection()
+        except Exception:
+            pass
+        raise DatabaseOperationError(
+            message="数据库连接失败，请重试",
+            detail=str(e)
+        ) from e
     except Exception as e:
         db.rollback()
-        # 重新抛出其他异常
         raise
 
 
@@ -74,15 +83,12 @@ def handle_transaction(func: Callable[..., T]) -> Callable[..., T]:
     """
     def wrapper(*args, **kwargs):
         try:
-            # 开始事务
+            get_db_connection()
             db.begin()
-            # 执行函数
             result = func(*args, **kwargs)
-            # 提交事务
             db.commit()
             return result
         except IntegrityError as e:
-            # 回滚事务
             db.rollback()
             if 'Duplicate entry' in str(e) or 'UNIQUE constraint' in str(e):
                 raise DuplicateResourceError(
@@ -100,14 +106,23 @@ def handle_transaction(func: Callable[..., T]) -> Callable[..., T]:
                     detail=str(e)
                 ) from e
         except OperationalError as e:
-            # 回滚事务
             db.rollback()
             raise DatabaseOperationError(
                 message="数据库操作失败",
                 detail=str(e)
             ) from e
+        except InterfaceError as e:
+            db.rollback()
+            try:
+                db.close()
+                get_db_connection()
+            except Exception:
+                pass
+            raise DatabaseOperationError(
+                message="数据库连接失败，请重试",
+                detail=str(e)
+            ) from e
         except Exception:
-            # 回滚事务
             db.rollback()
             raise
     

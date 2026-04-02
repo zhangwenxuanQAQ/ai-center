@@ -519,13 +519,23 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     if (messageIndex === -1) return;
 
     const updatedMessages = messages.slice(0, messageIndex);
-    setMessages(updatedMessages);
+    
+    // 创建编辑后的用户消息
+    const editedUserMessage: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: editingContent.trim(),
+      created_at: new Date().toISOString()
+    };
+    
+    const newMessages = [...updatedMessages, editedUserMessage];
+    setMessages(newMessages);
     setEditingMessageId(null);
     setEditingContent('');
 
-    setInputValue(editingContent);
+    setInputValue('');
     setTimeout(() => {
-      handleSendMessageWithMessages(updatedMessages, editingContent, messageId);
+      handleSendMessageWithMessages(newMessages, editingContent, messageId);
     }, 100);
   };
 
