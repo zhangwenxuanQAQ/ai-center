@@ -508,7 +508,7 @@ class ChatMessageService:
             content=user_content,
             model_id=model_id,
             chatbot_id=chatbot_id,
-            created_at=datetime.now()
+            created_at=datetime.now().astimezone()
         )
         user_message.save(force_insert=True)
         return user_message
@@ -556,7 +556,7 @@ class ChatMessageService:
             avatar=avatar,
             model_id=model_id,
             chatbot_id=chatbot_id,
-            created_at=datetime.now()
+            created_at=datetime.now().astimezone()
         )
         assistant_message.save(force_insert=True)
         return assistant_message
@@ -594,7 +594,7 @@ class ChatMessageService:
             content=tool_content,
             model_id=model_id,
             chatbot_id=chatbot_id,
-            created_at=datetime.now()
+            created_at=datetime.now().astimezone()
         )
         tool_message.save(force_insert=True)
         return tool_message

@@ -327,6 +327,31 @@ async def chat_with_model(llm_model_id: str, request: dict = Body(...)):
             logger.error("Messages is empty")
             raise HTTPException(status_code=400, detail="消息不能为空")
         
+        from app.core.prompt.utils.system_prompt_builder import build_system_prompt
+        
+        has_system_message = False
+        processed_messages = []
+        for msg in messages:
+            if msg.get('role') == 'system':
+                built_system_prompt = build_system_prompt(msg.get('content'))
+                processed_messages.append({
+                    'role': 'system',
+                    'content': built_system_prompt
+                })
+                has_system_message = True
+            else:
+                processed_messages.append(msg)
+        
+        if not has_system_message:
+            built_system_prompt = build_system_prompt(None)
+            processed_messages.insert(0, {
+                'role': 'system',
+                'content': built_system_prompt
+            })
+        
+        messages = processed_messages
+        logger.info(f"Processed messages: {messages}")
+        
         model_config = {
             'api_key': db_llm_model.api_key,
             'endpoint': db_llm_model.endpoint,

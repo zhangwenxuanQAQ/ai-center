@@ -977,7 +977,15 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           ) : null}
           <div className="message-footer">
             <span className="message-time">
-              {new Date(msg.created_at).toLocaleTimeString()}
+              {msg.created_at ? new Date(msg.created_at).toLocaleString('zh-CN', { 
+                year: 'numeric', 
+                month: '2-digit', 
+                day: '2-digit',
+                hour: '2-digit', 
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false 
+              }) : ''}
             </span>
             <div className="message-actions">
               {msg.role === 'assistant' && msg.content && (
