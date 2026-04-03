@@ -72,12 +72,7 @@ class ChatService:
         return db_chat
     
     @staticmethod
-    def get_chat_list(
-        user_id: str,
-        page: int = 1,
-        page_size: int = 20,
-        keyword: Optional[str] = None
-    ) -> ChatListResponse:
+    def get_chat_list(user_id: str, page: int = 1, page_size: int = 20, keyword: Optional[str] = None) -> ChatListResponse:
         """
         获取用户的对话列表（分页）
         
@@ -90,6 +85,9 @@ class ChatService:
         Returns:
             ChatListResponse: 对话列表响应
         """
+        from app.database.database import get_db_connection
+        
+        get_db_connection()
         
         query = Chat.select().where(
             (Chat.user_id == user_id) & 

@@ -32,6 +32,8 @@ export interface Message {
 }
 
 export const chatService = {
+  abort_controller: null as AbortController | null,
+
   /**
    * 获取对话列表
    * @param page - 页码，默认1
@@ -135,102 +137,126 @@ export const chatService = {
     onError?: (error: any) => void,
     onComplete?: () => void
   ) => {
+    if (chatService.abort_controller) {
+      chatService.abort_controller.abort();
+    }
+    
+    chatService.abort_controller = new AbortController();
+    
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
     const url = `${API_BASE_URL}/aicenter/v1/chat/completions`;
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query: [{ type: 'text', content }],
-        model_id: modelId,
-        chatbot_id: chatbotId,
-        chat_id: chatId,
-        config: config,
-        stream: true,
-        message_id: messageId,
-        system_prompt: systemPrompt
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      if (onError) {
-        onError(error);
-      }
-      return;
-    }
-
-    const reader = response.body?.getReader();
-    if (!reader) {
-      if (onError) {
-        onError(new Error('No response body'));
-      }
-      return;
-    }
-
-    const decoder = new TextDecoder();
-    let fullResponse = '';
-    let fullReasoning = '';
-
     try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          break;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: [{ type: 'text', content }],
+          model_id: modelId,
+          chatbot_id: chatbotId,
+          chat_id: chatId,
+          config: config,
+          stream: true,
+          message_id: messageId,
+          system_prompt: systemPrompt
+        }),
+        signal: chatService.abort_controller.signal
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        if (onError) {
+          onError(error);
         }
-        
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
-        
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const dataStr = line.substring(6);
-            if (dataStr === '[DONE]') {
-              if (onComplete) {
-                onComplete();
-              }
-              return;
-            }
-            
-            try {
-              const data = JSON.parse(dataStr);
-              if (data.error) {
-                if (onError) {
-                  onError(data.error);
+        return;
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        if (onError) {
+          onError(new Error('No response body'));
+        }
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      let fullResponse = '';
+      let fullReasoning = '';
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            break;
+          }
+          
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n');
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const dataStr = line.substring(6);
+              if (dataStr === '[DONE]') {
+                if (onComplete) {
+                  onComplete();
                 }
                 return;
               }
               
-              if (data.text) {
-                fullResponse += data.text;
+              try {
+                const data = JSON.parse(dataStr);
+                if (data.error) {
+                  if (onError) {
+                    onError(data.error);
+                  }
+                  return;
+                }
+                
+                if (data.text) {
+                  fullResponse += data.text;
+                }
+                
+                if (data.reasoning_content) {
+                  fullReasoning += data.reasoning_content;
+                }
+                
+                if (onMessage) {
+                  onMessage({
+                    ...data,
+                    full_text: fullResponse,
+                    full_reasoning: fullReasoning
+                  });
+                }
+              } catch (error) {
+                console.error('Error parsing SSE data:', error);
               }
-              
-              if (data.reasoning_content) {
-                fullReasoning += data.reasoning_content;
-              }
-              
-              if (onMessage) {
-                onMessage({
-                  ...data,
-                  full_text: fullResponse,
-                  full_reasoning: fullReasoning
-                });
-              }
-            } catch (error) {
-              console.error('Error parsing SSE data:', error);
             }
           }
         }
+      } finally {
+        reader.releaseLock();
       }
-    } catch (error) {
-      if (onError) {
-        onError(error);
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.log('Request aborted by user');
+        if (onComplete) {
+          onComplete();
+        }
+      } else {
+        console.error('Fetch error:', error);
+        if (onError) {
+          onError(error);
+        }
       }
-    } finally {
-      reader.releaseLock();
+    }
+  },
+
+  stopCurrentRequest: () => {
+    if (chatService.abort_controller) {
+      chatService.abort_controller.abort();
+      chatService.abort_controller = null;
     }
   },
 

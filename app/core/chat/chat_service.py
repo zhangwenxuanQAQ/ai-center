@@ -472,216 +472,239 @@ class ChatCoreService:
         start_time = time.time()
         reasoning_end_time = None
         
-        # 主循环：处理模型调用和工具调用
-        while True:
-            full_response = ''
-            reasoning_content = ''
-            tool_calls_list = []
-            
-            for chunk in model.stream_generate_with_messages(messages, **model_params):
-                if 'error' in chunk:
-                    yield {'error': chunk['error'], 'chat_id': chat_id}
-                    return
+        full_response = ''
+        reasoning_content = ''
+        is_stopped = False
+        
+        try:
+            # 主循环：处理模型调用和工具调用
+            while True:
+                full_response_chunk = ''
+                reasoning_content_chunk = ''
+                tool_calls_list = []
                 
-                if chunk.get('text'):
-                    if reasoning_end_time is None and reasoning_content:
-                        reasoning_end_time = time.time()
-                    full_response += chunk['text']
-                
-                if chunk.get('reasoning_content'):
-                    reasoning_content += chunk['reasoning_content']
-                
-                if chunk.get('tool_calls'):
-                    tool_calls_list = chunk.get('tool_calls')
-                
-                yield {
-                    'text': chunk.get('text', ''),
-                    'reasoning_content': chunk.get('reasoning_content'),
-                    'finish_reason': chunk.get('finish_reason'),
-                    'usage': chunk.get('usage'),
-                    'chat_id': chat_id
-                }
-            
-            # 检查是否需要调用工具
-            if tool_calls_list and tool_map:
-                messages.append({
-                    'role': 'assistant',
-                    'content': full_response,
-                    'tool_calls': tool_calls_list
-                })
-                
-                tool_responses = []
-                
-                for tool_call in tool_calls_list:
-                    function_name = tool_call.get('function', {}).get('name', '')
-                    function_args_str = tool_call.get('function', {}).get('arguments', '{}')
-                    tool_call_id = tool_call.get('id', '')
+                for chunk in model.stream_generate_with_messages(messages, **model_params):
+                    if 'error' in chunk:
+                        yield {'error': chunk['error'], 'chat_id': chat_id}
+                        return
                     
-                    try:
-                        function_args = json.loads(function_args_str)
-                    except json.JSONDecodeError:
-                        tool_message_content = f"工具 {function_name} 调用失败: 参数解析错误"
-                        yield {
-                            'text': '',
-                            'tool_call': {
-                                'name': function_name,
-                                'status': 'error',
-                                'message': tool_message_content,
-                                'requires_input': False
-                            },
-                            'chat_id': chat_id
-                        }
-                        messages.append({
-                            'role': 'tool',
-                            'tool_call_id': tool_call_id,
-                            'content': tool_message_content
-                        })
-                        continue
+                    if chunk.get('text'):
+                        if reasoning_end_time is None and reasoning_content:
+                            reasoning_end_time = time.time()
+                        full_response_chunk += chunk['text']
+                        full_response += chunk['text']
                     
-                    # 检查工具是否存在
-                    tool_id = tool_map.get(function_name)
-                    if not tool_id:
-                        tool_message_content = f"工具 {function_name} 不存在"
-                        yield {
-                            'text': '',
-                            'tool_call': {
-                                'name': function_name,
-                                'status': 'error',
-                                'message': tool_message_content,
-                                'requires_input': False
-                            },
-                            'chat_id': chat_id
-                        }
-                        messages.append({
-                            'role': 'tool',
-                            'tool_call_id': tool_call_id,
-                            'content': tool_message_content
-                        })
-                        continue
+                    if chunk.get('reasoning_content'):
+                        reasoning_content_chunk += chunk['reasoning_content']
+                        reasoning_content += chunk['reasoning_content']
                     
-                    # 处理工具调用
-                    tool_result = None
-                    for result in process_tool_calls([tool_call], tool_map):
-                        tool_result = result
-                        break
+                    if chunk.get('tool_calls'):
+                        tool_calls_list = chunk.get('tool_calls')
                     
-                    if tool_result:
-                        if 'error' in tool_result:
-                            # 检查是否是缺少参数的错误
-                            error_msg = tool_result['error']
-                            if '缺少' in error_msg or '参数' in error_msg:
-                                # 等待用户输入参数
-                                yield {
-                                    'text': '',
-                                    'tool_call': {
-                                        'name': function_name,
-                                        'status': 'requires_input',
-                                        'message': f"工具 {function_name} 需要输入参数",
-                                        'requires_input': True,
-                                        'tool_call_id': tool_call_id,
-                                        'function_args': function_args
-                                    },
-                                    'chat_id': chat_id
-                                }
-                                
-                                # 这里需要等待用户输入参数
-                                # 注意：在实际应用中，这里需要前端配合，发送包含参数的请求
-                                # 暂时先跳过，实际实现需要根据前端交互来处理
-                                tool_message_content = f"工具 {function_name} 缺少参数，需要用户输入"
-                                messages.append({
-                                    'role': 'tool',
-                                    'tool_call_id': tool_call_id,
-                                    'content': tool_message_content
-                                })
-                            else:
-                                tool_message_content = f"工具 {function_name} 调用失败: {error_msg}"
-                                yield {
-                                    'text': '',
-                                    'tool_call': {
-                                        'name': function_name,
-                                        'status': 'error',
-                                        'message': tool_message_content,
-                                        'requires_input': False
-                                    },
-                                    'chat_id': chat_id
-                                }
-                                messages.append({
-                                    'role': 'tool',
-                                    'tool_call_id': tool_call_id,
-                                    'content': tool_message_content
-                                })
-                        else:
-                            tool_message_content = json.dumps(tool_result.get('result'), ensure_ascii=False)
+                    yield {
+                        'text': chunk.get('text', ''),
+                        'reasoning_content': chunk.get('reasoning_content'),
+                        'finish_reason': chunk.get('finish_reason'),
+                        'usage': chunk.get('usage'),
+                        'chat_id': chat_id
+                    }
+                
+                # 检查是否需要调用工具
+                if tool_calls_list and tool_map:
+                    messages.append({
+                        'role': 'assistant',
+                        'content': full_response_chunk,
+                        'tool_calls': tool_calls_list
+                    })
+                    
+                    tool_responses = []
+                    
+                    for tool_call in tool_calls_list:
+                        function_name = tool_call.get('function', {}).get('name', '')
+                        function_args_str = tool_call.get('function', {}).get('arguments', '{}')
+                        tool_call_id = tool_call.get('id', '')
+                        
+                        try:
+                            function_args = json.loads(function_args_str)
+                        except json.JSONDecodeError:
+                            tool_message_content = f"工具 {function_name} 调用失败: 参数解析错误"
                             yield {
                                 'text': '',
                                 'tool_call': {
                                     'name': function_name,
-                                    'status': 'success',
-                                    'result': tool_result.get('result'),
+                                    'status': 'error',
+                                    'message': tool_message_content,
                                     'requires_input': False
                                 },
                                 'chat_id': chat_id
                             }
-                            # 保存工具消息到数据库
-                            ChatMessageService.create_tool_message(
-                                chat_id=chat_id,
-                                tool_content=tool_message_content,
-                                model_id=model_id,
-                                chatbot_id=chatbot_id,
-                                config=config
-                            )
                             messages.append({
                                 'role': 'tool',
                                 'tool_call_id': tool_call_id,
                                 'content': tool_message_content
                             })
-            else:
-                # 没有工具调用，退出循环
-                break
-        
-        reasoning_time = None
-        if reasoning_content and reasoning_end_time:
-            reasoning_time = int((reasoning_end_time - start_time) * 1000)
-        
-        assistant_message_dict = {'role': 'assistant', 'content': full_response}
-        if reasoning_content:
-            assistant_message_dict['reasoning_content'] = reasoning_content
-
-        avatar = None
-        if chatbot_id:
-            try:
-                chatbot = Chatbot.get(Chatbot.id == chatbot_id)
-                avatar = chatbot.avatar
-            except Chatbot.DoesNotExist:
-                pass
-        elif model_id:
-            try:
-                model = LLMModel.get(LLMModel.id == model_id)
-                if model.provider:
-                    avatar = f"/src/assets/llm/{model.provider.lower()}.png"
+                            continue
+                        
+                        # 检查工具是否存在
+                        tool_id = tool_map.get(function_name)
+                        if not tool_id:
+                            tool_message_content = f"工具 {function_name} 不存在"
+                            yield {
+                                'text': '',
+                                'tool_call': {
+                                    'name': function_name,
+                                    'status': 'error',
+                                    'message': tool_message_content,
+                                    'requires_input': False
+                                },
+                                'chat_id': chat_id
+                            }
+                            messages.append({
+                                'role': 'tool',
+                                'tool_call_id': tool_call_id,
+                                'content': tool_message_content
+                            })
+                            continue
+                        
+                        # 处理工具调用
+                        tool_result = None
+                        for result in process_tool_calls([tool_call], tool_map):
+                            tool_result = result
+                            break
+                        
+                        if tool_result:
+                            if 'error' in tool_result:
+                                # 检查是否是缺少参数的错误
+                                error_msg = tool_result['error']
+                                if '缺少' in error_msg or '参数' in error_msg:
+                                    # 等待用户输入参数
+                                    yield {
+                                        'text': '',
+                                        'tool_call': {
+                                            'name': function_name,
+                                            'status': 'requires_input',
+                                            'message': f"工具 {function_name} 需要输入参数",
+                                            'requires_input': True,
+                                            'tool_call_id': tool_call_id,
+                                            'function_args': function_args
+                                        },
+                                        'chat_id': chat_id
+                                    }
+                                    
+                                    # 这里需要等待用户输入参数
+                                    # 注意：在实际应用中，这里需要前端配合，发送包含参数的请求
+                                    # 暂时先跳过，实际实现需要根据前端交互来处理
+                                    tool_message_content = f"工具 {function_name} 缺少参数，需要用户输入"
+                                    messages.append({
+                                        'role': 'tool',
+                                        'tool_call_id': tool_call_id,
+                                        'content': tool_message_content
+                                    })
+                                else:
+                                    tool_message_content = f"工具 {function_name} 调用失败: {error_msg}"
+                                    yield {
+                                        'text': '',
+                                        'tool_call': {
+                                            'name': function_name,
+                                            'status': 'error',
+                                            'message': tool_message_content,
+                                            'requires_input': False
+                                        },
+                                        'chat_id': chat_id
+                                    }
+                                    messages.append({
+                                        'role': 'tool',
+                                        'tool_call_id': tool_call_id,
+                                        'content': tool_message_content
+                                    })
+                            else:
+                                tool_message_content = json.dumps(tool_result.get('result'), ensure_ascii=False)
+                                yield {
+                                    'text': '',
+                                    'tool_call': {
+                                        'name': function_name,
+                                        'status': 'success',
+                                        'result': tool_result.get('result'),
+                                        'requires_input': False
+                                    },
+                                    'chat_id': chat_id
+                                }
+                                # 保存工具消息到数据库
+                                ChatMessageService.create_tool_message(
+                                    chat_id=chat_id,
+                                    tool_content=tool_message_content,
+                                    model_id=model_id,
+                                    chatbot_id=chatbot_id,
+                                    config=config
+                                )
+                                messages.append({
+                                    'role': 'tool',
+                                    'tool_call_id': tool_call_id,
+                                    'content': tool_message_content
+                                })
                 else:
-                    avatar = f"/src/assets/llm/default.png"
-            except LLMModel.DoesNotExist:
-                pass
-        
-        ChatMessageService.create_assistant_message(
-            chat_id=chat_id,
-            assistant_content=full_response,
-            model_id=model_id,
-            chatbot_id=chatbot_id,
-            config=config,
-            reasoning_content=reasoning_content if reasoning_content else None,
-            reasoning_time=reasoning_time,
-            avatar=avatar
-        )
+                    # 没有工具调用，退出循环
+                    break
+        except GeneratorExit:
+            # 客户端停止请求，保存已生成的内容
+            is_stopped = True
+        except Exception as e:
+            # 其他异常，保存已生成的内容
+            print(f"Error in stream_chat: {e}")
+            pass
+        finally:
+            # 保存助手消息
+            if full_response or reasoning_content:
+                # 只有手动停止时才添加"用户停止回答"标记
+                if is_stopped:
+                    if full_response:
+                        full_response += "\n\n【用户停止回答】"
+                    else:
+                        full_response = "【用户停止回答】"
+                
+                reasoning_time = None
+                if reasoning_content and reasoning_end_time:
+                    reasoning_time = int((reasoning_end_time - start_time) * 1000)
+                
+                assistant_message_dict = {'role': 'assistant', 'content': full_response}
+                if reasoning_content:
+                    assistant_message_dict['reasoning_content'] = reasoning_content
 
-        chat_messages = ChatMessageService.get_messages_by_chat(chat_id)
-        system_message = messages[0] if messages else None
-        updated_messages = [{"role": msg.role, "content": msg.content , "reasoning_content": msg.reasoning_content , "message_id": msg.message_id} for msg in chat_messages.items]
-        if system_message:
-            updated_messages.insert(0, system_message)
-        updated_messages.append(assistant_message_dict)
-        ChatService.update_messages(chat_id, updated_messages)
+                avatar = None
+                if chatbot_id:
+                    try:
+                        chatbot = Chatbot.get(Chatbot.id == chatbot_id)
+                        avatar = chatbot.avatar
+                    except Chatbot.DoesNotExist:
+                        pass
+                elif model_id:
+                    try:
+                        model = LLMModel.get(LLMModel.id == model_id)
+                        if model.provider:
+                            avatar = f"/src/assets/llm/{model.provider.lower()}.png"
+                        else:
+                            avatar = f"/src/assets/llm/default.png"
+                    except LLMModel.DoesNotExist:
+                        pass
+                
+                ChatMessageService.create_assistant_message(
+                    chat_id=chat_id,
+                    assistant_content=full_response,
+                    model_id=model_id,
+                    chatbot_id=chatbot_id,
+                    config=config,
+                    reasoning_content=reasoning_content if reasoning_content else None,
+                    reasoning_time=reasoning_time,
+                    avatar=avatar
+                )
+
+                chat_messages = ChatMessageService.get_messages_by_chat(chat_id)
+                system_message = messages[0] if messages else None
+                updated_messages = [{"role": msg.role, "content": msg.content , "reasoning_content": msg.reasoning_content , "message_id": msg.message_id} for msg in chat_messages.items]
+                if system_message:
+                    updated_messages.insert(0, system_message)
+                updated_messages.append(assistant_message_dict)
+                ChatService.update_messages(chat_id, updated_messages)
     
     @staticmethod
     def chat(

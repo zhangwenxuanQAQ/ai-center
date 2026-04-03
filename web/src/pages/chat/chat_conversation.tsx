@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Input, Button, Switch, Modal, Slider, message, Popconfirm, Tooltip, Dropdown, Empty, Spin, Popover, InputNumber, Select } from 'antd';
-import { SendOutlined, ClearOutlined, SettingOutlined, RobotOutlined, BulbOutlined, LoadingOutlined, DownOutlined, RightOutlined, CopyOutlined, ReloadOutlined, EditOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { SendOutlined, ClearOutlined, SettingOutlined, RobotOutlined, BulbOutlined, LoadingOutlined, DownOutlined, RightOutlined, CopyOutlined, ReloadOutlined, EditOutlined, InfoCircleOutlined, StopOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import MDEditor from '@uiw/react-md-editor';
 import { llmModelService, LLMModel } from '../../services/llm_model';
@@ -235,6 +235,12 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleStop = () => {
+    chatService.stopCurrentRequest();
+    setLoading(false);
+    setThinkingMessageId(null);
   };
 
   const handleSend = async () => {
@@ -1154,10 +1160,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           </div>
           <Button
             type="primary"
-            icon={<SendOutlined />}
-            onClick={handleSend}
-            loading={loading}
-            disabled={!inputValue.trim() || !currentSelection}
+            icon={loading ? <StopOutlined /> : <SendOutlined />}
+            onClick={loading ? handleStop : handleSend}
             className="input-send-button"
           />
         </div>
