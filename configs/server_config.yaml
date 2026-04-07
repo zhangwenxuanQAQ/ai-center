@@ -17,3 +17,14 @@ es:
   port: 9200
   username: 'elastic'
   password: '123456'
+redis:
+  db: 1
+  username: ''
+  password: ''
+  host: '127.0.0.1'
+  port: 6379
+rustfs:
+  username: 'rustfsadmin'
+  password: 'rustfsadmin'
+  host: '127.0.0.1'
+  port: 9000

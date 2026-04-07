@@ -5,7 +5,7 @@ description: 文档切片后端代码实现
 
 ## 使用场景
 - 使用Deepdoc以及大模型进行文档切片
-- 需要参考RAGFLOW项目的rag代码实现本项目的文档切片功能， ragflow项目源码在本系统目录 F:\project\ragflow-0.24.0
+- 需要参考RAGFLOW项目的rag代码， ragflow项目源码在本系统目录 F:\project\ragflow-0.24.0
 
 ## 技术栈
 - Deepdoc
@@ -29,7 +29,7 @@ description: 文档切片后端代码实现
 3.server_config.yaml添加了es的配置项，在database目录的es_utils.py文件中实现es连接工具类
 4.knowledge_constants.py定义了文档解析类型以及文档解析状态常量，帮我修复代码bug改成字典类型
 
-## 规定
+##规定
 1.需要完整扫描ragflow项目工程，理解rag以及deepdoc目录下的代码
 2.不要影响本项目已有的其他功能代码
 3.结合本项目代码风格以及已存在代码实现ragflow下的切片方法

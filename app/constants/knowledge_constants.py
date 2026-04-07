@@ -1,32 +1,30 @@
 """
- 知识库常量
+知识库常量
 """
 
 # 文档解析类型
 DOCUMENT_PARSE_TYPE = {
-  Naive = 'naive',
-  Qa = 'qa',
-  Resume = 'resume',
-  Manual = 'manual',
-  Table = 'table',
-  Paper = 'paper',
-  Book = 'book',
-  Laws = 'laws',
-  Presentation = 'presentation',
-  Picture = 'picture',
-  One = 'one',
-  Audio = 'audio',
-  Email = 'email',
-  Tag = 'tag',
-  KnowledgeGraph = 'knowledge_graph',
+    "Naive": "naive",
+    "Qa": "qa",
+    "Resume": "resume",
+    "Manual": "manual",
+    "Table": "table",
+    "Paper": "paper",
+    "Book": "book",
+    "Laws": "laws",
+    "Presentation": "presentation",
+    "Picture": "picture",
+    "One": "one",
+    "Audio": "audio",
+    "Email": "email",
 }
 
 # 文档解析状态
 DOCUMENT_RUNNING_STATUS = {
-  "未开始" = 'pending', 
-  "运行中" = 'running', 
-  "已取消" = 'cacel', 
-  "已完成" = 'done', 
-  "失败" = 'fail', 
-  "定时调度" = 'schedule',
+    "pending": "未开始",
+    "running": "运行中",
+    "cancel": "已取消",
+    "done": "已完成",
+    "fail": "失败",
+    "schedule": "定时调度",
 }

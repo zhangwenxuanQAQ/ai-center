@@ -444,6 +444,13 @@ POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
 
 
 
-### 接下来实现知识库管理功能，知识库管理分页几个模块，分别是：知识库分类，知识库本身， 数据集，文档切片，文档上传等。
-我们完成文档切片后端逻辑代码：
-本部分
+1. 本项目使用redis作为切片任务的调度队列，在redis_utils.py文件中实现redis工具（可参考ragflow的redis_conn.py中的代码）。 项目的server_config.yaml已经配置了redis连接参数。
+2. 启动项目时需要同时启动任务调度器以及心跳检测任务。
+    （1）任务调度器会持续从redis队列中取出待执行任务
+    （2）心跳检测会定时打印出redis队列中的任务状态
+
+   参考ragflow的task_executor.py文件（主要是main方法中的逻辑，包括signal处理，任务收集，心跳检测报告等），实现本项目的任务调度器和心跳检测任务功能（本项目文件是app/core/knowledge/server/task_executor.py）
+
+
+
+接下来实现知识库
