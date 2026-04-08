@@ -12,7 +12,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { chatbotService, Chatbot, ChatbotCategory } from '../../services/chatbot';
 import { promptService, Prompt } from '../../services/prompt';
-import { knowledgeService, Knowledge } from '../../services/knowledge';
+import { knowledgebaseService, Knowledgebase } from '../../services/knowledgebase';
 import { mcpService, MCPServer } from '../../services/mcp';
 import { llmModelService, LLMModel } from '../../services/llm_model';
 import PageHeader from '../../components/page-header';
@@ -112,8 +112,8 @@ const ChatbotSetting: React.FC = () => {
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [selectedPromptId, setSelectedPromptId] = useState<number | undefined>(undefined);
   
-  const [knowledges, setKnowledges] = useState<Knowledge[]>([]);
-  const [selectedKnowledgeIds, setSelectedKnowledgeIds] = useState<number[]>([]);
+  const [knowledges, setKnowledges] = useState<Knowledgebase[]>([]);
+  const [selectedKnowledgeId, setSelectedKnowledgeId] = useState<string | undefined>(undefined);
   
   const [mcpServers, setMcpServers] = useState<MCPServer[]>([]);
   const [selectedMcpIds, setSelectedMcpIds] = useState<string[]>([]);
@@ -327,7 +327,7 @@ const ChatbotSetting: React.FC = () => {
         avatar: data.avatar,
         category_id: data.category_id,
         prompt_id: data.prompt_id,
-        knowledge_ids: data.knowledge_ids,
+        knowledge_id: data.knowledge_id,
         model_id: data.model_id,
         mcp_ids: data.mcp_ids,
         source_config: data.source_config
@@ -343,7 +343,7 @@ const ChatbotSetting: React.FC = () => {
       });
       setAvatarPreview(data.avatar || '');
       setSelectedPromptId(data.prompt_id);
-      setSelectedKnowledgeIds(data.knowledge_ids || []);
+      setSelectedKnowledgeId(data.knowledge_id || undefined);
       setSelectedModelId(data.model_id);
       setSelectedMcpIds(data.mcp_ids ? data.mcp_ids.map(id => String(id)) : []);
       setSelectedSourceType(data.source_type || 'local');
@@ -391,7 +391,7 @@ const ChatbotSetting: React.FC = () => {
 
   const fetchKnowledges = async () => {
     try {
-      const data = await knowledgeService.getKnowledges();
+      const data = await knowledgebaseService.getKnowledgebases();
       setKnowledges(data);
     } catch (error) {
       console.error('Failed to fetch knowledges:', error);
@@ -739,7 +739,7 @@ const ChatbotSetting: React.FC = () => {
     form.setFieldsValue(originalData);
     setAvatarPreview(originalData.avatar || '');
     setSelectedPromptId(originalData.prompt_id);
-    setSelectedKnowledgeIds(originalData.knowledge_ids || []);
+    setSelectedKnowledgeId(originalData.knowledge_id);
     setSelectedModelId(originalData.model_id);
     setSelectedMcpIds(originalData.mcp_ids ? originalData.mcp_ids.map(id => String(id)) : []);
     setSelectedSourceType(originalData.source_type || 'local');
@@ -766,7 +766,7 @@ const ChatbotSetting: React.FC = () => {
         ...values,
         avatar: avatarPreview,
         prompt_id: selectedPromptId,
-        knowledge_ids: selectedKnowledgeIds,
+        knowledge_id: selectedKnowledgeId,
         model_id: selectedModelId,
         mcp_ids: selectedMcpIds.map(id => parseInt(id)),
         source_config: selectedSourceType && sourceConfigFields.length > 0 ? JSON.stringify(sourceConfig) : undefined
@@ -775,7 +775,7 @@ const ChatbotSetting: React.FC = () => {
       setOriginalData({
         ...values,
         prompt_id: selectedPromptId,
-        knowledge_ids: selectedKnowledgeIds,
+        knowledge_id: selectedKnowledgeId,
         model_id: selectedModelId,
         mcp_ids: selectedMcpIds.map(id => parseInt(id)),
         source_config: selectedSourceType && sourceConfigFields.length > 0 ? JSON.stringify(sourceConfig) : undefined
@@ -1664,10 +1664,7 @@ const ChatbotSetting: React.FC = () => {
                   <div
                     key={knowledge.id}
                     onClick={() => {
-                      const newSelectedIds = selectedKnowledgeIds.includes(knowledge.id)
-                        ? selectedKnowledgeIds.filter(id => id !== knowledge.id)
-                        : [...selectedKnowledgeIds, knowledge.id];
-                      setSelectedKnowledgeIds(newSelectedIds);
+                      setSelectedKnowledgeId(selectedKnowledgeId === knowledge.id ? undefined : knowledge.id);
                       setHasChanges(true);
                     }}
                     style={{
@@ -1675,9 +1672,9 @@ const ChatbotSetting: React.FC = () => {
                       alignItems: 'center',
                       gap: '8px',
                       padding: '8px 12px',
-                      border: `1px solid ${selectedKnowledgeIds.includes(knowledge.id) ? '#52c41a' : (theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#d9d9d9')}`,
+                      border: `1px solid ${selectedKnowledgeId === knowledge.id ? '#52c41a' : (theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#d9d9d9')}`,
                       borderRadius: '4px',
-                      background: selectedKnowledgeIds.includes(knowledge.id) 
+                      background: selectedKnowledgeId === knowledge.id 
                         ? (theme === 'dark' ? 'rgba(82, 196, 26, 0.1)' : 'rgba(82, 196, 26, 0.05)')
                         : 'transparent',
                       cursor: 'pointer'
@@ -1691,7 +1688,7 @@ const ChatbotSetting: React.FC = () => {
                     <div style={{ flex: 1, minWidth: 0, fontSize: '13px', color: theme === 'dark' ? '#fff' : '#000' }}>
                       {knowledge.name}
                     </div>
-                    {selectedKnowledgeIds.includes(knowledge.id) && (
+                    {selectedKnowledgeId === knowledge.id && (
                       <CheckCircleOutlined style={{ color: '#52c41a', fontSize: '14px' }} />
                     )}
                   </div>

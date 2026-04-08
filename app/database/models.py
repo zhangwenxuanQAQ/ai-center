@@ -3,7 +3,7 @@
 基于数据库实际表结构生成
 """
 
-from peewee import Model, CharField, TextField, DateTimeField, BooleanField, IntegerField, ForeignKeyField
+from peewee import Model, CharField, TextField, DateTimeField, BooleanField, IntegerField, ForeignKeyField, FloatField, BigIntegerField
 from app.database.database import db
 import uuid
 from datetime import datetime
@@ -93,19 +93,72 @@ class ChatbotCategory(SoftDeleteModel):
         )
 
 
-class Knowledge(SoftDeleteModel):
+class KnowledgebaseCategory(SoftDeleteModel):
+    """
+    知识库分类模型
+
+    存储知识库分类信息，支持树形结构
+    """
+    name = CharField(max_length=255, index=True, verbose_name="分类名称")
+    description = TextField(null=True, verbose_name="分类描述")
+    parent_id = CharField(max_length=40, null=True, index=True, verbose_name="父分类ID")
+    sort_order = IntegerField(default=0, verbose_name="排序序号")
+    is_default = BooleanField(default=False, verbose_name="是否默认分类")
+
+    class Meta:
+        table_name = 'knowledgebase_category'
+        indexes = (
+            (('parent_id', 'sort_order'), False),
+        )
+
+
+class Knowledgebase(SoftDeleteModel):
     """
     知识库模型
-    
+
     存储知识库信息
     """
     name = CharField(max_length=255, index=True, verbose_name="知识库名称")
-    description = TextField(verbose_name="知识库描述")
-    file_path = CharField(max_length=512, verbose_name="文件路径")
-    status = BooleanField(verbose_name="状态")
-    
+    code = CharField(max_length=100, unique=True, index=True, verbose_name="知识库编码")
+    description = TextField(null=False, verbose_name="知识库描述")
+    avatar = TextField(null=True, verbose_name="知识库头像")
+    category_id = CharField(max_length=40, null=True, index=True, verbose_name="分类ID")
+    embedding_model_id = CharField(max_length=40, null=True, index=True, verbose_name="Embedding模型ID")
+    doc_num = IntegerField(default=0, verbose_name="文档数量")
+    token_num = IntegerField(default=0, verbose_name="文档总Token数")
+    chunk_num = IntegerField(default=0, verbose_name="文档总Chunk数")
+    retrieval_config = TextField(null=True, verbose_name="检索配置JSON")
+
     class Meta:
-        table_name = 'knowledge'
+        table_name = 'knowledgebase'
+
+
+class KnowledgebaseDocument(SoftDeleteModel):
+    """
+    知识库文档模型
+
+    存储知识库下的文档信息
+    """
+    kb_id = CharField(max_length=40, index=True, verbose_name="知识库ID")
+    chunk_method = CharField(max_length=50, verbose_name="文档Chunk方法")
+    chunk_config = TextField(null=True, verbose_name="文档Chunk配置JSON")
+    token_num = IntegerField(default=0, verbose_name="文档Token数")
+    chunk_num = IntegerField(default=0, verbose_name="文档Chunk数")
+    file_type = CharField(max_length=50, null=True, verbose_name="文档文件类型")
+    file_name = CharField(max_length=255, null=True, verbose_name="文档文件名")
+    location = CharField(max_length=512, null=True, verbose_name="文档存储路径")
+    file_size = BigIntegerField(default=0, verbose_name="文档文件大小(字节)")
+    running_status = CharField(max_length=50, default="pending", verbose_name="文档解析状态")
+    task_progress = FloatField(default=0, verbose_name="文档解析进度(0-1)")
+    task_begin_at = DateTimeField(null=True, verbose_name="文档解析开始时间")
+    task_end_at = DateTimeField(null=True, verbose_name="文档解析结束时间")
+    task_duration = IntegerField(default=0, verbose_name="文档解析耗时(毫秒)")
+
+    class Meta:
+        table_name = 'knowledgebase_document'
+        indexes = (
+            (('kb_id', 'created_at'), False),
+        )
 
 
 class LLMCategory(SoftDeleteModel):
@@ -401,7 +454,9 @@ def create_tables():
     tables = [
         User,
         ChatbotCategory,
-        Knowledge,
+        KnowledgebaseCategory,
+        Knowledgebase,
+        KnowledgebaseDocument,
         LLMCategory,
         LLMModel,
         PromptCategory,

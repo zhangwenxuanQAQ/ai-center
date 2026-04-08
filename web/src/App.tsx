@@ -11,7 +11,7 @@ import Chatbot from './pages/chatbot/chatbot.tsx';
 import ChatbotSetting from './pages/chatbot/chatbot_setting.tsx';
 import MCP from './pages/mcp/mcp.tsx';
 import MCPSetting from './pages/mcp/mcp_setting.tsx';
-import Knowledge from './pages/knowledge/knowledge.tsx';
+import Knowledgebase from './pages/knowledgebase/knowledgebase.tsx';
 import LLMModel from './pages/llm_model/llm_model.tsx';
 import LLMModelSetting from './pages/llm_model/llm_model_setting.tsx';
 import Prompt from './pages/prompt/prompt.tsx';
@@ -100,7 +100,7 @@ function App() {
                   <Link to="/chatbots">机器人</Link>
                 </Menu.Item>
                 <Menu.Item key="4" icon={<BookOutlined />}>
-                  <Link to="/knowledges">知识库</Link>
+                  <Link to="/knowledgebases">知识库</Link>
                 </Menu.Item>
                 <Menu.Item key="5" icon={<DatabaseOutlined />}>
                   <Link to="/mcps">MCP</Link>
@@ -166,7 +166,7 @@ function App() {
                   <Route path="/chatbot/setting/:id" element={<ChatbotSetting />} />
                   <Route path="/mcps" element={<MCP />} />
                   <Route path="/mcp/setting/:id" element={<MCPSetting />} />
-                  <Route path="/knowledges" element={<Knowledge />} />
+                  <Route path="/knowledgebases" element={<Knowledgebase />} />
                   <Route path="/llm_models" element={<LLMModel />} />
                   <Route path="/llm_model/setting/:id" element={<LLMModelSetting />} />
                   <Route path="/prompts" element={<Prompt />} />

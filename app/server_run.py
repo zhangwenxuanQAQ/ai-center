@@ -427,7 +427,183 @@ try:
             print("  chat_message 表已存在，跳过")
     except Exception as e:
         print(f"  创建 chat_message 表失败: {e}")
-    
+
+    # 创建 knowledgebase_category 表
+    print("\n创建 knowledgebase_category 表...")
+    try:
+        if 'knowledgebase_category' not in table_names:
+            db.execute_sql("""
+                CREATE TABLE knowledgebase_category (
+                    id CHAR(36) NOT NULL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    parent_id CHAR(36),
+                    sort_order INT DEFAULT 0,
+                    is_default TINYINT DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    create_user_id VARCHAR(40) DEFAULT NULL,
+                    update_user_id VARCHAR(40) DEFAULT NULL,
+                    deleted TINYINT DEFAULT 0,
+                    deleted_at DATETIME DEFAULT NULL,
+                    deleted_user_id VARCHAR(36) DEFAULT NULL,
+                    INDEX idx_name (name),
+                    INDEX idx_parent_id (parent_id),
+                    INDEX idx_sort_order (sort_order),
+                    INDEX idx_deleted (deleted)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+            print("  成功创建 knowledgebase_category 表")
+        else:
+            print("  knowledgebase_category 表已存在，跳过")
+    except Exception as e:
+        print(f"  创建 knowledgebase_category 表失败: {e}")
+
+    # 修改/创建 knowledgebase 表（原knowledge表重命名并修改结构）
+    print("\n处理 knowledgebase 表...")
+    try:
+        if 'knowledge' in table_names and 'knowledgebase' not in table_names:
+            db.execute_sql("RENAME TABLE knowledge TO knowledgebase;")
+            print("  成功将 knowledge 表重命名为 knowledgebase")
+            table_names.append('knowledgebase')
+
+        if 'knowledgebase' in table_names:
+            cursor = db.execute_sql("DESCRIBE knowledgebase;")
+            columns = [column[0] for column in cursor.fetchall()]
+
+            if 'code' not in columns:
+                db.execute_sql("ALTER TABLE knowledgebase ADD COLUMN code VARCHAR(100) UNIQUE AFTER name")
+                print("  成功添加 code 字段")
+
+            if 'avatar' not in columns:
+                db.execute_sql("ALTER TABLE knowledgebase ADD COLUMN avatar TEXT DEFAULT NULL AFTER description")
+                print("  成功添加 avatar 字段")
+
+            if 'category_id' not in columns:
+                db.execute_sql("ALTER TABLE knowledgebase ADD COLUMN category_id VARCHAR(40) DEFAULT NULL AFTER avatar")
+                print("  成功添加 category_id 字段")
+
+            if 'embedding_model_id' not in columns:
+                db.execute_sql("ALTER TABLE knowledgebase ADD COLUMN embedding_model_id VARCHAR(40) DEFAULT NULL AFTER category_id")
+                print("  成功添加 embedding_model_id 字段")
+
+            if 'doc_num' not in columns:
+                db.execute_sql("ALTER TABLE knowledgebase ADD COLUMN doc_num INT DEFAULT 0 AFTER embedding_model_id")
+                print("  成功添加 doc_num 字段")
+
+            if 'token_num' not in columns:
+                db.execute_sql("ALTER TABLE knowledgebase ADD COLUMN token_num INT DEFAULT 0 AFTER doc_num")
+                print("  成功添加 token_num 字段")
+
+            if 'chunk_num' not in columns:
+                db.execute_sql("ALTER TABLE knowledgebase ADD COLUMN chunk_num INT DEFAULT 0 AFTER token_num")
+                print("  成功添加 chunk_num 字段")
+
+            if 'retrieval_config' not in columns:
+                db.execute_sql("ALTER TABLE knowledgebase ADD COLUMN retrieval_config TEXT DEFAULT NULL AFTER chunk_num")
+                print("  成功添加 retrieval_config 字段")
+
+            if 'file_path' in columns:
+                db.execute_sql("ALTER TABLE knowledgebase DROP COLUMN file_path")
+                print("  成功删除 file_path 字段")
+
+            if 'status' in columns:
+                db.execute_sql("ALTER TABLE knowledgebase DROP COLUMN status")
+                print("  成功删除 status 字段")
+
+            if 'description' in columns:
+                db.execute_sql("ALTER TABLE knowledgebase MODIFY COLUMN description TEXT DEFAULT NULL")
+                print("  成功修改 description 字段为可空")
+        else:
+            print("  knowledgebase 表不存在，将在create_tables中创建")
+    except Exception as e:
+        print(f"  处理 knowledgebase 表失败: {e}")
+
+    # 创建/更新 knowledgebase_document 表
+    print("\n处理 knowledgebase_document 表...")
+    try:
+        if 'knowledgebase_document' not in table_names:
+            db.execute_sql("""
+                CREATE TABLE knowledgebase_document (
+                    id CHAR(36) NOT NULL PRIMARY KEY,
+                    kb_id VARCHAR(40) NOT NULL,
+                    chunk_method VARCHAR(50) NOT NULL,
+                    chunk_config TEXT DEFAULT NULL,
+                    token_num INT DEFAULT 0,
+                    chunk_num INT DEFAULT 0,
+                    file_type VARCHAR(50) DEFAULT NULL,
+                    file_name VARCHAR(255) DEFAULT NULL,
+                    location VARCHAR(512) DEFAULT NULL,
+                    file_size BIGINT DEFAULT 0,
+                    running_status VARCHAR(50) DEFAULT 'pending',
+                    task_progress FLOAT DEFAULT 0,
+                    task_begin_at DATETIME DEFAULT NULL,
+                    task_end_at DATETIME DEFAULT NULL,
+                    task_duration INT DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    create_user_id VARCHAR(40) DEFAULT NULL,
+                    update_user_id VARCHAR(40) DEFAULT NULL,
+                    deleted TINYINT DEFAULT 0,
+                    deleted_at DATETIME DEFAULT NULL,
+                    deleted_user_id VARCHAR(36) DEFAULT NULL,
+                    INDEX idx_kb_id (kb_id),
+                    INDEX idx_chunk_method (chunk_method),
+                    INDEX idx_running_status (running_status),
+                    INDEX idx_created_at (created_at),
+                    INDEX idx_deleted (deleted)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+            print("  成功创建 knowledgebase_document 表")
+        else:
+            print("  knowledgebase_document 表已存在，检查字段...")
+            cursor = db.execute_sql("DESCRIBE knowledgebase_document;")
+            columns = [column[0] for column in cursor.fetchall()]
+
+            if 'chunk_num' not in columns:
+                db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN chunk_num INT DEFAULT 0 AFTER token_num")
+                print("  成功添加 chunk_num 字段")
+
+            if 'file_type' not in columns:
+                db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN file_type VARCHAR(50) DEFAULT NULL AFTER chunk_num")
+                print("  成功添加 file_type 字段")
+
+            if 'file_name' not in columns:
+                db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN file_name VARCHAR(255) DEFAULT NULL AFTER file_type")
+                print("  成功添加 file_name 字段")
+
+            if 'location' not in columns:
+                db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN location VARCHAR(512) DEFAULT NULL AFTER file_name")
+                print("  成功添加 location 字段")
+
+            if 'file_size' not in columns:
+                db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN file_size BIGINT DEFAULT 0 AFTER location")
+                print("  成功添加 file_size 字段")
+
+            if 'running_status' not in columns:
+                db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN running_status VARCHAR(50) DEFAULT 'pending' AFTER file_size")
+                print("  成功添加 running_status 字段")
+
+            if 'task_progress' not in columns:
+                db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN task_progress FLOAT DEFAULT 0 AFTER running_status")
+                print("  成功添加 task_progress 字段")
+
+            if 'task_begin_at' not in columns:
+                db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN task_begin_at DATETIME DEFAULT NULL AFTER task_progress")
+                print("  成功添加 task_begin_at 字段")
+
+            if 'task_end_at' not in columns:
+                db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN task_end_at DATETIME DEFAULT NULL AFTER task_begin_at")
+                print("  成功添加 task_end_at 字段")
+
+            if 'task_duration' not in columns:
+                db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN task_duration INT DEFAULT 0 AFTER task_end_at")
+                print("  成功添加 task_duration 字段")
+
+            print("  knowledgebase_document 表字段检查完成")
+    except Exception as e:
+        print(f"  处理 knowledgebase_document 表失败: {e}")
+
     print("\n数据库迁移完成")
 except Exception as e:
     print(f"数据库迁移失败: {e}")

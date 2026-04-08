@@ -27,7 +27,7 @@ export interface Chatbot {
   avatar?: string;
   greeting?: string;
   prompt_id?: number;
-  knowledge_id?: number;
+  knowledge_id?: string;
   source_type?: string;
   source_config?: string;
   created_at: string;

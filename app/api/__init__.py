@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from .chatbot import router as chatbot_router
 from .chatbot_category import router as chatbot_category_router
-from .knowledge import router as knowledge_router
+from .knowledgebase import router as knowledgebase_router
 from .llm_model import router as llm_model_router
 from .prompt import router as prompt_router
 from .user import router as user_router
@@ -23,7 +23,7 @@ router.include_router(chatbot_category_router, prefix="/chatbot_category", tags=
 if mcp_enabled:
     router.include_router(mcp_router, prefix="/mcp", tags=["mcp"])
 
-router.include_router(knowledge_router, prefix="/knowledge", tags=["knowledge"])
+router.include_router(knowledgebase_router, prefix="/knowledgebase", tags=["knowledgebase"])
 router.include_router(llm_model_router, prefix="/llm_model", tags=["llm_model"])
 router.include_router(prompt_router, prefix="/prompt", tags=["prompt"])
 router.include_router(user_router, prefix="/user", tags=["user"])

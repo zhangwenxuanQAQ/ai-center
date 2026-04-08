@@ -24,7 +24,7 @@ description: 文档切片后端代码实现
 (6)deepdoc ： Deepdoc解析器代码
 
 ### 代码实现
-1.在本项目的core/knowledge/rag目录下实现上面描述的rag代码（可创建子目录）
+1.在本项目的core/knowledgebase/rag目录下实现上面描述的rag代码（可创建子目录）
 2.生成本功能的README.md
 3.server_config.yaml添加了es的配置项，在database目录的es_utils.py文件中实现es连接工具类
 4.knowledge_constants.py定义了文档解析类型以及文档解析状态常量，帮我修复代码bug改成字典类型

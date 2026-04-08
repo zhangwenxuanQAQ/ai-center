@@ -3,7 +3,7 @@
 ##功能摸快：
 1. 聊天机器人管理 （chatbot）
 2. MCP服务管理 (mcp)
-3. 知识库管理 (knowledge)
+3. 知识库管理 (knowledgebase)
 4. 模型配置 (llm_model)
 5. 提示词管理 (prompt)
 6. 用户权限管理 (user)
@@ -449,8 +449,42 @@ POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
     （1）任务调度器会持续从redis队列中取出待执行任务
     （2）心跳检测会定时打印出redis队列中的任务状态
 
-   参考ragflow的task_executor.py文件（主要是main方法中的逻辑，包括signal处理，任务收集，心跳检测报告等），实现本项目的任务调度器和心跳检测任务功能（本项目文件是app/core/knowledge/server/task_executor.py）
+   参考ragflow的task_executor.py文件（主要是main方法中的逻辑，包括signal处理，任务收集，心跳检测报告等），实现本项目的任务调度器和心跳检测任务功能（本项目文件是app/core/knowledgebase/server/task_executor.py）
 
 
 
-接下来实现知识库
+接下来实现知识库分类以及知识库管理功能：
+1.新增知识库分类表knowledgebase_category , 字段参考mcp分类表。 前后端代码类似
+2. knowledge表名改成knowledgebase ,字段修改如下：
+   -增加category_id
+   -增加code（知识库编码）
+   -增加avatar
+   -增加embedding_model_id (用于关联embedding模型)
+   -增加doc_num (知识库下文档数量)
+   -增加token_num (知识库下文档总token数)
+   -增加chunk_num (知识库下文档总chunk数)
+   -增加retrieval_config (检索配置json对象)
+   -删除file_path
+   -修改description为非必填
+3. 增加knowledgebase_document表，存储知识库下的文档信息,字段如下：
+    -kb_id (知识库id)
+    -chunk_method (文档chunk方法, 来自knowledge_constants.py)
+    -chunk_config (文档chunk配置, json对象)
+    -token_num (文档token数)
+    -chunk_num (文档chunk数)
+    -file_type (文档文件类型)
+    -file_name (文档文件名)
+    -location (存储到文件系统中的路径，这里就是rustfs文档路径)
+    -file_size (文档文件大小)
+    -running_status (文档解析状态, 来自knowledge_constants.py)  
+    -task_progress (文档解析进度, 0-1之间的浮点数)
+    -task_begin_at (文档解析开始时间)
+    -task_end_at (文档解析结束时间)
+    -task_duration (文档解析耗时)
+
+
+3.实现知识库管理主页（参考机器人管理主页）
+  - 左侧为分类树
+  - 右侧为知识库（卡片形式展示）。 需要支持根据名称和编码模糊查询，下方为分页栏
+  - 左右容器的布局以及样式和机器人管理主页一致
+    

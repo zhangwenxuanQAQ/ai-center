@@ -32,7 +32,7 @@ ai-center/
 │   │   ├── chatbot.py
 │   │   ├── chatbot_category.py
 │   │   ├── chat.py
-│   │   ├── knowledge.py
+│   │   ├── knowledgebase.py
 │   │   ├── llm_model.py
 │   │   ├── mcp.py
 │   │   ├── prompt.py
@@ -48,7 +48,7 @@ ai-center/
 │   │   ├── base_dto.py    # 基础DTO
 │   │   ├── chatbot/
 │   │   ├── chat/
-│   │   ├── knowledge/
+│   │   ├── knowledgebase/
 │   │   ├── llm_model/
 │   │   ├── mcp/
 │   │   ├── prompt/

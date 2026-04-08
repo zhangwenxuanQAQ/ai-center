@@ -3,7 +3,7 @@ import { BookOutlined } from '@ant-design/icons';
 import PageHeader from '../../components/page-header';
 import '../../styles/common.css';
 
-const Knowledge: React.FC = () => {
+const Knowledgebase: React.FC = () => {
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
   useEffect(() => {
@@ -34,4 +34,4 @@ const Knowledge: React.FC = () => {
   );
 };
 
-export default Knowledge;
+export default Knowledgebase;
