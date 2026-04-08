@@ -306,24 +306,36 @@ async def chat_completions(
     
     try:
         if chat_request.stream:
-            def generate():
-                for chunk in ChatCoreService.chat_stream(
-                    user_id=user_id,
-                    query=chat_request.query,
-                    model_id=chat_request.model_id,
-                    chatbot_id=chat_request.chatbot_id,
-                    chat_id=chat_request.chat_id,
-                    config=chat_request.config,
-                    message_id=chat_request.message_id,
-                    system_prompt=chat_request.system_prompt
-                ):
-                    if 'error' in chunk:
-                        yield f"data: {json.dumps({'error': chunk['error'], 'chat_id': chunk.get('chat_id')}, ensure_ascii=False)}\n\n"
-                        return
+            async def generate():
+                try:
+                    for chunk in ChatCoreService.chat_stream(
+                        user_id=user_id,
+                        query=chat_request.query,
+                        model_id=chat_request.model_id,
+                        chatbot_id=chat_request.chatbot_id,
+                        chat_id=chat_request.chat_id,
+                        config=chat_request.config,
+                        message_id=chat_request.message_id,
+                        system_prompt=chat_request.system_prompt
+                    ):
+                        # 检查客户端是否断开连接
+                        if await request.is_disconnected():
+                            # 客户端断开连接，触发GeneratorExit异常
+                            raise GeneratorExit("Client disconnected")
+                        
+                        if 'error' in chunk:
+                            yield f"data: {json.dumps({'error': chunk['error'], 'chat_id': chunk.get('chat_id')}, ensure_ascii=False)}\n\n"
+                            return
 
-                    yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+                        yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
 
-                yield "data: [DONE]\n\n"
+                    yield "data: [DONE]\n\n"
+                except GeneratorExit:
+                    # 客户端断开连接，传播GeneratorExit异常
+                    raise
+                except Exception as e:
+                    print(f"Error in generate: {e}")
+                    raise
 
             return StreamingResponse(
                 generate(),
