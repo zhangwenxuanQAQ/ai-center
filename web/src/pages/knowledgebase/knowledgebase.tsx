@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Layout, Tree, Card, Row, Col, Avatar, Empty, Spin, Button, Modal, Form, Input, TreeSelect, Upload, message, Popconfirm, Pagination } from 'antd';
+import { Layout, Tree, Card, Row, Col, Avatar, Empty, Spin, Button, Modal, Form, Input, TreeSelect, Upload, message, Popconfirm, Pagination, Switch, Select, Tag } from 'antd';
 const { TextArea } = Input;
-import { BookOutlined, PlusOutlined, UploadOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UpOutlined, DownOutlined, FileTextOutlined } from '@ant-design/icons';
+const { Option } = Select;
+import { BookOutlined, PlusOutlined, UploadOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UpOutlined, DownOutlined, FileTextOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import type { TreeDataNode, TreeProps, UploadProps } from 'antd';
 import { knowledgebaseService, Knowledgebase, KnowledgebaseCategory } from '../../services/knowledgebase';
 import PageHeader from '../../components/page-header';
@@ -29,6 +30,7 @@ const KnowledgebaseManagement: React.FC = () => {
   const [editingKbId, setEditingKbId] = useState<string | null>(null);
   const [searchName, setSearchName] = useState<string>('');
   const [searchCode, setSearchCode] = useState<string>('');
+  const [filterStatus, setFilterStatus] = useState<string>('');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(12);
   const [totalKbs, setTotalKbs] = useState<number>(0);
@@ -63,13 +65,13 @@ const KnowledgebaseManagement: React.FC = () => {
 
   useEffect(() => {
     fetchKnowledgebases(selectedCategory, 1, pageSize);
-  }, [searchName, searchCode, selectedCategory]);
+  }, [searchName, searchCode, selectedCategory, filterStatus]);
 
   const getAllCategoryKeys = (categories: KnowledgebaseCategory[]): string[] => {
     let keys: string[] = [];
     categories.forEach(category => {
       keys.push(`category-${category.id}`);
-      if (category.children && category.children.length > 0) {
+      if (category.children && Array.isArray(category.children) && category.children.length > 0) {
         keys = keys.concat(getAllCategoryKeys(category.children));
       }
     });
@@ -92,10 +94,14 @@ const KnowledgebaseManagement: React.FC = () => {
     try {
       const response = await knowledgebaseService.getKnowledgebases(
         page !== undefined ? page : currentPage,
-        size !== undefined ? size : pageSize
+        size !== undefined ? size : pageSize,
+        categoryId || selectedCategory,
+        searchName,
+        searchCode,
+        filterStatus || undefined
       );
-      setKnowledgebases(response);
-      setTotalKbs(response.length);
+      setKnowledgebases(response.data || []);
+      setTotalKbs(response.total || 0);
     } catch (error) {
       console.error('Failed to fetch knowledgebases:', error);
       setKnowledgebases([]);
@@ -275,7 +281,7 @@ const KnowledgebaseManagement: React.FC = () => {
           </div>
         ),
         key: `category-${category.id}`,
-        children: category.children && category.children.length > 0 
+        children: category.children && Array.isArray(category.children) && category.children.length > 0 
           ? category.children.map(child => buildCategoryNode(child))
           : undefined,
       };
@@ -292,7 +298,7 @@ const KnowledgebaseManagement: React.FC = () => {
           </div>
         ),
         key: `category-${category.id}`,
-        children: category.children && category.children.length > 0 
+        children: category.children && Array.isArray(category.children) && category.children.length > 0 
           ? category.children.map(child => buildCategoryNode(child))
           : undefined,
       });
@@ -341,6 +347,7 @@ const KnowledgebaseManagement: React.FC = () => {
       day: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
+      second: '2-digit',
     });
   };
 
@@ -370,6 +377,7 @@ const KnowledgebaseManagement: React.FC = () => {
       description: kb.description,
       avatar: kb.avatar,
       category_id: kb.category_id,
+      status: kb.status !== false
     });
     setEditAvatarPreview(kb.avatar || '');
     setIsEditModalVisible(true);
@@ -592,6 +600,7 @@ const KnowledgebaseManagement: React.FC = () => {
               value={searchName}
               onChange={(e) => setSearchName(e.target.value)}
               prefix={<SearchOutlined />}
+              allowClear
               style={{
                 width: '200px',
                 height: '36px',
@@ -609,6 +618,7 @@ const KnowledgebaseManagement: React.FC = () => {
               value={searchCode}
               onChange={(e) => setSearchCode(e.target.value)}
               prefix={<SearchOutlined />}
+              allowClear
               style={{
                 width: '200px',
                 height: '36px',
@@ -618,10 +628,28 @@ const KnowledgebaseManagement: React.FC = () => {
                 boxShadow: 'none',
                 outline: 'none',
                 color: theme === 'dark' ? '#ffffff' : '#000000'
-              }}
-              className="no-border-input"
-            />
-          </div>
+              }
+            }
+            className="no-border-input"
+          />
+          <Select
+            placeholder="按状态筛选"
+            value={filterStatus}
+            onChange={setFilterStatus}
+            style={{
+              width: '120px',
+              height: '36px',
+              borderRadius: '18px',
+              background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
+              border: 'none',
+              color: theme === 'dark' ? '#ffffff' : '#000000'
+            }}
+          >
+            <Option value="">全部状态</Option>
+            <Option value="true">启用</Option>
+            <Option value="false">禁用</Option>
+          </Select>
+        </div>
 
           <div style={{ 
             flex: 1, 
@@ -708,9 +736,18 @@ const KnowledgebaseManagement: React.FC = () => {
                             </div>
                             <div className="card-title">{kb.name}</div>
                             <div className="card-meta">
-                              <div className="card-info">
-                                <FileTextOutlined style={{ marginRight: 8 }} />
-                                <span>文档: {kb.doc_num || 0}</span>
+                              <div style={{ display: 'flex', alignItems: 'center' }}>
+                                <div className="card-info">
+                                  <FileTextOutlined style={{ marginRight: 8 }} />
+                                  <span>数据集: {kb.doc_num || 0}</span>
+                                </div>
+                                <div className="card-status" style={{ marginLeft: '16px' }}>
+                                  {kb.status !== false ? (
+                                    <Tag icon={<CheckCircleOutlined />} color="success">启用</Tag>
+                                  ) : (
+                                    <Tag icon={<CloseCircleOutlined />} color="error">禁用</Tag>
+                                  )}
+                                </div>
                               </div>
                               <div className="card-date">{formatDate(kb.created_at)}</div>
                             </div>
@@ -793,7 +830,7 @@ const KnowledgebaseManagement: React.FC = () => {
             label="知识库描述"
             rules={[{ required: true, message: '请输入知识库描述' }]}
           >
-            <TextArea rows={3} placeholder="请输入知识库描述" />
+            <TextArea rows={3} placeholder="请输入描述，介绍知识库包含的内容以及使用场景，这将知道模型何时调用知识库" />
           </Form.Item>
           <Form.Item
             name="category_id"
@@ -863,8 +900,9 @@ const KnowledgebaseManagement: React.FC = () => {
           <Form.Item
             name="description"
             label="知识库描述"
+            rules={[{ required: true, message: '请输入知识库描述' }]}
           >
-            <TextArea rows={3} placeholder="请输入知识库描述" />
+            <TextArea rows={3} placeholder="请输入描述，介绍知识库包含的内容以及使用场景，这将知道模型何时调用知识库" />
           </Form.Item>
           <Form.Item
             name="category_id"
@@ -899,6 +937,13 @@ const KnowledgebaseManagement: React.FC = () => {
                 <Button icon={<UploadOutlined />}>点击上传</Button>
               </Upload>
             </div>
+          </Form.Item>
+          <Form.Item
+            name="status"
+            label="状态"
+            valuePropName="checked"
+          >
+            <Switch checkedChildren="启用" unCheckedChildren="禁用" />
           </Form.Item>
         </Form>
       </Modal>

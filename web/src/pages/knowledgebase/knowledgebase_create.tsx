@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Form, Input, Select, TreeSelect, Button, message, Row, Col, Upload, Spin, Tag, Avatar, Modal, InputNumber, Switch, Slider, Tooltip } from 'antd';
+import { Form, Input, Select, TreeSelect, Button, message, Row, Col, Upload, Spin, Tag, Avatar, Modal, InputNumber, Switch, Slider, Tooltip, Drawer, Descriptions } from 'antd';
 const { TextArea } = Input;
 import { ArrowLeftOutlined, SaveOutlined, UploadOutlined, DatabaseOutlined, ApiOutlined, QuestionCircleOutlined, EyeOutlined, PlusOutlined, DeleteOutlined, SettingOutlined, CloseOutlined } from '@ant-design/icons';
 import type { UploadProps } from 'antd';
@@ -11,6 +11,15 @@ import '../../styles/common.css';
 import './knowledgebase_create.less';
 
 const { Option } = Select;
+
+const MODEL_TYPE_MAP: Record<string, string> = {
+  'text': '文本模型',
+  'embedding': '向量模型',
+  'rerank': '重排序模型',
+  'chat': '聊天模型',
+  'code': '代码模型',
+  'image': '图像模型'
+};
 
 const MODEL_TYPES = [
   { type: 'embedding', name: '向量模型', required: true , description: '用于将文本转换为向量存储'},
@@ -46,6 +55,8 @@ const KnowledgebaseCreate: React.FC = () => {
   const [isModelSelectModalVisible, setIsModelSelectModalVisible] = useState(false);
   const [selectingModelType, setSelectingModelType] = useState<string>('');
   const [availableModels, setAvailableModels] = useState<LLMModel[]>([]);
+  const [viewModelDrawerVisible, setViewModelDrawerVisible] = useState(false);
+  const [currentModel, setCurrentModel] = useState<any>(null);
   
   const [retrievalConfig, setRetrievalConfig] = useState<any>({
     vector_similarity: 0.2,
@@ -156,6 +167,11 @@ const KnowledgebaseCreate: React.FC = () => {
     }
   };
 
+  const handleViewModel = (model: LLMModel) => {
+    setCurrentModel(model);
+    setViewModelDrawerVisible(true);
+  };
+
   const handleSliderChange = (key: string, value: any) => {
     setRetrievalConfig((prev: any) => ({
       ...prev,
@@ -213,8 +229,6 @@ const KnowledgebaseCreate: React.FC = () => {
       if (error.errorFields) {
         const missingFields = error.errorFields.map((field: any) => field.name[0]);
         message.error(`请填写必填项：${missingFields.join(', ')}`);
-      } else {
-        message.error('知识库创建失败');
       }
     } finally {
       setSaving(false);
@@ -464,6 +478,7 @@ const KnowledgebaseCreate: React.FC = () => {
                             icon={<EyeOutlined />}
                             size="small"
                             title="查看模型"
+                            onClick={() => handleViewModel(selectedModel)}
                           />
                           <Button
                             type="text"
@@ -710,6 +725,97 @@ const KnowledgebaseCreate: React.FC = () => {
           </div>
         )}
       </Modal>
+
+      {/* 模型查看抽屉 */}
+      <Drawer
+        title="模型详情"
+        placement="right"
+        onClose={() => setViewModelDrawerVisible(false)}
+        open={viewModelDrawerVisible}
+        width={600}
+        getContainer={false}
+        className={`chatbot-drawer ${theme === 'dark' ? 'dark' : 'light'}`}
+      >
+        {currentModel && (
+          <div style={{ padding: '16px 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+              <img 
+                src={getProviderAvatar(currentModel.provider || '')}
+                alt={currentModel.provider}
+                style={{ 
+                  width: 48, 
+                  height: 48, 
+                  borderRadius: '50%',
+                  objectFit: 'cover'
+                }}
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.src = '/src/assets/llm/default.svg';
+                }}
+              />
+              <div>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>
+                  {currentModel.name}
+                </h3>
+                <p style={{ margin: '8px 0 0 0', fontSize: '13px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+                  {currentModel.provider} · {MODEL_TYPE_MAP[currentModel.model_type] || currentModel.model_type}
+                </p>
+              </div>
+            </div>
+            
+            <Descriptions 
+              bordered 
+              column={{ xs: 1, sm: 1, md: 1, lg: 1, xl: 1, xxl: 1 }}
+              style={{ 
+                backgroundColor: theme === 'dark' ? 'rgba(255, 255, 255, 0.02)' : '#fafafa',
+                borderColor: theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#e8e8e8'
+              }}
+            >
+              <Descriptions.Item label="模型类型">
+                {MODEL_TYPE_MAP[currentModel.model_type] || currentModel.model_type}
+              </Descriptions.Item>
+              <Descriptions.Item label="端点地址">
+                {currentModel.endpoint || '未配置'}
+              </Descriptions.Item>
+              <Descriptions.Item label="支持图片">
+                {currentModel.support_image ? '是' : '否'}
+              </Descriptions.Item>
+              <Descriptions.Item label="状态">
+                <Tag color={currentModel.status ? 'green' : 'red'}>
+                  {currentModel.status ? '启用' : '禁用'}
+                </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="标签">
+                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                  {currentModel.tags && (Array.isArray(currentModel.tags) ? currentModel.tags : JSON.parse(currentModel.tags)).map((tag: string, index: number) => (
+                    <Tag key={index} color="blue" style={{ fontSize: '10px', padding: '0 4px' }}>
+                      {tag}
+                    </Tag>
+                  ))}
+                </div>
+              </Descriptions.Item>
+              <Descriptions.Item label="配置">
+                <pre style={{ 
+                  fontSize: '12px', 
+                  color: theme === 'dark' ? '#ccc' : '#333',
+                  backgroundColor: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5',
+                  padding: '12px',
+                  borderRadius: '4px',
+                  overflowX: 'auto'
+                }}>
+                  {JSON.stringify(currentModel.config || {}, null, 2)}
+                </pre>
+              </Descriptions.Item>
+              <Descriptions.Item label="创建时间">
+                {currentModel.created_at || '未设置'}
+              </Descriptions.Item>
+              <Descriptions.Item label="更新时间">
+                {currentModel.updated_at || '未更新'}
+              </Descriptions.Item>
+            </Descriptions>
+          </div>
+        )}
+      </Drawer>
     </div>
   );
 };

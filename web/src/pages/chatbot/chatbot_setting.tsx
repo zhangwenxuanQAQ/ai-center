@@ -392,7 +392,7 @@ const ChatbotSetting: React.FC = () => {
   const fetchKnowledges = async () => {
     try {
       const data = await knowledgebaseService.getKnowledgebases();
-      setKnowledges(data);
+      setKnowledges(data.data || []);
     } catch (error) {
       console.error('Failed to fetch knowledges:', error);
     }

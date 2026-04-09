@@ -523,3 +523,30 @@ POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
     at knowledgebase_create.tsx:669:47
     at Array.map (<anonymous>)
     at KnowledgebaseCreate (knowledgebase_create.tsx:625:29)
+
+
+## 实现知识库详情页功能
+功能包括三大部分：
+1. 知识库配置
+2. 数据集
+3. 检索测试
+
+使用标签页展示这三大部分功能。
+1. 知识库配置，也就是编辑知识库基本信息，模型配置和检索配置：
+  （1）标签内容和创建知识库一样：左侧基本信息，右侧模型配置和检索配置
+  （2）下方按钮为“恢复”和“保存”，当有数据变更时需要在按钮旁边提示“• 有未保存的变动” （这里可以参考编辑提示词页面）。
+
+2.数据集
+（1）新增knowledgebase_document_category表，存储文档分类，表字段和知识库分类表相同。
+（1）knowledgebase_document表新增字段tags,存文档标签json数组.
+（2）标签内容为左侧文档分类树，右侧文档列表（表格形式展示）,表格下方为分页栏，默认20条/页（参考提示词管理页面提示词列表）
+（3）表格需要支持过滤条件：
+  （3.1）根据文档分类过滤
+  （3.2）根据文档标签过滤
+  （3.3）根据文档名称过滤
+  （3.4）根据文档文件类型过滤
+  （3.5）根据文档解析状态过滤 （knowledge_constants.py中的DOCUMENT_RUNNING_STATUS）
+
+3.检索测试
+  （1）标签内容为左侧检索配置+ 用户问题输入文本域 + 测试按钮，右侧为向量检索到的数据列表。
+  （2）具体检索接口后续再实现。

@@ -119,7 +119,7 @@ class Knowledgebase(SoftDeleteModel):
     存储知识库信息
     """
     name = CharField(max_length=255, index=True, verbose_name="知识库名称")
-    code = CharField(max_length=100, unique=True, index=True, verbose_name="知识库编码")
+    code = CharField(max_length=100, index=True, verbose_name="知识库编码")
     description = TextField(null=False, verbose_name="知识库描述")
     avatar = TextField(null=True, verbose_name="知识库头像")
     category_id = CharField(max_length=40, null=True, index=True, verbose_name="分类ID")
@@ -130,6 +130,7 @@ class Knowledgebase(SoftDeleteModel):
     token_num = IntegerField(default=0, verbose_name="文档总Token数")
     chunk_num = IntegerField(default=0, verbose_name="文档总Chunk数")
     retrieval_config = TextField(null=True, verbose_name="检索配置JSON")
+    status = BooleanField(default=True, verbose_name="状态")
 
     class Meta:
         table_name = 'knowledgebase'

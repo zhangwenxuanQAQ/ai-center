@@ -295,7 +295,7 @@ class KnowledgebaseService:
         return db_kb
 
     @staticmethod
-    def get_knowledgebases(skip: int = 0, limit: int = 100, category_id: str = None, name: str = None, code: str = None):
+    def get_knowledgebases(skip: int = 0, limit: int = 100, category_id: str = None, name: str = None, code: str = None, status: str = None):
         """
         获取知识库列表
 
@@ -305,6 +305,7 @@ class KnowledgebaseService:
             category_id: 分类ID（可选）
             name: 知识库名称（模糊查询）
             code: 知识库编码（模糊查询）
+            status: 状态（可选）
 
         Returns:
             List[Knowledgebase]: 知识库列表
@@ -320,10 +321,14 @@ class KnowledgebaseService:
         if code:
             query = query.where(Knowledgebase.code.contains(code))
 
+        if status is not None:
+            status_bool = status.lower() == 'true'
+            query = query.where(Knowledgebase.status == status_bool)
+
         return list(query.order_by(Knowledgebase.created_at.desc()).offset(skip).limit(limit))
 
     @staticmethod
-    def count_knowledgebases(category_id: str = None, name: str = None, code: str = None) -> int:
+    def count_knowledgebases(category_id: str = None, name: str = None, code: str = None, status: str = None) -> int:
         """
         统计知识库总数
 
@@ -331,6 +336,7 @@ class KnowledgebaseService:
             category_id: 分类ID（可选）
             name: 知识库名称（模糊查询）
             code: 知识库编码（模糊查询）
+            status: 状态（可选）
 
         Returns:
             int: 知识库总数
@@ -345,6 +351,10 @@ class KnowledgebaseService:
 
         if code:
             query = query.where(Knowledgebase.code.contains(code))
+
+        if status is not None:
+            status_bool = status.lower() == 'true'
+            query = query.where(Knowledgebase.status == status_bool)
 
         return query.count()
 

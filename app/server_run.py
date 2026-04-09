@@ -97,6 +97,25 @@ try:
     except Exception as e:
         print(f"  移除chatbot表中code字段的唯一约束失败: {e}")
     
+    print("\n移除knowledgebase表中code字段的唯一约束...")
+    try:
+        cursor = db.execute_sql("SHOW INDEX FROM knowledgebase;")
+        indexes = cursor.fetchall()
+        
+        unique_index_name = None
+        for index in indexes:
+            if index[4] == 'code' and index[1] == 0:  # Non_unique = 0 means unique index
+                unique_index_name = index[2]
+                break
+        
+        if unique_index_name:
+            db.execute_sql(f"ALTER TABLE knowledgebase DROP INDEX {unique_index_name};")
+            print("  成功移除knowledgebase表中code字段的唯一约束")
+        else:
+            print("  knowledgebase表中code字段没有唯一约束，跳过移除")
+    except Exception as e:
+        print(f"  移除knowledgebase表中code字段的唯一约束失败: {e}")
+    
     print("\n为mcp_category表添加is_default字段...")
     try:
         cursor = db.execute_sql("DESCRIBE mcp_category;")
@@ -511,9 +530,9 @@ try:
                 db.execute_sql("ALTER TABLE knowledgebase DROP COLUMN file_path")
                 print("  成功删除 file_path 字段")
 
-            if 'status' in columns:
-                db.execute_sql("ALTER TABLE knowledgebase DROP COLUMN status")
-                print("  成功删除 status 字段")
+            if 'status' not in columns:
+                db.execute_sql("ALTER TABLE knowledgebase ADD COLUMN status TINYINT DEFAULT 1")
+                print("  成功添加 status 字段")
 
             if 'description' in columns:
                 db.execute_sql("ALTER TABLE knowledgebase MODIFY COLUMN description TEXT DEFAULT NULL")

@@ -158,7 +158,8 @@ def get_knowledgebases(
     page_size: int = Query(12, description="每页数量"),
     category_id: str = Query(None, description="分类ID"),
     name: str = Query(None, description="知识库名称（模糊查询）"),
-    code: str = Query(None, description="知识库编码（模糊查询）")
+    code: str = Query(None, description="知识库编码（模糊查询）"),
+    status: str = Query(None, description="状态")
 ):
     """
     获取知识库列表（分页）
@@ -169,13 +170,14 @@ def get_knowledgebases(
         category_id: 分类ID（可选）
         name: 知识库名称（模糊查询，可选）
         code: 知识库编码（模糊查询，可选）
+        status: 状态（可选）
 
     Returns:
         ApiResponse: 统一格式的响应对象，包含data和total
     """
     skip = (page - 1) * page_size
-    kbs = KnowledgebaseService.get_knowledgebases(skip, page_size, category_id, name, code)
-    total = KnowledgebaseService.count_knowledgebases(category_id, name, code)
+    kbs = KnowledgebaseService.get_knowledgebases(skip, page_size, category_id, name, code, status)
+    total = KnowledgebaseService.count_knowledgebases(category_id, name, code, status)
     kbs_data = []
     for kb in kbs:
         kb_dict = kb.__data__

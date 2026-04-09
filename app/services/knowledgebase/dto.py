@@ -88,6 +88,7 @@ class KnowledgebaseBase(BaseModel):
     token_num: int = Field(default=0, description="文档总Token数")
     chunk_num: int = Field(default=0, description="文档总Chunk数")
     retrieval_config: Optional[dict] = Field(None, description="检索配置JSON对象")
+    status: Optional[bool] = Field(default=True, description="状态")
 
 
 class KnowledgebaseCreate(KnowledgebaseBase):
@@ -126,6 +127,7 @@ class KnowledgebaseUpdate(BaseModel):
     token_num: Optional[int] = Field(None, description="文档总Token数")
     chunk_num: Optional[int] = Field(None, description="文档总Chunk数")
     retrieval_config: Optional[dict] = Field(None, description="检索配置JSON对象")
+    status: Optional[bool] = Field(None, description="状态")
 
 
 class Knowledgebase(KnowledgebaseBase, BaseDTO):

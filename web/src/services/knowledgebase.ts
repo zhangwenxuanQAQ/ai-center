@@ -39,62 +39,70 @@ export const knowledgebaseService = {
    * 获取知识库分类树
    */
   getCategoryTree: async (): Promise<KnowledgebaseCategory[]> => {
-    const response = await http.get<{ code: number; data: KnowledgebaseCategory[]; message: string }>(
+    return http.get<KnowledgebaseCategory[]>(
       '/aicenter/v1/knowledgebase/category/tree'
-    );
-    return response.data || [];
+    ) || [];
   },
 
   /**
    * 创建分类
    */
   createCategory: async (data: Partial<KnowledgebaseCategory>): Promise<KnowledgebaseCategory> => {
-    const response = await http.post<{ code: number; data: KnowledgebaseCategory; message: string }>(
+    return http.post<KnowledgebaseCategory>(
       '/aicenter/v1/knowledgebase/category',
       data
     );
-    return response.data;
   },
 
   /**
    * 更新分类
    */
   updateCategory: async (id: string, data: Partial<KnowledgebaseCategory>): Promise<KnowledgebaseCategory> => {
-    const response = await http.post<{ code: number; data: KnowledgebaseCategory; message: string }>(
+    return http.post<KnowledgebaseCategory>(
       `/aicenter/v1/knowledgebase/category/${id}`,
       data
     );
-    return response.data;
   },
 
   /**
    * 删除分类
    */
   deleteCategory: async (id: string): Promise<KnowledgebaseCategory> => {
-    const response = await http.post<{ code: number; data: KnowledgebaseCategory; message: string }>(
+    return http.post<KnowledgebaseCategory>(
       `/aicenter/v1/knowledgebase/category/${id}/delete`
     );
-    return response.data;
   },
 
   /**
    * 获取知识库列表（分页）
    */
-  getKnowledgebases: async (page: number = 1, pageSize: number = 100): Promise<Knowledgebase[]> => {
-    const response = await http.get<{ code: number; data: { data: Knowledgebase[]; total: number }; message: string }>(
-      `/aicenter/v1/knowledgebase?page=${page}&page_size=${pageSize}`
-    );
-    return response.data?.data || [];
+  getKnowledgebases: async (page: number = 1, pageSize: number = 100, categoryId?: string | null, name?: string, code?: string, status?: string): Promise<{ data: Knowledgebase[]; total: number }> => {
+    let params = [`page=${page}`, `page_size=${pageSize}`];
+    if (categoryId) {
+      params.push(`category_id=${categoryId}`);
+    }
+    if (name) {
+      params.push(`name=${encodeURIComponent(name)}`);
+    }
+    if (code) {
+      params.push(`code=${encodeURIComponent(code)}`);
+    }
+    if (status !== undefined) {
+      params.push(`status=${status}`);
+    }
+    const queryString = params.length > 0 ? `?${params.join('&')}` : '';
+    return http.get<{ data: Knowledgebase[]; total: number }>(
+      `/aicenter/v1/knowledgebase${queryString}`
+    ) || { data: [], total: 0 };
   },
 
   /**
    * 获取单个知识库
    */
   getKnowledgebase: async (id: string): Promise<Knowledgebase> => {
-    const response = await http.get<{ code: number; data: Knowledgebase; message: string }>(
+    return http.get<Knowledgebase>(
       `/aicenter/v1/knowledgebase/${id}`
     );
-    return response.data;
   },
 
   /**
@@ -102,10 +110,9 @@ export const knowledgebaseService = {
    */
   checkCodeUnique: async (code: string): Promise<boolean> => {
     try {
-      const response = await http.get<{ code: number; data: boolean; message: string }>(
+      return http.get<boolean>(
         `/aicenter/v1/knowledgebase/check_code?code=${code}`
       );
-      return response.data;
     } catch (error) {
       console.error('Failed to check code uniqueness:', error);
       return true;
@@ -116,31 +123,28 @@ export const knowledgebaseService = {
    * 创建知识库
    */
   createKnowledgebase: async (data: Partial<Knowledgebase>): Promise<Knowledgebase> => {
-    const response = await http.post<{ code: number; data: Knowledgebase; message: string }>(
+    return http.post<Knowledgebase>(
       '/aicenter/v1/knowledgebase',
       data
     );
-    return response.data;
   },
 
   /**
    * 更新知识库
    */
   updateKnowledgebase: async (id: string, data: Partial<Knowledgebase>): Promise<Knowledgebase> => {
-    const response = await http.post<{ code: number; data: Knowledgebase; message: string }>(
+    return http.post<Knowledgebase>(
       `/aicenter/v1/knowledgebase/${id}`,
       data
     );
-    return response.data;
   },
 
   /**
    * 删除知识库
    */
   deleteKnowledgebase: async (id: string): Promise<Knowledgebase> => {
-    const response = await http.post<{ code: number; data: Knowledgebase; message: string }>(
+    return http.post<Knowledgebase>(
       `/aicenter/v1/knowledgebase/${id}/delete`
     );
-    return response.data;
   },
 };
