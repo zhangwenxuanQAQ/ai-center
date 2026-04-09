@@ -124,6 +124,8 @@ class Knowledgebase(SoftDeleteModel):
     avatar = TextField(null=True, verbose_name="知识库头像")
     category_id = CharField(max_length=40, null=True, index=True, verbose_name="分类ID")
     embedding_model_id = CharField(max_length=40, null=True, index=True, verbose_name="Embedding模型ID")
+    rerank_model_id = CharField(max_length=40, null=True, index=True, verbose_name="Rerank模型ID")
+    text_model_id = CharField(max_length=40, null=True, index=True, verbose_name="Text模型ID")
     doc_num = IntegerField(default=0, verbose_name="文档数量")
     token_num = IntegerField(default=0, verbose_name="文档总Token数")
     chunk_num = IntegerField(default=0, verbose_name="文档总Chunk数")
@@ -250,8 +252,6 @@ class Chatbot(SoftDeleteModel):
     category_id = CharField(max_length=40, null=True, index=True, verbose_name="分类ID")
     avatar = TextField(null=True, verbose_name="机器人头像")
     greeting = TextField(null=True, verbose_name="欢迎语")
-    prompt_id = CharField(max_length=40, null=True, index=True, verbose_name="提示词ID")
-    knowledge_id = CharField(max_length=40, null=True, index=True, verbose_name="知识库ID")
     source_type = CharField(max_length=255, null=True, verbose_name="来源类型")
     source_config = TextField(null=True, verbose_name="来源配置")
     

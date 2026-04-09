@@ -69,6 +69,8 @@ class KnowledgebaseBase(BaseModel):
         avatar: 知识库头像
         category_id: 分类ID
         embedding_model_id: Embedding模型ID
+        rerank_model_id: Rerank模型ID
+        text_model_id: Text模型ID
         doc_num: 文档数量
         token_num: 文档总Token数
         chunk_num: 文档总Chunk数
@@ -80,6 +82,8 @@ class KnowledgebaseBase(BaseModel):
     avatar: Optional[str] = Field(None, description="知识库头像，base64格式字符串或URL")
     category_id: Optional[str] = Field(None, description="分类ID，UUID格式")
     embedding_model_id: Optional[str] = Field(None, description="Embedding模型ID，UUID格式")
+    rerank_model_id: Optional[str] = Field(None, description="Rerank模型ID，UUID格式")
+    text_model_id: Optional[str] = Field(None, description="Text模型ID，UUID格式")
     doc_num: int = Field(default=0, description="文档数量")
     token_num: int = Field(default=0, description="文档总Token数")
     chunk_num: int = Field(default=0, description="文档总Chunk数")
@@ -103,6 +107,8 @@ class KnowledgebaseUpdate(BaseModel):
         avatar: 知识库头像
         category_id: 分类ID
         embedding_model_id: Embedding模型ID
+        rerank_model_id: Rerank模型ID
+        text_model_id: Text模型ID
         doc_num: 文档数量
         token_num: 文档总Token数
         chunk_num: 文档总Chunk数
@@ -114,6 +120,8 @@ class KnowledgebaseUpdate(BaseModel):
     avatar: Optional[str] = Field(None, description="知识库头像，base64格式字符串或URL")
     category_id: Optional[str] = Field(None, description="分类ID，UUID格式")
     embedding_model_id: Optional[str] = Field(None, description="Embedding模型ID，UUID格式")
+    rerank_model_id: Optional[str] = Field(None, description="Rerank模型ID，UUID格式")
+    text_model_id: Optional[str] = Field(None, description="Text模型ID，UUID格式")
     doc_num: Optional[int] = Field(None, description="文档数量")
     token_num: Optional[int] = Field(None, description="文档总Token数")
     chunk_num: Optional[int] = Field(None, description="文档总Chunk数")

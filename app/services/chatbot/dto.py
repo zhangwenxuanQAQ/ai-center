@@ -19,8 +19,6 @@ class ChatbotBase(BaseModel):
         category_id: 分类ID
         avatar: 头像URL或Base64
         greeting: 欢迎语（必填）
-        prompt_id: 提示词ID
-        knowledge_id: 知识库ID
         source_type: 来源类型（必填）
         source_config: 来源配置
     """
@@ -31,8 +29,6 @@ class ChatbotBase(BaseModel):
     category_id: Optional[str] = Field(None, description="分类ID，UUID格式")
     avatar: Optional[str] = Field(None, description="头像URL或Base64")
     greeting: str = Field(..., min_length=1, max_length=500, description="欢迎语，长度1-500个字符")
-    prompt_id: Optional[str] = Field(None, description="提示词ID，UUID格式")
-    knowledge_id: Optional[str] = Field(None, description="知识库ID，UUID格式")
     source_type: str = Field(..., min_length=1, max_length=50, description="来源类型，最大长度50个字符")
     source_config: Optional[str] = Field(None, max_length=2000, description="来源配置，最大长度2000个字符")
 
@@ -59,8 +55,6 @@ class ChatbotUpdate(BaseModel):
         category_id: 分类ID
         avatar: 头像URL
         greeting: 欢迎语
-        prompt_id: 提示词ID
-        knowledge_id: 知识库ID
         source_type: 来源类型
         source_config: 来源配置
         mcp_server_ids: MCP服务ID列表
@@ -72,8 +66,6 @@ class ChatbotUpdate(BaseModel):
     category_id: Optional[str] = Field(None, description="分类ID，UUID格式")
     avatar: Optional[str] = Field(None, description="头像URL或Base64")
     greeting: Optional[str] = Field(None, max_length=500, description="欢迎语，最大长度500个字符")
-    prompt_id: Optional[str] = Field(None, description="提示词ID，UUID格式")
-    knowledge_id: Optional[str] = Field(None, description="知识库ID，UUID格式")
     source_type: Optional[str] = Field(None, max_length=50, description="来源类型，最大长度50个字符")
     source_config: Optional[str] = Field(None, max_length=2000, description="来源配置，最大长度2000个字符")
     mcp_server_ids: Optional[List[str]] = Field(None, description="MCP服务ID列表，UUID格式")

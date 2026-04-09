@@ -116,6 +116,21 @@ def delete_kb_category(category_id: str):
 
 
 # 知识库相关接口
+@router.get("/check_code", response_model=ApiResponse)
+def check_knowledgebase_code(code: str = Query(..., description="知识库编码")):
+    """
+    检查知识库编码是否唯一
+
+    Args:
+        code: 知识库编码
+
+    Returns:
+        ApiResponse: 统一格式的响应对象，包含编码是否唯一的布尔值
+    """
+    is_unique = KnowledgebaseService.check_code_unique(code)
+    return ResponseUtil.success(data=is_unique, message="检查编码唯一性成功")
+
+
 @router.post("", response_model=ApiResponse)
 def create_knowledgebase(kb: KnowledgebaseCreate):
     """

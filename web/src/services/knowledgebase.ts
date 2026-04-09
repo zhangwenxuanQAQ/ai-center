@@ -13,6 +13,7 @@ export interface Knowledgebase {
   avatar?: string;
   category_id?: string;
   embedding_model_id?: string;
+  rerank_model_id?: string;
   doc_num: number;
   token_num: number;
   chunk_num: number;
@@ -30,6 +31,7 @@ export interface KnowledgebaseCategory {
   is_default: boolean;
   created_at: string;
   updated_at?: string;
+  children?: KnowledgebaseCategory[];
 }
 
 export const knowledgebaseService = {
@@ -41,6 +43,38 @@ export const knowledgebaseService = {
       '/aicenter/v1/knowledgebase/category/tree'
     );
     return response.data || [];
+  },
+
+  /**
+   * 创建分类
+   */
+  createCategory: async (data: Partial<KnowledgebaseCategory>): Promise<KnowledgebaseCategory> => {
+    const response = await http.post<{ code: number; data: KnowledgebaseCategory; message: string }>(
+      '/aicenter/v1/knowledgebase/category',
+      data
+    );
+    return response.data;
+  },
+
+  /**
+   * 更新分类
+   */
+  updateCategory: async (id: string, data: Partial<KnowledgebaseCategory>): Promise<KnowledgebaseCategory> => {
+    const response = await http.post<{ code: number; data: KnowledgebaseCategory; message: string }>(
+      `/aicenter/v1/knowledgebase/category/${id}`,
+      data
+    );
+    return response.data;
+  },
+
+  /**
+   * 删除分类
+   */
+  deleteCategory: async (id: string): Promise<KnowledgebaseCategory> => {
+    const response = await http.post<{ code: number; data: KnowledgebaseCategory; message: string }>(
+      `/aicenter/v1/knowledgebase/category/${id}/delete`
+    );
+    return response.data;
   },
 
   /**
@@ -61,6 +95,21 @@ export const knowledgebaseService = {
       `/aicenter/v1/knowledgebase/${id}`
     );
     return response.data;
+  },
+
+  /**
+   * 检查编码是否唯一
+   */
+  checkCodeUnique: async (code: string): Promise<boolean> => {
+    try {
+      const response = await http.get<{ code: number; data: boolean; message: string }>(
+        `/aicenter/v1/knowledgebase/check_code?code=${code}`
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Failed to check code uniqueness:', error);
+      return true;
+    }
   },
 
   /**

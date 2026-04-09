@@ -241,6 +241,24 @@ class KnowledgebaseService:
     """
 
     @staticmethod
+    def check_code_unique(code: str) -> bool:
+        """
+        检查知识库编码是否唯一
+
+        Args:
+            code: 知识库编码
+
+        Returns:
+            bool: 编码是否唯一（True表示唯一，False表示已存在）
+        """
+        existing = Knowledgebase.select().where(
+            (Knowledgebase.code == code) &
+            (Knowledgebase.deleted == False)
+        ).first()
+        
+        return existing is None
+
+    @staticmethod
     @handle_transaction
     def create_knowledgebase(kb: KnowledgebaseCreate):
         """

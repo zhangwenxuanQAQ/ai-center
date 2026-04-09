@@ -191,3 +191,108 @@
   background: #667eea;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
+
+/* ==================== 公共 Slider 样式 ==================== */
+
+/* 白天模式 */
+.light-theme .ant-slider {
+  & .ant-slider-track {
+    background-color: #667eea !important;
+  }
+  
+  & .ant-slider-handle {
+    border-color: #667eea !important;
+  }
+  
+  & .ant-slider-rail {
+    background-color: #e0e0e0 !important;
+  }
+  
+  & .ant-slider-handle:hover,
+  & .ant-slider-handle:focus {
+    border-color: #5a6fe0 !important;
+    box-shadow: 0 0 0 8px rgba(102, 126, 234, 0.1) !important;
+  }
+  
+  & .ant-slider-handle:active {
+    border-color: #4d5fd8 !important;
+    box-shadow: 0 0 0 8px rgba(102, 126, 234, 0.2) !important;
+  }
+}
+
+/* 夜间模式 */
+.dark-theme .ant-slider {
+  & .ant-slider-track {
+    background-color: #667eea !important;
+  }
+  
+  & .ant-slider-handle {
+    border-color: #667eea !important;
+  }
+  
+  & .ant-slider-rail {
+    background-color: #333333 !important;
+  }
+  
+  & .ant-slider-handle:hover,
+  & .ant-slider-handle:focus {
+    border-color: #7c8bff !important;
+    box-shadow: 0 0 0 8px rgba(102, 126, 234, 0.2) !important;
+  }
+  
+  & .ant-slider-handle:active {
+    border-color: #8a98ff !important;
+    box-shadow: 0 0 0 8px rgba(102, 126, 234, 0.3) !important;
+  }
+}
+
+/* 气泡卡片中的 Slider 样式 */
+.ant-popover .ant-slider {
+  & .ant-slider-track {
+    background-color: #667eea !important;
+  }
+  
+  & .ant-slider-handle {
+    border-color: #667eea !important;
+  }
+  
+  & .ant-slider-rail {
+    background-color: #e0e0e0 !important;
+  }
+  
+  & .ant-slider-handle:hover,
+  & .ant-slider-handle:focus {
+    border-color: #5a6fe0 !important;
+    box-shadow: 0 0 0 8px rgba(102, 126, 234, 0.1) !important;
+  }
+  
+  & .ant-slider-handle:active {
+    border-color: #4d5fd8 !important;
+    box-shadow: 0 0 0 8px rgba(102, 126, 234, 0.2) !important;
+  }
+}
+
+.dark-theme .ant-popover .ant-slider {
+  & .ant-slider-track {
+    background-color: #667eea !important;
+  }
+  
+  & .ant-slider-handle {
+    border-color: #667eea !important;
+  }
+  
+  & .ant-slider-rail {
+    background-color: #333333 !important;
+  }
+  
+  & .ant-slider-handle:hover,
+  & .ant-slider-handle:focus {
+    border-color: #7c8bff !important;
+    box-shadow: 0 0 0 8px rgba(102, 126, 234, 0.2) !important;
+  }
+  
+  & .ant-slider-handle:active {
+    border-color: #8a98ff !important;
+    box-shadow: 0 0 0 8px rgba(102, 126, 234, 0.3) !important;
+  }
+}

@@ -487,6 +487,10 @@ try:
                 db.execute_sql("ALTER TABLE knowledgebase ADD COLUMN embedding_model_id VARCHAR(40) DEFAULT NULL AFTER category_id")
                 print("  成功添加 embedding_model_id 字段")
 
+            if 'rerank_model_id' not in columns:
+                db.execute_sql("ALTER TABLE knowledgebase ADD COLUMN rerank_model_id VARCHAR(40) DEFAULT NULL AFTER embedding_model_id")
+                print("  成功添加 rerank_model_id 字段")
+
             if 'doc_num' not in columns:
                 db.execute_sql("ALTER TABLE knowledgebase ADD COLUMN doc_num INT DEFAULT 0 AFTER embedding_model_id")
                 print("  成功添加 doc_num 字段")
