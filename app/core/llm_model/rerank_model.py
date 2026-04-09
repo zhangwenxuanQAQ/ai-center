@@ -56,9 +56,23 @@ class RerankModel(BaseLLM):
                 'Authorization': f'Bearer {self.api_key}'
             }
             
+            # 构建请求URL - 处理不同提供商的API格式
+            endpoint = self.endpoint.rstrip('/')
+            # 检查是否已经包含rerank路径
+            if 'rerank' not in endpoint:
+                # 根据常见API格式调整
+                if 'compatible-api' in endpoint:
+                    # 例如：https://dashscope.aliyuncs.com/compatible-api/v1/reranks/rerank
+                    request_url = f'{endpoint}/reranks/rerank'
+                else:
+                    # 标准格式
+                    request_url = f'{endpoint}/rerank'
+            else:
+                request_url = endpoint
+            
             with httpx.Client(timeout=30) as client:
                 response = client.post(
-                    f'{self.endpoint}/rerank',
+                    request_url,
                     headers=headers,
                     json={
                         'model': self.model_name,
@@ -71,9 +85,20 @@ class RerankModel(BaseLLM):
                 response.raise_for_status()
                 result = response.json()
                 
-                # 格式化响应
+                # 格式化响应，确保返回ranked_documents字段
+                ranked_documents = result.get('results', [])
+                # 转换结果格式以匹配测试期望
+                formatted_results = []
+                for item in ranked_documents:
+                    formatted_item = {
+                        'index': item.get('index'),
+                        'document': item.get('document'),
+                        'score': item.get('score')
+                    }
+                    formatted_results.append(formatted_item)
+                
                 return {
-                    'results': result.get('results', []),
+                    'ranked_documents': formatted_results,
                     'usage': result.get('usage', {})
                 }
         except Exception as e:

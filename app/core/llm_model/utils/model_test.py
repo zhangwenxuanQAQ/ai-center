@@ -297,7 +297,7 @@ class ModelTestUtils:
             ]
             
             # 这里需要根据实际的Rerank模型接口调整参数
-            response = model.generate(test_prompt, documents=test_documents)
+            response = model.generate(test_prompt, documents=test_documents,top_n=2)
             
             if 'error' in response:
                 return {
