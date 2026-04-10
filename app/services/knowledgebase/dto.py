@@ -141,12 +141,65 @@ class Knowledgebase(KnowledgebaseBase, BaseDTO):
         from_attributes = True
 
 
+class KnowledgebaseDocumentCategoryBase(BaseModel):
+    """
+    知识库文档分类基础DTO
+
+    Attributes:
+        kb_id: 知识库ID
+        name: 分类名称
+        description: 分类描述
+        parent_id: 父分类ID
+        sort_order: 排序顺序
+    """
+    kb_id: str = Field(..., description="知识库ID，UUID格式")
+    name: str = Field(..., min_length=1, max_length=100, description="分类名称，长度1-100个字符")
+    description: Optional[str] = Field(None, max_length=500, description="分类描述，最大长度500个字符")
+    parent_id: Optional[str] = Field(None, description="父分类ID，UUID格式")
+    sort_order: int = Field(default=0, description="排序顺序")
+
+
+class KnowledgebaseDocumentCategoryCreate(KnowledgebaseDocumentCategoryBase):
+    """
+    知识库文档分类创建DTO
+    """
+
+
+class KnowledgebaseDocumentCategoryUpdate(BaseModel):
+    """
+    知识库文档分类更新DTO
+
+    Attributes:
+        name: 分类名称
+        description: 分类描述
+        parent_id: 父分类ID
+        sort_order: 排序顺序
+    """
+    name: Optional[str] = Field(None, min_length=1, max_length=100, description="分类名称，长度1-100个字符")
+    description: Optional[str] = Field(None, max_length=500, description="分类描述，最大长度500个字符")
+    parent_id: Optional[str] = Field(None, description="父分类ID，UUID格式")
+    sort_order: Optional[int] = Field(None, description="排序顺序")
+
+
+class KnowledgebaseDocumentCategory(KnowledgebaseDocumentCategoryBase, BaseDTO):
+    """
+    知识库文档分类响应DTO
+
+    继承自KnowledgebaseDocumentCategoryBase和BaseDTO，包含知识库文档分类基本信息和公共字段
+    """
+
+    class Config:
+        from_attributes = True
+
+
 class KnowledgebaseDocumentBase(BaseModel):
     """
     知识库文档基础DTO
 
     Attributes:
         kb_id: 知识库ID
+        category_id: 文档分类ID
+        tags: 文档标签JSON数组
         chunk_method: 文档Chunk方法
         chunk_config: 文档Chunk配置JSON
         token_num: 文档Token数
@@ -162,6 +215,8 @@ class KnowledgebaseDocumentBase(BaseModel):
         task_duration: 文档解析耗时
     """
     kb_id: str = Field(..., description="知识库ID，UUID格式")
+    category_id: Optional[str] = Field(None, description="文档分类ID，UUID格式")
+    tags: Optional[list] = Field(None, description="文档标签JSON数组")
     chunk_method: str = Field(..., min_length=1, max_length=50, description="文档Chunk方法")
     chunk_config: Optional[dict] = Field(None, description="文档Chunk配置JSON对象")
     token_num: int = Field(default=0, description="文档Token数")
@@ -189,6 +244,8 @@ class KnowledgebaseDocumentUpdate(BaseModel):
 
     Attributes:
         kb_id: 知识库ID
+        category_id: 文档分类ID
+        tags: 文档标签JSON数组
         chunk_method: 文档Chunk方法
         chunk_config: 文档Chunk配置JSON
         token_num: 文档Token数
@@ -204,6 +261,8 @@ class KnowledgebaseDocumentUpdate(BaseModel):
         task_duration: 文档解析耗时
     """
     kb_id: Optional[str] = Field(None, description="知识库ID，UUID格式")
+    category_id: Optional[str] = Field(None, description="文档分类ID，UUID格式")
+    tags: Optional[list] = Field(None, description="文档标签JSON数组")
     chunk_method: Optional[str] = Field(None, min_length=1, max_length=50, description="文档Chunk方法")
     chunk_config: Optional[dict] = Field(None, description="文档Chunk配置JSON对象")
     token_num: Optional[int] = Field(None, description="文档Token数")

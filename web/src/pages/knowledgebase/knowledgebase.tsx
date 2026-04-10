@@ -352,7 +352,7 @@ const KnowledgebaseManagement: React.FC = () => {
   };
 
   const handleCardClick = (kbId: string) => {
-    message.info('知识库详情页面待实现');
+    navigate(`/knowledgebase/detail/${kbId}`);
   };
 
   const handleCardMouseMove = (kbId: string, e: React.MouseEvent<HTMLDivElement>) => {

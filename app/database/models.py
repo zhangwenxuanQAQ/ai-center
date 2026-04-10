@@ -136,6 +136,25 @@ class Knowledgebase(SoftDeleteModel):
         table_name = 'knowledgebase'
 
 
+class KnowledgebaseDocumentCategory(SoftDeleteModel):
+    """
+    知识库文档分类模型
+
+    存储知识库下的文档分类信息，支持树形结构
+    """
+    kb_id = CharField(max_length=40, index=True, verbose_name="知识库ID")
+    name = CharField(max_length=255, index=True, verbose_name="分类名称")
+    description = TextField(null=True, verbose_name="分类描述")
+    parent_id = CharField(max_length=40, null=True, index=True, verbose_name="父分类ID")
+    sort_order = IntegerField(default=0, verbose_name="排序序号")
+
+    class Meta:
+        table_name = 'knowledgebase_document_category'
+        indexes = (
+            (('kb_id', 'parent_id', 'sort_order'), False),
+        )
+
+
 class KnowledgebaseDocument(SoftDeleteModel):
     """
     知识库文档模型
@@ -143,6 +162,8 @@ class KnowledgebaseDocument(SoftDeleteModel):
     存储知识库下的文档信息
     """
     kb_id = CharField(max_length=40, index=True, verbose_name="知识库ID")
+    category_id = CharField(max_length=40, null=True, index=True, verbose_name="文档分类ID")
+    tags = TextField(null=True, verbose_name="文档标签JSON数组")
     chunk_method = CharField(max_length=50, verbose_name="文档Chunk方法")
     chunk_config = TextField(null=True, verbose_name="文档Chunk配置JSON")
     token_num = IntegerField(default=0, verbose_name="文档Token数")
@@ -457,6 +478,7 @@ def create_tables():
         ChatbotCategory,
         KnowledgebaseCategory,
         Knowledgebase,
+        KnowledgebaseDocumentCategory,
         KnowledgebaseDocument,
         LLMCategory,
         LLMModel,

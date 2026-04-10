@@ -530,7 +530,6 @@ POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
 1. 知识库配置
 2. 数据集
 3. 检索测试
-
 使用标签页展示这三大部分功能。
 1. 知识库配置，也就是编辑知识库基本信息，模型配置和检索配置：
   （1）标签内容和创建知识库一样：左侧基本信息，右侧模型配置和检索配置
@@ -550,3 +549,14 @@ POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
 3.检索测试
   （1）标签内容为左侧检索配置+ 用户问题输入文本域 + 测试按钮，右侧为向量检索到的数据列表。
   （2）具体检索接口后续再实现。
+
+在knowledgebase_setting.tsx中实现知识库配置。
+在knowledgebase_document.tsx中实现数据集标签页。
+在knowledgebase_retrieval.tsx中实现检索测试标签页。
+
+##要求：
+需要保持上方导航栏的样式与知识库主页一致。
+需要保持左侧文档分类树的样式与知识库主页一致。
+知识库配置的布局需要和创建知识库页面一致
+
+代码写完后重启前后端服务，后端服务启动时需要更新库表结构。

@@ -627,6 +627,60 @@ try:
     except Exception as e:
         print(f"  处理 knowledgebase_document 表失败: {e}")
 
+    # 创建 knowledgebase_document_category 表
+    print("\n创建 knowledgebase_document_category 表...")
+    try:
+        cursor = db.execute_sql("SHOW TABLES;")
+        tables = cursor.fetchall()
+        table_names = [table[0] for table in tables]
+        if 'knowledgebase_document_category' not in table_names:
+            db.execute_sql("""
+                CREATE TABLE knowledgebase_document_category (
+                    id CHAR(36) NOT NULL PRIMARY KEY,
+                    knowledgebase_id VARCHAR(40) NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    parent_id CHAR(36),
+                    sort_order INT DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    create_user_id VARCHAR(40) DEFAULT NULL,
+                    update_user_id VARCHAR(40) DEFAULT NULL,
+                    deleted TINYINT DEFAULT 0,
+                    deleted_at DATETIME DEFAULT NULL,
+                    deleted_user_id VARCHAR(36) DEFAULT NULL,
+                    INDEX idx_knowledgebase_id (knowledgebase_id),
+                    INDEX idx_parent_id (parent_id),
+                    INDEX idx_sort_order (sort_order),
+                    INDEX idx_deleted (deleted)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+            print("  成功创建 knowledgebase_document_category 表")
+        else:
+            print("  knowledgebase_document_category 表已存在，跳过")
+    except Exception as e:
+        print(f"  创建 knowledgebase_document_category 表失败: {e}")
+    
+    # 为 knowledgebase_document 表添加 category_id 和 tags 字段
+    print("\n为 knowledgebase_document 表添加 category_id 和 tags 字段...")
+    try:
+        cursor = db.execute_sql("DESCRIBE knowledgebase_document;")
+        columns = [column[0] for column in cursor.fetchall()]
+        
+        if 'category_id' not in columns:
+            db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN category_id VARCHAR(40) DEFAULT NULL AFTER kb_id")
+            print("  成功添加 category_id 字段")
+        else:
+            print("  category_id 字段已存在，跳过")
+        
+        if 'tags' not in columns:
+            db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN tags TEXT DEFAULT NULL AFTER category_id")
+            print("  成功添加 tags 字段")
+        else:
+            print("  tags 字段已存在，跳过")
+    except Exception as e:
+        print(f"  添加字段失败: {e}")
+    
     print("\n数据库迁移完成")
 except Exception as e:
     print(f"数据库迁移失败: {e}")

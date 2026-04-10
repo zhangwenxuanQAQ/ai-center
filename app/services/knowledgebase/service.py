@@ -5,11 +5,12 @@
 import json
 from datetime import datetime
 from typing import Dict, Any, Optional, List
-from app.database.models import KnowledgebaseCategory, Knowledgebase, KnowledgebaseDocument
+from app.database.models import KnowledgebaseCategory, Knowledgebase, KnowledgebaseDocument, KnowledgebaseDocumentCategory
 from app.services.knowledgebase.dto import (
     KnowledgebaseCategoryCreate, KnowledgebaseCategoryUpdate,
     KnowledgebaseCreate, KnowledgebaseUpdate,
-    KnowledgebaseDocumentCreate, KnowledgebaseDocumentUpdate
+    KnowledgebaseDocumentCreate, KnowledgebaseDocumentUpdate,
+    KnowledgebaseDocumentCategoryCreate, KnowledgebaseDocumentCategoryUpdate
 )
 from app.database.db_utils import handle_transaction
 from app.core.exceptions import ResourceNotFoundError, DuplicateResourceError
@@ -484,6 +485,9 @@ class KnowledgebaseDocumentService:
         if doc_data.get('chunk_config') and isinstance(doc_data['chunk_config'], dict):
             doc_data['chunk_config'] = json.dumps(doc_data['chunk_config'], ensure_ascii=False)
 
+        if doc_data.get('tags') and isinstance(doc_data['tags'], list):
+            doc_data['tags'] = json.dumps(doc_data['tags'], ensure_ascii=False)
+
         db_doc = KnowledgebaseDocument(**doc_data)
         db_doc.save(force_insert=True)
 
@@ -496,7 +500,17 @@ class KnowledgebaseDocumentService:
         return db_doc
 
     @staticmethod
-    def get_documents(skip: int = 0, limit: int = 100, kb_id: str = None, chunk_method: str = None):
+    def get_documents(
+        skip: int = 0, 
+        limit: int = 100, 
+        kb_id: str = None, 
+        category_id: str = None,
+        tags: list = None,
+        name: str = None,
+        file_type: str = None,
+        running_status: str = None,
+        chunk_method: str = None
+    ):
         """
         获取知识库文档列表
 
@@ -504,6 +518,11 @@ class KnowledgebaseDocumentService:
             skip: 跳过的记录数
             limit: 返回的最大记录数
             kb_id: 知识库ID（可选）
+            category_id: 文档分类ID（可选）
+            tags: 标签列表（可选）
+            name: 文档名称（模糊查询，可选）
+            file_type: 文件类型（可选）
+            running_status: 解析状态（可选）
             chunk_method: Chunk方法（可选）
 
         Returns:
@@ -514,18 +533,43 @@ class KnowledgebaseDocumentService:
         if kb_id:
             query = query.where(KnowledgebaseDocument.kb_id == kb_id)
 
+        if category_id:
+            query = query.where(KnowledgebaseDocument.category_id == category_id)
+
+        if name:
+            query = query.where(KnowledgebaseDocument.file_name.contains(name))
+
+        if file_type:
+            query = query.where(KnowledgebaseDocument.file_type == file_type)
+
+        if running_status:
+            query = query.where(KnowledgebaseDocument.running_status == running_status)
+
         if chunk_method:
             query = query.where(KnowledgebaseDocument.chunk_method == chunk_method)
 
         return list(query.order_by(KnowledgebaseDocument.created_at.desc()).offset(skip).limit(limit))
 
     @staticmethod
-    def count_documents(kb_id: str = None, chunk_method: str = None) -> int:
+    def count_documents(
+        kb_id: str = None, 
+        category_id: str = None,
+        tags: list = None,
+        name: str = None,
+        file_type: str = None,
+        running_status: str = None,
+        chunk_method: str = None
+    ) -> int:
         """
         统计知识库文档总数
 
         Args:
             kb_id: 知识库ID（可选）
+            category_id: 文档分类ID（可选）
+            tags: 标签列表（可选）
+            name: 文档名称（模糊查询，可选）
+            file_type: 文件类型（可选）
+            running_status: 解析状态（可选）
             chunk_method: Chunk方法（可选）
 
         Returns:
@@ -535,6 +579,18 @@ class KnowledgebaseDocumentService:
 
         if kb_id:
             query = query.where(KnowledgebaseDocument.kb_id == kb_id)
+
+        if category_id:
+            query = query.where(KnowledgebaseDocument.category_id == category_id)
+
+        if name:
+            query = query.where(KnowledgebaseDocument.file_name.contains(name))
+
+        if file_type:
+            query = query.where(KnowledgebaseDocument.file_type == file_type)
+
+        if running_status:
+            query = query.where(KnowledgebaseDocument.running_status == running_status)
 
         if chunk_method:
             query = query.where(KnowledgebaseDocument.chunk_method == chunk_method)
@@ -588,6 +644,12 @@ class KnowledgebaseDocumentService:
         if update_data.get('chunk_config') and isinstance(update_data['chunk_config'], dict):
             update_data['chunk_config'] = json.dumps(update_data['chunk_config'], ensure_ascii=False)
 
+        if 'tags' in update_data:
+            if update_data['tags'] and isinstance(update_data['tags'], list):
+                update_data['tags'] = json.dumps(update_data['tags'], ensure_ascii=False)
+            else:
+                update_data['tags'] = None
+
         for field, value in update_data.items():
             setattr(db_doc, field, value)
         db_doc.updated_at = datetime.now()
@@ -626,3 +688,193 @@ class KnowledgebaseDocumentService:
         ).where(Knowledgebase.id == db_doc.kb_id).execute()
 
         return db_doc
+
+
+class KnowledgebaseDocumentCategoryService:
+    """
+    知识库文档分类服务类
+
+    提供知识库文档分类的创建、查询、更新、删除等操作
+    """
+
+    @staticmethod
+    @handle_transaction
+    def create_category(category: KnowledgebaseDocumentCategoryCreate):
+        """
+        创建知识库文档分类
+
+        Args:
+            category: 知识库文档分类创建DTO
+
+        Returns:
+            KnowledgebaseDocumentCategory: 创建的知识库文档分类对象
+
+        Raises:
+            DuplicateResourceError: 同一知识库、同一父分类下名称已存在
+            ResourceNotFoundError: 知识库不存在
+        """
+        try:
+            kb = Knowledgebase.get_by_id(category.kb_id)
+            if kb.deleted:
+                raise ResourceNotFoundError(message=f"知识库 {category.kb_id} 不存在")
+        except Knowledgebase.DoesNotExist:
+            raise ResourceNotFoundError(message=f"知识库 {category.kb_id} 不存在")
+
+        parent_id = category.parent_id
+
+        existing = KnowledgebaseDocumentCategory.select().where(
+            (KnowledgebaseDocumentCategory.kb_id == category.kb_id) &
+            (KnowledgebaseDocumentCategory.name == category.name) &
+            (KnowledgebaseDocumentCategory.parent_id == parent_id if parent_id else KnowledgebaseDocumentCategory.parent_id.is_null()) &
+            (KnowledgebaseDocumentCategory.deleted == False)
+        ).first()
+
+        if existing:
+            raise DuplicateResourceError(f"分类名称 '{category.name}' 已存在")
+
+        db_category = KnowledgebaseDocumentCategory(**category.model_dump())
+        db_category.save(force_insert=True)
+        return db_category
+
+    @staticmethod
+    def get_categories(kb_id: str, skip: int = 0, limit: int = 100):
+        """
+        获取知识库文档分类列表
+
+        Args:
+            kb_id: 知识库ID
+            skip: 跳过的记录数
+            limit: 返回的最大记录数
+
+        Returns:
+            List[KnowledgebaseDocumentCategory]: 知识库文档分类列表
+        """
+        return list(KnowledgebaseDocumentCategory.select().where(
+            (KnowledgebaseDocumentCategory.kb_id == kb_id) &
+            (KnowledgebaseDocumentCategory.deleted == False)
+        ).offset(skip).limit(limit))
+
+    @staticmethod
+    def get_category_tree(kb_id: str):
+        """
+        获取知识库文档分类树形结构
+
+        Args:
+            kb_id: 知识库ID
+
+        Returns:
+            List[dict]: 分类树形结构
+        """
+        categories = list(KnowledgebaseDocumentCategory.select().where(
+            (KnowledgebaseDocumentCategory.kb_id == kb_id) &
+            (KnowledgebaseDocumentCategory.deleted == False)
+        ).order_by(KnowledgebaseDocumentCategory.sort_order))
+
+        def build_tree(parent_id=None):
+            tree = []
+            for cat in categories:
+                if cat.parent_id == parent_id:
+                    node = {
+                        "id": str(cat.id),
+                        "name": cat.name,
+                        "description": cat.description,
+                        "kb_id": str(cat.kb_id),
+                        "parent_id": str(cat.parent_id) if cat.parent_id else None,
+                        "sort_order": cat.sort_order,
+                        "children": build_tree(cat.id)
+                    }
+                    tree.append(node)
+            return tree
+
+        return build_tree()
+
+    @staticmethod
+    def get_category(category_id: str):
+        """
+        获取单个知识库文档分类
+
+        Args:
+            category_id: 知识库文档分类ID
+
+        Returns:
+            KnowledgebaseDocumentCategory: 知识库文档分类对象，不存在则返回None
+        """
+        try:
+            category = KnowledgebaseDocumentCategory.get_by_id(category_id)
+            if category.deleted:
+                return None
+            return category
+        except KnowledgebaseDocumentCategory.DoesNotExist:
+            return None
+
+    @staticmethod
+    @handle_transaction
+    def update_category(category_id: str, category: KnowledgebaseDocumentCategoryUpdate):
+        """
+        更新知识库文档分类
+
+        Args:
+            category_id: 知识库文档分类ID
+            category: 知识库文档分类更新DTO
+
+        Returns:
+            KnowledgebaseDocumentCategory: 更新后的知识库文档分类对象
+
+        Raises:
+            ResourceNotFoundError: 知识库文档分类不存在
+            DuplicateResourceError: 同一知识库、同一父分类下名称已存在
+        """
+        try:
+            db_category = KnowledgebaseDocumentCategory.get_by_id(category_id)
+            if db_category.deleted:
+                raise ResourceNotFoundError(message=f"知识库文档分类 {category_id} 不存在")
+        except KnowledgebaseDocumentCategory.DoesNotExist:
+            raise ResourceNotFoundError(message=f"知识库文档分类 {category_id} 不存在")
+
+        update_data = category.model_dump(exclude_unset=True)
+
+        if 'name' in update_data:
+            parent_id = update_data.get('parent_id', db_category.parent_id)
+            existing = KnowledgebaseDocumentCategory.select().where(
+                (KnowledgebaseDocumentCategory.kb_id == db_category.kb_id) &
+                (KnowledgebaseDocumentCategory.name == update_data['name']) &
+                (KnowledgebaseDocumentCategory.parent_id == parent_id if parent_id else KnowledgebaseDocumentCategory.parent_id.is_null()) &
+                (KnowledgebaseDocumentCategory.id != category_id) &
+                (KnowledgebaseDocumentCategory.deleted == False)
+            ).first()
+
+            if existing:
+                raise DuplicateResourceError(f"分类名称 '{update_data['name']}' 已存在")
+
+        for field, value in update_data.items():
+            setattr(db_category, field, value)
+        db_category.updated_at = datetime.now()
+        db_category.save()
+        return db_category
+
+    @staticmethod
+    @handle_transaction
+    def delete_category(category_id: str):
+        """
+        删除知识库文档分类（逻辑删除）
+
+        Args:
+            category_id: 知识库文档分类ID
+
+        Returns:
+            KnowledgebaseDocumentCategory: 被删除的知识库文档分类对象
+
+        Raises:
+            ResourceNotFoundError: 知识库文档分类不存在
+        """
+        try:
+            db_category = KnowledgebaseDocumentCategory.get_by_id(category_id)
+            if db_category.deleted:
+                raise ResourceNotFoundError(message=f"知识库文档分类 {category_id} 不存在")
+        except KnowledgebaseDocumentCategory.DoesNotExist:
+            raise ResourceNotFoundError(message=f"知识库文档分类 {category_id} 不存在")
+
+        db_category.deleted = True
+        db_category.deleted_at = datetime.now()
+        db_category.save()
+        return db_category

@@ -7,12 +7,14 @@ from fastapi import APIRouter, Body, Query
 from app.services.knowledgebase.service import (
     KnowledgebaseCategoryService,
     KnowledgebaseService,
-    KnowledgebaseDocumentService
+    KnowledgebaseDocumentService,
+    KnowledgebaseDocumentCategoryService
 )
 from app.services.knowledgebase.dto import (
     KnowledgebaseCategoryCreate, KnowledgebaseCategoryUpdate, KnowledgebaseCategory as CategorySchema,
     KnowledgebaseCreate, KnowledgebaseUpdate, Knowledgebase as KbSchema,
-    KnowledgebaseDocumentCreate, KnowledgebaseDocumentUpdate, KnowledgebaseDocument as DocSchema
+    KnowledgebaseDocumentCreate, KnowledgebaseDocumentUpdate, KnowledgebaseDocument as DocSchema,
+    KnowledgebaseDocumentCategoryCreate, KnowledgebaseDocumentCategoryUpdate, KnowledgebaseDocumentCategory as DocCategorySchema
 )
 from app.utils.response import ResponseUtil, ApiResponse
 
@@ -278,7 +280,11 @@ def create_document(kb_id: str, document: KnowledgebaseDocumentCreate):
 def get_documents(
     kb_id: str,
     page: int = Query(1, description="页码"),
-    page_size: int = Query(10, description="每页数量"),
+    page_size: int = Query(20, description="每页数量"),
+    category_id: str = Query(None, description="文档分类ID"),
+    name: str = Query(None, description="文档名称（模糊查询）"),
+    file_type: str = Query(None, description="文件类型"),
+    running_status: str = Query(None, description="解析状态"),
     chunk_method: str = Query(None, description="Chunk方法")
 ):
     """
@@ -287,21 +293,34 @@ def get_documents(
     Args:
         kb_id: 知识库ID
         page: 页码，默认1
-        page_size: 每页数量，默认10
+        page_size: 每页数量，默认20
+        category_id: 文档分类ID（可选）
+        name: 文档名称（模糊查询，可选）
+        file_type: 文件类型（可选）
+        running_status: 解析状态（可选）
         chunk_method: Chunk方法（可选）
 
     Returns:
         ApiResponse: 统一格式的响应对象，包含data和total
     """
     skip = (page - 1) * page_size
-    docs = KnowledgebaseDocumentService.get_documents(skip, page_size, kb_id, chunk_method)
-    total = KnowledgebaseDocumentService.count_documents(kb_id, chunk_method)
+    docs = KnowledgebaseDocumentService.get_documents(
+        skip, page_size, kb_id, category_id, None, name, file_type, running_status, chunk_method
+    )
+    total = KnowledgebaseDocumentService.count_documents(
+        kb_id, category_id, None, name, file_type, running_status, chunk_method
+    )
     docs_data = []
     for doc in docs:
         doc_dict = doc.__data__
         if doc_dict.get('chunk_config'):
             try:
                 doc_dict['chunk_config'] = json.loads(doc_dict['chunk_config'])
+            except (json.JSONDecodeError, TypeError):
+                pass
+        if doc_dict.get('tags'):
+            try:
+                doc_dict['tags'] = json.loads(doc_dict['tags'])
             except (json.JSONDecodeError, TypeError):
                 pass
         docs_data.append(doc_dict)
@@ -327,6 +346,11 @@ def get_document(kb_id: str, document_id: str):
     if data.get('chunk_config'):
         try:
             data['chunk_config'] = json.loads(data['chunk_config'])
+        except (json.JSONDecodeError, TypeError):
+            pass
+    if data.get('tags'):
+        try:
+            data['tags'] = json.loads(data['tags'])
         except (json.JSONDecodeError, TypeError):
             pass
     return ResponseUtil.success(data=data, message="获取知识库文档成功")
@@ -369,3 +393,105 @@ def delete_document(kb_id: str, document_id: str):
     """
     db_doc = KnowledgebaseDocumentService.delete_document(document_id)
     return ResponseUtil.success(data=db_doc.__data__, message="知识库文档删除成功")
+
+
+# 知识库文档分类相关接口
+@router.post("/{kb_id}/document_category", response_model=ApiResponse)
+def create_document_category(kb_id: str, category: KnowledgebaseDocumentCategoryCreate):
+    """
+    创建知识库文档分类
+
+    Args:
+        kb_id: 知识库ID
+        category: 知识库文档分类创建DTO
+
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    category.kb_id = kb_id
+    db_category = KnowledgebaseDocumentCategoryService.create_category(category)
+    return ResponseUtil.created(data=db_category.__data__, message="知识库文档分类创建成功")
+
+
+@router.get("/{kb_id}/document_category", response_model=ApiResponse)
+def get_document_categories(kb_id: str, skip: int = 0, limit: int = 100):
+    """
+    获取知识库文档分类列表
+
+    Args:
+        kb_id: 知识库ID
+        skip: 跳过的记录数
+        limit: 返回的最大记录数
+
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    categories = KnowledgebaseDocumentCategoryService.get_categories(kb_id, skip, limit)
+    categories_data = [category.__data__ for category in categories]
+    return ResponseUtil.success(data=categories_data, message="获取知识库文档分类列表成功")
+
+
+@router.get("/{kb_id}/document_category/tree", response_model=ApiResponse)
+def get_document_category_tree(kb_id: str):
+    """
+    获取知识库文档分类树形结构
+
+    Args:
+        kb_id: 知识库ID
+
+    Returns:
+        ApiResponse: 统一格式的响应对象，包含分类树形结构
+    """
+    tree = KnowledgebaseDocumentCategoryService.get_category_tree(kb_id)
+    return ResponseUtil.success(data=tree, message="获取知识库文档分类树成功")
+
+
+@router.get("/{kb_id}/document_category/{category_id}", response_model=ApiResponse)
+def get_document_category(kb_id: str, category_id: str):
+    """
+    获取单个知识库文档分类
+
+    Args:
+        kb_id: 知识库ID
+        category_id: 知识库文档分类ID
+
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    category = KnowledgebaseDocumentCategoryService.get_category(category_id)
+    if category is None:
+        return ResponseUtil.not_found(message=f"知识库文档分类 {category_id} 不存在")
+    return ResponseUtil.success(data=category.__data__, message="获取知识库文档分类成功")
+
+
+@router.post("/{kb_id}/document_category/{category_id}", response_model=ApiResponse)
+def update_document_category(kb_id: str, category_id: str, category: KnowledgebaseDocumentCategoryUpdate):
+    """
+    更新知识库文档分类
+
+    Args:
+        kb_id: 知识库ID
+        category_id: 知识库文档分类ID
+        category: 知识库文档分类更新DTO
+
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    db_category = KnowledgebaseDocumentCategoryService.update_category(category_id, category)
+    return ResponseUtil.success(data=db_category.__data__, message="知识库文档分类更新成功")
+
+
+@router.post("/{kb_id}/document_category/{category_id}/delete", response_model=ApiResponse)
+def delete_document_category(kb_id: str, category_id: str):
+    """
+    删除知识库文档分类（逻辑删除）
+
+    Args:
+        kb_id: 知识库ID
+        category_id: 知识库文档分类ID
+
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    db_category = KnowledgebaseDocumentCategoryService.delete_category(category_id)
+    return ResponseUtil.success(data=db_category.__data__, message="知识库文档分类删除成功")
