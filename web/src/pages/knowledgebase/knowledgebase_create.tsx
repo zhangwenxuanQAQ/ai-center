@@ -12,21 +12,6 @@ import './knowledgebase_create.less';
 
 const { Option } = Select;
 
-const MODEL_TYPE_MAP: Record<string, string> = {
-  'text': '文本模型',
-  'embedding': '向量模型',
-  'rerank': '重排序模型',
-  'chat': '聊天模型',
-  'code': '代码模型',
-  'image': '图像模型'
-};
-
-const MODEL_TYPES = [
-  { type: 'embedding', name: '向量模型', required: true , description: '用于将文本转换为向量存储'},
-  { type: 'rerank', name: 'Rerank模型', required: false, description: '用于重排序，如果不选那么默认使用余弦相似度排序' },
-  { type: 'text', name: '文本模型', required: false, description: '用于关键词提取' }
-];
-
 const getProviderAvatar = (provider: string): string => {
   if (!provider) {
     return '/src/assets/llm/default.svg';
@@ -58,11 +43,16 @@ const KnowledgebaseCreate: React.FC = () => {
   const [viewModelDrawerVisible, setViewModelDrawerVisible] = useState(false);
   const [currentModel, setCurrentModel] = useState<any>(null);
   
-  const [retrievalConfig, setRetrievalConfig] = useState<any>({
-    vector_similarity: 0.2,
-    keyword_similarity: 0.3,
-    top_k: 5
-  });
+  const [retrievalConfig, setRetrievalConfig] = useState<any>({});
+  const [retrievalConfigs, setRetrievalConfigs] = useState<any[]>([]);
+  const [modelTypes, setModelTypes] = useState<Record<string, string>>({});
+
+  // 模型类型信息
+  const MODEL_TYPES = [
+    { type: 'embedding', name: '向量模型', required: true , description: '用于将文本转换为向量存储'},
+    { type: 'rerank', name: 'Rerank模型', required: false, description: '用于重排序，如果不选那么默认使用余弦相似度排序' },
+    { type: 'text', name: '文本模型', required: false, description: '用于关键词提取' }
+  ];
 
   useEffect(() => {
     const currentTheme = document.body.getAttribute('data-theme') || 'light';
@@ -80,6 +70,8 @@ const KnowledgebaseCreate: React.FC = () => {
   useEffect(() => {
     fetchCategories();
     fetchModels();
+    fetchModelTypes();
+    fetchRetrievalConfigs();
     
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault();
@@ -118,6 +110,80 @@ const KnowledgebaseCreate: React.FC = () => {
     } catch (error) {
       console.error('Failed to fetch models:', error);
     }
+  };
+
+  const fetchModelTypes = async () => {
+    try {
+      const types = await llmModelService.getModelTypes();
+      setModelTypes(types);
+    } catch (error) {
+      console.error('Failed to fetch model types:', error);
+    }
+  };
+
+  const fetchRetrievalConfigs = async () => {
+    try {
+      // 这里应该调用后端API获取检索配置项
+      // 暂时使用前端常量，后续替换为后端API
+      const configs = [
+        {
+          key: "vector_similarity",
+          label: "文本相似度阈值",
+          type: "slider",
+          min: 0,
+          max: 1,
+          step: 0.01,
+          default: 0.2,
+          description: "文本相似度阈值，用于筛选检索结果"
+        },
+        {
+          key: "keyword_similarity",
+          label: "关键词相似度阈值",
+          type: "slider",
+          min: 0,
+          max: 1,
+          step: 0.01,
+          default: 0.3,
+          description: "关键词相似度阈值，用于筛选检索结果"
+        },
+        {
+          key: "top_k",
+          label: "召回数量",
+          type: "slider",
+          min: 1,
+          max: 20,
+          step: 1,
+          default: 5,
+          description: "检索时返回的最大结果数量"
+        },
+        {
+          key: "sort_by",
+          label: "排序方式",
+          type: "select",
+          options: [
+            { value: "sim", label: "混合相似度" },
+            { value: "vsim", label: "向量相似度" },
+            { value: "tsim", label: "关键词相似度" }
+          ],
+          default: "sim",
+          description: "检索结果的排序方式"
+        }
+      ];
+      setRetrievalConfigs(configs);
+      
+      // 初始化默认值
+      const defaultConfig: any = {};
+      configs.forEach(config => {
+        defaultConfig[config.key] = config.default;
+      });
+      setRetrievalConfig(defaultConfig);
+    } catch (error) {
+      console.error('Failed to fetch retrieval configs:', error);
+    }
+  };
+
+  const getModelTypeName = (modelType: string): string => {
+    return modelTypes[modelType] || modelType;
   };
 
   const handleSelectModel = (modelType: string) => {
@@ -279,6 +345,69 @@ const KnowledgebaseCreate: React.FC = () => {
         value: child.id
       }))
     }));
+  };
+
+  const renderRetrievalConfig = (param: any) => {
+    const value = retrievalConfig[param.key] ?? param.default;
+
+    switch (param.type) {
+      case 'slider':
+        return (
+          <div key={param.key}>
+            <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>{param.label}</span>
+              <Tooltip title={param.description}>
+                <QuestionCircleOutlined style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999', cursor: 'help' }} />
+              </Tooltip>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <Slider
+                min={param.min}
+                max={param.max}
+                step={param.step}
+                value={value}
+                onChange={(v) => handleSliderChange(param.key, v)}
+                style={{ flex: 1 }}
+              />
+              <InputNumber
+                size="small"
+                min={param.min}
+                max={param.max}
+                step={param.step}
+                value={value}
+                onChange={(value) => value !== null && handleSliderChange(param.key, value)}
+                style={{ width: 80 }}
+              />
+            </div>
+            <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999' }}>{param.min}</span>
+              <span style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999' }}>{param.max}</span>
+            </div>
+          </div>
+        );
+      case 'select':
+        return (
+          <div key={param.key}>
+            <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>{param.label}</span>
+              <Tooltip title={param.description}>
+                <QuestionCircleOutlined style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999', cursor: 'help' }} />
+              </Tooltip>
+            </div>
+            <Select
+              value={value}
+              onChange={(v) => handleSliderChange(param.key, v)}
+              style={{ width: '100%' }}
+            >
+              {param.options?.map((opt: any) => (
+                <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+              ))}
+            </Select>
+          </div>
+        );
+      default:
+        return null;
+    }
   };
 
   if (loading) {
@@ -526,104 +655,7 @@ const KnowledgebaseCreate: React.FC = () => {
               </div>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1 }}>
-                {/* 文本相似度阈值 */}
-                <div>
-                  <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>文本相似度阈值</span>
-                    <Tooltip title="文档相似度的最低阈值，低于此阈值的文档将被过滤">
-                      <QuestionCircleOutlined style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999', cursor: 'help' }} />
-                    </Tooltip>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <Slider
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      value={retrievalConfig.vector_similarity}
-                      onChange={(value) => handleSliderChange('vector_similarity', value)}
-                      style={{ flex: 1 }}
-                    />
-                    <InputNumber
-                      size="small"
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      value={retrievalConfig.vector_similarity}
-                      onChange={(value) => value !== null && handleSliderChange('vector_similarity', value)}
-                      style={{ width: 80 }}
-                    />
-                  </div>
-                  <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999' }}>0</span>
-                    <span style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999' }}>1</span>
-                  </div>
-                </div>
-
-                {/* 关键词相似度阈值 */}
-                <div>
-                  <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>关键词相似度阈值</span>
-                    <Tooltip title="关键词相似度的最低阈值，低于此阈值的关键词将被过滤">
-                      <QuestionCircleOutlined style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999', cursor: 'help' }} />
-                    </Tooltip>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <Slider
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      value={retrievalConfig.keyword_similarity}
-                      onChange={(value) => handleSliderChange('keyword_similarity', value)}
-                      style={{ flex: 1 }}
-                    />
-                    <InputNumber
-                      size="small"
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      value={retrievalConfig.keyword_similarity}
-                      onChange={(value) => value !== null && handleSliderChange('keyword_similarity', value)}
-                      style={{ width: 80 }}
-                    />
-                  </div>
-                  <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999' }}>0</span>
-                    <span style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999' }}>1</span>
-                  </div>
-                </div>
-
-                {/* 召回数量 */}
-                <div>
-                  <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>召回数量</span>
-                    <Tooltip title="检索时返回的文档数量">
-                      <QuestionCircleOutlined style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999', cursor: 'help' }} />
-                    </Tooltip>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <Slider
-                      min={1}
-                      max={20}
-                      step={1}
-                      value={retrievalConfig.top_k}
-                      onChange={(value) => handleSliderChange('top_k', value)}
-                      style={{ flex: 1 }}
-                    />
-                    <InputNumber
-                      size="small"
-                      min={1}
-                      max={20}
-                      step={1}
-                      value={retrievalConfig.top_k}
-                      onChange={(value) => value !== null && handleSliderChange('top_k', value)}
-                      style={{ width: 80 }}
-                    />
-                  </div>
-                  <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999' }}>1</span>
-                    <span style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999' }}>20</span>
-                  </div>
-                </div>
+                {retrievalConfigs.map(param => renderRetrievalConfig(param))}
               </div>
             </div>
           </div>
@@ -710,7 +742,7 @@ const KnowledgebaseCreate: React.FC = () => {
                     {model.name}
                   </div>
                   <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999', marginTop: '4px' }}>
-                    {model.provider}
+                    {model.provider} · {getModelTypeName(model.model_type)}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -758,7 +790,7 @@ const KnowledgebaseCreate: React.FC = () => {
                   {currentModel.name}
                 </h3>
                 <p style={{ margin: '8px 0 0 0', fontSize: '13px', color: theme === 'dark' ? '#aaa' : '#999' }}>
-                  {currentModel.provider} · {MODEL_TYPE_MAP[currentModel.model_type] || currentModel.model_type}
+                  {currentModel.provider} · {getModelTypeName(currentModel.model_type)}
                 </p>
               </div>
             </div>
@@ -772,7 +804,7 @@ const KnowledgebaseCreate: React.FC = () => {
               }}
             >
               <Descriptions.Item label="模型类型">
-                {MODEL_TYPE_MAP[currentModel.model_type] || currentModel.model_type}
+                {getModelTypeName(currentModel.model_type)}
               </Descriptions.Item>
               <Descriptions.Item label="端点地址">
                 {currentModel.endpoint || '未配置'}

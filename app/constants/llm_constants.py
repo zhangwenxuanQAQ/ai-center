@@ -7,8 +7,8 @@ MODEL_TYPE = {
     "audio": "语音模型",
     "vision": "视觉模型",
     "multimodal": "全模态模型",
-    "embedding": "Embedding",
-    "rerank": "Rerank",
+    "embedding": "Embedding模型",
+    "rerank": "Rerank模型",
     "tts": "语音合成模型"
 }
 
