@@ -2,7 +2,8 @@
 知识库常量
 """
 
-# 文档chunk方法
+FILE_NAME_LEN_LIMIT = 255
+
 DOCUMENT_CHUNK_METHOD = {
     "naive": "Naive",
     "qa": "QA",
@@ -19,7 +20,6 @@ DOCUMENT_CHUNK_METHOD = {
     "email": "Email",
 }
 
-# 文档解析状态
 DOCUMENT_RUNNING_STATUS = {
     "pending": "未开始",
     "running": "运行中",
@@ -29,7 +29,6 @@ DOCUMENT_RUNNING_STATUS = {
     "schedule": "定时调度",
 }
 
-# 检索配置
 RETRIEVAL_CONFIGS = [{
             "key": "vector_similarity",
             "label": "文本相似度阈值",
@@ -58,10 +57,9 @@ RETRIEVAL_CONFIGS = [{
             "default":5,
         },
          {
-            "key": "sort_by",# 排序方式 sim-混合相似度 vsim-向量相似度 tsim-关键词相似度
+            "key": "sort_by",
             "label": "排序方式",
             "type": "select",
             "options": [{"value":"sim","label": "混合相似度"},{"value":"vsim","label": "向量相似度"},{"value":"tsim","label": "关键词相似度"}],
             "default": "sim",
         }]
-   

@@ -560,3 +560,24 @@ POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
 知识库配置的布局需要和创建知识库页面一致
 
 代码写完后重启前后端服务，后端服务启动时需要更新库表结构。
+
+
+
+## 在knowledgebase_document_setting.tsx中实现知识库数据集新增编辑页面
+页面分页配置项区域和底部按钮区域。
+1. 配置项区域包括：
+  （1）数据来源（必填），使用knowledgebase_document_constants.py中的SourceType枚举。界面上用卡片展示，每个卡片展示一个来源类型，点击切换到下一个来源类型。
+  （2）上传文档/选择数据源/选择自定义模板
+      （2.1）当来源是LOCAL_DOCUMENT时，需要上传文档。 上传文档支持单个文档或者多个文档。
+      （2.2）当来源是DATASOURCE时，需要选择数据源，暂时先不支持。
+      （2.3）当来源是CUSTOM_TEMPLATE时，需要选择自定义模板，暂时先不支持。
+  （3）切片方法（必填），使用knowledgebase_document_constants.py中的ChunkMethod枚举。
+      
+2. 底部按钮区域包括：
+   如果是新增：
+  （1）返回
+  （2）保存
+   如果是编辑：
+  （1）返回
+  （2）恢复
+  （3）保存

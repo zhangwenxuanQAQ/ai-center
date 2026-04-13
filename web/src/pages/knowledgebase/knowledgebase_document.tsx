@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Layout, Tree, Table, Input, Select, Button, Tag, Spin, Pagination, Empty, Row, Col } from 'antd';
-import { SearchOutlined, PlusOutlined, FolderOutlined, FileTextOutlined } from '@ant-design/icons';
+import { Layout, Tree, Table, Input, Select, Button, Tag, Spin, Pagination, Empty, Row, Col, Tooltip, Switch, message } from 'antd';
+import { SearchOutlined, PlusOutlined, FolderOutlined, FileTextOutlined, PlayCircleOutlined, PauseCircleOutlined, ReloadOutlined, UnorderedListOutlined, EditOutlined, DownloadOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { TreeDataNode, TreeProps } from 'antd';
 import { knowledgebaseService, Knowledgebase, KnowledgebaseDocument, KnowledgebaseDocumentCategory } from '../../services/knowledgebase';
 import { DOCUMENT_RUNNING_STATUS, DOCUMENT_CHUNK_METHOD } from '../../constants/knowledgebase';
@@ -26,8 +26,9 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
   const [pageSize, setPageSize] = useState(20);
   const [totalDocs, setTotalDocs] = useState(0);
   const [searchName, setSearchName] = useState<string>('');
-  const [filterFileType, setFilterFileType] = useState<string>('');
-  const [filterStatus, setFilterStatus] = useState<string>('');
+  const [filterFileType, setFilterFileType] = useState<string[]>([]);
+  const [filterStatus, setFilterStatus] = useState<string[]>([]);
+  const [filterNewStatus, setFilterNewStatus] = useState<boolean | null>(null);
 
   useEffect(() => {
     const currentTheme = document.body.getAttribute('data-theme') || 'dark';
@@ -49,7 +50,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
 
   useEffect(() => {
     fetchDocuments();
-  }, [selectedCategory, searchName, filterFileType, filterStatus, currentPage, pageSize]);
+  }, [selectedCategory, searchName, filterFileType, filterStatus, filterNewStatus, currentPage, pageSize]);
 
   const getAllCategoryKeys = (categories: KnowledgebaseDocumentCategory[]): string[] => {
     let keys: string[] = [];
@@ -82,8 +83,9 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
         pageSize,
         selectedCategory || undefined,
         searchName || undefined,
-        filterFileType || undefined,
-        filterStatus || undefined
+        filterFileType.length > 0 ? filterFileType : undefined,
+        filterStatus.length > 0 ? filterStatus : undefined,
+        filterNewStatus || undefined
       );
       setDocuments(response.data || []);
       setTotalDocs(response.total || 0);
@@ -167,6 +169,26 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  const handleStatusChange = async (documentId: string, newStatus: string) => {
+    try {
+      // 先更新本地状态，提供即时反馈
+      setDocuments(prevDocuments => 
+        prevDocuments.map(doc => 
+          doc.id === documentId ? { ...doc, status: newStatus } : doc
+        )
+      );
+      
+      // 调用API更新服务器状态
+      await knowledgebaseService.updateDocument(knowledgebase.id, documentId, { status: newStatus });
+      message.success('状态更新成功');
+    } catch (error) {
+      console.error('Failed to update document status:', error);
+      message.error('状态更新失败');
+      // 失败时恢复原始状态
+      fetchDocuments();
+    }
+  };
+
   const columns = [
     {
       title: '文档名称',
@@ -178,12 +200,6 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
           <span>{text || '未命名文档'}</span>
         </div>
       ),
-    },
-    {
-      title: '文件类型',
-      dataIndex: 'file_type',
-      key: 'file_type',
-      width: 120,
     },
     {
       title: '文件大小',
@@ -204,22 +220,22 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       ),
     },
     {
-      title: 'Chunk方法',
+      title: '切片方法',
       dataIndex: 'chunk_method',
       key: 'chunk_method',
       width: 120,
       render: (method: string) => DOCUMENT_CHUNK_METHOD[method as keyof typeof DOCUMENT_CHUNK_METHOD] || method,
     },
     {
-      title: 'Token数',
-      dataIndex: 'token_num',
-      key: 'token_num',
+      title: '切片数',
+      dataIndex: 'chunk_num',
+      key: 'chunk_num',
       width: 100,
     },
     {
-      title: 'Chunk数',
-      dataIndex: 'chunk_num',
-      key: 'chunk_num',
+      title: 'Token数',
+      dataIndex: 'token_num',
+      key: 'token_num',
       width: 100,
     },
     {
@@ -234,6 +250,111 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
         </div>
       ),
     },
+    {
+      title: '创建时间',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      width: 180,
+      render: (createdAt: string) => (
+        <span>{createdAt ? new Date(createdAt).toLocaleString() : '-'}</span>
+      ),
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      key: 'status',
+      width: 100,
+      render: (status: boolean, record: KnowledgebaseDocument) => (
+        <Switch 
+          checked={status}
+          onChange={(checked) => handleStatusChange(record.id, checked)}
+          checkedChildren="启用"
+          unCheckedChildren="禁用"
+        />
+      ),
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 180,
+      fixed: 'right' as const,
+      render: (_, record: KnowledgebaseDocument) => {
+        const getStatusButton = () => {
+          switch (record.running_status) {
+            case 'running':
+              return (
+                <Tooltip title="停止">
+                  <Button 
+                    type="text"
+                    size="small" 
+                    icon={<PauseCircleOutlined />}
+                    style={{ color: '#1890ff' }}
+                  />
+                </Tooltip>
+              );
+            case 'done':
+            case 'fail':
+            case 'cancel':
+              return (
+                <Tooltip title="重新执行">
+                  <Button 
+                    type="text"
+                    size="small" 
+                    icon={<ReloadOutlined />}
+                    style={{ color: '#52c41a' }}
+                  />
+                </Tooltip>
+              );
+            default:
+              return (
+                <Tooltip title="运行">
+                  <Button 
+                    type="text"
+                    size="small" 
+                    icon={<PlayCircleOutlined />}
+                    style={{ color: '#52c41a' }}
+                  />
+                </Tooltip>
+              );
+          }
+        };
+        
+        return (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {getStatusButton()}
+            <Tooltip title="查看切片">
+              <Button 
+                type="text"
+                size="small" 
+                icon={<UnorderedListOutlined />}
+              />
+            </Tooltip>
+            <Tooltip title="编辑">
+              <Button 
+                type="text"
+                size="small" 
+                icon={<EditOutlined />}
+              />
+            </Tooltip>
+            <Tooltip title="下载">
+              <Button 
+                type="text"
+                size="small" 
+                icon={<DownloadOutlined />}
+              />
+            </Tooltip>
+            <Tooltip title="删除">
+              <Button 
+                type="text"
+                size="small" 
+                danger 
+                icon={<DeleteOutlined />}
+              />
+            </Tooltip>
+          </div>
+        );
+      },
+    },
   ];
 
   return (
@@ -241,6 +362,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       <LeftSider
         width={260}
         className={`category-sider ${theme === 'dark' ? 'dark' : 'light'}`}
+        style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
       >
         <div className={`sider-header ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>文档分类</span>
@@ -268,6 +390,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
           onExpand={handleTreeExpand}
           treeData={buildTreeData()}
           className={`category-tree ${theme === 'dark' ? 'dark' : 'light'}`}
+          style={{ flex: 1, overflow: 'auto' }}
         />
       </LeftSider>
 
@@ -292,40 +415,63 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
             className="no-border-input"
           />
           <Select
-            placeholder="按文件类型筛选"
+            placeholder="请选择切片方法"
             value={filterFileType}
             onChange={setFilterFileType}
+            mode="multiple"
             allowClear
             style={{
-              width: '150px',
+              width: '200px',
               height: '36px',
               borderRadius: '18px',
-              background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
+              background: theme === 'dark' ? 'transparent' : '#ffffff',
               border: 'none',
               color: theme === 'dark' ? '#ffffff' : '#000000'
             }}
+            maxTagCount={1}
+            maxTagTextLength={10}
           >
             {Object.entries(DOCUMENT_CHUNK_METHOD).map(([key, label]) => (
               <Option key={key} value={key}>{label}</Option>
             ))}
           </Select>
           <Select
-            placeholder="按解析状态筛选"
+            placeholder="请选择解析状态"
             value={filterStatus}
             onChange={setFilterStatus}
+            mode="multiple"
+            allowClear
+            style={{
+              width: '200px',
+              height: '36px',
+              borderRadius: '18px',
+              background: theme === 'dark' ? 'transparent' : '#ffffff',
+              border: 'none',
+              color: theme === 'dark' ? '#ffffff' : '#000000'
+            }}
+            maxTagCount={1}
+            maxTagTextLength={10}
+          >
+            {Object.entries(DOCUMENT_RUNNING_STATUS).map(([key, label]) => (
+              <Option key={key} value={key}>{label}</Option>
+            ))}
+          </Select>
+          <Select
+            placeholder="请选择状态"
+            value={filterNewStatus}
+            onChange={setFilterNewStatus}
             allowClear
             style={{
               width: '150px',
               height: '36px',
               borderRadius: '18px',
-              background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
+              background: theme === 'dark' ? 'transparent' : '#ffffff',
               border: 'none',
               color: theme === 'dark' ? '#ffffff' : '#000000'
             }}
           >
-            {Object.entries(DOCUMENT_RUNNING_STATUS).map(([key, label]) => (
-              <Option key={key} value={key}>{label}</Option>
-            ))}
+            <Option key="true" value={true}>启用</Option>
+            <Option key="false" value={false}>禁用</Option>
           </Select>
         </div>
 
@@ -354,6 +500,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
               rowKey="id"
               pagination={false}
               className={`knowledgebase-document-table ${theme === 'dark' ? 'dark' : 'light'}`}
+              scroll={{ x: 'max-content' }}
             />
           )}
         </div>

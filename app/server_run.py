@@ -668,19 +668,47 @@ try:
         columns = [column[0] for column in cursor.fetchall()]
         
         if 'category_id' not in columns:
-            db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN category_id VARCHAR(40) DEFAULT NULL AFTER kb_id")
-            print("  成功添加 category_id 字段")
+            db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN category_id VARCHAR(36) DEFAULT NULL")
+            print("  category_id 字段已添加")
         else:
             print("  category_id 字段已存在，跳过")
         
         if 'tags' not in columns:
-            db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN tags TEXT DEFAULT NULL AFTER category_id")
-            print("  成功添加 tags 字段")
+            db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN tags TEXT DEFAULT NULL")
+            print("  tags 字段已添加")
         else:
             print("  tags 字段已存在，跳过")
     except Exception as e:
-        print(f"  添加字段失败: {e}")
-    
+        print(f"  为 knowledgebase_document 表添加字段失败: {e}")
+
+    print("\n将 knowledgebase_document 表的 status 字段从字符串类型改为布尔类型...")
+    try:
+        cursor = db.execute_sql("DESCRIBE knowledgebase_document;")
+        columns = cursor.fetchall()
+        status_column = None
+        for column in columns:
+            if column[0] == 'status':
+                status_column = column
+                break
+        
+        if status_column:
+            if status_column[1].upper() != 'BOOLEAN':
+                # 添加临时字段
+                db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN status_temp BOOLEAN DEFAULT TRUE;")
+                # 更新临时字段值
+                db.execute_sql("UPDATE knowledgebase_document SET status_temp = CASE WHEN status = 'active' THEN TRUE ELSE FALSE END;")
+                # 删除原字段
+                db.execute_sql("ALTER TABLE knowledgebase_document DROP COLUMN status;")
+                # 重命名临时字段
+                db.execute_sql("ALTER TABLE knowledgebase_document CHANGE COLUMN status_temp status BOOLEAN DEFAULT TRUE;")
+                print("  成功将 status 字段从字符串类型改为布尔类型")
+            else:
+                print("  status 字段已经是布尔类型，跳过")
+        else:
+            print("  status 字段不存在，跳过")
+    except Exception as e:
+        print(f"  修改 knowledgebase_document 表的 status 字段类型失败: {e}")
+
     print("\n数据库迁移完成")
 except Exception as e:
     print(f"数据库迁移失败: {e}")

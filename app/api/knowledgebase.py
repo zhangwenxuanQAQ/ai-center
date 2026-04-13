@@ -3,13 +3,17 @@
 """
 
 import json
-from fastapi import APIRouter, Body, Query
+import logging
+from typing import List
+from fastapi import APIRouter, Body, Query, UploadFile, File, Form
+from fastapi.responses import StreamingResponse
 from app.services.knowledgebase.service import (
     KnowledgebaseCategoryService,
     KnowledgebaseService,
     KnowledgebaseDocumentService,
     KnowledgebaseDocumentCategoryService
 )
+from app.services.knowledgebase.document.service import DocumentService
 from app.services.knowledgebase.dto import (
     KnowledgebaseCategoryCreate, KnowledgebaseCategoryUpdate, KnowledgebaseCategory as CategorySchema,
     KnowledgebaseCreate, KnowledgebaseUpdate, Knowledgebase as KbSchema,
@@ -17,6 +21,9 @@ from app.services.knowledgebase.dto import (
     KnowledgebaseDocumentCategoryCreate, KnowledgebaseDocumentCategoryUpdate, KnowledgebaseDocumentCategory as DocCategorySchema
 )
 from app.utils.response import ResponseUtil, ApiResponse
+from app.constants.knowledgebase_constants import SourceType, FILE_NAME_LEN_LIMIT
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -284,8 +291,9 @@ def get_documents(
     category_id: str = Query(None, description="文档分类ID"),
     name: str = Query(None, description="文档名称（模糊查询）"),
     file_type: str = Query(None, description="文件类型"),
-    running_status: str = Query(None, description="解析状态"),
-    chunk_method: str = Query(None, description="Chunk方法")
+    running_status: List[str] = Query(None, description="解析状态"),
+    status: bool = Query(None, description="文档状态"),
+    chunk_method: List[str] = Query(None, description="Chunk方法")
 ):
     """
     获取知识库文档列表（分页）
@@ -297,18 +305,35 @@ def get_documents(
         category_id: 文档分类ID（可选）
         name: 文档名称（模糊查询，可选）
         file_type: 文件类型（可选）
-        running_status: 解析状态（可选）
-        chunk_method: Chunk方法（可选）
+        running_status: 解析状态列表（可选）
+        status: 文档状态（可选）
+        chunk_method: Chunk方法列表（可选）
 
     Returns:
         ApiResponse: 统一格式的响应对象，包含data和total
     """
     skip = (page - 1) * page_size
     docs = KnowledgebaseDocumentService.get_documents(
-        skip, page_size, kb_id, category_id, None, name, file_type, running_status, chunk_method
+        kb_id=kb_id, 
+        category_id=category_id, 
+        tags=None, 
+        name=name, 
+        file_type=file_type, 
+        running_status=running_status, 
+        status=status, 
+        chunk_method=chunk_method, 
+        skip=skip, 
+        limit=page_size
     )
     total = KnowledgebaseDocumentService.count_documents(
-        kb_id, category_id, None, name, file_type, running_status, chunk_method
+        kb_id=kb_id, 
+        category_id=category_id, 
+        tags=None, 
+        name=name, 
+        file_type=file_type, 
+        running_status=running_status, 
+        status=status, 
+        chunk_method=chunk_method
     )
     docs_data = []
     for doc in docs:
@@ -325,6 +350,86 @@ def get_documents(
                 pass
         docs_data.append(doc_dict)
     return ResponseUtil.success(data={"data": docs_data, "total": total}, message="获取知识库文档列表成功")
+
+
+@router.post("/{kb_id}/document/upload", response_model=ApiResponse)
+async def upload_documents(
+    kb_id: str,
+    files: List[UploadFile] = File(..., description="上传的文件列表"),
+    source_type: str = Form(SourceType.DOCUMENT, description="来源类型：document/datasheet/custom_template"),
+    category_id: str = Form(None, description="文档分类ID"),
+):
+    """
+    批量上传文档到知识库
+
+    文件上传到RustFS对象存储，存储路径为：知识库id/文件名称。
+    如果存在同名文件，自动在文件名后添加递增数字后缀，如test_(1).docx。
+
+    Args:
+        kb_id: 知识库ID
+        files: 上传的文件列表
+        source_type: 来源类型，默认document
+        category_id: 文档分类ID，可选
+
+    Returns:
+        ApiResponse: 统一格式的响应对象，包含成功上传的文档列表和错误信息
+    """
+    if not files:
+        return ResponseUtil.bad_request(message="未选择文件")
+
+    for f in files:
+        if not f.filename:
+            return ResponseUtil.bad_request(message="文件名不能为空")
+        if len(f.filename.encode("utf-8")) > FILE_NAME_LEN_LIMIT:
+            return ResponseUtil.bad_request(message=f"文件名 {f.filename} 长度超过{FILE_NAME_LEN_LIMIT}字节限制")
+
+    if source_type not in [SourceType.DOCUMENT, SourceType.DATASHEET, SourceType.CUSTOM_TEMPLATE]:
+        return ResponseUtil.bad_request(message=f"不支持的来源类型: {source_type}")
+
+    try:
+        file_data_list = []
+        for f in files:
+            content = await f.read()
+            file_data_list.append({
+                "filename": f.filename,
+                "content": content,
+                "content_type": f.content_type,
+            })
+            await f.close()
+
+        errors, documents = DocumentService.upload_documents(
+            kb_id=kb_id,
+            file_data_list=file_data_list,
+            source_type=source_type,
+            category_id=category_id,
+        )
+
+        docs_data = []
+        for doc in documents:
+            doc_dict = doc.__data__
+            if doc_dict.get('chunk_config'):
+                try:
+                    doc_dict['chunk_config'] = json.loads(doc_dict['chunk_config'])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            if doc_dict.get('tags'):
+                try:
+                    doc_dict['tags'] = json.loads(doc_dict['tags'])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            docs_data.append(doc_dict)
+
+        if errors:
+            return ResponseUtil.success(
+                data={"data": docs_data, "errors": errors},
+                message=f"部分文件上传成功，{len(errors)}个文件上传失败"
+            )
+
+        return ResponseUtil.created(data=docs_data, message=f"成功上传{len(docs_data)}个文件")
+
+    except Exception as e:
+        logger.error(f"上传文档失败: {e}")
+        return ResponseUtil.error(message=str(e))
 
 
 @router.get("/{kb_id}/document/{document_id}", response_model=ApiResponse)
@@ -393,6 +498,83 @@ def delete_document(kb_id: str, document_id: str):
     """
     db_doc = KnowledgebaseDocumentService.delete_document(document_id)
     return ResponseUtil.success(data=db_doc.__data__, message="知识库文档删除成功")
+
+
+@router.get("/{kb_id}/document/{document_id}/download")
+def download_document(kb_id: str, document_id: str):
+    """
+    下载知识库文档
+
+    Args:
+        kb_id: 知识库ID
+        document_id: 文档ID
+
+    Returns:
+        StreamingResponse: 文件流响应
+    """
+    try:
+        result = DocumentService.download_document(document_id)
+        blob = result["blob"]
+        file_name = result["file_name"]
+        mime_type = result["mime_type"]
+
+        import urllib.parse
+        encoded_filename = urllib.parse.quote(file_name)
+
+        from io import BytesIO
+        file_stream = BytesIO(blob)
+
+        return StreamingResponse(
+            file_stream,
+            media_type=mime_type,
+            headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
+                "Content-Length": str(len(blob)),
+            }
+        )
+    except Exception as e:
+        logger.error(f"下载文档失败: {e}")
+        return ResponseUtil.error(message=str(e))
+
+
+@router.get("/{kb_id}/document/{document_id}/preview", response_model=ApiResponse)
+def preview_document(kb_id: str, document_id: str):
+    """
+    获取知识库文档在线阅读预览URL
+
+    Args:
+        kb_id: 知识库ID
+        document_id: 文档ID
+
+    Returns:
+        ApiResponse: 统一格式的响应对象，包含预签名URL
+    """
+    try:
+        url = DocumentService.get_document_preview_url(document_id)
+        return ResponseUtil.success(data={"url": url}, message="获取预览URL成功")
+    except Exception as e:
+        logger.error(f"获取预览URL失败: {e}")
+        return ResponseUtil.error(message=str(e))
+
+
+@router.get("/{kb_id}/document/{document_id}/thumbnail", response_model=ApiResponse)
+def get_document_thumbnail(kb_id: str, document_id: str):
+    """
+    获取知识库文档缩略图
+
+    Args:
+        kb_id: 知识库ID
+        document_id: 文档ID
+
+    Returns:
+        ApiResponse: 统一格式的响应对象，包含base64编码的缩略图
+    """
+    try:
+        thumbnail = DocumentService.get_thumbnail(document_id)
+        return ResponseUtil.success(data={"thumbnail": thumbnail}, message="获取缩略图成功")
+    except Exception as e:
+        logger.error(f"获取缩略图失败: {e}")
+        return ResponseUtil.error(message=str(e))
 
 
 # 知识库文档分类相关接口

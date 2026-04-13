@@ -62,6 +62,7 @@ export interface KnowledgebaseDocument {
   location?: string;
   file_size: number;
   running_status: string;
+  status: boolean;
   task_progress: number;
   task_begin_at?: string;
   task_end_at?: string;
@@ -231,8 +232,9 @@ export const knowledgebaseService = {
     pageSize: number = 20,
     categoryId?: string,
     name?: string,
-    fileType?: string,
-    runningStatus?: string
+    chunkMethod?: string[],
+    runningStatus?: string[],
+    status?: string
   ): Promise<{ data: KnowledgebaseDocument[]; total: number }> => {
     let params = [`page=${page}`, `page_size=${pageSize}`];
     if (categoryId) {
@@ -241,11 +243,18 @@ export const knowledgebaseService = {
     if (name) {
       params.push(`name=${encodeURIComponent(name)}`);
     }
-    if (fileType) {
-      params.push(`file_type=${fileType}`);
+    if (chunkMethod && chunkMethod.length > 0) {
+      chunkMethod.forEach(method => {
+        params.push(`chunk_method=${method}`);
+      });
     }
-    if (runningStatus) {
-      params.push(`running_status=${runningStatus}`);
+    if (runningStatus && runningStatus.length > 0) {
+      runningStatus.forEach(status => {
+        params.push(`running_status=${status}`);
+      });
+    }
+    if (status) {
+      params.push(`status=${status}`);
     }
     const queryString = params.length > 0 ? `?${params.join('&')}` : '';
     return http.get<{ data: KnowledgebaseDocument[]; total: number }>(

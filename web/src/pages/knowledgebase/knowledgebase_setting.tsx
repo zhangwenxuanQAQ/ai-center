@@ -719,7 +719,7 @@ const KnowledgebaseSetting: React.FC<KnowledgebaseSettingProps> = ({ knowledgeba
         </div>
       </div>
 
-      <div style={{ 
+      <div className={`restore-save-buttons ${theme === 'dark' ? 'dark' : 'light'}`} style={{ 
         paddingTop: '8px', 
         borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8',
         display: 'flex',

@@ -177,6 +177,7 @@ class KnowledgebaseDocument(SoftDeleteModel):
     source_config = TextField(null=True, verbose_name="来源配置JSON")
     thumbnail = TextField(null=True, verbose_name="文件缩略图")
     running_status = CharField(max_length=50, default="pending", verbose_name="文档解析状态")
+    status = BooleanField(default=True, verbose_name="文档状态")
     task_progress = FloatField(default=0, verbose_name="文档解析进度(0-1)")
     task_begin_at = DateTimeField(null=True, verbose_name="文档解析开始时间")
     task_end_at = DateTimeField(null=True, verbose_name="文档解析结束时间")

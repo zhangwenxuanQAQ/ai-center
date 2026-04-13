@@ -501,29 +501,31 @@ class KnowledgebaseDocumentService:
 
     @staticmethod
     def get_documents(
-        skip: int = 0, 
-        limit: int = 100, 
         kb_id: str = None, 
         category_id: str = None,
         tags: list = None,
         name: str = None,
         file_type: str = None,
-        running_status: str = None,
-        chunk_method: str = None
-    ):
+        running_status: list = None,
+        status: str = None,
+        chunk_method: list = None,
+        skip: int = 0,
+        limit: int = 20
+    ) -> List[KnowledgebaseDocument]:
         """
         获取知识库文档列表
 
         Args:
-            skip: 跳过的记录数
-            limit: 返回的最大记录数
             kb_id: 知识库ID（可选）
             category_id: 文档分类ID（可选）
             tags: 标签列表（可选）
             name: 文档名称（模糊查询，可选）
             file_type: 文件类型（可选）
-            running_status: 解析状态（可选）
-            chunk_method: Chunk方法（可选）
+            running_status: 解析状态列表（可选）
+            status: 文档状态（可选）
+            chunk_method: Chunk方法列表（可选）
+            skip: 跳过记录数（默认0）
+            limit: 返回记录数（默认20）
 
         Returns:
             List[KnowledgebaseDocument]: 知识库文档列表
@@ -543,10 +545,19 @@ class KnowledgebaseDocumentService:
             query = query.where(KnowledgebaseDocument.file_type == file_type)
 
         if running_status:
-            query = query.where(KnowledgebaseDocument.running_status == running_status)
+            if isinstance(running_status, list):
+                query = query.where(KnowledgebaseDocument.running_status.in_(running_status))
+            else:
+                query = query.where(KnowledgebaseDocument.running_status == running_status)
+
+        if status:
+            query = query.where(KnowledgebaseDocument.status == status)
 
         if chunk_method:
-            query = query.where(KnowledgebaseDocument.chunk_method == chunk_method)
+            if isinstance(chunk_method, list):
+                query = query.where(KnowledgebaseDocument.chunk_method.in_(chunk_method))
+            else:
+                query = query.where(KnowledgebaseDocument.chunk_method == chunk_method)
 
         return list(query.order_by(KnowledgebaseDocument.created_at.desc()).offset(skip).limit(limit))
 
@@ -557,8 +568,9 @@ class KnowledgebaseDocumentService:
         tags: list = None,
         name: str = None,
         file_type: str = None,
-        running_status: str = None,
-        chunk_method: str = None
+        running_status: list = None,
+        status: str = None,
+        chunk_method: list = None
     ) -> int:
         """
         统计知识库文档总数
@@ -569,8 +581,9 @@ class KnowledgebaseDocumentService:
             tags: 标签列表（可选）
             name: 文档名称（模糊查询，可选）
             file_type: 文件类型（可选）
-            running_status: 解析状态（可选）
-            chunk_method: Chunk方法（可选）
+            running_status: 解析状态列表（可选）
+            status: 文档状态（可选）
+            chunk_method: Chunk方法列表（可选）
 
         Returns:
             int: 知识库文档总数
@@ -590,10 +603,19 @@ class KnowledgebaseDocumentService:
             query = query.where(KnowledgebaseDocument.file_type == file_type)
 
         if running_status:
-            query = query.where(KnowledgebaseDocument.running_status == running_status)
+            if isinstance(running_status, list):
+                query = query.where(KnowledgebaseDocument.running_status.in_(running_status))
+            else:
+                query = query.where(KnowledgebaseDocument.running_status == running_status)
+
+        if status:
+            query = query.where(KnowledgebaseDocument.status == status)
 
         if chunk_method:
-            query = query.where(KnowledgebaseDocument.chunk_method == chunk_method)
+            if isinstance(chunk_method, list):
+                query = query.where(KnowledgebaseDocument.chunk_method.in_(chunk_method))
+            else:
+                query = query.where(KnowledgebaseDocument.chunk_method == chunk_method)
 
         return query.count()
 
