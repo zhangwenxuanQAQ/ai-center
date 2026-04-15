@@ -709,6 +709,46 @@ try:
     except Exception as e:
         print(f"  修改 knowledgebase_document 表的 status 字段类型失败: {e}")
 
+    # 更新 knowledgebase_document 表的 location 和 file_name 字段
+    print("\n更新 knowledgebase_document 表的 location 和 file_name 字段...")
+    try:
+        cursor = db.execute_sql("DESCRIBE knowledgebase_document;")
+        columns = cursor.fetchall()
+        
+        # 更新 location 字段从 VARCHAR(512) 改为 TEXT
+        location_column = None
+        for column in columns:
+            if column[0] == 'location':
+                location_column = column
+                break
+        
+        if location_column:
+            if 'varchar' in location_column[1].lower():
+                db.execute_sql("ALTER TABLE knowledgebase_document MODIFY COLUMN location TEXT DEFAULT NULL;")
+                print("  成功将 location 字段类型改为 TEXT")
+            else:
+                print("  location 字段已经是 TEXT 类型，跳过")
+        else:
+            print("  location 字段不存在，跳过")
+        
+        # 更新 file_name 字段长度从 VARCHAR(255) 改为 VARCHAR(2000)
+        file_name_column = None
+        for column in columns:
+            if column[0] == 'file_name':
+                file_name_column = column
+                break
+        
+        if file_name_column:
+            if 'varchar(255)' in file_name_column[1].lower():
+                db.execute_sql("ALTER TABLE knowledgebase_document MODIFY COLUMN file_name VARCHAR(2000) DEFAULT NULL;")
+                print("  成功将 file_name 字段长度改为 2000")
+            else:
+                print("  file_name 字段长度已经是 2000，跳过")
+        else:
+            print("  file_name 字段不存在，跳过")
+    except Exception as e:
+        print(f"  更新 knowledgebase_document 表字段失败: {e}")
+
     # 统一所有表的COLLATE为utf8mb4_0900_ai_ci
     print("\n统一所有表的COLLATE字符集为utf8mb4_0900_ai_ci...")
     try:
