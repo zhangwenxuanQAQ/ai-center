@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Layout, Tree, Table, Input, Select, Button, Tag, Spin, Pagination, Empty, Row, Col, Tooltip, Switch, message } from 'antd';
-import { SearchOutlined, PlusOutlined, FolderOutlined, FileTextOutlined, PlayCircleOutlined, PauseCircleOutlined, ReloadOutlined, UnorderedListOutlined, EditOutlined, DownloadOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Layout, Tree, Table, Input, Select, Button, Tag, Spin, Pagination, Empty, Row, Col, Tooltip, Switch, message, Modal, Popconfirm, Form } from 'antd';
+const { TextArea } = Input;
+import { SearchOutlined, PlusOutlined, FolderOutlined, FileTextOutlined, PlayCircleOutlined, PauseCircleOutlined, ReloadOutlined, UnorderedListOutlined, EditOutlined, DownloadOutlined, DeleteOutlined, UpOutlined, DownOutlined } from '@ant-design/icons';
 import type { TreeDataNode, TreeProps } from 'antd';
 import { knowledgebaseService, Knowledgebase, KnowledgebaseDocument, KnowledgebaseDocumentCategory } from '../../services/knowledgebase';
 import { DOCUMENT_RUNNING_STATUS, DOCUMENT_CHUNK_METHOD } from '../../constants/knowledgebase';
+import KnowledgebaseDocumentSetting from './knowledgebase_document_setting';
 import '../../styles/common.css';
 import './knowledgebase.less';
 
@@ -29,6 +31,15 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
   const [filterFileType, setFilterFileType] = useState<string[]>([]);
   const [filterStatus, setFilterStatus] = useState<string[]>([]);
   const [filterNewStatus, setFilterNewStatus] = useState<boolean | null>(null);
+  const [showSetting, setShowSetting] = useState(false);
+  const [editingDocument, setEditingDocument] = useState<KnowledgebaseDocument | undefined>(undefined);
+  
+  // 分类管理相关状态
+  const [isCategoryModalVisible, setIsCategoryModalVisible] = useState(false);
+  const [isCategoryEditModalVisible, setIsCategoryEditModalVisible] = useState(false);
+  const [categoryForm] = Form.useForm();
+  const [categoryEditForm] = Form.useForm();
+  const [editingCategory, setEditingCategory] = useState<any>(null);
 
   useEffect(() => {
     const currentTheme = document.body.getAttribute('data-theme') || 'dark';
@@ -108,11 +119,63 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       key: 'all',
     };
 
-    const buildCategoryNode = (category: KnowledgebaseDocumentCategory): TreeDataNode => {
+    const buildCategoryNode = (category: any): TreeDataNode => {
       return {
         title: (
-          <div className="category-tree-node" style={{ cursor: 'pointer' }}>
+          <div className="category-tree-node" style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="category-name" title={category.name}>{category.name}</div>
+            <div className="category-actions" style={{ display: 'flex', gap: '4px' }}>
+              <Button
+                type="text"
+                icon={<UpOutlined />}
+                size="small"
+                title="上移"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCategorySort(category, 'up');
+                }}
+              />
+              <Button
+                type="text"
+                icon={<DownOutlined />}
+                size="small"
+                title="下移"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCategorySort(category, 'down');
+                }}
+              />
+              <Button
+                type="text"
+                icon={<EditOutlined />}
+                size="small"
+                title="编辑"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleEditCategory(category);
+                }}
+              />
+              <Popconfirm
+                title="确认删除"
+                description="确定要删除这个分类吗？"
+                onConfirm={(e) => {
+                  e.stopPropagation();
+                  handleDeleteCategory(category);
+                }}
+                okText="确认"
+                cancelText="取消"
+              >
+                <Button
+                  type="text"
+                  icon={<DeleteOutlined />}
+                  size="small"
+                  danger
+                  title="删除"
+                  className="delete-category-btn"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </Popconfirm>
+            </div>
           </div>
         ),
         key: `category-${category.id}`,
@@ -122,7 +185,28 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       };
     };
 
-    const categoryNodes: TreeDataNode[] = categories.map(cat => buildCategoryNode(cat));
+    const categoryNodes: TreeDataNode[] = [];
+
+    const defaultCategories = categories.filter(category => category.is_default);
+    const normalCategories = categories.filter(category => !category.is_default);
+
+    defaultCategories.forEach(category => {
+      categoryNodes.push({
+        title: (
+          <div className="category-tree-node" style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="category-name" title={category.name}>{category.name}</div>
+          </div>
+        ),
+        key: `category-${category.id}`,
+        children: category.children && Array.isArray(category.children) && category.children.length > 0
+          ? category.children.map(child => buildCategoryNode(child))
+          : undefined,
+      });
+    });
+
+    normalCategories.forEach(category => {
+      categoryNodes.push(buildCategoryNode(category));
+    });
 
     return [allNode, ...categoryNodes];
   };
@@ -142,6 +226,130 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
 
   const handleTreeExpand: TreeProps['onExpand'] = (expandedKeys) => {
     setExpandedKeys(expandedKeys as string[]);
+  };
+
+  const handleOpenCategoryModal = () => {
+    categoryForm.resetFields();
+    const maxSortOrder = categories.length > 0 
+      ? Math.max(...flattenAllCategories(categories).map(c => c.sort_order || 0)) 
+      : 0;
+    categoryForm.setFieldsValue({ sort_order: maxSortOrder + 1 });
+    setIsCategoryModalVisible(true);
+  };
+
+  const handleSaveCategory = async () => {
+    try {
+      const values = await categoryForm.validateFields();
+      await knowledgebaseService.createDocumentCategory(knowledgebase.id, values);
+      message.success('分类创建成功');
+      setIsCategoryModalVisible(false);
+      fetchCategories();
+    } catch (error) {
+      console.error('Failed to create category:', error);
+    }
+  };
+
+  const handleEditCategory = (category: any) => {
+    if (category.is_default) {
+      message.warning('默认分类不能编辑');
+      return;
+    }
+    categoryEditForm.setFieldsValue({
+      name: category.name,
+      description: category.description || '',
+      parent_id: category.parent_id || null,
+      sort_order: category.sort_order || 1
+    });
+    setEditingCategory(category);
+    setIsCategoryEditModalVisible(true);
+  };
+
+  const handleSaveEditCategory = async () => {
+    if (!editingCategory) return;
+
+    try {
+      const values = await categoryEditForm.validateFields();
+      await knowledgebaseService.updateDocumentCategory(knowledgebase.id, editingCategory.id, values);
+      message.success('分类更新成功');
+      setIsCategoryEditModalVisible(false);
+      setEditingCategory(null);
+      fetchCategories();
+    } catch (error) {
+      console.error('Failed to update category:', error);
+    }
+  };
+
+  const handleDeleteCategory = async (category: any) => {
+    try {
+      await knowledgebaseService.deleteDocumentCategory(knowledgebase.id, category.id);
+      message.success('分类删除成功');
+      fetchCategories();
+    } catch (error: any) {
+      console.error('Failed to delete category:', error);
+      message.error(error.message || '删除分类失败');
+    }
+  };
+
+  const flattenAllCategories = (cats: any[]): any[] => {
+    let result: any[] = [];
+    cats.forEach(cat => {
+      result.push(cat);
+      if (cat.children && Array.isArray(cat.children) && cat.children.length > 0) {
+        result = result.concat(flattenAllCategories(cat.children));
+      }
+    });
+    return result;
+  };
+
+  const handleCategorySort = async (category: any, direction: 'up' | 'down') => {
+    try {
+      // 检查是否是默认分类
+      if (category.is_default) {
+        message.warning('默认分类不能排序');
+        return;
+      }
+
+      const allCategories = flattenAllCategories(categories);
+      const siblingCategories = allCategories.filter(c => 
+        !c.is_default && 
+        c.parent_id === category.parent_id
+      );
+      siblingCategories.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+      const currentIndex = siblingCategories.findIndex(c => c.id === category.id);
+
+      if (direction === 'up' && currentIndex === 0) {
+        message.warning('已经是第一个分类了');
+        return;
+      }
+      if (direction === 'down' && currentIndex === siblingCategories.length - 1) {
+        message.warning('已经是最后一个分类了');
+        return;
+      }
+
+      const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+      const targetCategory = siblingCategories[targetIndex];
+
+      await knowledgebaseService.updateDocumentCategory(knowledgebase.id, category.id, { sort_order: targetCategory.sort_order });
+      await knowledgebaseService.updateDocumentCategory(knowledgebase.id, targetCategory.id, { sort_order: category.sort_order });
+
+      message.success('排序更新成功！');
+      fetchCategories();
+    } catch (error) {
+      console.error('更新排序失败:', error);
+    }
+  };
+
+  const buildCategoryTreeSelectData = () => {
+    const buildTree = (category: KnowledgebaseDocumentCategory): any[] => {
+      return [{
+        title: category.name,
+        value: category.id,
+        children: category.children && Array.isArray(category.children) && category.children.length > 0
+          ? category.children.map(child => buildTree(child))
+          : undefined
+      }];
+    };
+    return categories.flatMap(cat => buildTree(cat));
   };
 
   const getStatusColor = (status: string) => {
@@ -189,6 +397,17 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
     }
   };
 
+  const handleDelete = async (documentId: string) => {
+    try {
+      await knowledgebaseService.deleteDocument(knowledgebase.id, documentId);
+      message.success('文档删除成功');
+      fetchDocuments();
+    } catch (error) {
+      console.error('Failed to delete document:', error);
+      message.error('文档删除失败');
+    }
+  };
+
   const columns = [
     {
       title: '文档名称',
@@ -227,18 +446,6 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       render: (method: string) => DOCUMENT_CHUNK_METHOD[method as keyof typeof DOCUMENT_CHUNK_METHOD] || method,
     },
     {
-      title: '切片数',
-      dataIndex: 'chunk_num',
-      key: 'chunk_num',
-      width: 100,
-    },
-    {
-      title: 'Token数',
-      dataIndex: 'token_num',
-      key: 'token_num',
-      width: 100,
-    },
-    {
       title: '标签',
       dataIndex: 'tags',
       key: 'tags',
@@ -248,6 +455,15 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
             <Tag key={index} size="small">{tag}</Tag>
           )) : '-'}
         </div>
+      ),
+    },
+    {
+      title: '所属分类',
+      dataIndex: 'category_name',
+      key: 'category_name',
+      width: 150,
+      render: (categoryName: string) => (
+        <span>{categoryName || '-'}</span>
       ),
     },
     {
@@ -334,6 +550,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
                 type="text"
                 size="small" 
                 icon={<EditOutlined />}
+                onClick={() => { setEditingDocument(record); setShowSetting(true); }}
               />
             </Tooltip>
             <Tooltip title="下载">
@@ -343,14 +560,21 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
                 icon={<DownloadOutlined />}
               />
             </Tooltip>
-            <Tooltip title="删除">
-              <Button 
-                type="text"
-                size="small" 
-                danger 
-                icon={<DeleteOutlined />}
-              />
-            </Tooltip>
+            <Popconfirm
+              title="确定要删除该文档吗？"
+              onConfirm={() => handleDelete(record.id)}
+              okText="确定"
+              cancelText="取消"
+            >
+              <Tooltip title="删除">
+                <Button 
+                  type="text"
+                  size="small" 
+                  danger 
+                  icon={<DeleteOutlined />}
+                />
+              </Tooltip>
+            </Popconfirm>
           </div>
         );
       },
@@ -359,43 +583,73 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
 
   return (
     <Layout className="knowledgebase-layout" style={{ height: '100%' }}>
-      <LeftSider
-        width={260}
-        className={`category-sider ${theme === 'dark' ? 'dark' : 'light'}`}
-        style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
-      >
-        <div className={`sider-header ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>文档分类</span>
+      {!showSetting && (
+        <LeftSider
+          width={260}
+          className={`category-sider ${theme === 'dark' ? 'dark' : 'light'}`}
+          style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
+        >
+          <div className={`sider-header ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>文档分类</span>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              size="small"
+              onClick={handleOpenCategoryModal}
+              style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                border: 'none',
+                borderRadius: '12px',
+                padding: '0 12px',
+                height: '28px',
+                fontSize: '12px'
+              }}
+            >
+              新增分类
+            </Button>
+          </div>
+          <Tree
+            showIcon
+            selectedKeys={selectedKeys}
+            expandedKeys={expandedKeys}
+            onSelect={handleTreeSelect}
+            onExpand={handleTreeExpand}
+            treeData={buildTreeData()}
+            className={`category-tree ${theme === 'dark' ? 'dark' : 'light'}`}
+            style={{ flex: 1, overflow: 'auto' }}
+          />
+        </LeftSider>
+      )}
+
+      <Content className={`knowledgebase-content ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        {showSetting ? (
+          <KnowledgebaseDocumentSetting
+            knowledgebase={knowledgebase}
+            document={editingDocument}
+            onBack={() => { setShowSetting(false); setEditingDocument(undefined); fetchCategories(); }}
+            onSave={() => { setShowSetting(false); setEditingDocument(undefined); fetchDocuments(); fetchCategories(); }}
+          />
+        ) : (
+        <div style={{
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          overflowY: 'hidden',
+        }}>
+        <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap', alignItems: 'center' }}>
           <Button
             type="primary"
             icon={<PlusOutlined />}
-            size="small"
+            onClick={() => { setEditingDocument(undefined); setShowSetting(true); }}
             style={{
               background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
               border: 'none',
-              borderRadius: '12px',
-              padding: '0 12px',
-              height: '28px',
-              fontSize: '12px'
+              borderRadius: '18px',
+              height: '36px',
             }}
           >
-            新增分类
+            新增数据集
           </Button>
-        </div>
-        <Tree
-          showIcon
-          selectedKeys={selectedKeys}
-          expandedKeys={expandedKeys}
-          onSelect={handleTreeSelect}
-          onExpand={handleTreeExpand}
-          treeData={buildTreeData()}
-          className={`category-tree ${theme === 'dark' ? 'dark' : 'light'}`}
-          style={{ flex: 1, overflow: 'auto' }}
-        />
-      </LeftSider>
-
-      <Content className={`knowledgebase-content ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap', alignItems: 'center' }}>
           <Input
             placeholder="搜索文档名称"
             value={searchName}
@@ -500,7 +754,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
               rowKey="id"
               pagination={false}
               className={`knowledgebase-document-table ${theme === 'dark' ? 'dark' : 'light'}`}
-              scroll={{ x: 'max-content' }}
+              scroll={{ x: 'max-content', y: 'calc(100vh - 300px)' }}
             />
           )}
         </div>
@@ -531,7 +785,115 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
             style={{ margin: 0 }}
           />
         </div>
+        </div>
+        )}
       </Content>
+
+      {/* 分类管理弹窗 */}
+      <Modal
+        title="新增分类"
+        open={isCategoryModalVisible}
+        onCancel={() => setIsCategoryModalVisible(false)}
+        onOk={handleSaveCategory}
+        width={600}
+        okText="保存"
+        cancelText="取消"
+        className={`knowledgebase-modal ${theme === 'dark' ? 'dark' : 'light'}`}
+      >
+        <Form form={categoryForm} layout="vertical">
+          <Form.Item
+            name="name"
+            label="分类名称"
+            rules={[{ required: true, message: '请输入分类名称' }]}
+          >
+            <Input placeholder="请输入分类名称" />
+          </Form.Item>
+          <Form.Item
+            name="description"
+            label="分类描述"
+          >
+            <TextArea rows={3} placeholder="请输入分类描述" />
+          </Form.Item>
+          <Form.Item
+            name="parent_id"
+            label="父分类"
+          >
+            <Select
+              placeholder="选择父分类（可选，不选则为顶级分类）"
+              style={{ width: '100%' }}
+              allowClear
+            >
+              {buildCategoryTreeSelectData().map(item => (
+                <Select.Option key={item.value} value={item.value}>
+                  {item.title}
+                </Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+          <Form.Item
+            name="sort_order"
+            label="排序顺序"
+            initialValue={1}
+            rules={[{ required: true, message: '请输入排序顺序' }]}
+          >
+            <Input type="number" placeholder="请输入排序顺序（大于0）" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 分类编辑弹窗 */}
+      <Modal
+        title="编辑分类"
+        open={isCategoryEditModalVisible}
+        onCancel={() => {
+          setIsCategoryEditModalVisible(false);
+          setEditingCategory(null);
+        }}
+        onOk={handleSaveEditCategory}
+        width={600}
+        okText="保存"
+        cancelText="取消"
+        className={`knowledgebase-modal ${theme === 'dark' ? 'dark' : 'light'}`}
+      >
+        <Form form={categoryEditForm} layout="vertical">
+          <Form.Item
+            name="name"
+            label="分类名称"
+            rules={[{ required: true, message: '请输入分类名称' }]}
+          >
+            <Input placeholder="请输入分类名称" />
+          </Form.Item>
+          <Form.Item
+            name="description"
+            label="分类描述"
+          >
+            <TextArea rows={3} placeholder="请输入分类描述" />
+          </Form.Item>
+          <Form.Item
+            name="parent_id"
+            label="父分类"
+          >
+            <Select
+              placeholder="选择父分类（可选，不选则为顶级分类）"
+              style={{ width: '100%' }}
+              allowClear
+            >
+              {buildCategoryTreeSelectData().map(item => (
+                <Select.Option key={item.value} value={item.value}>
+                  {item.title}
+                </Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+          <Form.Item
+            name="sort_order"
+            label="排序顺序"
+            rules={[{ required: true, message: '请输入排序顺序' }]}
+          >
+            <Input type="number" placeholder="请输入排序顺序（大于0）" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </Layout>
   );
 };

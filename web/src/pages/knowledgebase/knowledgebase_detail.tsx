@@ -25,7 +25,9 @@ const KnowledgebaseDetail: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [knowledgebase, setKnowledgebase] = useState<Knowledgebase | null>(null);
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
-  const [activeTab, setActiveTab] = useState('setting');
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    return localStorage.getItem(`knowledgebase_${id}_activeTab`) || 'setting';
+  });
   const [viewModelDrawerVisible, setViewModelDrawerVisible] = useState(false);
   const [currentModel, setCurrentModel] = useState<LLMModel | null>(null);
   const [modelTypes, setModelTypes] = useState<Record<string, string>>({});
@@ -83,6 +85,13 @@ const KnowledgebaseDetail: React.FC = () => {
 
   const getModelTypeName = (modelType: string): string => {
     return modelTypes[modelType] || modelType;
+  };
+
+  const handleTabChange = (key: string) => {
+    setActiveTab(key);
+    if (id) {
+      localStorage.setItem(`knowledgebase_${id}_activeTab`, key);
+    }
   };
 
   if (loading) {
@@ -153,12 +162,12 @@ const KnowledgebaseDetail: React.FC = () => {
 
       <Tabs
         activeKey={activeTab}
-        onChange={setActiveTab}
+        onChange={handleTabChange}
         items={tabItems}
         type="card"
         className={`knowledgebase-detail-tabs ${theme === 'dark' ? 'dark' : 'light'}`}
         style={{
-          height: 'calc(100% - 60px)', 
+          height: 'calc(100% - 80px)', 
           display: 'flex', 
           flexDirection: 'column',
           padding: '8px',

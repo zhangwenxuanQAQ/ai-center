@@ -13,9 +13,12 @@ interface BreadcrumbItem {
 interface PageHeaderProps {
   items: BreadcrumbItem[];
   actionButton?: React.ReactNode;
+  backButton?: React.ReactNode;
+  showHome?: boolean;
+  className?: string;
 }
 
-const PageHeader: React.FC<PageHeaderProps> = ({ items, actionButton }) => {
+const PageHeader: React.FC<PageHeaderProps> = ({ items, actionButton, backButton, showHome = true, className }) => {
   const navigate = useNavigate();
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
@@ -33,7 +36,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({ items, actionButton }) => {
     return () => observer.disconnect();
   }, []);
 
-  const breadcrumbItems = [
+  const breadcrumbItems = showHome ? [
     {
       title: (
         <span className="breadcrumb-home" onClick={() => navigate('/')}>
@@ -55,14 +58,33 @@ const PageHeader: React.FC<PageHeaderProps> = ({ items, actionButton }) => {
         </span>
       ),
     })),
-  ];
+  ] : items.map((item, index) => ({
+    title: (
+      <span 
+        className={index === items.length - 1 ? 'breadcrumb-current' : 'breadcrumb-item'}
+        onClick={() => item.path && navigate(item.path)}
+        style={{ cursor: item.path ? 'pointer' : 'default' }}
+      >
+        {item.icon}
+        {item.icon && <span style={{ marginLeft: 4 }} />}
+        <span>{item.title}</span>
+      </span>
+    ),
+  }));
 
   return (
-    <div className={`page-header ${theme === 'dark' ? 'dark' : 'light'}`}>
-      <Breadcrumb
-        className={`ant-breadcrumb ${theme === 'dark' ? 'dark' : 'light'}`}
-        items={breadcrumbItems}
-      />
+    <div className={`page-header ${theme === 'dark' ? 'dark' : 'light'} ${className || ''}`}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        {backButton && (
+          <div className="page-header-back">
+            {backButton}
+          </div>
+        )}
+        <Breadcrumb
+          className={`ant-breadcrumb ${theme === 'dark' ? 'dark' : 'light'}`}
+          items={breadcrumbItems}
+        />
+      </div>
       {actionButton && (
         <div className="page-header-actions">
           {actionButton}

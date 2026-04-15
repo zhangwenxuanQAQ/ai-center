@@ -8,7 +8,8 @@ import logging
 import uuid
 from io import BytesIO
 
-from app.constants.knowledgebase_constants import FileType, SourceType, FILE_NAME_LEN_LIMIT
+from app.constants.knowledgebase_constants import FILE_NAME_LEN_LIMIT
+from app.constants.knowledgebase_document_constants import FileType, SourceType
 from app.core.knowledgebase.utils.file_utils import (
     filename_type,
     get_file_suffix,
@@ -32,7 +33,7 @@ class DocumentUploadHandler:
     """
 
     @staticmethod
-    def upload_documents(kb_id, file_data_list, source_type=SourceType.DOCUMENT, category_id=None):
+    def upload_documents(kb_id, file_data_list, source_type=SourceType.LOCAL_DOCUMENT, category_id=None, chunk_method=None, chunk_config=None, tags=None, status=None):
         """
         批量上传文档到知识库
 
@@ -41,6 +42,10 @@ class DocumentUploadHandler:
             file_data_list: 文件数据列表，每个元素为dict，包含filename/content/content_type
             source_type: 来源类型，默认为document
             category_id: 文档分类ID，可选
+            chunk_method: 切片方法，可选
+            chunk_config: 切片配置，可选
+            tags: 标签，可选
+            status: 状态，可选
 
         Returns:
             tuple: (errors, documents) 错误列表和文档记录列表
@@ -49,10 +54,14 @@ class DocumentUploadHandler:
             ResourceNotFoundError: 知识库不存在
             RuntimeError: RustFS不可用或不支持的文件类型
         """
+        logger.info(f"开始上传文档，kb_id: {kb_id}, 文件数量: {len(file_data_list)}")
+        
         if not rustfs_utils.is_available:
+            logger.error("RustFS对象存储服务不可用，无法上传文件")
             raise RuntimeError("RustFS对象存储服务不可用，无法上传文件")
 
         try:
+            logger.info(f"获取知识库信息，kb_id: {kb_id}")
             kb = Knowledgebase.get_by_id(kb_id)
             if kb.deleted:
                 raise ResourceNotFoundError(message=f"知识库 {kb_id} 不存在")
@@ -60,6 +69,7 @@ class DocumentUploadHandler:
             raise ResourceNotFoundError(message=f"知识库 {kb_id} 不存在")
 
         if not rustfs_utils.bucket_exists(kb_id):
+            logger.info(f"创建Bucket: {kb_id}")
             rustfs_utils.create_bucket(kb_id)
 
         errors = []
@@ -67,23 +77,31 @@ class DocumentUploadHandler:
 
         for file_data in file_data_list:
             try:
+                logger.info(f"开始处理文件: {file_data.get('filename')}")
                 doc = DocumentUploadHandler._upload_single_document(
                     kb_id=kb_id,
                     kb=kb,
                     file_data=file_data,
                     source_type=source_type,
                     category_id=category_id,
+                    chunk_method=chunk_method,
+                    chunk_config=chunk_config,
+                    tags=tags,
+                    status=status,
                 )
                 documents.append(doc)
+                logger.info(f"文件处理成功: {file_data.get('filename')}")
             except Exception as e:
                 filename = file_data.get('filename', 'unknown')
                 errors.append(f"{filename}: {str(e)}")
                 logger.error(f"上传文件 {filename} 失败: {e}")
+                import traceback
+                logger.error(f"异常详情: {traceback.format_exc()}")
 
         return errors, documents
 
     @staticmethod
-    def _upload_single_document(kb_id, kb, file_data, source_type, category_id):
+    def _upload_single_document(kb_id, kb, file_data, source_type, category_id, chunk_method=None, chunk_config=None, tags=None, status=None):
         """
         上传单个文档
 
@@ -93,6 +111,10 @@ class DocumentUploadHandler:
             file_data: 文件数据dict，包含filename/content/content_type
             source_type: 来源类型
             category_id: 文档分类ID
+            chunk_method: 切片方法，可选
+            chunk_config: 切片配置，可选
+            tags: 标签，可选
+            status: 状态，可选
 
         Returns:
             KnowledgebaseDocument: 创建的文档记录
@@ -141,6 +163,10 @@ class DocumentUploadHandler:
             source_type=source_type,
             category_id=category_id,
             thumbnail=thumbnail_base64,
+            chunk_method=chunk_method,
+            chunk_config=chunk_config,
+            tags=tags,
+            status=status,
         )
 
         return doc
@@ -193,7 +219,7 @@ class DocumentUploadHandler:
     @staticmethod
     def _create_document_record(
         kb_id, kb, filename, original_filename, location, blob,
-        file_type, source_type, category_id, thumbnail
+        file_type, source_type, category_id, thumbnail, chunk_method=None, chunk_config=None, tags=None, status=None
     ):
         """
         创建文档数据库记录
@@ -209,17 +235,48 @@ class DocumentUploadHandler:
             source_type: 来源类型
             category_id: 文档分类ID
             thumbnail: 缩略图base64字符串
+            chunk_method: 切片方法，可选
+            chunk_config: 切片配置，可选
+            tags: 标签，可选
+            status: 状态，可选
 
         Returns:
             KnowledgebaseDocument: 创建的文档记录
         """
         default_chunk_method = getattr(kb, 'chunk_method', 'naive')
-        chunk_method = get_chunk_method_by_file_type(file_type, filename, default_chunk_method)
+        document_chunk_method = chunk_method or get_chunk_method_by_file_type(file_type, filename, default_chunk_method)
+
+        if not category_id:
+            from app.services.knowledgebase.service import KnowledgebaseDocumentCategoryService
+            default_category = KnowledgebaseDocumentCategoryService._get_or_create_default_category(kb_id)
+            category_id = default_category.id
+
+        # 处理切片配置
+        document_chunk_config = chunk_config
+        if isinstance(document_chunk_config, str):
+            try:
+                import json
+                document_chunk_config = json.loads(document_chunk_config)
+            except (json.JSONDecodeError, TypeError):
+                document_chunk_config = {}
+
+        # 处理标签
+        document_tags = tags
+        if isinstance(document_tags, str):
+            try:
+                import json
+                document_tags = json.loads(document_tags)
+            except (json.JSONDecodeError, TypeError):
+                document_tags = []
+
+        # 处理状态
+        document_status = status or 'active'
 
         doc = KnowledgebaseDocument(
             kb_id=kb_id,
             category_id=category_id,
-            chunk_method=chunk_method,
+            chunk_method=document_chunk_method,
+            chunk_config=document_chunk_config,
             file_type=file_type,
             file_name=filename,
             location=location,
@@ -229,6 +286,8 @@ class DocumentUploadHandler:
             thumbnail=thumbnail,
             running_status="pending",
             task_progress=0,
+            status=document_status,
+            tags=document_tags,
         )
         doc.save(force_insert=True)
 

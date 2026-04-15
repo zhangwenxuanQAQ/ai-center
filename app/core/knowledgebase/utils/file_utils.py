@@ -11,7 +11,7 @@ import sys
 from io import BytesIO
 from pathlib import Path
 
-from app.constants.knowledgebase_constants import FileType
+from app.constants.knowledgebase_document_constants import FileType
 
 LOCK_KEY_pdfplumber = "global_shared_lock_pdfplumber"
 if LOCK_KEY_pdfplumber not in sys.modules:

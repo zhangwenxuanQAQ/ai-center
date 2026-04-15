@@ -482,6 +482,10 @@ class KnowledgebaseDocumentService:
 
         doc_data = document.model_dump()
 
+        if not doc_data.get('category_id'):
+            default_category = KnowledgebaseDocumentCategoryService._get_or_create_default_category(document.kb_id)
+            doc_data['category_id'] = default_category.id
+
         if doc_data.get('chunk_config') and isinstance(doc_data['chunk_config'], dict):
             doc_data['chunk_config'] = json.dumps(doc_data['chunk_config'], ensure_ascii=False)
 
@@ -511,7 +515,7 @@ class KnowledgebaseDocumentService:
         chunk_method: list = None,
         skip: int = 0,
         limit: int = 20
-    ) -> List[KnowledgebaseDocument]:
+    ) -> List[dict]:
         """
         获取知识库文档列表
 
@@ -528,9 +532,19 @@ class KnowledgebaseDocumentService:
             limit: 返回记录数（默认20）
 
         Returns:
-            List[KnowledgebaseDocument]: 知识库文档列表
+            List[dict]: 知识库文档列表，包含分类名称
         """
-        query = KnowledgebaseDocument.select().where(KnowledgebaseDocument.deleted == False)
+        from peewee import JOIN
+        
+        # 执行左连接查询，关联分类表
+        query = KnowledgebaseDocument.select(
+            KnowledgebaseDocument,
+            KnowledgebaseDocumentCategory.name.alias('category_name')
+        ).join(
+            KnowledgebaseDocumentCategory,
+            on=(KnowledgebaseDocument.category_id == KnowledgebaseDocumentCategory.id),
+            join_type=JOIN.LEFT_OUTER
+        ).where(KnowledgebaseDocument.deleted == False)
 
         if kb_id:
             query = query.where(KnowledgebaseDocument.kb_id == kb_id)
@@ -559,7 +573,29 @@ class KnowledgebaseDocumentService:
             else:
                 query = query.where(KnowledgebaseDocument.chunk_method == chunk_method)
 
-        return list(query.order_by(KnowledgebaseDocument.created_at.desc()).offset(skip).limit(limit))
+        # 执行查询并转换为字典列表
+        documents = []
+        for doc in query.order_by(KnowledgebaseDocument.created_at.desc()).offset(skip).limit(limit):
+            doc_dict = doc.__data__
+            # 处理JSON字段
+            if doc_dict.get('tags'):
+                try:
+                    doc_dict['tags'] = json.loads(doc_dict['tags'])
+                except:
+                    doc_dict['tags'] = []
+            if doc_dict.get('chunk_config'):
+                try:
+                    doc_dict['chunk_config'] = json.loads(doc_dict['chunk_config'])
+                except:
+                    doc_dict['chunk_config'] = {}
+            if doc_dict.get('source_config'):
+                try:
+                    doc_dict['source_config'] = json.loads(doc_dict['source_config'])
+                except:
+                    doc_dict['source_config'] = {}
+            documents.append(doc_dict)
+
+        return documents
 
     @staticmethod
     def count_documents(
@@ -682,7 +718,7 @@ class KnowledgebaseDocumentService:
     @handle_transaction
     def delete_document(document_id: str):
         """
-        删除知识库文档（逻辑删除）
+        删除知识库文档（逻辑删除，同时删除RustFS中的文件）
 
         Args:
             document_id: 文档ID
@@ -699,6 +735,17 @@ class KnowledgebaseDocumentService:
                 raise ResourceNotFoundError(message=f"知识库文档 {document_id} 不存在")
         except KnowledgebaseDocument.DoesNotExist:
             raise ResourceNotFoundError(message=f"知识库文档 {document_id} 不存在")
+
+        # 删除RustFS中的文件
+        from app.database.storage.rustfs_utils import rustfs_utils
+        if db_doc.location and rustfs_utils.is_available:
+            try:
+                rustfs_utils.delete_object(
+                    bucket_name=db_doc.kb_id,
+                    object_key=db_doc.location,
+                )
+            except Exception as e:
+                logger.warning(f"删除RustFS文件失败 {db_doc.kb_id}/{db_doc.location}: {e}")
 
         db_doc.deleted = True
         db_doc.deleted_at = datetime.now()
@@ -718,6 +765,32 @@ class KnowledgebaseDocumentCategoryService:
 
     提供知识库文档分类的创建、查询、更新、删除等操作
     """
+
+    @staticmethod
+    def _get_or_create_default_category(kb_id: str):
+        """
+        获取或创建默认分类
+
+        Args:
+            kb_id: 知识库ID
+
+        Returns:
+            KnowledgebaseDocumentCategory: 默认分类对象
+        """
+        default_category = KnowledgebaseDocumentCategory.select().where(
+            (KnowledgebaseDocumentCategory.kb_id == kb_id) &
+            (KnowledgebaseDocumentCategory.name == "默认分类")
+        ).first()
+        if not default_category:
+            default_category = KnowledgebaseDocumentCategory(
+                kb_id=kb_id,
+                name="默认分类",
+                description="系统默认分类",
+                sort_order=0,
+                is_default=True
+            )
+            default_category.save(force_insert=True)
+        return default_category
 
     @staticmethod
     @handle_transaction
@@ -888,6 +961,8 @@ class KnowledgebaseDocumentCategoryService:
 
         Raises:
             ResourceNotFoundError: 知识库文档分类不存在
+            ValueError: 分类下存在文档，无法删除
+            ValueError: 默认分类不能删除
         """
         try:
             db_category = KnowledgebaseDocumentCategory.get_by_id(category_id)
@@ -895,6 +970,19 @@ class KnowledgebaseDocumentCategoryService:
                 raise ResourceNotFoundError(message=f"知识库文档分类 {category_id} 不存在")
         except KnowledgebaseDocumentCategory.DoesNotExist:
             raise ResourceNotFoundError(message=f"知识库文档分类 {category_id} 不存在")
+
+        # 检查是否是默认分类
+        if db_category.is_default:
+            raise ValueError("默认分类不能删除")
+
+        # 检查分类下是否存在文档
+        doc_count = KnowledgebaseDocument.select().where(
+            (KnowledgebaseDocument.category_id == category_id) &
+            (KnowledgebaseDocument.deleted == False)
+        ).count()
+
+        if doc_count > 0:
+            raise ValueError(f"该分类下存在 {doc_count} 个文档，无法删除")
 
         db_category.deleted = True
         db_category.deleted_at = datetime.now()

@@ -6,7 +6,7 @@
 import logging
 from app.core.knowledgebase.document.upload_handler import DocumentUploadHandler
 from app.core.knowledgebase.document.download_handler import DocumentDownloadHandler
-from app.constants.knowledgebase_constants import SourceType
+from app.constants.knowledgebase_document_constants import SourceType
 from app.database.db_utils import handle_transaction
 from app.database.models import KnowledgebaseDocument, Knowledgebase
 from app.core.exceptions import ResourceNotFoundError
@@ -22,7 +22,7 @@ class DocumentService:
     """
 
     @staticmethod
-    def upload_documents(kb_id, file_data_list, source_type=SourceType.DOCUMENT, category_id=None):
+    def upload_documents(kb_id, file_data_list, source_type=SourceType.LOCAL_DOCUMENT, category_id=None, chunk_method=None, chunk_config=None, tags=None, status=None):
         """
         批量上传文档到知识库
 
@@ -31,6 +31,10 @@ class DocumentService:
             file_data_list: 文件数据列表，每个元素为dict，包含filename/content/content_type
             source_type: 来源类型，默认为document
             category_id: 文档分类ID，可选
+            chunk_method: 切片方法，可选
+            chunk_config: 切片配置，可选
+            tags: 标签，可选
+            status: 状态，可选
 
         Returns:
             tuple: (errors, documents) 错误列表和文档记录列表
@@ -44,6 +48,10 @@ class DocumentService:
             file_data_list=file_data_list,
             source_type=source_type,
             category_id=category_id,
+            chunk_method=chunk_method,
+            chunk_config=chunk_config,
+            tags=tags,
+            status=status,
         )
         return errors, documents
 

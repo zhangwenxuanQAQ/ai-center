@@ -57,10 +57,14 @@ export async function request<T = any>(
   const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
 
   try {
+    // 只有当不是 FormData 时才设置 Content-Type
+    const headers: Record<string, string> = {};
+    if (!(requestConfig.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
+    }
+
     const response = await fetch(fullUrl, {
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       ...requestConfig,
     });
 
@@ -124,10 +128,15 @@ export async function post<T = any>(
   data?: any,
   config?: RequestConfig
 ): Promise<T> {
+  // 如果是 FormData，直接传递，不使用 JSON.stringify
+  const body = data instanceof FormData 
+    ? data 
+    : (data ? JSON.stringify(data) : undefined);
+  
   return request<T>(url, {
     ...config,
     method: 'POST',
-    body: data ? JSON.stringify(data) : undefined,
+    body,
   });
 }
 

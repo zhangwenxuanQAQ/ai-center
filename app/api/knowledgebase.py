@@ -21,11 +21,38 @@ from app.services.knowledgebase.dto import (
     KnowledgebaseDocumentCategoryCreate, KnowledgebaseDocumentCategoryUpdate, KnowledgebaseDocumentCategory as DocCategorySchema
 )
 from app.utils.response import ResponseUtil, ApiResponse
-from app.constants.knowledgebase_constants import SourceType, FILE_NAME_LEN_LIMIT
+from app.constants.knowledgebase_constants import FILE_NAME_LEN_LIMIT
+from app.constants.knowledgebase_document_constants import (
+    CHUNK_METHOD_LABELS, CHUNK_METHOD_CONFIGS, SOURCE_TYPE_LABELS, SourceType
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+@router.get("/document_constants", response_model=ApiResponse)
+def get_document_constants():
+    """
+    获取文档相关常量配置
+
+    Returns:
+        ApiResponse: 包含切片方法、来源类型、切片配置的响应
+    """
+    chunk_methods = [
+        {"key": k, "label": v} for k, v in CHUNK_METHOD_LABELS.items()
+    ]
+    source_types = [
+        {"key": k, "label": v} for k, v in SOURCE_TYPE_LABELS.items()
+    ]
+    chunk_configs = {}
+    for method_key, fields in CHUNK_METHOD_CONFIGS.items():
+        chunk_configs[method_key] = [f.to_dict() for f in fields]
+    return ResponseUtil.success(data={
+        "chunk_methods": chunk_methods,
+        "source_types": source_types,
+        "chunk_configs": chunk_configs,
+    })
 
 
 # 知识库分类相关接口
@@ -356,8 +383,12 @@ def get_documents(
 async def upload_documents(
     kb_id: str,
     files: List[UploadFile] = File(..., description="上传的文件列表"),
-    source_type: str = Form(SourceType.DOCUMENT, description="来源类型：document/datasheet/custom_template"),
+    source_type: str = Form(SourceType.LOCAL_DOCUMENT, description="来源类型：local_document/datasource/custom_template"),
     category_id: str = Form(None, description="文档分类ID"),
+    chunk_method: str = Form(None, description="切片方法"),
+    chunk_config: str = Form(None, description="切片配置，JSON字符串"),
+    tags: str = Form(None, description="标签，JSON字符串"),
+    status: str = Form(None, description="状态：active/inactive"),
 ):
     """
     批量上传文档到知识库
@@ -370,6 +401,10 @@ async def upload_documents(
         files: 上传的文件列表
         source_type: 来源类型，默认document
         category_id: 文档分类ID，可选
+        chunk_method: 切片方法，可选
+        chunk_config: 切片配置，JSON字符串，可选
+        tags: 标签，JSON字符串，可选
+        status: 状态：active/inactive，可选
 
     Returns:
         ApiResponse: 统一格式的响应对象，包含成功上传的文档列表和错误信息
@@ -383,7 +418,7 @@ async def upload_documents(
         if len(f.filename.encode("utf-8")) > FILE_NAME_LEN_LIMIT:
             return ResponseUtil.bad_request(message=f"文件名 {f.filename} 长度超过{FILE_NAME_LEN_LIMIT}字节限制")
 
-    if source_type not in [SourceType.DOCUMENT, SourceType.DATASHEET, SourceType.CUSTOM_TEMPLATE]:
+    if source_type not in [SourceType.LOCAL_DOCUMENT, SourceType.DATASOURCE, SourceType.CUSTOM_TEMPLATE]:
         return ResponseUtil.bad_request(message=f"不支持的来源类型: {source_type}")
 
     try:
@@ -397,11 +432,31 @@ async def upload_documents(
             })
             await f.close()
 
+        # 处理可选参数
+        document_chunk_config = None
+        if chunk_config:
+            try:
+                document_chunk_config = json.loads(chunk_config)
+            except (json.JSONDecodeError, TypeError):
+                return ResponseUtil.bad_request(message="切片配置格式错误")
+
+        document_tags = None
+        if tags:
+            try:
+                document_tags = json.loads(tags)
+            except (json.JSONDecodeError, TypeError):
+                return ResponseUtil.bad_request(message="标签格式错误")
+
+        logger.info(f"准备上传 {len(file_data_list)} 个文件到知识库 {kb_id}")
         errors, documents = DocumentService.upload_documents(
             kb_id=kb_id,
             file_data_list=file_data_list,
             source_type=source_type,
             category_id=category_id,
+            chunk_method=chunk_method,
+            chunk_config=document_chunk_config,
+            tags=document_tags,
+            status=status,
         )
 
         docs_data = []
@@ -428,8 +483,14 @@ async def upload_documents(
         return ResponseUtil.created(data=docs_data, message=f"成功上传{len(docs_data)}个文件")
 
     except Exception as e:
+        import traceback
         logger.error(f"上传文档失败: {e}")
-        return ResponseUtil.error(message=str(e))
+        logger.error(f"异常详情: {traceback.format_exc()}")
+        logger.error(f"异常类型: {type(e)}")
+        error_msg = str(e)
+        if not error_msg or error_msg == "(0, '')":
+            error_msg = "上传文档失败，请检查RustFS服务是否正常运行"
+        return ResponseUtil.error(message=error_msg)
 
 
 @router.get("/{kb_id}/document/{document_id}", response_model=ApiResponse)
@@ -675,5 +736,8 @@ def delete_document_category(kb_id: str, category_id: str):
     Returns:
         ApiResponse: 统一格式的响应对象
     """
-    db_category = KnowledgebaseDocumentCategoryService.delete_category(category_id)
-    return ResponseUtil.success(data=db_category.__data__, message="知识库文档分类删除成功")
+    try:
+        db_category = KnowledgebaseDocumentCategoryService.delete_category(category_id)
+        return ResponseUtil.success(data=db_category.__data__, message="知识库文档分类删除成功")
+    except ValueError as e:
+        return ResponseUtil.error(message=str(e))

@@ -4,3 +4,4 @@ app/ai_center.egg-info/
 web/dist/
 web/node_modules/
 .vscode/
+.venv/

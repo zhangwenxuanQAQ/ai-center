@@ -434,7 +434,7 @@ const KnowledgebaseCreate: React.FC = () => {
         }
       />
 
-      <div className="knowledgebase-create-container" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100% - 60px)', overflow: 'hidden' }}>
+      <div className="knowledgebase-create-container" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100% - 80px)', overflow: 'hidden' }}>
         <div style={{ display: 'flex', gap: '8px', flex: 1, overflow: 'hidden' }}>
           <div style={{ width: '30%', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto', overflowX: 'hidden' }} className="hide-scrollbar">
             <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; } .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; } .hide-scrollbar-inner::-webkit-scrollbar { display: none; } .hide-scrollbar-inner { -ms-overflow-style: none; scrollbar-width: none; }`}</style>

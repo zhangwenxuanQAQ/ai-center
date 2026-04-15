@@ -24,6 +24,12 @@
   border-bottom: 0.5px solid rgba(0, 0, 0, 0.2);
 }
 
+/* 紧凑版本 - 高度减半 */
+.page-header.compact {
+  padding: 8px 32px;
+  height: 40px;
+}
+
 @keyframes slideDown {
   from {
     opacity: 0;

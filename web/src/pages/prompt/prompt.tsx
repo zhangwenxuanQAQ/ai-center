@@ -243,7 +243,6 @@ const PromptManagement: React.FC = () => {
         fetchCategoryTree();
       }).catch(error => {
         console.error('Failed to create category:', error);
-        message.error('分类创建失败');
       });
     });
   };

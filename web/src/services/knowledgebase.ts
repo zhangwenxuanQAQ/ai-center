@@ -61,6 +61,7 @@ export interface KnowledgebaseDocument {
   file_name?: string;
   location?: string;
   file_size: number;
+  source_type?: string;
   running_status: string;
   status: boolean;
   task_progress: number;
@@ -297,6 +298,67 @@ export const knowledgebaseService = {
   deleteDocument: async (kbId: string, documentId: string): Promise<KnowledgebaseDocument> => {
     return http.post<KnowledgebaseDocument>(
       `/aicenter/v1/knowledgebase/${kbId}/document/${documentId}/delete`
+    );
+  },
+
+  /**
+   * 获取文档常量配置（切片方法、来源类型、切片配置）
+   */
+  getDocumentConstants: async (): Promise<{
+    chunk_methods: Array<{ key: string; label: string }>;
+    source_types: Array<{ key: string; label: string }>;
+    chunk_configs: Record<string, Array<{
+      key: string;
+      label: string;
+      field_type: string;
+      default: unknown;
+      description: string;
+      required: boolean;
+      options?: Array<{ label: string; value: string }>;
+      min_value?: number;
+      max_value?: number;
+      step?: number;
+    }>>;
+  }> => {
+    return http.get('/aicenter/v1/knowledgebase/document_constants');
+  },
+
+  /**
+   * 上传文档
+   */
+  uploadDocuments: async (
+    kbId: string,
+    files: File[],
+    sourceType: string = 'local_document',
+    categoryId?: string,
+    chunkMethod?: string,
+    chunkConfig?: Record<string, unknown>,
+    tags?: string[],
+    status?: boolean
+  ): Promise<{ errors: string[]; documents: KnowledgebaseDocument[] }> => {
+    const formData = new FormData();
+    files.forEach(file => {
+      formData.append('files', file);
+    });
+    formData.append('source_type', sourceType);
+    if (categoryId) {
+      formData.append('category_id', categoryId);
+    }
+    if (chunkMethod) {
+      formData.append('chunk_method', chunkMethod);
+    }
+    if (chunkConfig) {
+      formData.append('chunk_config', JSON.stringify(chunkConfig));
+    }
+    if (tags) {
+      formData.append('tags', JSON.stringify(tags));
+    }
+    if (status !== undefined) {
+      formData.append('status', status ? 'active' : 'inactive');
+    }
+    return http.post(
+      `/aicenter/v1/knowledgebase/${kbId}/document/upload`,
+      formData
     );
   },
 };
