@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Layout, Tree, Table, Input, Select, Button, Tag, Spin, Pagination, Empty, Row, Col, Tooltip, Switch, message, Modal, Popconfirm, Form } from 'antd';
+import { Layout, Tree, Table, Input, Select, Button, Tag, Spin, Pagination, Empty, Row, Col, Tooltip, Switch, message, Modal, Popconfirm, Form, TreeSelect } from 'antd';
 const { TextArea } = Input;
 import { SearchOutlined, PlusOutlined, FolderOutlined, FileTextOutlined, PlayCircleOutlined, PauseCircleOutlined, ReloadOutlined, UnorderedListOutlined, EditOutlined, DownloadOutlined, DeleteOutlined, UpOutlined, DownOutlined } from '@ant-design/icons';
 import type { TreeDataNode, TreeProps } from 'antd';
@@ -340,16 +340,17 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
   };
 
   const buildCategoryTreeSelectData = () => {
-    const buildTree = (category: KnowledgebaseDocumentCategory): any[] => {
-      return [{
+    const buildTree = (category: KnowledgebaseDocumentCategory): any => {
+      return {
         title: category.name,
         value: category.id,
+        key: category.id,
         children: category.children && Array.isArray(category.children) && category.children.length > 0
           ? category.children.map(child => buildTree(child))
           : undefined
-      }];
+      };
     };
-    return categories.flatMap(cat => buildTree(cat));
+    return categories.map(cat => buildTree(cat));
   };
 
   const getStatusColor = (status: string) => {
@@ -818,17 +819,12 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
             name="parent_id"
             label="父分类"
           >
-            <Select
-              placeholder="选择父分类（可选，不选则为顶级分类）"
-              style={{ width: '100%' }}
+            <TreeSelect
+              placeholder="请选择父分类"
+              treeData={buildCategoryTreeSelectData()}
               allowClear
-            >
-              {buildCategoryTreeSelectData().map(item => (
-                <Select.Option key={item.value} value={item.value}>
-                  {item.title}
-                </Select.Option>
-              ))}
-            </Select>
+              treeDefaultExpandAll
+            />
           </Form.Item>
           <Form.Item
             name="sort_order"
@@ -873,17 +869,12 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
             name="parent_id"
             label="父分类"
           >
-            <Select
-              placeholder="选择父分类（可选，不选则为顶级分类）"
-              style={{ width: '100%' }}
+            <TreeSelect
+              placeholder="请选择父分类"
+              treeData={buildCategoryTreeSelectData()}
               allowClear
-            >
-              {buildCategoryTreeSelectData().map(item => (
-                <Select.Option key={item.value} value={item.value}>
-                  {item.title}
-                </Select.Option>
-              ))}
-            </Select>
+              treeDefaultExpandAll
+            />
           </Form.Item>
           <Form.Item
             name="sort_order"

@@ -1055,10 +1055,12 @@ const MCPManagement: React.FC = () => {
             <TextArea rows={3} placeholder="请输入分类描述" />
           </Form.Item>
           <Form.Item name="parent_id" label="父分类">
-            <Select placeholder="选择父分类（可选，不选则为顶级分类）">
-              <Option value={null}>顶级分类</Option>
-              {categories.map(category => (<Option key={category.id} value={category.id}>{category.name}</Option>))}
-            </Select>
+            <TreeSelect
+              placeholder="请选择父分类"
+              treeData={buildCategoryTreeSelectData()}
+              allowClear
+              treeDefaultExpandAll
+            />
           </Form.Item>
           <Form.Item name="sort_order" label="排序顺序" initialValue={1} rules={[{ required: true, message: '请输入排序顺序' }]}>
             <Input type="number" placeholder="请输入排序顺序（大于0）" />
@@ -1076,10 +1078,12 @@ const MCPManagement: React.FC = () => {
             <TextArea rows={3} placeholder="请输入分类描述" />
           </Form.Item>
           <Form.Item name="parent_id" label="父分类">
-            <Select placeholder="选择父分类（可选，不选则为顶级分类）">
-              <Option value={null}>顶级分类</Option>
-              {flattenAllCategories(categories).filter(category => !editingCategory || category.id !== editingCategory.id).map(category => (<Option key={category.id} value={category.id}>{category.name}</Option>))}
-            </Select>
+            <TreeSelect
+              placeholder="请选择父分类"
+              treeData={buildCategoryTreeSelectData()}
+              allowClear
+              treeDefaultExpandAll
+            />
           </Form.Item>
           <Form.Item name="sort_order" label="排序顺序" rules={[{ required: true, message: '请输入排序顺序' }]}>
             <Input type="number" placeholder="请输入排序顺序（大于0）" />

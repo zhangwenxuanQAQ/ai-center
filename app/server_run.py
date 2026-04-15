@@ -206,7 +206,7 @@ try:
                     INDEX idx_parent_id (parent_id),
                     INDEX idx_sort_order (sort_order),
                     INDEX idx_deleted (deleted)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
             """)
             print("  成功创建 prompt_category 表")
         else:
@@ -334,7 +334,7 @@ try:
                     INDEX idx_prompt_id (prompt_id),
                     INDEX idx_prompt_type (prompt_type),
                     INDEX idx_deleted (deleted)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
             """)
             print("  成功创建 chatbot_prompt 表")
         else:
@@ -439,7 +439,7 @@ try:
                     INDEX idx_model_id (model_id),
                     INDEX idx_chatbot_id (chatbot_id),
                     INDEX idx_deleted (deleted)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
             """)
             print("  成功创建 chat_message 表")
         else:
@@ -470,7 +470,7 @@ try:
                     INDEX idx_parent_id (parent_id),
                     INDEX idx_sort_order (sort_order),
                     INDEX idx_deleted (deleted)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
             """)
             print("  成功创建 knowledgebase_category 表")
         else:
@@ -575,7 +575,7 @@ try:
                     INDEX idx_running_status (running_status),
                     INDEX idx_created_at (created_at),
                     INDEX idx_deleted (deleted)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
             """)
             print("  成功创建 knowledgebase_document 表")
         else:
@@ -653,7 +653,7 @@ try:
                     INDEX idx_parent_id (parent_id),
                     INDEX idx_sort_order (sort_order),
                     INDEX idx_deleted (deleted)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
             """)
             print("  成功创建 knowledgebase_document_category 表")
         else:
@@ -695,8 +695,8 @@ try:
             if status_column[1].upper() != 'BOOLEAN':
                 # 添加临时字段
                 db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN status_temp BOOLEAN DEFAULT TRUE;")
-                # 更新临时字段值
-                db.execute_sql("UPDATE knowledgebase_document SET status_temp = CASE WHEN status = 'active' THEN TRUE ELSE FALSE END;")
+                # 更新临时字段值：只有明确为'inactive'时才设为FALSE，其他情况都设为TRUE
+                db.execute_sql("UPDATE knowledgebase_document SET status_temp = CASE WHEN status = 'inactive' THEN FALSE ELSE TRUE END;")
                 # 删除原字段
                 db.execute_sql("ALTER TABLE knowledgebase_document DROP COLUMN status;")
                 # 重命名临时字段
@@ -708,6 +708,29 @@ try:
             print("  status 字段不存在，跳过")
     except Exception as e:
         print(f"  修改 knowledgebase_document 表的 status 字段类型失败: {e}")
+
+    # 统一所有表的COLLATE为utf8mb4_0900_ai_ci
+    print("\n统一所有表的COLLATE字符集为utf8mb4_0900_ai_ci...")
+    try:
+        tables_to_update = [
+            'prompt_category',
+            'chatbot_prompt',
+            'chat_message',
+            'knowledgebase_category',
+            'knowledgebase_document',
+            'knowledgebase_document_category'
+        ]
+        
+        for table_name in tables_to_update:
+            try:
+                cursor = db.execute_sql(f"SHOW TABLES LIKE '{table_name}';")
+                if cursor.fetchone():
+                    db.execute_sql(f"ALTER TABLE {table_name} CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;")
+                    print(f"  成功修改 {table_name} 表的COLLATE")
+            except Exception as e:
+                print(f"  修改 {table_name} 表的COLLATE失败: {e}")
+    except Exception as e:
+        print(f"  统一表COLLATE失败: {e}")
 
     print("\n数据库迁移完成")
 except Exception as e:

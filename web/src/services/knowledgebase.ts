@@ -354,7 +354,7 @@ export const knowledgebaseService = {
       formData.append('tags', JSON.stringify(tags));
     }
     if (status !== undefined) {
-      formData.append('status', status ? 'active' : 'inactive');
+      formData.append('status', String(status));
     }
     return http.post(
       `/aicenter/v1/knowledgebase/${kbId}/document/upload`,

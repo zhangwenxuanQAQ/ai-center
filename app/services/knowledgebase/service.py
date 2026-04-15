@@ -534,17 +534,7 @@ class KnowledgebaseDocumentService:
         Returns:
             List[dict]: 知识库文档列表，包含分类名称
         """
-        from peewee import JOIN
-        
-        # 执行左连接查询，关联分类表
-        query = KnowledgebaseDocument.select(
-            KnowledgebaseDocument,
-            KnowledgebaseDocumentCategory.name.alias('category_name')
-        ).join(
-            KnowledgebaseDocumentCategory,
-            on=(KnowledgebaseDocument.category_id == KnowledgebaseDocumentCategory.id),
-            join_type=JOIN.LEFT_OUTER
-        ).where(KnowledgebaseDocument.deleted == False)
+        query = KnowledgebaseDocument.select().where(KnowledgebaseDocument.deleted == False)
 
         if kb_id:
             query = query.where(KnowledgebaseDocument.kb_id == kb_id)
@@ -573,11 +563,23 @@ class KnowledgebaseDocumentService:
             else:
                 query = query.where(KnowledgebaseDocument.chunk_method == chunk_method)
 
-        # 执行查询并转换为字典列表
         documents = []
+        category_cache = {}
+        
         for doc in query.order_by(KnowledgebaseDocument.created_at.desc()).offset(skip).limit(limit):
             doc_dict = doc.__data__
-            # 处理JSON字段
+            
+            if doc_dict.get('category_id'):
+                if doc_dict['category_id'] not in category_cache:
+                    try:
+                        category = KnowledgebaseDocumentCategory.get_by_id(doc_dict['category_id'])
+                        category_cache[doc_dict['category_id']] = category.name if not category.deleted else None
+                    except KnowledgebaseDocumentCategory.DoesNotExist:
+                        category_cache[doc_dict['category_id']] = None
+                doc_dict['category_name'] = category_cache.get(doc_dict['category_id'])
+            else:
+                doc_dict['category_name'] = None
+            
             if doc_dict.get('tags'):
                 try:
                     doc_dict['tags'] = json.loads(doc_dict['tags'])
@@ -708,6 +710,44 @@ class KnowledgebaseDocumentService:
             else:
                 update_data['tags'] = None
 
+        if 'category_id' in update_data and update_data['category_id'] != db_doc.category_id:
+            from app.database.storage.rustfs_utils import rustfs_utils
+            
+            old_category_id = db_doc.category_id
+            new_category_id = update_data['category_id']
+            
+            if db_doc.location and rustfs_utils.is_available:
+                old_location = db_doc.location
+                filename = old_location.split('/')[-1]
+                
+                new_category_path = KnowledgebaseDocumentCategoryService.get_category_path(new_category_id) if new_category_id else ""
+                
+                if new_category_path:
+                    new_location = f"{new_category_path}/{filename}"
+                else:
+                    new_location = filename
+                
+                if old_location != new_location:
+                    try:
+                        copy_success = rustfs_utils.copy_object(
+                            source_bucket=db_doc.kb_id,
+                            source_key=old_location,
+                            dest_bucket=db_doc.kb_id,
+                            dest_key=new_location
+                        )
+                        
+                        if copy_success:
+                            rustfs_utils.delete_object(
+                                bucket_name=db_doc.kb_id,
+                                object_key=old_location
+                            )
+                            update_data['location'] = new_location
+                            logger.info(f"文档分类变更，文件路径已更新: {old_location} -> {new_location}")
+                        else:
+                            logger.warning(f"文档分类变更，但文件复制失败: {old_location} -> {new_location}")
+                    except Exception as e:
+                        logger.error(f"文档分类变更，文件移动失败: {e}")
+
         for field, value in update_data.items():
             setattr(db_doc, field, value)
         db_doc.updated_at = datetime.now()
@@ -793,6 +833,35 @@ class KnowledgebaseDocumentCategoryService:
         return default_category
 
     @staticmethod
+    def get_category_path(category_id: str):
+        """
+        获取分类的完整路径（包括所有父分类）
+
+        Args:
+            category_id: 分类ID
+
+        Returns:
+            str: 分类路径，格式为：父分类id/子分类id/当前分类id
+        """
+        if not category_id:
+            return ""
+        
+        path_parts = []
+        current_id = category_id
+        
+        while current_id:
+            try:
+                category = KnowledgebaseDocumentCategory.get_by_id(current_id)
+                if category.deleted:
+                    break
+                path_parts.insert(0, category.id)
+                current_id = category.parent_id
+            except KnowledgebaseDocumentCategory.DoesNotExist:
+                break
+        
+        return "/".join(path_parts)
+
+    @staticmethod
     @handle_transaction
     def create_category(category: KnowledgebaseDocumentCategoryCreate):
         """
@@ -876,6 +945,7 @@ class KnowledgebaseDocumentCategoryService:
                         "kb_id": str(cat.kb_id),
                         "parent_id": str(cat.parent_id) if cat.parent_id else None,
                         "sort_order": cat.sort_order,
+                        "is_default": cat.is_default,
                         "children": build_tree(cat.id)
                     }
                     tree.append(node)

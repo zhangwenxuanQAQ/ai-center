@@ -1435,14 +1435,12 @@ const ChatbotManagement: React.FC = () => {
             name="parent_id"
             label="父分类"
           >
-            <Select placeholder="选择父分类（可选，不选则为顶级分类）">
-              <Option value={null}>顶级分类</Option>
-              {categories.map(category => (
-                <Option key={category.id} value={category.id}>
-                  {category.name}
-                </Option>
-              ))}
-            </Select>
+            <TreeSelect
+              placeholder="请选择父分类"
+              treeData={buildCategoryTreeSelectData()}
+              allowClear
+              treeDefaultExpandAll
+            />
           </Form.Item>
           <Form.Item
             name="sort_order"
@@ -1501,30 +1499,12 @@ const ChatbotManagement: React.FC = () => {
             name="parent_id"
             label="父分类"
           >
-            <Select placeholder="选择父分类（可选，不选则为顶级分类）">
-              <Option value={null}>顶级分类</Option>
-              {(() => {
-                // 扁平化解分类树为一维数组
-                const flattenCategories = (cats: ChatbotCategory[]): ChatbotCategory[] => {
-                  let result: ChatbotCategory[] = [];
-                  cats.forEach(cat => {
-                    result.push(cat);
-                    if (cat.children) {
-                      result = result.concat(flattenCategories(cat.children));
-                    }
-                  });
-                  return result;
-                };
-                const allCategories = flattenCategories(categories);
-                return allCategories
-                  .filter(category => !editingCategory || category.id !== editingCategory.id)
-                  .map(category => (
-                    <Option key={category.id} value={category.id}>
-                      {category.name}
-                    </Option>
-                  ));
-              })()}
-            </Select>
+            <TreeSelect
+              placeholder="请选择父分类"
+              treeData={buildCategoryTreeSelectData()}
+              allowClear
+              treeDefaultExpandAll
+            />
           </Form.Item>
           <Form.Item
             name="sort_order"

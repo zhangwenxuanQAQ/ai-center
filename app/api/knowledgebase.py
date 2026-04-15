@@ -362,21 +362,7 @@ def get_documents(
         status=status, 
         chunk_method=chunk_method
     )
-    docs_data = []
-    for doc in docs:
-        doc_dict = doc.__data__
-        if doc_dict.get('chunk_config'):
-            try:
-                doc_dict['chunk_config'] = json.loads(doc_dict['chunk_config'])
-            except (json.JSONDecodeError, TypeError):
-                pass
-        if doc_dict.get('tags'):
-            try:
-                doc_dict['tags'] = json.loads(doc_dict['tags'])
-            except (json.JSONDecodeError, TypeError):
-                pass
-        docs_data.append(doc_dict)
-    return ResponseUtil.success(data={"data": docs_data, "total": total}, message="获取知识库文档列表成功")
+    return ResponseUtil.success(data={"data": docs, "total": total}, message="获取知识库文档列表成功")
 
 
 @router.post("/{kb_id}/document/upload", response_model=ApiResponse)
@@ -388,7 +374,7 @@ async def upload_documents(
     chunk_method: str = Form(None, description="切片方法"),
     chunk_config: str = Form(None, description="切片配置，JSON字符串"),
     tags: str = Form(None, description="标签，JSON字符串"),
-    status: str = Form(None, description="状态：active/inactive"),
+    status: bool = Form(None, description="状态：true/false"),
 ):
     """
     批量上传文档到知识库
@@ -404,7 +390,7 @@ async def upload_documents(
         chunk_method: 切片方法，可选
         chunk_config: 切片配置，JSON字符串，可选
         tags: 标签，JSON字符串，可选
-        status: 状态：active/inactive，可选
+        status: 状态：true/false，可选
 
     Returns:
         ApiResponse: 统一格式的响应对象，包含成功上传的文档列表和错误信息

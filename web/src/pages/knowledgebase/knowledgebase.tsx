@@ -977,7 +977,7 @@ const KnowledgebaseManagement: React.FC = () => {
             label="父分类"
           >
             <TreeSelect
-              placeholder="选择父分类（可选，不选则为顶级分类）"
+              placeholder="请选择父分类"
               treeData={buildCategoryTreeSelectData()}
               treeDefaultExpandAll
               allowClear
@@ -1023,7 +1023,7 @@ const KnowledgebaseManagement: React.FC = () => {
             label="父分类"
           >
             <TreeSelect
-              placeholder="选择父分类（可选，不选则为顶级分类）"
+              placeholder="请选择父分类"
               treeData={buildCategoryTreeSelectData()}
               treeDefaultExpandAll
               allowClear

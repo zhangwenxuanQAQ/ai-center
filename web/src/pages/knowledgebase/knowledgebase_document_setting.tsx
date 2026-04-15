@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Button, Input, Select, Tag, Upload, message, Slider, InputNumber, Tooltip, Form, Switch } from 'antd';
+import { Button, Input, Select, Tag, Upload, message, Slider, InputNumber, Tooltip, Form, Switch, TreeSelect } from 'antd';
 import PageHeader from '../../components/page-header';
 import {
   UploadOutlined,
@@ -301,7 +301,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
             chunk_method: chunkMethod,
             chunk_config: chunkConfig,
             tags,
-            status: status ? 'active' : 'inactive',
+            status: status,
             category_id: categoryId || undefined,
           });
           message.success('保存成功');
@@ -328,7 +328,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
                 chunk_method: chunkMethod,
                 chunk_config: chunkConfig,
                 tags,
-                status: status ? 'active' : 'inactive',
+                status: status,
                 category_id: categoryId || undefined,
               });
             }
@@ -341,7 +341,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
             chunk_config: chunkConfig,
             tags,
             source_type: sourceType,
-            status: status ? 'active' : 'inactive',
+            status: status,
             category_id: categoryId || undefined,
           } as Partial<KnowledgebaseDocument>);
           message.success('创建成功');
@@ -606,19 +606,15 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
           分类
         </div>
-        <Select
+        <TreeSelect
           value={categoryId || undefined}
           onChange={setCategoryId}
           placeholder="请选择分类"
+          treeData={buildCategoryTreeSelectData()}
           style={{ width: '50%', float: 'left' }}
           allowClear
-        >
-          {buildCategoryTreeSelectData().map(item => (
-            <Select.Option key={item.value} value={item.value}>
-              {item.title}
-            </Select.Option>
-          ))}
-        </Select>
+          treeDefaultExpandAll
+        />
       </div>
     );
   };
@@ -699,7 +695,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         display: 'flex',
         justifyContent: 'center',
         gap: 12,
-        padding: '16px 0 24px 0',
+        padding: '16px 0 8px 0',
         borderTop: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}`,
         marginTop: 16,
       }}>

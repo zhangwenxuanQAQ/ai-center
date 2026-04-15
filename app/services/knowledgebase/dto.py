@@ -152,7 +152,7 @@ class KnowledgebaseDocumentCategoryBase(BaseModel):
         parent_id: 父分类ID
         sort_order: 排序顺序
     """
-    kb_id: str = Field(..., description="知识库ID，UUID格式")
+    kb_id: Optional[str] = Field(None, description="知识库ID，UUID格式")
     name: str = Field(..., min_length=1, max_length=100, description="分类名称，长度1-100个字符")
     description: Optional[str] = Field(None, max_length=500, description="分类描述，最大长度500个字符")
     parent_id: Optional[str] = Field(None, description="父分类ID，UUID格式")

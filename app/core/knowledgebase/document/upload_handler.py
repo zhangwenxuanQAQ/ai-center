@@ -139,7 +139,14 @@ class DocumentUploadHandler:
         if not blob:
             raise RuntimeError("文件内容为空")
 
-        location = resolved_filename
+        from app.services.knowledgebase.service import KnowledgebaseDocumentCategoryService
+        category_path = KnowledgebaseDocumentCategoryService.get_category_path(category_id) if category_id else ""
+        
+        if category_path:
+            location = f"{category_path}/{resolved_filename}"
+        else:
+            location = resolved_filename
+        
         upload_success = DocumentUploadHandler._upload_to_rustfs(
             kb_id, location, blob, get_mime_type(filename)
         )
@@ -270,7 +277,7 @@ class DocumentUploadHandler:
                 document_tags = []
 
         # 处理状态
-        document_status = status or 'active'
+        document_status = status if status is not None else True
 
         doc = KnowledgebaseDocument(
             kb_id=kb_id,
