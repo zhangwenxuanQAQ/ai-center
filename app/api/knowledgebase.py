@@ -5,7 +5,7 @@
 import json
 import logging
 from typing import List
-from fastapi import APIRouter, Body, Query, UploadFile, File, Form
+from fastapi import APIRouter, Body, Query, UploadFile, File, Form, Request
 from fastapi.responses import StreamingResponse
 from app.services.knowledgebase.service import (
     KnowledgebaseCategoryService,
@@ -477,6 +477,30 @@ async def upload_documents(
         if not error_msg or error_msg == "(0, '')":
             error_msg = "上传文档失败，请检查RustFS服务是否正常运行"
         return ResponseUtil.error(message=error_msg)
+
+
+@router.post("/{kb_id}/document/batch_delete", response_model=ApiResponse)
+async def batch_delete_documents(kb_id: str, request: Request):
+    """
+    批量删除知识库文档
+
+    Args:
+        kb_id: 知识库ID
+        request: 请求对象，包含文档ID列表
+
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    try:
+        document_ids = await request.json()
+        if not isinstance(document_ids, list):
+            return ResponseUtil.error(message="请求体必须是文档ID列表")
+        deleted_count = KnowledgebaseDocumentService.batch_delete_documents(document_ids)
+        return ResponseUtil.success(data={"deleted_count": deleted_count}, message=f"成功删除{deleted_count}个文档")
+    except ValueError as e:
+        return ResponseUtil.error(message=str(e))
+    except Exception as e:
+        return ResponseUtil.error(message=f"批量删除失败: {str(e)}")
 
 
 @router.get("/{kb_id}/document/{document_id}", response_model=ApiResponse)

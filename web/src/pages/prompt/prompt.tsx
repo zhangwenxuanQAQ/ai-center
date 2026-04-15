@@ -104,6 +104,10 @@ const PromptManagement: React.FC = () => {
   }, [selectedCategory, searchName, filterStatus, currentPage, pageSize]);
 
   useEffect(() => {
+    setSelectedRowKeys([]);
+  }, [selectedCategory, searchName, filterStatus]);
+
+  useEffect(() => {
     if (isCategoryModalVisible && editingCategory) {
       editCategoryForm.setFieldsValue({
         name: editingCategory.name,
@@ -338,17 +342,17 @@ const PromptManagement: React.FC = () => {
       okText: '确定',
       cancelText: '取消',
       onOk: () => {
-        const deletePromises = selectedRowKeys.map(key => 
-          promptService.deletePrompt(key as string)
-        );
-        Promise.all(deletePromises).then(() => {
-          message.success('批量删除成功');
-          setSelectedRowKeys([]);
-          fetchPrompts();
-        }).catch(error => {
-          console.error('Failed to batch delete prompts:', error);
-          message.error('批量删除失败');
-        });
+        promptService.batchDeletePrompts(selectedRowKeys.map(key => key as string))
+          .then(() => {
+            message.success('批量删除成功');
+            setSelectedRowKeys([]);
+            // 重置表格到第一页
+            setCurrentPage(1);
+            fetchPrompts();
+          })
+          .catch(error => {
+            console.error('Failed to batch delete prompts:', error);
+          });
       }
     });
   };
@@ -695,6 +699,7 @@ const PromptManagement: React.FC = () => {
               rowSelection={{
                 selectedRowKeys,
                 onChange: (selectedKeys) => setSelectedRowKeys(selectedKeys),
+                preserveSelectedRowKeys: true,
               }}
               onHeaderRow={(columns, index) => ({
                 onDoubleClick: () => {
@@ -726,7 +731,7 @@ const PromptManagement: React.FC = () => {
               showSizeChanger
               showQuickJumper
               showTotal={(total) => `共 ${total} 条记录`}
-              pageSizeOptions={['20', '40', '60', '80']}
+              pageSizeOptions={['10','20', '40', '60', '80']}
               locale={{
                 items_per_page: '条/页',
                 jump_to: '前往',

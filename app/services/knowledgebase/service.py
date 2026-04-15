@@ -797,6 +797,78 @@ class KnowledgebaseDocumentService:
         ).where(Knowledgebase.id == db_doc.kb_id).execute()
 
         return db_doc
+    
+    @staticmethod
+    @handle_transaction
+    def batch_delete_documents(document_ids: List[str]):
+        """
+        批量删除知识库文档（逻辑删除，同时删除RustFS中的文件）
+
+        Args:
+            document_ids: 文档ID列表
+
+        Returns:
+            int: 成功删除的文档数量
+
+        Raises:
+            ResourceNotFoundError: 文档不存在
+        """
+        if not document_ids:
+            return 0
+        
+        # 检查所有文档是否存在且未删除
+        existing_docs = list(KnowledgebaseDocument.select().where(
+            (KnowledgebaseDocument.id.in_(document_ids)) &
+            (KnowledgebaseDocument.deleted == False)
+        ))
+        
+        existing_ids = {doc.id for doc in existing_docs}
+        missing_ids = set(document_ids) - existing_ids
+        
+        if missing_ids:
+            raise ResourceNotFoundError(message=f"文档 {', '.join(missing_ids)} 不存在")
+        
+        # 删除RustFS中的文件
+        from app.database.storage.rustfs_utils import rustfs_utils
+        if rustfs_utils.is_available:
+            for doc in existing_docs:
+                if doc.location:
+                    try:
+                        rustfs_utils.delete_object(
+                            bucket_name=doc.kb_id,
+                            object_key=doc.location,
+                        )
+                    except Exception as e:
+                        logger.warning(f"删除RustFS文件失败 {doc.kb_id}/{doc.location}: {e}")
+        
+        # 按知识库分组统计删除的文档数量和token数
+        kb_stats = {}
+        for doc in existing_docs:
+            if doc.kb_id not in kb_stats:
+                kb_stats[doc.kb_id] = {'doc_count': 0, 'token_count': 0}
+            kb_stats[doc.kb_id]['doc_count'] += 1
+            kb_stats[doc.kb_id]['token_count'] += doc.token_num or 0
+        
+        # 批量更新文档状态
+        from datetime import datetime
+        now = datetime.now()
+        
+        updated = KnowledgebaseDocument.update(
+            deleted=True,
+            deleted_at=now
+        ).where(
+            (KnowledgebaseDocument.id.in_(document_ids)) &
+            (KnowledgebaseDocument.deleted == False)
+        ).execute()
+        
+        # 更新每个知识库的统计信息
+        for kb_id, stats in kb_stats.items():
+            Knowledgebase.update(
+                doc_num=Knowledgebase.doc_num - stats['doc_count'],
+                token_num=Knowledgebase.token_num - stats['token_count']
+            ).where(Knowledgebase.id == kb_id).execute()
+        
+        return updated
 
 
 class KnowledgebaseDocumentCategoryService:

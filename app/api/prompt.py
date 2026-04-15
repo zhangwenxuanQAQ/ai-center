@@ -3,7 +3,7 @@
 """
 
 import json
-from fastapi import APIRouter, Body, Query
+from fastapi import APIRouter, Body, Query, Request
 from app.services.prompt.service import PromptCategoryService, PromptService
 from app.services.prompt.dto import (
     PromptCategoryCreate, PromptCategoryUpdate, PromptCategory, 
@@ -167,6 +167,29 @@ def get_prompts(
         "page": page,
         "page_size": page_size
     }, message="获取提示词列表成功")
+
+
+@router.post("/batch_delete", response_model=ApiResponse)
+async def batch_delete_prompts(request: Request):
+    """
+    批量删除提示词
+    
+    Args:
+        request: 请求对象，包含提示词ID列表
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    try:
+        prompt_ids = await request.json()
+        if not isinstance(prompt_ids, list):
+            return ResponseUtil.error(message="请求体必须是提示词ID列表")
+        deleted_count = PromptService.batch_delete_prompts(prompt_ids)
+        return ResponseUtil.success(data={"deleted_count": deleted_count}, message=f"成功删除{deleted_count}个提示词")
+    except ValueError as e:
+        return ResponseUtil.error(message=str(e))
+    except Exception as e:
+        return ResponseUtil.error(message=f"批量删除失败: {str(e)}")
 
 
 @router.get("/{prompt_id}", response_model=ApiResponse)

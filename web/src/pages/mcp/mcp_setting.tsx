@@ -608,10 +608,12 @@ const MCPSetting: React.FC = () => {
           const result = await mcpService.batchDeleteTools(selectedToolIds);
           message.success(`成功删除 ${result.deleted_count} 个工具`);
           setSelectedToolIds([]);
+          // 重置表格到第一页
+          setCurrentPage(1);
           fetchTools();
-        } catch (error) {
+        } catch (error: any) {
           console.error('Failed to batch delete tools:', error);
-          message.error('批量删除失败');
+          // 不再手动打印错误消息，由后端返回的错误信息处理
         }
       },
       okText: '确认',

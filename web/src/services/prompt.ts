@@ -130,4 +130,11 @@ export const promptService = {
   updatePromptStatus: async (id: string, status: boolean): Promise<Prompt> => {
     return http.post<Prompt>(`/aicenter/v1/prompt/${id}/status`, { status });
   },
+
+  /**
+   * 批量删除提示词
+   */
+  batchDeletePrompts: async (ids: string[]): Promise<{ deleted_count: number }> => {
+    return http.post<{ deleted_count: number }>('/aicenter/v1/prompt/batch_delete', ids);
+  },
 };

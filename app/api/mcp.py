@@ -3,7 +3,7 @@ MCP控制器，提供MCP相关的API接口
 """
 
 import json
-from fastapi import APIRouter, Body, Query
+from fastapi import APIRouter, Body, Query, Request
 from app.services.mcp.service import MCPCategoryService, MCPServerService, MCPToolService
 from app.services.mcp.dto import (
     MCPCategoryCreate, MCPCategoryUpdate, MCPCategory, 
@@ -495,18 +495,24 @@ def delete_mcp_tool(tool_id: str):
 
 
 @router.post("/tools/batch_delete", response_model=ApiResponse)
-def batch_delete_mcp_tools(tool_ids: list = Body(..., description="MCP工具ID列表")):
+async def batch_delete_mcp_tools(request: Request):
     """
     批量删除MCP工具
     
     Args:
-        tool_ids: MCP工具ID列表
+        request: 请求对象，包含MCP工具ID列表
         
     Returns:
         ApiResponse: 统一格式的响应对象
     """
-    deleted_count = MCPToolService.batch_delete_tools(tool_ids)
-    return ResponseUtil.success(data={"deleted_count": deleted_count}, message=f"成功删除 {deleted_count} 个工具")
+    try:
+        tool_ids = await request.json()
+        if not isinstance(tool_ids, list):
+            return ResponseUtil.error(message="请求体必须是MCP工具ID列表")
+        deleted_count = MCPToolService.batch_delete_tools(tool_ids)
+        return ResponseUtil.success(data={"deleted_count": deleted_count}, message=f"成功删除 {deleted_count} 个工具")
+    except Exception as e:
+        return ResponseUtil.error(message=f"批量删除失败: {str(e)}")
 
 
 @router.post("/tool/{tool_id}/test", response_model=ApiResponse)

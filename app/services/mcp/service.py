@@ -839,19 +839,22 @@ class MCPToolService:
         Returns:
             int: 删除成功的工具数量
         """
-        deleted_count = 0
-        for tool_id in tool_ids:
-            try:
-                db_tool = MCPTool.get_by_id(tool_id)
-                if not db_tool.deleted:
-                    db_tool.deleted = True
-                    db_tool.deleted_at = datetime.now()
-                    db_tool.save()
-                    deleted_count += 1
-            except MCPTool.DoesNotExist:
-                # 跳过不存在的工具
-                continue
-        return deleted_count
+        if not tool_ids:
+            return 0
+        
+        # 批量更新，使用单次数据库查询
+        from datetime import datetime
+        now = datetime.now()
+        
+        updated = MCPTool.update(
+            deleted=True,
+            deleted_at=now
+        ).where(
+            (MCPTool.id.in_(tool_ids)) &
+            (MCPTool.deleted == False)
+        ).execute()
+        
+        return updated
     
     @staticmethod
     async def test_tool(tool_id: str, params: dict) -> dict:

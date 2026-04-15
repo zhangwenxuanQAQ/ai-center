@@ -435,3 +435,47 @@ class PromptService:
         db_prompt.updated_at = datetime.now()
         db_prompt.save()
         return db_prompt
+    
+    @staticmethod
+    @handle_transaction
+    def batch_delete_prompts(prompt_ids: List[str]):
+        """
+        批量删除提示词（逻辑删除）
+        
+        Args:
+            prompt_ids: 提示词ID列表
+            
+        Returns:
+            int: 成功删除的提示词数量
+            
+        Raises:
+            ResourceNotFoundError: 提示词不存在
+        """
+        if not prompt_ids:
+            return 0
+        
+        # 检查所有提示词是否存在且未删除
+        existing_prompts = list(Prompt.select().where(
+            (Prompt.id.in_(prompt_ids)) &
+            (Prompt.deleted == False)
+        ))
+        
+        existing_ids = {p.id for p in existing_prompts}
+        missing_ids = set(prompt_ids) - existing_ids
+        
+        if missing_ids:
+            raise ResourceNotFoundError(message=f"提示词 {', '.join(missing_ids)} 不存在")
+        
+        # 批量更新
+        from datetime import datetime
+        now = datetime.now()
+        
+        updated = Prompt.update(
+            deleted=True,
+            deleted_at=now
+        ).where(
+            (Prompt.id.in_(prompt_ids)) &
+            (Prompt.deleted == False)
+        ).execute()
+        
+        return updated

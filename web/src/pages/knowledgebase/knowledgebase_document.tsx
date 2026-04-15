@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Layout, Tree, Table, Input, Select, Button, Tag, Spin, Pagination, Empty, Row, Col, Tooltip, Switch, message, Modal, Popconfirm, Form, TreeSelect } from 'antd';
 const { TextArea } = Input;
-import { SearchOutlined, PlusOutlined, FolderOutlined, FileTextOutlined, PlayCircleOutlined, PauseCircleOutlined, ReloadOutlined, UnorderedListOutlined, EditOutlined, DownloadOutlined, DeleteOutlined, UpOutlined, DownOutlined } from '@ant-design/icons';
+import { SearchOutlined, PlusOutlined, FolderOutlined, FileTextOutlined, PlayCircleOutlined, PauseCircleOutlined, ReloadOutlined, UnorderedListOutlined, EditOutlined, DownloadOutlined, DeleteOutlined, UpOutlined, DownOutlined, CloseOutlined } from '@ant-design/icons';
 import type { TreeDataNode, TreeProps } from 'antd';
 import { knowledgebaseService, Knowledgebase, KnowledgebaseDocument, KnowledgebaseDocumentCategory } from '../../services/knowledgebase';
 import { DOCUMENT_RUNNING_STATUS, DOCUMENT_CHUNK_METHOD } from '../../constants/knowledgebase';
@@ -33,6 +33,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
   const [filterNewStatus, setFilterNewStatus] = useState<boolean | null>(null);
   const [showSetting, setShowSetting] = useState(false);
   const [editingDocument, setEditingDocument] = useState<KnowledgebaseDocument | undefined>(undefined);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // 分类管理相关状态
   const [isCategoryModalVisible, setIsCategoryModalVisible] = useState(false);
@@ -62,6 +63,10 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
   useEffect(() => {
     fetchDocuments();
   }, [selectedCategory, searchName, filterFileType, filterStatus, filterNewStatus, currentPage, pageSize]);
+
+  useEffect(() => {
+    setSelectedRowKeys([]);
+  }, [selectedCategory, searchName, filterFileType, filterStatus, filterNewStatus]);
 
   const getAllCategoryKeys = (categories: KnowledgebaseDocumentCategory[]): string[] => {
     let keys: string[] = [];
@@ -409,6 +414,32 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
     }
   };
 
+  const handleBatchDelete = () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning('请选择要删除的文档');
+      return;
+    }
+    Modal.confirm({
+      title: '批量删除',
+      content: `确定要删除选中的 ${selectedRowKeys.length} 个文档吗？`,
+      okText: '确定',
+      cancelText: '取消',
+      onOk: () => {
+        knowledgebaseService.batchDeleteDocuments(knowledgebase.id, selectedRowKeys.map(key => key as string))
+          .then(() => {
+            message.success('批量删除成功');
+            setSelectedRowKeys([]);
+            // 重置表格到第一页
+            setCurrentPage(1);
+            fetchDocuments();
+          })
+          .catch(error => {
+            console.error('Failed to batch delete documents:', error);
+          });
+      }
+    });
+  };
+
   const columns = [
     {
       title: '文档名称',
@@ -651,6 +682,15 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
           >
             新增数据集
           </Button>
+          <Button 
+            danger
+            icon={<DeleteOutlined />}
+            onClick={handleBatchDelete}
+            className="batch-delete-button"
+            disabled={selectedRowKeys.length === 0}
+          >
+            批量删除 ({selectedRowKeys.length})
+          </Button>
           <Input
             placeholder="搜索文档名称"
             value={searchName}
@@ -728,6 +768,20 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
             <Option key="true" value={true}>启用</Option>
             <Option key="false" value={false}>禁用</Option>
           </Select>
+          <Button 
+            icon={<CloseOutlined />}
+            onClick={() => {
+              setSearchName('');
+              setFilterFileType([]);
+              setFilterStatus([]);
+              setFilterNewStatus(null);
+              setSelectedRowKeys([]);
+              setCurrentPage(1);
+            }}
+            style={{ height: '36px' }}
+          >
+            清空
+          </Button>
         </div>
 
         <div style={{ 
@@ -756,6 +810,12 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
               pagination={false}
               className={`knowledgebase-document-table ${theme === 'dark' ? 'dark' : 'light'}`}
               scroll={{ x: 'max-content', y: 'calc(100vh - 300px)' }}
+              rowSelection={{
+                selectedRowKeys,
+                onChange: (selectedKeys) => setSelectedRowKeys(selectedKeys),
+                preserveSelectedRowKeys: true,
+              }}
+              size="small"
             />
           )}
         </div>

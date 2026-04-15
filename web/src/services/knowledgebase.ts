@@ -302,6 +302,16 @@ export const knowledgebaseService = {
   },
 
   /**
+   * 批量删除文档
+   */
+  batchDeleteDocuments: async (kbId: string, documentIds: string[]): Promise<{ deleted_count: number }> => {
+    return http.post<{ deleted_count: number }>(
+      `/aicenter/v1/knowledgebase/${kbId}/document/batch_delete`,
+      documentIds
+    );
+  },
+
+  /**
    * 获取文档常量配置（切片方法、来源类型、切片配置）
    */
   getDocumentConstants: async (): Promise<{

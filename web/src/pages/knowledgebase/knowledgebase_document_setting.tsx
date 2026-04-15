@@ -18,7 +18,7 @@ import {
   FormOutlined,
   InboxOutlined,
 } from '@ant-design/icons';
-import { knowledgebaseService, KnowledgebaseDocument, KnowledgebaseCategory } from '../../services/knowledgebase';
+import { knowledgebaseService, KnowledgebaseDocument, KnowledgebaseCategory, KnowledgebaseDocumentCategory } from '../../services/knowledgebase';
 
 interface ChunkConfigFieldDef {
   key: string;
@@ -144,7 +144,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
   };
 
   // 分类管理相关状态
-  const [categories, setCategories] = useState<KnowledgebaseCategory[]>([]);
+  const [categories, setCategories] = useState<KnowledgebaseDocumentCategory[]>([]);
 
   const [originalData, setOriginalData] = useState({
     sourceType: 'local_document',
@@ -173,18 +173,19 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
 
   const fetchCategories = async () => {
     try {
-      const data = await knowledgebaseService.getCategoryTree();
+      const data = await knowledgebaseService.getDocumentCategoryTree(knowledgebase.id);
       setCategories(data);
     } catch (error) {
-      console.error('Failed to fetch categories:', error);
+      console.error('Failed to fetch document categories:', error);
     }
   };
 
   const buildCategoryTreeSelectData = () => {
-    const buildTree = (cats: KnowledgebaseCategory[]): any[] => {
+    const buildTree = (cats: KnowledgebaseDocumentCategory[]): any[] => {
       return cats.map(cat => ({
         title: cat.name,
         value: cat.id,
+        key: cat.id,
         children: cat.children && cat.children.length > 0 ? buildTree(cat.children) : undefined
       }));
     };
@@ -198,12 +199,14 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       const docChunkConfig = doc.chunk_config || {};
       const docTags = doc.tags || [];
       const docStatus = typeof doc.status === 'string' ? doc.status === 'active' : !!doc.status;
+      const docCategoryId = doc.category_id || '';
 
       setSourceType(docSourceType);
       setChunkMethod(docChunkMethod);
       setChunkConfig(docChunkConfig as Record<string, unknown>);
       setTags(docTags);
       setStatus(docStatus);
+      setCategoryId(docCategoryId);
 
       const initData = {
         sourceType: docSourceType,
