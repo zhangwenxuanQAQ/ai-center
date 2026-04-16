@@ -430,6 +430,7 @@ const DatasourceManagement: React.FC = () => {
     form.resetFields();
     setSelectedDatasourceType('');
     setDatasourceConfig({});
+    setConnectionTestResult(null);
     setIsModalVisible(true);
   };
 
@@ -448,6 +449,7 @@ const DatasourceManagement: React.FC = () => {
     } else {
       setEditDatasourceConfig({});
     }
+    setConnectionTestResult(null);
     setIsEditModalVisible(true);
   };
 
@@ -457,7 +459,7 @@ const DatasourceManagement: React.FC = () => {
       if (result.success) {
         message.success('连接测试成功！');
       } else {
-        message.error(`连接测试失败：${result.message}`);
+        message.error(`连接测试失败：${result.message || '未知错误'}`);
       }
     } catch (error) {
       console.error('测试连接失败:', error);
@@ -616,8 +618,8 @@ const DatasourceManagement: React.FC = () => {
       const result = await datasourceService.testConnection('test', testData);
       
       setConnectionTestResult({
-        success: result.success,
-        message: result.message
+        success: result.success || false,
+        message: result.message || '连接测试失败'
       });
       
       if (result.success) {

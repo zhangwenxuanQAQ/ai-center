@@ -107,6 +107,10 @@ class DatasourceService:
                 field_name = field['name']
                 field_value = encrypted_config[field_name]
                 if field_value:
+                    # 检查是否已经被加密（Fernet加密后的文本以gAAAA开头）
+                    if isinstance(field_value, str) and field_value.startswith('gAAAA'):
+                        # 已经被加密，不再重复加密
+                        continue
                     encrypted_config[field_name] = encrypt_password(field_value)
         
         return encrypted_config
@@ -126,6 +130,27 @@ class DatasourceService:
         if not config:
             return config
         
+        def decrypt_until_plain(encrypted_value: str, max_attempts: int = 10) -> str:
+            """递归解密直到得到明文"""
+            if not isinstance(encrypted_value, str) or not encrypted_value.startswith('gAAAA'):
+                return encrypted_value
+            
+            current_value = encrypted_value
+            attempts = 0
+            
+            while current_value.startswith('gAAAA') and attempts < max_attempts:
+                try:
+                    decrypted = decrypt_password(current_value)
+                    if decrypted == current_value:
+                        # 解密失败，返回当前值
+                        break
+                    current_value = decrypted
+                    attempts += 1
+                except Exception:
+                    break
+            
+            return current_value
+        
         config_fields = DATASOURCE_CONFIG_FIELDS.get(datasource_type, [])
         decrypted_config = config.copy()
         
@@ -134,7 +159,8 @@ class DatasourceService:
                 field_name = field['name']
                 field_value = decrypted_config[field_name]
                 if field_value:
-                    decrypted_config[field_name] = decrypt_password(field_value)
+                    # 递归解密直到得到明文
+                    decrypted_config[field_name] = decrypt_until_plain(field_value)
         
         return decrypted_config
     
