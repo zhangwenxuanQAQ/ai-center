@@ -3,6 +3,7 @@
 """
 
 import json
+import logging
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 from app.database.models import KnowledgebaseCategory, Knowledgebase, KnowledgebaseDocument, KnowledgebaseDocumentCategory
@@ -14,6 +15,8 @@ from app.services.knowledgebase.dto import (
 )
 from app.database.db_utils import handle_transaction
 from app.core.exceptions import ResourceNotFoundError, DuplicateResourceError
+
+logger = logging.getLogger(__name__)
 
 
 class KnowledgebaseCategoryService:
@@ -582,9 +585,12 @@ class KnowledgebaseDocumentService:
             
             if doc_dict.get('tags'):
                 try:
-                    doc_dict['tags'] = json.loads(doc_dict['tags'])
+                    parsed_tags = json.loads(doc_dict['tags'])
+                    doc_dict['tags'] = parsed_tags if isinstance(parsed_tags, list) else []
                 except:
                     doc_dict['tags'] = []
+            else:
+                doc_dict['tags'] = []
             if doc_dict.get('chunk_config'):
                 try:
                     doc_dict['chunk_config'] = json.loads(doc_dict['chunk_config'])
@@ -905,7 +911,7 @@ class KnowledgebaseDocumentCategoryService:
         return default_category
 
     @staticmethod
-    def get_category_path(category_id: str):
+    def get_category_path(category_id: Optional[str]):
         """
         获取分类的完整路径（包括所有父分类）
 

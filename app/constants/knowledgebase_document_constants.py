@@ -143,15 +143,6 @@ NAIVE_CHUNK_CONFIG: List[ChunkConfigField] = [
         ],
     ),
     ChunkConfigField(
-        key="task_page_size",
-        label="页面大小",
-        field_type="number",
-        default=12,
-        description="PDF解析每页大小",
-        min_value=1,
-        max_value=100,
-    ),
-    ChunkConfigField(
         key="overlapped_percent",
         label="重叠百分比",
         field_type="slider",

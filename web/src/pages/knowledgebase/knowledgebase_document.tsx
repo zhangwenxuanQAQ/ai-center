@@ -34,6 +34,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
   const [showSetting, setShowSetting] = useState(false);
   const [editingDocument, setEditingDocument] = useState<KnowledgebaseDocument | undefined>(undefined);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [documentConstants, setDocumentConstants] = useState<any>(null);
   
   // 分类管理相关状态
   const [isCategoryModalVisible, setIsCategoryModalVisible] = useState(false);
@@ -58,6 +59,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
   useEffect(() => {
     fetchCategories();
     fetchDocuments();
+    fetchDocumentConstants();
   }, [knowledgebase.id]);
 
   useEffect(() => {
@@ -87,6 +89,15 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       setExpandedKeys(allKeys);
     } catch (error) {
       console.error('Failed to fetch document categories:', error);
+    }
+  };
+
+  const fetchDocumentConstants = async () => {
+    try {
+      const data = await knowledgebaseService.getDocumentConstants();
+      setDocumentConstants(data);
+    } catch (error) {
+      console.error('Failed to fetch document constants:', error);
     }
   };
 
@@ -475,7 +486,13 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       dataIndex: 'chunk_method',
       key: 'chunk_method',
       width: 120,
-      render: (method: string) => DOCUMENT_CHUNK_METHOD[method as keyof typeof DOCUMENT_CHUNK_METHOD] || method,
+      render: (method: string) => {
+        if (documentConstants?.chunk_methods) {
+          const chunkMethod = documentConstants.chunk_methods.find((cm: any) => cm.key === method);
+          return chunkMethod?.label || method;
+        }
+        return DOCUMENT_CHUNK_METHOD[method as keyof typeof DOCUMENT_CHUNK_METHOD] || method;
+      },
     },
     {
       title: '标签',

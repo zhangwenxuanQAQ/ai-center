@@ -1,6 +1,5 @@
 """
 文件工具类
-参考ragflow项目的api/utils/file_utils.py实现
 提供文件类型判断、缩略图生成等功能
 """
 

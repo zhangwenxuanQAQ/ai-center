@@ -526,9 +526,12 @@ def get_document(kb_id: str, document_id: str):
             pass
     if data.get('tags'):
         try:
-            data['tags'] = json.loads(data['tags'])
+            parsed_tags = json.loads(data['tags'])
+            data['tags'] = parsed_tags if isinstance(parsed_tags, list) else []
         except (json.JSONDecodeError, TypeError):
-            pass
+            data['tags'] = []
+    else:
+        data['tags'] = []
     return ResponseUtil.success(data=data, message="获取知识库文档成功")
 
 

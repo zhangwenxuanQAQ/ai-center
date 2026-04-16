@@ -1,6 +1,5 @@
 """
 文档上传处理器
-参考ragflow项目的FileService.upload_document逻辑实现
 负责文件上传到RustFS、文件去重、缩略图生成、文档记录创建等核心逻辑
 """
 

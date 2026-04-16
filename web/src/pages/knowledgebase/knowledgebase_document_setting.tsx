@@ -152,6 +152,8 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     chunkConfig: {},
     tags: [] as string[],
     status: true,
+    fileList: [] as Array<{ uid: string; name: string; size: number }>,
+    categoryId: '',
   });
 
   useEffect(() => {
@@ -214,6 +216,8 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         chunkConfig: docChunkConfig as Record<string, unknown>,
         tags: docTags,
         status: docStatus,
+        fileList: [], // 文件列表在编辑模式下不会重新初始化，因为文件已上传
+        categoryId: docCategoryId,
       };
       setOriginalData(initData);
     } else if (constants) {
@@ -229,15 +233,19 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       chunkConfig,
       tags: [...tags],
       status,
+      fileList: [...fileList],
+      categoryId,
     };
     const changed =
       current.sourceType !== originalData.sourceType ||
       current.chunkMethod !== originalData.chunkMethod ||
       JSON.stringify(current.chunkConfig) !== JSON.stringify(originalData.chunkConfig) ||
       JSON.stringify(current.tags) !== JSON.stringify(originalData.tags) ||
-      current.status !== originalData.status;
+      current.status !== originalData.status ||
+      JSON.stringify(current.fileList) !== JSON.stringify(originalData.fileList) ||
+      current.categoryId !== originalData.categoryId;
     setHasChanges(changed);
-  }, [sourceType, chunkMethod, chunkConfig, tags, status, originalData, constants]);
+  }, [sourceType, chunkMethod, chunkConfig, tags, status, fileList, categoryId, originalData, constants]);
 
   const fetchConstants = async () => {
     try {
@@ -376,44 +384,46 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
           数据来源 <span style={{ color: '#ff4d4f' }}>*</span>
         </div>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          {constants.source_types.map(st => {
-            const isSelected = sourceType === st.key;
-            const isDisabled = st.key !== 'local_document';
-            return (
-              <Tooltip key={st.key} title={isDisabled ? '暂不支持' : st.label}>
-                <div
-                  onClick={() => !isDisabled && handleSourceTypeChange(st.key)}
-                  style={{
-                    width: 140,
-                    padding: '16px 12px',
-                    borderRadius: 8,
-                    border: `2px solid ${isSelected ? '#667eea' : theme === 'dark' ? 'rgba(255,255,255,0.15)' : '#e8e8e8'}`,
-                    background: isSelected
-                      ? theme === 'dark' ? 'rgba(102,126,234,0.15)' : 'rgba(102,126,234,0.08)'
-                      : theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#fafafa',
-                    cursor: isDisabled ? 'not-allowed' : 'pointer',
-                    opacity: isDisabled ? 0.5 : 1,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: 8,
-                    transition: 'all 0.2s',
-                  }}
-                >
-                  <div style={{ color: isSelected ? '#667eea' : theme === 'dark' ? '#aaa' : '#666' }}>
-                    {SOURCE_TYPE_ICONS[st.key]}
+          {constants.source_types
+            .filter(st => !isEdit || st.key === sourceType) // 编辑模式下只显示当前数据源
+            .map(st => {
+              const isSelected = sourceType === st.key;
+              const isDisabled = isEdit || st.key !== 'local_document'; // 编辑模式下禁用修改
+              return (
+                <Tooltip key={st.key} title={isDisabled ? (isEdit ? '编辑模式下不可修改' : '暂不支持') : st.label}>
+                  <div
+                    onClick={() => !isDisabled && handleSourceTypeChange(st.key)}
+                    style={{
+                      width: 140,
+                      padding: '16px 12px',
+                      borderRadius: 8,
+                      border: `2px solid ${isSelected ? '#667eea' : theme === 'dark' ? 'rgba(255,255,255,0.15)' : '#e8e8e8'}`,
+                      background: isSelected
+                        ? theme === 'dark' ? 'rgba(102,126,234,0.15)' : 'rgba(102,126,234,0.08)'
+                        : theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#fafafa',
+                      cursor: isDisabled ? 'not-allowed' : 'pointer',
+                      opacity: isDisabled ? 0.5 : 1,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 8,
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    <div style={{ color: isSelected ? '#667eea' : theme === 'dark' ? '#aaa' : '#666' }}>
+                      {SOURCE_TYPE_ICONS[st.key]}
+                    </div>
+                    <div style={{
+                      fontSize: 13,
+                      color: isSelected ? '#667eea' : theme === 'dark' ? '#ccc' : '#666',
+                      fontWeight: isSelected ? 600 : 400,
+                    }}>
+                      {st.label}
+                    </div>
                   </div>
-                  <div style={{
-                    fontSize: 13,
-                    color: isSelected ? '#667eea' : theme === 'dark' ? '#ccc' : '#666',
-                    fontWeight: isSelected ? 600 : 400,
-                  }}>
-                    {st.label}
-                  </div>
-                </div>
-              </Tooltip>
-            );
-          })}
+                </Tooltip>
+              );
+            })}
         </div>
       </div>
     );
@@ -470,8 +480,12 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
               background: theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#fafafa',
               border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}`,
               color: theme === 'dark' ? '#ccc' : '#666',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
             }}>
-              {document?.file_name || '已上传文档'}
+              <span style={{ fontSize: 24 }}>{getFileIcon(doc?.file_name || '')}</span>
+              <span>{doc?.file_name || '已上传文档'}</span>
             </div>
           )}
         </div>
@@ -697,11 +711,17 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       <div style={{
         display: 'flex',
         justifyContent: 'center',
-        gap: 12,
+        alignItems: 'center',
+        gap: 16,
         padding: '16px 0 8px 0',
         borderTop: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}`,
         marginTop: 16,
       }}>
+        {isEdit && hasChanges && (
+          <span style={{ color: '#faad14', fontSize: 12 }}>
+            • 有未保存的变动
+          </span>
+        )}
         <Button
           onClick={onBack}
         >
