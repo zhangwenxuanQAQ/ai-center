@@ -181,4 +181,54 @@ export const datasourceService = {
   getSchema: async (id: string): Promise<any> => {
     return http.get<any>(`/aicenter/v1/datasource/${id}/schema`);
   },
+
+  /**
+   * 列出文件（仅适用于文件存储类型数据源）
+   * @param id - 数据源ID
+   * @param bucket - Bucket名称（可选）
+   * @param prefix - 文件前缀/目录（可选）
+   * @param maxKeys - 最大返回数量
+   */
+  listFiles: async (id: string, bucket?: string, prefix?: string, maxKeys: number = 100): Promise<any> => {
+    let params = [`max_keys=${maxKeys}`];
+    if (bucket) params.push(`bucket=${encodeURIComponent(bucket)}`);
+    if (prefix) params.push(`prefix=${encodeURIComponent(prefix)}`);
+    const queryString = params.length > 0 ? `?${params.join('&')}` : '';
+    return http.get<any>(`/aicenter/v1/datasource/${id}/files${queryString}`);
+  },
+
+  /**
+   * 下载文件（仅适用于文件存储类型数据源）
+   * @param id - 数据源ID
+   * @param bucket - Bucket名称（可选）
+   * @param objectName - 对象名称/文件路径
+   */
+  downloadFile: async (id: string, bucket: string | undefined, objectName: string): Promise<any> => {
+    return http.post<any>(`/aicenter/v1/datasource/${id}/files/download`, { bucket, object_name: objectName });
+  },
+
+  /**
+   * 列出数据库表（仅适用于关系型数据库数据源）
+   * @param id - 数据源ID
+   * @param database - 数据库名称（可选）
+   */
+  listTables: async (id: string, database?: string): Promise<any> => {
+    let params = [];
+    if (database) params.push(`database=${encodeURIComponent(database)}`);
+    const queryString = params.length > 0 ? `?${params.join('&')}` : '';
+    return http.get<any>(`/aicenter/v1/datasource/${id}/tables${queryString}`);
+  },
+
+  /**
+   * 获取表的字段信息（仅适用于关系型数据库数据源）
+   * @param id - 数据源ID
+   * @param tableName - 表名称
+   * @param database - 数据库名称（可选）
+   */
+  getTableColumns: async (id: string, tableName: string, database?: string): Promise<any> => {
+    let params = [];
+    if (database) params.push(`database=${encodeURIComponent(database)}`);
+    const queryString = params.length > 0 ? `?${params.join('&')}` : '';
+    return http.get<any>(`/aicenter/v1/datasource/${id}/tables/${encodeURIComponent(tableName)}/columns${queryString}`);
+  },
 };

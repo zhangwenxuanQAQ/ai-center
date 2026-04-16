@@ -128,3 +128,77 @@ class OracleDatasource(DatasourceBase):
             return {"success": False, "message": "缺少oracledb依赖，请执行: pip install oracledb"}
         except Exception as e:
             return {"success": False, "message": f"获取Schema信息失败: {str(e)}"}
+
+    def list_tables(self) -> Dict[str, Any]:
+        """
+        获取Oracle数据库表列表
+        """
+        try:
+            import oracledb
+            dsn = f"{self.config.get('host', 'localhost')}:{self.config.get('port', 1521)}/{self.config.get('service_name', '')}"
+            connection = oracledb.connect(
+                user=self.config.get('username', ''),
+                password=self.config.get('password', ''),
+                dsn=dsn,
+            )
+            cursor = connection.cursor()
+            username = self.config.get('username', '').upper()
+            cursor.execute(
+                "SELECT TABLE_NAME, COMMENTS FROM USER_TAB_COMMENTS WHERE TABLE_TYPE = 'TABLE' ORDER BY TABLE_NAME"
+            )
+            tables = cursor.fetchall()
+            table_list = []
+            for table in tables:
+                table_list.append({
+                    "table_name": table[0],
+                    "table_comment": table[1] or ''
+                })
+            connection.close()
+            return {
+                "success": True,
+                "message": "获取表列表成功",
+                "data": {"tables": table_list}
+            }
+        except ImportError:
+            return {"success": False, "message": "缺少oracledb依赖，请执行: pip install oracledb"}
+        except Exception as e:
+            return {"success": False, "message": f"获取表列表失败: {str(e)}"}
+
+    def get_table_columns(self, table_name: str) -> Dict[str, Any]:
+        """
+        获取Oracle数据库表字段信息
+        """
+        try:
+            import oracledb
+            dsn = f"{self.config.get('host', 'localhost')}:{self.config.get('port', 1521)}/{self.config.get('service_name', '')}"
+            connection = oracledb.connect(
+                user=self.config.get('username', ''),
+                password=self.config.get('password', ''),
+                dsn=dsn,
+            )
+            cursor = connection.cursor()
+            cursor.execute(
+                "SELECT COLUMN_NAME, DATA_TYPE, NULLABLE, DATA_DEFAULT "
+                "FROM USER_TAB_COLUMNS WHERE TABLE_NAME = :table_name ORDER BY COLUMN_ID",
+                {"table_name": table_name.upper()}
+            )
+            columns = cursor.fetchall()
+            column_list = []
+            for col in columns:
+                column_list.append({
+                    "column_name": col[0],
+                    "column_type": col[1],
+                    "is_nullable": "YES" if col[2] == "Y" else "NO",
+                    "column_default": str(col[3]) if col[3] else None,
+                    "column_comment": ""
+                })
+            connection.close()
+            return {
+                "success": True,
+                "message": "获取表字段成功",
+                "data": {"columns": column_list}
+            }
+        except ImportError:
+            return {"success": False, "message": "缺少oracledb依赖，请执行: pip install oracledb"}
+        except Exception as e:
+            return {"success": False, "message": f"获取表字段失败: {str(e)}"}

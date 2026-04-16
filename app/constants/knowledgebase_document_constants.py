@@ -331,3 +331,21 @@ class RunningStatus:
     DONE = "done" # 已完成
     FAIL = "fail" # 失败
     SCHEDULE = "schedule" # 定时调度
+
+
+class SourceConfigDefinition:
+    """
+    数据来源配置参数定义，根据数据来源类型展示不同的配置项
+    如果数据来源是本地文档，配置项为空对象。
+    如果数据来源是数据源则为json对象，字段如下：
+        - datasource_id: 数据源ID
+        如果是关系型数据库：
+            - table_name: 表名
+            - column_names: 所选字段列表
+            - where_clause: WHERE条件
+        如果是文件系统（根据具体类型可能不同，一般如下）：
+            - bucket_name: 存储桶名
+            - location: 文件路径
+    如果是自定义模板，暂时为空对象
+    """
+    

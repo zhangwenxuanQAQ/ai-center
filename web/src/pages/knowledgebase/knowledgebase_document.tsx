@@ -602,13 +602,22 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
                 onClick={() => { setEditingDocument(record); setShowSetting(true); }}
               />
             </Tooltip>
-            <Tooltip title="下载">
-              <Button 
-                type="text"
-                size="small" 
-                icon={<DownloadOutlined />}
-              />
-            </Tooltip>
+            {(record.source_type === 'local_document' || record.source_type === 'file_datasource') && (
+              <Tooltip title="下载">
+                <Button 
+                  type="text"
+                  size="small" 
+                  icon={<DownloadOutlined />}
+                  onClick={async () => {
+                    try {
+                      await knowledgebaseService.downloadDocument(knowledgebase.id, record.id);
+                    } catch (error) {
+                      message.error('下载失败，请稍后重试');
+                    }
+                  }}
+                />
+              </Tooltip>
+            )}
             <Popconfirm
               title="确定要删除该文档吗？"
               onConfirm={() => handleDelete(record.id)}

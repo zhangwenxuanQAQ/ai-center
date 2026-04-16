@@ -187,3 +187,84 @@ def get_datasource_schema(datasource_id: str):
         return ResponseUtil.success(data=result, message=result.get('message', '获取Schema信息成功'))
     else:
         return ResponseUtil.error(code=400, message=result.get('message', '获取Schema信息失败'), data=result)
+
+
+@router.get("/{datasource_id}/files", response_model=ApiResponse)
+def list_datasource_files(datasource_id: str, bucket: str = None, prefix: str = None, max_keys: int = 100):
+    """
+    列出数据源文件（仅适用于文件存储类型数据源）
+    
+    Args:
+        datasource_id: 数据源ID
+        bucket: Bucket名称（可选）
+        prefix: 文件前缀/目录（可选）
+        max_keys: 最大返回数量
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    result = DatasourceService.list_files(datasource_id, bucket, prefix, max_keys)
+    if result.get('success'):
+        return ResponseUtil.success(data=result, message=result.get('message', '获取文件列表成功'))
+    else:
+        return ResponseUtil.error(code=400, message=result.get('message', '获取文件列表失败'), data=result)
+
+
+@router.post("/{datasource_id}/files/download", response_model=ApiResponse)
+def download_datasource_file(datasource_id: str, data: dict):
+    """
+    下载数据源文件（仅适用于文件存储类型数据源）
+    
+    Args:
+        datasource_id: 数据源ID
+        data: 包含bucket和object_name的字典
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    bucket = data.get('bucket')
+    object_name = data.get('object_name', '')
+    result = DatasourceService.download_file(datasource_id, bucket, object_name)
+    if result.get('success'):
+        return ResponseUtil.success(data=result, message=result.get('message', '文件下载成功'))
+    else:
+        return ResponseUtil.error(code=400, message=result.get('message', '文件下载失败'), data=result)
+
+
+@router.get("/{datasource_id}/tables", response_model=ApiResponse)
+def list_datasource_tables(datasource_id: str, database: str = None):
+    """
+    列出数据源表（仅适用于关系型数据库数据源）
+    
+    Args:
+        datasource_id: 数据源ID
+        database: 数据库名称（可选）
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    result = DatasourceService.list_tables(datasource_id, database)
+    if result.get('success'):
+        return ResponseUtil.success(data=result, message=result.get('message', '获取表列表成功'))
+    else:
+        return ResponseUtil.error(code=400, message=result.get('message', '获取表列表失败'), data=result)
+
+
+@router.get("/{datasource_id}/tables/{table_name}/columns", response_model=ApiResponse)
+def get_datasource_table_columns(datasource_id: str, table_name: str, database: str = None):
+    """
+    获取数据源表字段信息（仅适用于关系型数据库数据源）
+    
+    Args:
+        datasource_id: 数据源ID
+        table_name: 表名称
+        database: 数据库名称（可选）
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    result = DatasourceService.get_table_columns(datasource_id, table_name, database)
+    if result.get('success'):
+        return ResponseUtil.success(data=result, message=result.get('message', '获取表字段信息成功'))
+    else:
+        return ResponseUtil.error(code=400, message=result.get('message', '获取表字段信息失败'), data=result)

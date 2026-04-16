@@ -495,3 +495,115 @@ class DatasourceService:
             return ds_instance.get_schema_info()
         except Exception as e:
             return {"success": False, "message": f"获取Schema信息失败: {str(e)}"}
+    
+    @staticmethod
+    def list_files(datasource_id: str, bucket: str = None, prefix: str = None, max_keys: int = 100):
+        """
+        列出文件（仅适用于文件存储类型数据源）
+        
+        Args:
+            datasource_id: 数据源ID
+            bucket: Bucket名称（可选）
+            prefix: 文件前缀/目录（可选）
+            max_keys: 最大返回数量
+            
+        Returns:
+            dict: 文件列表
+        """
+        datasource = DatasourceService.get_datasource(datasource_id)
+        if not datasource:
+            return {"success": False, "message": "数据源不存在"}
+        
+        datasource_type = datasource.get('type')
+        config = datasource.get('config', {})
+        
+        decrypted_config = DatasourceService._decrypt_sensitive_config(config, datasource_type)
+        
+        try:
+            ds_instance = DatasourceFactory.create(datasource_type, decrypted_config)
+            return ds_instance.list_files(bucket=bucket, prefix=prefix, max_keys=max_keys)
+        except Exception as e:
+            return {"success": False, "message": f"获取文件列表失败: {str(e)}"}
+    
+    @staticmethod
+    def download_file(datasource_id: str, bucket: str = None, object_name: str = ""):
+        """
+        下载文件（仅适用于文件存储类型数据源）
+        
+        Args:
+            datasource_id: 数据源ID
+            bucket: Bucket名称（可选）
+            object_name: 对象名称/文件路径
+            
+        Returns:
+            dict: 文件内容
+        """
+        datasource = DatasourceService.get_datasource(datasource_id)
+        if not datasource:
+            return {"success": False, "message": "数据源不存在"}
+        
+        datasource_type = datasource.get('type')
+        config = datasource.get('config', {})
+        
+        decrypted_config = DatasourceService._decrypt_sensitive_config(config, datasource_type)
+        
+        try:
+            ds_instance = DatasourceFactory.create(datasource_type, decrypted_config)
+            return ds_instance.download_file(bucket=bucket, object_name=object_name)
+        except Exception as e:
+            return {"success": False, "message": f"下载文件失败: {str(e)}"}
+    
+    @staticmethod
+    def list_tables(datasource_id: str, database: str = None):
+        """
+        列出数据库表（仅适用于关系型数据库数据源）
+        
+        Args:
+            datasource_id: 数据源ID
+            database: 数据库名称（可选）
+            
+        Returns:
+            dict: 表列表
+        """
+        datasource = DatasourceService.get_datasource(datasource_id)
+        if not datasource:
+            return {"success": False, "message": "数据源不存在"}
+        
+        datasource_type = datasource.get('type')
+        config = datasource.get('config', {})
+        
+        decrypted_config = DatasourceService._decrypt_sensitive_config(config, datasource_type)
+        
+        try:
+            ds_instance = DatasourceFactory.create(datasource_type, decrypted_config)
+            return ds_instance.list_tables(database=database)
+        except Exception as e:
+            return {"success": False, "message": f"获取表列表失败: {str(e)}"}
+    
+    @staticmethod
+    def get_table_columns(datasource_id: str, table_name: str, database: str = None):
+        """
+        获取表的字段信息（仅适用于关系型数据库数据源）
+        
+        Args:
+            datasource_id: 数据源ID
+            table_name: 表名称
+            database: 数据库名称（可选）
+            
+        Returns:
+            dict: 字段信息
+        """
+        datasource = DatasourceService.get_datasource(datasource_id)
+        if not datasource:
+            return {"success": False, "message": "数据源不存在"}
+        
+        datasource_type = datasource.get('type')
+        config = datasource.get('config', {})
+        
+        decrypted_config = DatasourceService._decrypt_sensitive_config(config, datasource_type)
+        
+        try:
+            ds_instance = DatasourceFactory.create(datasource_type, decrypted_config)
+            return ds_instance.get_table_columns(table_name=table_name, database=database)
+        except Exception as e:
+            return {"success": False, "message": f"获取表字段信息失败: {str(e)}"}

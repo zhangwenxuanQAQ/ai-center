@@ -113,3 +113,118 @@ class MinIODatasource(DatasourceBase):
             return {"success": False, "message": "缺少minio依赖，请执行: pip install minio"}
         except Exception as e:
             return {"success": False, "message": f"获取Bucket信息失败: {str(e)}"}
+
+    def list_files(self, bucket: Optional[str] = None, prefix: Optional[str] = None, max_keys: int = 100) -> Dict[str, Any]:
+        """
+        列出文件
+        
+        Args:
+            bucket: Bucket名称（可选，不指定则使用配置中的默认bucket）
+            prefix: 文件前缀/目录（可选）
+            max_keys: 最大返回数量
+            
+        Returns:
+            Dict[str, Any]: 包含文件列表的字典
+        """
+        try:
+            from minio import Minio
+            secure = self.config.get('secure', False)
+            client = Minio(
+                endpoint=self.config.get('endpoint_url', ''),
+                access_key=self.config.get('access_key', ''),
+                secret_key=self.config.get('secret_key', ''),
+                secure=secure,
+            )
+            target_bucket = bucket or self.config.get('bucket', '')
+            if not target_bucket:
+                return {"success": False, "message": "Bucket名称不能为空", "data": None}
+            
+            objects = client.list_objects(target_bucket, prefix=prefix or '', recursive=False)
+            files = []
+            directories = []
+            count = 0
+            
+            for obj in objects:
+                if count >= max_keys:
+                    break
+                if obj.is_dir:
+                    directories.append({
+                        "name": obj.object_name.rstrip('/'),
+                        "type": "directory",
+                        "path": obj.object_name,
+                    })
+                else:
+                    files.append({
+                        "name": obj.object_name.split('/')[-1],
+                        "type": "file",
+                        "path": obj.object_name,
+                        "size": obj.size,
+                        "last_modified": str(obj.last_modified) if obj.last_modified else '',
+                        "etag": obj.etag,
+                        "content_type": obj.content_type,
+                    })
+                count += 1
+            
+            return {
+                "success": True,
+                "message": "获取文件列表成功",
+                "data": {
+                    "bucket": target_bucket,
+                    "prefix": prefix or '',
+                    "directories": directories,
+                    "files": files,
+                    "total": len(directories) + len(files),
+                }
+            }
+        except ImportError:
+            return {"success": False, "message": "缺少minio依赖，请执行: pip install minio"}
+        except Exception as e:
+            return {"success": False, "message": f"获取文件列表失败: {str(e)}"}
+
+    def download_file(self, bucket: Optional[str] = None, object_name: str = "") -> Dict[str, Any]:
+        """
+        下载文件
+        
+        Args:
+            bucket: Bucket名称（可选，不指定则使用配置中的默认bucket）
+            object_name: 对象名称/文件路径
+            
+        Returns:
+            Dict[str, Any]: 包含文件内容的字典
+        """
+        try:
+            from minio import Minio
+            import io
+            secure = self.config.get('secure', False)
+            client = Minio(
+                endpoint=self.config.get('endpoint_url', ''),
+                access_key=self.config.get('access_key', ''),
+                secret_key=self.config.get('secret_key', ''),
+                secure=secure,
+            )
+            target_bucket = bucket or self.config.get('bucket', '')
+            if not target_bucket:
+                return {"success": False, "message": "Bucket名称不能为空", "data": None}
+            if not object_name:
+                return {"success": False, "message": "文件路径不能为空", "data": None}
+            
+            response = client.get_object(target_bucket, object_name)
+            file_content = response.read()
+            response.close()
+            response.release_conn()
+            
+            return {
+                "success": True,
+                "message": "文件下载成功",
+                "data": {
+                    "bucket": target_bucket,
+                    "object_name": object_name,
+                    "file_name": object_name.split('/')[-1],
+                    "file_content": file_content,
+                    "file_size": len(file_content),
+                }
+            }
+        except ImportError:
+            return {"success": False, "message": "缺少minio依赖，请执行: pip install minio"}
+        except Exception as e:
+            return {"success": False, "message": f"文件下载失败: {str(e)}"}

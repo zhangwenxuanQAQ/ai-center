@@ -722,37 +722,92 @@ class KnowledgebaseDocumentService:
             old_category_id = db_doc.category_id
             new_category_id = update_data['category_id']
             
+            logger.info(f"文档分类变更: 从 {old_category_id} 到 {new_category_id}")
+            logger.info(f"当前文档 location: {db_doc.location}")
+            logger.info(f"RustFS 可用: {rustfs_utils.is_available}")
+            
             if db_doc.location and rustfs_utils.is_available:
-                old_location = db_doc.location
-                filename = old_location.split('/')[-1]
+                filename = db_doc.location.split('/')[-1]
                 
+                # 构建新的完整路径
                 new_category_path = KnowledgebaseDocumentCategoryService.get_category_path(new_category_id) if new_category_id else ""
+                new_full_path = f"{new_category_path}/{filename}" if new_category_path else filename
                 
+                # 构建新的 location 值（相对于分类路径的文件名）
                 if new_category_path:
                     new_location = f"{new_category_path}/{filename}"
                 else:
                     new_location = filename
                 
-                if old_location != new_location:
-                    try:
+                logger.info(f"新完整路径: {new_full_path}")
+                logger.info(f"新 location: {new_location}")
+                
+                try:
+                    # 尝试查找源文件
+                    source_key = None
+                    
+                    # 方法1: 基于旧分类路径查找
+                    old_category_path = KnowledgebaseDocumentCategoryService.get_category_path(old_category_id) if old_category_id else ""
+                    old_full_path = f"{old_category_path}/{filename}" if old_category_path else filename
+                    if rustfs_utils.object_exists(db_doc.kb_id, old_full_path):
+                        source_key = old_full_path
+                        logger.info(f"找到源文件: {db_doc.kb_id}/{source_key}")
+                    
+                    # 方法2: 直接使用 location 作为路径（兼容旧数据）
+                    if not source_key and rustfs_utils.object_exists(db_doc.kb_id, db_doc.location):
+                        source_key = db_doc.location
+                        logger.info(f"找到源文件: {db_doc.kb_id}/{source_key}")
+                    
+                    # 方法3: 遍历桶中的所有文件，查找文件名匹配的文件
+                    if not source_key:
+                        logger.info(f"尝试遍历桶 {db_doc.kb_id} 查找文件 {filename}")
+                        objects = rustfs_utils.list_objects(db_doc.kb_id)
+                        for obj in objects:
+                            if obj['Key'].endswith(f"/{filename}") or obj['Key'] == filename:
+                                source_key = obj['Key']
+                                logger.info(f"找到源文件: {db_doc.kb_id}/{source_key}")
+                                break
+                    
+                    if source_key:
+                        logger.info(f"尝试复制文件: {db_doc.kb_id}/{source_key} -> {db_doc.kb_id}/{new_full_path}")
+                        
                         copy_success = rustfs_utils.copy_object(
                             source_bucket=db_doc.kb_id,
-                            source_key=old_location,
+                            source_key=source_key,
                             dest_bucket=db_doc.kb_id,
-                            dest_key=new_location
+                            dest_key=new_full_path
                         )
                         
+                        logger.info(f"复制结果: {copy_success}")
+                        
                         if copy_success:
-                            rustfs_utils.delete_object(
-                                bucket_name=db_doc.kb_id,
-                                object_key=old_location
-                            )
-                            update_data['location'] = new_location
-                            logger.info(f"文档分类变更，文件路径已更新: {old_location} -> {new_location}")
+                            # 检查目标文件是否存在
+                            dest_exists = rustfs_utils.object_exists(db_doc.kb_id, new_full_path)
+                            logger.info(f"目标文件存在: {dest_exists}")
+                            
+                            if dest_exists:
+                                rustfs_utils.delete_object(
+                                    bucket_name=db_doc.kb_id,
+                                    object_key=source_key
+                                )
+                                update_data['location'] = new_location
+                                logger.info(f"文档分类变更，文件路径已更新: {source_key} -> {new_full_path}")
+                            else:
+                                logger.warning(f"目标文件不存在，复制可能失败: {db_doc.kb_id}/{new_full_path}")
                         else:
-                            logger.warning(f"文档分类变更，但文件复制失败: {old_location} -> {new_location}")
-                    except Exception as e:
-                        logger.error(f"文档分类变更，文件移动失败: {e}")
+                            logger.warning(f"文档分类变更，但文件复制失败: {source_key} -> {new_full_path}")
+                    else:
+                        logger.warning(f"未找到源文件: {filename}")
+                        # 即使找不到源文件，也要更新数据库中的 location 字段
+                        update_data['location'] = new_location
+                        logger.info(f"更新数据库中的 location 字段为: {new_location}")
+                except Exception as e:
+                    logger.error(f"文档分类变更，文件移动失败: {e}")
+                    # 即使出现异常，也要更新数据库中的 location 字段
+                    update_data['location'] = new_location
+                    logger.info(f"更新数据库中的 location 字段为: {new_location}")
+            else:
+                logger.info(f"跳过文件移动: location={db_doc.location}, rustfs_available={rustfs_utils.is_available}")
 
         for field, value in update_data.items():
             setattr(db_doc, field, value)
