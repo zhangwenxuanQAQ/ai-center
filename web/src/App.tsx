@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { Layout, Menu, Button, Card, ConfigProvider, theme as antTheme } from 'antd';
-import { HomeOutlined, MessageOutlined, SettingOutlined, LogoutOutlined, RobotOutlined, BookOutlined, DatabaseOutlined, CommentOutlined, MoonOutlined, SunOutlined, MenuFoldOutlined, MenuUnfoldOutlined, HistoryOutlined, TeamOutlined, ToolOutlined, FileTextOutlined } from '@ant-design/icons';
+import { HomeOutlined, MessageOutlined, SettingOutlined, LogoutOutlined, RobotOutlined, BookOutlined, DatabaseOutlined, CommentOutlined, MoonOutlined, SunOutlined, MenuFoldOutlined, MenuUnfoldOutlined, HistoryOutlined, TeamOutlined, ToolOutlined, FileTextOutlined, CloudServerOutlined } from '@ant-design/icons';
 import { useState, useEffect } from 'react';
 import './styles/index.css';
 import './styles/common.css';
@@ -20,6 +20,7 @@ import Prompt from './pages/prompt/prompt.tsx';
 import PromptSetting from './pages/prompt/prompt_setting.tsx';
 import User from './pages/user/user.tsx';
 import Chat from './pages/chat/chat.tsx';
+import Datasource from './pages/datasource/datasource.tsx';
 
 const { Header, Content, Sider } = Layout;
 
@@ -113,9 +114,12 @@ function App() {
                 <Menu.Item key="7" icon={<SettingOutlined />}>
                   <Link to="/llm_models">模型库</Link>
                 </Menu.Item>
+                <Menu.Item key="8" icon={<CloudServerOutlined />}>
+                  <Link to="/datasources">数据源</Link>
+                </Menu.Item>
               </Menu.SubMenu>
               <Menu.SubMenu key="sub3" title="日志" icon={<FileTextOutlined />}>
-                <Menu.Item key="8" icon={<HistoryOutlined />}>
+                <Menu.Item key="9" icon={<HistoryOutlined />}>
                   <Link to="/chats">问答日志</Link>
                 </Menu.Item>
               </Menu.SubMenu>
@@ -177,6 +181,7 @@ function App() {
                   <Route path="/prompt/setting/:id" element={<PromptSetting />} />
                   <Route path="/users" element={<User />} />
                   <Route path="/chats" element={<Chat />} />
+                  <Route path="/datasources" element={<Datasource />} />
                 </Routes>
               </Card>
             </Content>

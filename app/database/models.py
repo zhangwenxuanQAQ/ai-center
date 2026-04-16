@@ -474,6 +474,42 @@ class ChatbotTool(BaseModel):
         )
 
 
+class DatasourceCategory(SoftDeleteModel):
+    """
+    数据源分类模型
+    
+    存储数据源分类信息，支持树形结构
+    """
+    name = CharField(max_length=255, index=True, verbose_name="分类名称")
+    description = TextField(null=True, verbose_name="分类描述")
+    is_default = BooleanField(default=False, verbose_name="是否默认分类")
+    parent_id = CharField(max_length=40, null=True, index=True, verbose_name="父分类ID")
+    sort_order = IntegerField(default=0, verbose_name="排序序号")
+    
+    class Meta:
+        table_name = 'datasource_category'
+        indexes = (
+            (('parent_id', 'sort_order'), False),
+        )
+
+
+class Datasource(SoftDeleteModel):
+    """
+    数据源模型
+    
+    存储数据源配置信息
+    """
+    name = CharField(max_length=255, index=True, verbose_name="数据源名称")
+    code = CharField(max_length=100, index=True, verbose_name="数据源编码")
+    type = CharField(max_length=50, index=True, verbose_name="数据源类型")
+    category_id = CharField(max_length=40, null=True, index=True, verbose_name="分类ID")
+    config = TextField(null=True, verbose_name="数据源配置JSON")
+    status = BooleanField(default=True, verbose_name="状态：True启用，False停用")
+    
+    class Meta:
+        table_name = 'datasource'
+
+
 def create_tables():
     """
     创建所有数据表
@@ -499,7 +535,9 @@ def create_tables():
         ChatbotMCP,
         ChatbotModel,
         ChatbotPrompt,
-        ChatbotTool
+        ChatbotTool,
+        DatasourceCategory,
+        Datasource,
     ]
     
     for table in tables:

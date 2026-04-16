@@ -290,6 +290,8 @@ class PromptService:
             status_bool = status.lower() == 'true'
             query = query.where(Prompt.status == status_bool)
         
+        query = query.order_by(Prompt.created_at.desc())
+        
         return list(query.offset(skip).limit(limit))
     
     @staticmethod
