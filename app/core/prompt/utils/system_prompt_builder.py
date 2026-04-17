@@ -26,14 +26,14 @@ def build_system_prompt(original_prompt: Optional[str] = None) -> str:
     
     now = datetime.now().astimezone()
     current_time = now.strftime("%Y-%m-%d %H:%M:%S")
-    time_info = f"当前系统时间为：{current_time}"
+    time_info = f"** 当前系统时间 **：{current_time}"
     parts.append(time_info)
     
     timezone_name = now.strftime("%Z")
     timezone_offset = now.strftime("%z")
-    timezone_info = f"当前时区：{timezone_name} (UTC{timezone_offset[:3]}:{timezone_offset[3:]})"
+    timezone_info = f"** 当前时区 **：{timezone_name} (UTC{timezone_offset[:3]}:{timezone_offset[3:]})"
     parts.append(timezone_info)
 
-    rule_info = "当用户需要查询时间时需要使用最新系统时间"
+    rule_info = "** 当用户需要查询时间必须以当前系统时间为准，不要使用其他时间 **"
     parts.append(rule_info)
     return "\n\n".join(parts)

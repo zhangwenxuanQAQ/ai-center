@@ -492,8 +492,25 @@ class KnowledgebaseDocumentService:
         if doc_data.get('chunk_config') and isinstance(doc_data['chunk_config'], dict):
             doc_data['chunk_config'] = json.dumps(doc_data['chunk_config'], ensure_ascii=False)
 
+        if doc_data.get('source_config') and isinstance(doc_data['source_config'], dict):
+            doc_data['source_config'] = json.dumps(doc_data['source_config'], ensure_ascii=False)
+
         if doc_data.get('tags') and isinstance(doc_data['tags'], list):
             doc_data['tags'] = json.dumps(doc_data['tags'], ensure_ascii=False)
+
+        # 自动获取 mime_type 和 file_type
+        from app.core.knowledgebase.utils.file_utils import get_mime_type, filename_type
+        
+        # 优先使用 file_name，其次使用 location
+        filename = doc_data.get('file_name') or doc_data.get('location')
+        if filename:
+            # 获取 MIME 类型
+            if not doc_data.get('mime_type'):
+                doc_data['mime_type'] = get_mime_type(filename)
+            # 获取文件类型
+            if not doc_data.get('file_type'):
+                file_type_str = filename_type(filename)
+                doc_data['file_type'] = file_type_str
 
         db_doc = KnowledgebaseDocument(**doc_data)
         db_doc.save(force_insert=True)
@@ -710,11 +727,32 @@ class KnowledgebaseDocumentService:
         if update_data.get('chunk_config') and isinstance(update_data['chunk_config'], dict):
             update_data['chunk_config'] = json.dumps(update_data['chunk_config'], ensure_ascii=False)
 
+        if update_data.get('source_config') and isinstance(update_data['source_config'], dict):
+            update_data['source_config'] = json.dumps(update_data['source_config'], ensure_ascii=False)
+
         if 'tags' in update_data:
             if update_data['tags'] and isinstance(update_data['tags'], list):
                 update_data['tags'] = json.dumps(update_data['tags'], ensure_ascii=False)
             else:
                 update_data['tags'] = None
+
+        # 自动获取 mime_type 和 file_type
+        from app.core.knowledgebase.utils.file_utils import get_mime_type, filename_type
+        
+        # 优先使用 file_name，其次使用 location
+        filename = update_data.get('file_name') or update_data.get('location')
+        # 如果更新数据中没有文件名，则使用数据库中的文件名
+        if not filename:
+            filename = db_doc.file_name or db_doc.location
+        
+        if filename:
+            # 获取 MIME 类型
+            if 'mime_type' not in update_data:
+                update_data['mime_type'] = get_mime_type(filename)
+            # 获取文件类型
+            if 'file_type' not in update_data:
+                file_type_str = filename_type(filename)
+                update_data['file_type'] = file_type_str
 
         if 'category_id' in update_data and update_data['category_id'] != db_doc.category_id:
             from app.database.storage.rustfs_utils import rustfs_utils
@@ -724,9 +762,11 @@ class KnowledgebaseDocumentService:
             
             logger.info(f"文档分类变更: 从 {old_category_id} 到 {new_category_id}")
             logger.info(f"当前文档 location: {db_doc.location}")
+            logger.info(f"当前文档 source_type: {db_doc.source_type}")
             logger.info(f"RustFS 可用: {rustfs_utils.is_available}")
             
-            if db_doc.location and rustfs_utils.is_available:
+            # 只移动本地文档的文件
+            if db_doc.location and rustfs_utils.is_available and db_doc.source_type == 'local_document':
                 filename = db_doc.location.split('/')[-1]
                 
                 # 构建新的完整路径
@@ -807,7 +847,8 @@ class KnowledgebaseDocumentService:
                     update_data['location'] = new_location
                     logger.info(f"更新数据库中的 location 字段为: {new_location}")
             else:
-                logger.info(f"跳过文件移动: location={db_doc.location}, rustfs_available={rustfs_utils.is_available}")
+                # 非本地文档，不更新 location 字段
+                logger.info(f"非本地文档，跳过 location 字段更新: source_type={db_doc.source_type}")
 
         for field, value in update_data.items():
             setattr(db_doc, field, value)
@@ -837,9 +878,9 @@ class KnowledgebaseDocumentService:
         except KnowledgebaseDocument.DoesNotExist:
             raise ResourceNotFoundError(message=f"知识库文档 {document_id} 不存在")
 
-        # 删除RustFS中的文件
+        # 删除RustFS中的文件 - 只删除本地文档
         from app.database.storage.rustfs_utils import rustfs_utils
-        if db_doc.location and rustfs_utils.is_available:
+        if db_doc.location and rustfs_utils.is_available and db_doc.source_type == 'local_document':
             try:
                 rustfs_utils.delete_object(
                     bucket_name=db_doc.kb_id,
@@ -889,11 +930,11 @@ class KnowledgebaseDocumentService:
         if missing_ids:
             raise ResourceNotFoundError(message=f"文档 {', '.join(missing_ids)} 不存在")
         
-        # 删除RustFS中的文件
+        # 删除RustFS中的文件 - 只删除本地文档
         from app.database.storage.rustfs_utils import rustfs_utils
         if rustfs_utils.is_available:
             for doc in existing_docs:
-                if doc.location:
+                if doc.location and doc.source_type == 'local_document':
                     try:
                         rustfs_utils.delete_object(
                             bucket_name=doc.kb_id,

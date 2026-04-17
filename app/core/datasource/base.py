@@ -67,7 +67,7 @@ class DatasourceBase(ABC):
         """
         pass
 
-    def list_files(self, bucket: Optional[str] = None, prefix: Optional[str] = None, max_keys: int = 100) -> Dict[str, Any]:
+    def list_files(self, bucket: Optional[str] = None, prefix: Optional[str] = None, max_keys: int = 100, search_keyword: Optional[str] = None) -> Dict[str, Any]:
         """
         列出文件（仅适用于文件存储类型数据源）
         
@@ -75,6 +75,7 @@ class DatasourceBase(ABC):
             bucket: Bucket名称（可选）
             prefix: 文件前缀/目录（可选）
             max_keys: 最大返回数量
+            search_keyword: 搜索关键词（可选）
             
         Returns:
             Dict[str, Any]: 包含文件列表的字典

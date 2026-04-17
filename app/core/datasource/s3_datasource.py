@@ -115,14 +115,15 @@ class S3Datasource(DatasourceBase):
         except Exception as e:
             return {"success": False, "message": f"获取Bucket信息失败: {str(e)}"}
 
-    def list_files(self, bucket: Optional[str] = None, prefix: Optional[str] = None, max_keys: int = 100) -> Dict[str, Any]:
+    def list_files(self, bucket: Optional[str] = None, prefix: Optional[str] = None, max_keys: int = 100, search_keyword: Optional[str] = None) -> Dict[str, Any]:
         """
         列出文件
         
         Args:
-            bucket: Bucket名称（可选，不指定则使用配置中的默认bucket）
+            bucket: Bucket名称（可选，不指定则列出所有桶）
             prefix: 文件前缀/目录（可选）
             max_keys: 最大返回数量
+            search_keyword: 搜索关键词（可选）
             
         Returns:
             Dict[str, Any]: 包含文件列表的字典
@@ -136,10 +137,35 @@ class S3Datasource(DatasourceBase):
                 aws_secret_access_key=self.config.get('secret_key', ''),
                 region_name=self.config.get('region', 'us-east-1'),
             )
-            target_bucket = bucket or self.config.get('bucket', '')
-            if not target_bucket:
-                return {"success": False, "message": "Bucket名称不能为空", "data": None}
             
+            # 如果没有指定bucket，列出所有桶
+            if not bucket:
+                response = client.list_buckets()
+                buckets = []
+                for bucket_info in response.get('Buckets', []):
+                    bucket_name = bucket_info.get('Name', '')
+                    # 如果有搜索关键词，过滤桶名称
+                    if search_keyword and search_keyword.lower() not in bucket_name.lower():
+                        continue
+                    buckets.append({
+                        "name": bucket_name,
+                        "type": "bucket",
+                        "path": bucket_name,
+                    })
+                return {
+                    "success": True,
+                    "message": "获取桶列表成功",
+                    "data": {
+                        "bucket": None,
+                        "prefix": None,
+                        "directories": buckets,
+                        "files": [],
+                        "total": len(buckets),
+                    }
+                }
+            
+            # 有指定bucket，列出bucket内的文件和目录
+            target_bucket = bucket
             response = client.list_objects_v2(
                 Bucket=target_bucket,
                 Prefix=prefix or '',
@@ -153,8 +179,12 @@ class S3Datasource(DatasourceBase):
             for common_prefix in response.get('CommonPrefixes', []):
                 dir_name = common_prefix.get('Prefix', '').rstrip('/')
                 if dir_name:
+                    dir_display_name = dir_name.split('/')[-1] if '/' in dir_name else dir_name
+                    # 如果有搜索关键词，过滤目录名称
+                    if search_keyword and search_keyword.lower() not in dir_display_name.lower():
+                        continue
                     directories.append({
-                        "name": dir_name.split('/')[-1] if '/' in dir_name else dir_name,
+                        "name": dir_display_name,
                         "type": "directory",
                         "path": common_prefix.get('Prefix', ''),
                     })
@@ -162,14 +192,33 @@ class S3Datasource(DatasourceBase):
             for obj in response.get('Contents', []):
                 key = obj.get('Key', '')
                 if not key.endswith('/'):
+                    file_name = key.split('/')[-1] if '/' in key else key
+                    # 如果有搜索关键词，过滤文件名称
+                    if search_keyword and search_keyword.lower() not in file_name.lower():
+                        continue
+                    
+                    # 生成缩略图
+                    thumbnail = ""
+                    try:
+                        from app.core.knowledgebase.utils.file_utils import get_mime_type, thumbnail
+                        # 下载文件内容以生成缩略图
+                        get_response = client.get_object(Bucket=target_bucket, Key=key)
+                        file_content = get_response['Body'].read()
+                        # 生成缩略图
+                        thumbnail = thumbnail(file_name, file_content)
+                    except Exception:
+                        # 生成缩略图失败时不影响文件列表获取
+                        pass
+                    
                     files.append({
-                        "name": key.split('/')[-1] if '/' in key else key,
+                        "name": file_name,
                         "type": "file",
                         "path": key,
                         "size": obj.get('Size', 0),
                         "last_modified": str(obj.get('LastModified', '')),
                         "etag": obj.get('ETag', ''),
                         "storage_class": obj.get('StorageClass', ''),
+                        "thumbnail": thumbnail,
                     })
             
             return {

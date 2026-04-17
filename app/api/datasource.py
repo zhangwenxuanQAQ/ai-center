@@ -79,9 +79,9 @@ def test_datasource_connection(data: dict):
     """
     result = DatasourceService.test_connection_with_data(data)
     if result.get('success'):
-        return ResponseUtil.success(data=result, message=result.get('message', '连接测试成功'))
+        return ResponseUtil.success(data=result.get('data'), message=result.get('message', '连接测试成功'))
     else:
-        return ResponseUtil.error(code=400, message=result.get('message', '连接测试失败'), data=result)
+        return ResponseUtil.error(code=400, message=result.get('message', '连接测试失败'), data=result.get('data'))
 
 
 @router.get("/{datasource_id}", response_model=ApiResponse)
@@ -145,9 +145,9 @@ def test_datasource_connection_by_id(datasource_id: str):
     """
     result = DatasourceService.test_connection(datasource_id)
     if result.get('success'):
-        return ResponseUtil.success(data=result, message=result.get('message', '连接测试成功'))
+        return ResponseUtil.success(data=result.get('data'), message=result.get('message', '连接测试成功'))
     else:
-        return ResponseUtil.error(code=400, message=result.get('message', '连接测试失败'), data=result)
+        return ResponseUtil.error(code=400, message=result.get('message', '连接测试失败'), data=result.get('data'))
 
 
 @router.post("/{datasource_id}/query", response_model=ApiResponse)
@@ -166,9 +166,9 @@ def execute_datasource_query(datasource_id: str, query_data: dict):
     params = query_data.get('params')
     result = DatasourceService.execute_query(datasource_id, query, params)
     if result.get('success'):
-        return ResponseUtil.success(data=result, message=result.get('message', '查询执行成功'))
+        return ResponseUtil.success(data=result.get('data'), message=result.get('message', '查询执行成功'))
     else:
-        return ResponseUtil.error(code=400, message=result.get('message', '查询执行失败'), data=result)
+        return ResponseUtil.error(code=400, message=result.get('message', '查询执行失败'), data=result.get('data'))
 
 
 @router.get("/{datasource_id}/schema", response_model=ApiResponse)
@@ -184,13 +184,13 @@ def get_datasource_schema(datasource_id: str):
     """
     result = DatasourceService.get_schema_info(datasource_id)
     if result.get('success'):
-        return ResponseUtil.success(data=result, message=result.get('message', '获取Schema信息成功'))
+        return ResponseUtil.success(data=result.get('data'), message=result.get('message', '获取Schema信息成功'))
     else:
-        return ResponseUtil.error(code=400, message=result.get('message', '获取Schema信息失败'), data=result)
+        return ResponseUtil.error(code=400, message=result.get('message', '获取Schema信息失败'), data=result.get('data'))
 
 
 @router.get("/{datasource_id}/files", response_model=ApiResponse)
-def list_datasource_files(datasource_id: str, bucket: str = None, prefix: str = None, max_keys: int = 100):
+def list_datasource_files(datasource_id: str, bucket: str = None, prefix: str = None, max_keys: int = 100, search_keyword: str = None):
     """
     列出数据源文件（仅适用于文件存储类型数据源）
     
@@ -199,15 +199,16 @@ def list_datasource_files(datasource_id: str, bucket: str = None, prefix: str = 
         bucket: Bucket名称（可选）
         prefix: 文件前缀/目录（可选）
         max_keys: 最大返回数量
+        search_keyword: 搜索关键词（可选）
         
     Returns:
         ApiResponse: 统一格式的响应对象
     """
-    result = DatasourceService.list_files(datasource_id, bucket, prefix, max_keys)
+    result = DatasourceService.list_files(datasource_id, bucket, prefix, max_keys, search_keyword)
     if result.get('success'):
-        return ResponseUtil.success(data=result, message=result.get('message', '获取文件列表成功'))
+        return ResponseUtil.success(data=result.get('data'), message=result.get('message', '获取文件列表成功'))
     else:
-        return ResponseUtil.error(code=400, message=result.get('message', '获取文件列表失败'), data=result)
+        return ResponseUtil.error(code=400, message=result.get('message', '获取文件列表失败'), data=result.get('data'))
 
 
 @router.post("/{datasource_id}/files/download", response_model=ApiResponse)
@@ -226,9 +227,9 @@ def download_datasource_file(datasource_id: str, data: dict):
     object_name = data.get('object_name', '')
     result = DatasourceService.download_file(datasource_id, bucket, object_name)
     if result.get('success'):
-        return ResponseUtil.success(data=result, message=result.get('message', '文件下载成功'))
+        return ResponseUtil.success(data=result.get('data'), message=result.get('message', '文件下载成功'))
     else:
-        return ResponseUtil.error(code=400, message=result.get('message', '文件下载失败'), data=result)
+        return ResponseUtil.error(code=400, message=result.get('message', '文件下载失败'), data=result.get('data'))
 
 
 @router.get("/{datasource_id}/tables", response_model=ApiResponse)
@@ -245,9 +246,9 @@ def list_datasource_tables(datasource_id: str, database: str = None):
     """
     result = DatasourceService.list_tables(datasource_id, database)
     if result.get('success'):
-        return ResponseUtil.success(data=result, message=result.get('message', '获取表列表成功'))
+        return ResponseUtil.success(data=result.get('data'), message=result.get('message', '获取表列表成功'))
     else:
-        return ResponseUtil.error(code=400, message=result.get('message', '获取表列表失败'), data=result)
+        return ResponseUtil.error(code=400, message=result.get('message', '获取表列表失败'), data=result.get('data'))
 
 
 @router.get("/{datasource_id}/tables/{table_name}/columns", response_model=ApiResponse)
@@ -265,6 +266,6 @@ def get_datasource_table_columns(datasource_id: str, table_name: str, database: 
     """
     result = DatasourceService.get_table_columns(datasource_id, table_name, database)
     if result.get('success'):
-        return ResponseUtil.success(data=result, message=result.get('message', '获取表字段信息成功'))
+        return ResponseUtil.success(data=result.get('data'), message=result.get('message', '获取表字段信息成功'))
     else:
-        return ResponseUtil.error(code=400, message=result.get('message', '获取表字段信息失败'), data=result)
+        return ResponseUtil.error(code=400, message=result.get('message', '获取表字段信息失败'), data=result.get('data'))

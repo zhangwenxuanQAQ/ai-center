@@ -62,6 +62,8 @@ export interface KnowledgebaseDocument {
   location?: string;
   file_size: number;
   source_type?: string;
+  source_config?: Record<string, unknown> | string;
+  thumbnail?: string;
   running_status: string;
   status: boolean;
   task_progress: number;
@@ -254,7 +256,7 @@ export const knowledgebaseService = {
         params.push(`running_status=${status}`);
       });
     }
-    if (status) {
+    if (status !== undefined) {
       params.push(`status=${status}`);
     }
     const queryString = params.length > 0 ? `?${params.join('&')}` : '';

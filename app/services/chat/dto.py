@@ -184,7 +184,7 @@ class QueryItem(BaseModel):
         content: 内容
         mime_type: MIME类型
     """
-    type: str = Field(..., description="类型：text/file_base64")
+    type: str = Field(..., description="类型：text/file_base64/document")
     content: str = Field(..., description="内容")
     mime_type: Optional[str] = Field(None, description="MIME类型")
 

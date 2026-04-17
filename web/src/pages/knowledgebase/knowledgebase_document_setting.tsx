@@ -40,6 +40,14 @@ interface DocumentConstants {
   chunk_methods: Array<{ key: string; label: string }>;
   source_types: Array<{ key: string; label: string }>;
   chunk_configs: Record<string, ChunkConfigFieldDef[]>;
+  source_configs: {
+    local_document: ChunkConfigFieldDef[];
+    datasource: {
+      relational_database: ChunkConfigFieldDef[];
+      file_storage: ChunkConfigFieldDef[];
+    };
+    custom_template: ChunkConfigFieldDef[];
+  };
 }
 
 interface KnowledgebaseDocumentSettingProps {
@@ -88,6 +96,9 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
   const [files, setFiles] = useState<any[]>([]);
   const [directories, setDirectories] = useState<any[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
+  const [fileSearchKeyword, setFileSearchKeyword] = useState<string>('');
+  const [fileCurrentPage, setFileCurrentPage] = useState<number>(1);
+  const [filePageSize, setFilePageSize] = useState<number>(10);
   
   // 数据库表浏览器相关状态
   const [tableBrowserLoading, setTableBrowserLoading] = useState(false);
@@ -107,6 +118,24 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // 格式化时间为北京时间（精确到秒）
+  const formatDateTime = (dateStr: string): string => {
+    if (!dateStr) return '-';
+    try {
+      const date = new Date(dateStr);
+      // 直接使用本地时间显示，不再手动加8小时
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    } catch {
+      return '-';
+    }
   };
 
   // 根据文件扩展名获取图标和颜色
@@ -232,6 +261,8 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     setSelectedTable('');
     setCurrentBucket('');
     setCurrentPath('');
+    setFileSearchKeyword('');
+    setFileCurrentPage(1);
     
     if (datasource) {
       // 根据数据源类型加载内容
@@ -246,20 +277,17 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     }
   };
 
-  const loadFileList = async (datasourceId: string, bucket?: string, prefix?: string) => {
+  const loadFileList = async (datasourceId: string, bucket?: string, prefix?: string, searchKeyword?: string) => {
     try {
       setFileBrowserLoading(true);
-      const result = await datasourceService.listFiles(datasourceId, bucket, prefix);
-      if (result.success) {
-        setDirectories(result.data?.data?.directories || []);
-        setFiles(result.data?.data?.files || []);
-        if (result.data?.data?.bucket) {
-          setCurrentBucket(result.data.data.bucket);
-        }
-        setCurrentPath(prefix || '');
-      } else {
-        message.error(result.message || '获取文件列表失败');
+      const result = await datasourceService.listFiles(datasourceId, bucket, prefix, 100, searchKeyword);
+      // http.get 已经返回了 data 字段，直接使用 result
+      setDirectories(result?.directories || []);
+      setFiles(result?.files || []);
+      if (result?.bucket) {
+        setCurrentBucket(result.bucket);
       }
+      setCurrentPath(prefix || '');
     } catch (error) {
       console.error('Failed to load file list:', error);
       message.error('获取文件列表失败');
@@ -272,11 +300,8 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     try {
       setTableBrowserLoading(true);
       const result = await datasourceService.listTables(datasourceId);
-      if (result.success) {
-        setTables(result.data?.data?.tables || []);
-      } else {
-        message.error(result.message || '获取表列表失败');
-      }
+      // http.get 已经返回了 data 字段，直接使用 result
+      setTables(result?.tables || []);
     } catch (error) {
       console.error('Failed to load table list:', error);
       message.error('获取表列表失败');
@@ -286,7 +311,20 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
   };
 
   const handleDirectoryClick = (directory: any) => {
-    if (selectedDatasourceId) {
+    if (!selectedDatasourceId) return;
+    
+    // 重置搜索和分页状态
+    setFileSearchKeyword('');
+    setFileCurrentPage(1);
+    
+    // 如果是桶，设置currentBucket并加载桶内的文件列表
+    if (directory.type === 'bucket') {
+      setCurrentBucket(directory.name);
+      setCurrentPath('');
+      loadFileList(selectedDatasourceId, directory.name, undefined);
+    } 
+    // 如果是目录，加载目录内的文件列表
+    else if (directory.type === 'directory') {
       loadFileList(selectedDatasourceId, currentBucket, directory.path);
     }
   };
@@ -296,15 +334,33 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     try {
       setSelectedTable(tableName);
       const result = await datasourceService.getTableColumns(selectedDatasourceId, tableName);
-      if (result.success) {
-        setTableColumns(result.data?.data?.columns || []);
-      } else {
-        message.error(result.message || '获取表字段失败');
-      }
+      // http.get 已经返回了 data 字段，直接使用 result
+      setTableColumns(result?.columns || []);
     } catch (error) {
       console.error('Failed to load table columns:', error);
       message.error('获取表字段失败');
     }
+  };
+
+  // 处理文件勾选
+  const handleFileSelect = (file: any, checked: boolean) => {
+    if (checked) {
+      // 添加文件到选中列表
+      setSelectedFiles(prev => [...prev, file.path]);
+    } else {
+      // 从选中列表移除文件
+      setSelectedFiles(prev => prev.filter(path => path !== file.path));
+    }
+  };
+
+  // 移除已选择的文件
+  const handleRemoveSelectedFile = (filePath: string) => {
+    setSelectedFiles(prev => prev.filter(path => path !== filePath));
+  };
+
+  // 获取文件名（从路径中提取）
+  const getFileName = (path: string): string => {
+    return path.split('/').pop() || path;
   };
 
   const buildCategoryTreeSelectData = () => {
@@ -320,7 +376,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
   };
 
   useEffect(() => {
-    if (doc && constants) {
+    if (isEdit && doc) {
       const docSourceType = doc.source_type || 'local_document';
       const docChunkMethod = doc.chunk_method || 'naive';
       const docChunkConfig = doc.chunk_config || {};
@@ -334,6 +390,21 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       setTags(docTags);
       setStatus(docStatus);
       setCategoryId(docCategoryId);
+
+      // 从 source_config 中提取数据源ID和桶名（如果是数据源类型）
+      if (docSourceType === 'datasource' && doc.source_config) {
+        try {
+          const sourceConfig = typeof doc.source_config === 'string' ? JSON.parse(doc.source_config) : doc.source_config;
+          if (sourceConfig && sourceConfig.datasource_id) {
+            setSelectedDatasourceId(sourceConfig.datasource_id);
+            if (sourceConfig.bucket_name) {
+              setCurrentBucket(sourceConfig.bucket_name);
+            }
+          }
+        } catch (error) {
+          console.error('Failed to parse source_config:', error);
+        }
+      }
 
       const initData = {
         sourceType: docSourceType,
@@ -371,6 +442,16 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       current.categoryId !== originalData.categoryId;
     setHasChanges(changed);
   }, [sourceType, chunkMethod, chunkConfig, tags, status, fileList, categoryId, originalData, constants]);
+
+  // 当数据源列表和选中的数据源ID都有值时，设置selectedDatasource
+  useEffect(() => {
+    if (selectedDatasourceId && datasources.length > 0) {
+      const datasource = datasources.find(d => d.id === selectedDatasourceId);
+      if (datasource) {
+        setSelectedDatasource(datasource);
+      }
+    }
+  }, [datasources, selectedDatasourceId]);
 
   const fetchConstants = async () => {
     try {
@@ -429,6 +510,13 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       message.error('请上传文档');
       return;
     }
+    if (!isEdit && sourceType === 'datasource') {
+      const isFileStorage = selectedDatasource && ['s3', 'minio', 'rustfs'].includes(selectedDatasource.type);
+      if (isFileStorage && selectedFiles.length === 0) {
+        message.error('请至少选择一个文件');
+        return;
+      }
+    }
 
     setSaving(true);
     try {
@@ -470,6 +558,105 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
             }
           }
           message.success('创建成功');
+        } else if (sourceType === 'datasource') {
+          if (selectedDatasource) {
+            const isFileStorage = ['s3', 'minio', 'rustfs'].includes(selectedDatasource.type);
+            const isRelationalDb = ['mysql', 'postgresql', 'oracle', 'sql_server'].includes(selectedDatasource.type);
+            
+            if (isFileStorage) {
+              // 文件存储类型：为每个已选择的文件创建一个单独的数据集记录
+              // 根据 SourceConfigDefinition.FILE_STORAGE_CONFIG 定义字段
+              for (const filePath of selectedFiles) {
+                // 从 files 数组中找到对应的文件信息
+                const file = files.find(f => f.path === filePath);
+                
+                // 从后端获取的 source_configs 字段定义
+                const fileStorageConfigFields = constants?.source_configs?.datasource?.file_storage || [];
+                const sourceConfig: any = {};
+                
+                // 根据字段定义构建 sourceConfig
+                fileStorageConfigFields.forEach(field => {
+                  switch (field.key) {
+                    case 'datasource_id':
+                      sourceConfig[field.key] = selectedDatasourceId;
+                      break;
+                    case 'bucket_name':
+                      sourceConfig[field.key] = currentBucket;
+                      break;
+                    case 'location':
+                      sourceConfig[field.key] = filePath;
+                      break;
+                    case 'selected_files':
+                      sourceConfig[field.key] = JSON.stringify([filePath]);
+                      break;
+                    default:
+                      // 如果有其他字段，可以在这里添加
+                      break;
+                  }
+                });
+                
+                // 从文件路径中提取文件名
+                const fileName = filePath.split('/').pop() || filePath;
+                
+                await knowledgebaseService.createDocument(knowledgebase.id, {
+                  kb_id: knowledgebase.id,
+                  chunk_method: chunkMethod,
+                  chunk_config: chunkConfig,
+                  tags,
+                  source_type: 'datasource',  // 固定为 'datasource'
+                  source_config: sourceConfig,
+                  status: status,
+                  category_id: categoryId || undefined,
+                  // 添加文件相关字段（file_type 和 mime_type 由后端自动生成）
+                  file_name: fileName,
+                  location: filePath,
+                  // 从文件列表中获取 thumbnail 和 file_size
+                  thumbnail: file?.thumbnail || null,
+                  file_size: file?.size || 0,
+                } as Partial<KnowledgebaseDocument>);
+              }
+              message.success(`成功创建 ${selectedFiles.length} 个数据集`);
+            } else if (isRelationalDb) {
+              // 关系型数据库类型：创建单个数据集记录
+              // 根据 SourceConfigDefinition.RELATIONAL_DATABASE_CONFIG 定义字段
+              // 从后端获取的 source_configs 字段定义
+              const relationalDbConfigFields = constants?.source_configs?.datasource?.relational_database || [];
+              const sourceConfig: any = {};
+              
+              // 根据字段定义构建 sourceConfig
+              relationalDbConfigFields.forEach(field => {
+                switch (field.key) {
+                  case 'datasource_id':
+                    sourceConfig[field.key] = selectedDatasourceId;
+                    break;
+                  case 'table_name':
+                    sourceConfig[field.key] = selectedTable;
+                    break;
+                  case 'column_names':
+                    sourceConfig[field.key] = []; // 可选：字段列表（TODO: 添加字段选择支持）
+                    break;
+                  case 'where_clause':
+                    sourceConfig[field.key] = ''; // 可选：WHERE条件（TODO: 添加WHERE条件输入支持）
+                    break;
+                  default:
+                    // 如果有其他字段，可以在这里添加
+                    break;
+                }
+              });
+              
+              await knowledgebaseService.createDocument(knowledgebase.id, {
+                kb_id: knowledgebase.id,
+                chunk_method: chunkMethod,
+                chunk_config: chunkConfig,
+                tags,
+                source_type: sourceType,
+                source_config: sourceConfig,
+                status: status,
+                category_id: categoryId || undefined,
+              } as Partial<KnowledgebaseDocument>);
+              message.success('创建成功');
+            }
+          }
         } else {
           await knowledgebaseService.createDocument(knowledgebase.id, {
             kb_id: knowledgebase.id,
@@ -498,6 +685,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     setChunkConfig(originalData.chunkConfig);
     setTags(originalData.tags);
     setStatus(originalData.status);
+    setCategoryId(originalData.categoryId);
     setFileList([]);
   };
 
@@ -606,11 +794,25 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
               border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}`,
               color: theme === 'dark' ? '#ccc' : '#666',
               display: 'flex',
-              alignItems: 'center',
+              alignItems: 'flex-start',
               gap: 12,
             }}>
-              <span style={{ fontSize: 24 }}>{getFileIcon(doc?.file_name || '')}</span>
-              <span>{doc?.file_name || '已上传文档'}</span>
+              <span style={{ fontSize: 24, marginTop: 2 }}>{getFileIcon(doc?.file_name || '')}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
+                <span style={{ fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333' }}>
+                  {doc?.file_name || '已上传文档'}
+                </span>
+                {doc?.location && (
+                  <span style={{ fontSize: 12, color: theme === 'dark' ? '#888' : '#999' }}>
+                    路径: {doc.location}
+                  </span>
+                )}
+                {doc?.file_size && doc.file_size > 0 && (
+                  <span style={{ fontSize: 12, color: theme === 'dark' ? '#888' : '#999' }}>
+                    大小: {formatFileSize(doc.file_size)}
+                  </span>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -631,6 +833,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
             onChange={handleDatasourceSelect}
             placeholder="请选择数据源"
             loading={datasourceLoading}
+            disabled={isEdit}
             style={{ width: '100%' }}
             showSearch
             optionFilterProp="label"
@@ -653,101 +856,316 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
   };
 
   const renderFileBrowser = () => {
-    if (sourceType !== 'datasource' || !selectedDatasource) return null;
+    if (sourceType !== 'datasource') return null;
+    
+    // 编辑模式下显示文件信息，不需要依赖selectedDatasource
+    if (isEdit && doc) {
+      // 解析source_config获取桶名
+      let bucketName = '';
+      try {
+        if (doc.source_config) {
+          const sourceConfig = typeof doc.source_config === 'string' ? JSON.parse(doc.source_config) : doc.source_config;
+          if (sourceConfig && sourceConfig.bucket_name) {
+            bucketName = sourceConfig.bucket_name;
+          }
+        }
+      } catch (error) {
+        console.error('Failed to parse source_config for bucket name:', error);
+      }
+
+      return (
+        <div style={{ width: '100%' }}>
+          <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
+            文件信息
+          </div>
+          <div style={{ width: '50%' }}>
+            <div style={{
+              padding: '12px 16px',
+              borderRadius: 8,
+              background: theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#fafafa',
+              border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}`,
+              color: theme === 'dark' ? '#ccc' : '#666',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 12,
+            }}>
+              <span style={{ fontSize: 24, marginTop: 2 }}>{getFileIcon(doc.file_name || '')}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
+                <span style={{ fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333' }}>
+                  {doc.file_name || '已上传文件'}
+                </span>
+                {bucketName && (
+                  <span style={{ fontSize: 12, color: theme === 'dark' ? '#888' : '#999' }}>
+                    桶名: {bucketName}
+                  </span>
+                )}
+                {doc.location && (
+                  <span style={{ fontSize: 12, color: theme === 'dark' ? '#888' : '#999' }}>
+                    路径: {doc.location}
+                  </span>
+                )}
+                {doc.file_size > 0 && (
+                  <span style={{ fontSize: 12, color: theme === 'dark' ? '#888' : '#999' }}>
+                    大小: {formatFileSize(doc.file_size)}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    
+    // 非编辑模式需要selectedDatasource
+    if (!selectedDatasource) return null;
     const isFileStorage = ['s3', 'minio', 'rustfs'].includes(selectedDatasource.type);
     if (!isFileStorage) return null;
+    
+    // 计算分页数据
+    const totalItems = directories.length + files.length;
+    const startIndex = (fileCurrentPage - 1) * filePageSize;
+    const endIndex = startIndex + filePageSize;
+    
+    // 先显示目录，再显示文件
+    const paginatedDirectories = directories.slice(
+      Math.max(0, startIndex), 
+      Math.min(directories.length, endIndex)
+    );
+    const paginatedFiles = files.slice(
+      Math.max(0, startIndex - directories.length), 
+      Math.min(files.length, endIndex - directories.length)
+    );
     
     return (
       <div style={{ width: '100%' }}>
         <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
           文件浏览
         </div>
-        <div style={{ 
-          width: '100%',
-          maxHeight: 400,
-          overflowY: 'auto',
-          padding: 16,
-          borderRadius: 8,
-          background: theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#fafafa',
-          border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}`,
-        }}>
-          {fileBrowserLoading ? (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
-              <Spin size="large" />
-            </div>
-          ) : directories.length === 0 && files.length === 0 ? (
-            <Empty description="暂无文件" />
-          ) : (
-            <div>
-              {currentPath && (
+        <div style={{ width: '50%' }}>
+          {/* 搜索框 */}
+          <div style={{ marginBottom: 8 }}>
+            <Input
+              placeholder="搜索文件或目录名称"
+              value={fileSearchKeyword}
+              onChange={(e) => {
+                const keyword = e.target.value;
+                setFileSearchKeyword(keyword);
+                setFileCurrentPage(1); // 搜索时重置页码
+                // 调用后端接口搜索
+                loadFileList(selectedDatasourceId, currentBucket || undefined, currentPath || undefined, keyword);
+              }}
+              style={{ width: '100%' }}
+              allowClear
+            />
+          </div>
+          
+          <div style={{ 
+            width: '100%',
+            maxHeight: 400,
+            overflowY: 'auto',
+            padding: 16,
+            borderRadius: 8,
+            background: theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#fafafa',
+            border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}`,
+          }}>
+            {fileBrowserLoading ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
+                <Spin size="large" />
+              </div>
+            ) : directories.length === 0 && files.length === 0 ? (
+              <Empty description={fileSearchKeyword ? "未找到匹配的文件或目录" : "暂无文件"} />
+            ) : (
+              <div>
+                {/* 面包屑导航 */}
                 <div style={{ marginBottom: 16, paddingBottom: 8, borderBottom: `1px dashed ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#d9d9d9'}` }}>
-                  <Button 
-                    type="text" 
-                    icon={<ArrowLeftOutlined />} 
-                    onClick={() => {
-                      const parentPath = currentPath.split('/').slice(0, -1).join('/');
-                      loadFileList(selectedDatasourceId, currentBucket, parentPath || undefined);
-                    }}
-                  >
-                    返回上级
-                  </Button>
+                  {currentBucket ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Button 
+                        type="text" 
+                        icon={<ArrowLeftOutlined />} 
+                        onClick={() => {
+                          // 返回到桶列表
+                          setCurrentBucket('');
+                          setCurrentPath('');
+                          setFileSearchKeyword('');
+                          setFileCurrentPage(1);
+                          loadFileList(selectedDatasourceId, undefined, undefined);
+                        }}
+                      >
+                        返回桶列表
+                      </Button>
+                      <span style={{ color: theme === 'dark' ? '#888' : '#999' }}>|</span>
+                      <span style={{ color: theme === 'dark' ? '#ccc' : '#666' }}>
+                        桶: {currentBucket}
+                      </span>
+                      {currentPath && (
+                        <>
+                          <span style={{ color: theme === 'dark' ? '#888' : '#999' }}>/</span>
+                          <span style={{ color: theme === 'dark' ? '#ccc' : '#666' }}>
+                            {currentPath}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ color: theme === 'dark' ? '#ccc' : '#666' }}>
+                      请选择一个桶
+                    </div>
+                  )}
                 </div>
-              )}
-              <Row gutter={[12, 12]}>
-                {directories.map((dir, index) => (
-                  <Col key={`dir-${index}`} xs={12} sm={8} md={6}>
+                
+                {/* 目录和文件列表 */}
+                <div style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  gap: 8 
+                }}>
+                  {/* 目录列表 */}
+                  {paginatedDirectories.map((dir, index) => (
                     <div
+                      key={`dir-${index}`}
                       onClick={() => handleDirectoryClick(dir)}
                       style={{
                         padding: 12,
-                        borderRadius: 8,
+                        borderRadius: 4,
                         background: theme === 'dark' ? 'rgba(102,126,234,0.1)' : 'rgba(102,126,234,0.05)',
                         cursor: 'pointer',
                         display: 'flex',
-                        flexDirection: 'column',
                         alignItems: 'center',
-                        gap: 8,
+                        gap: 12,
                         transition: 'all 0.2s',
                       }}
                     >
-                      <FolderOutlined style={{ fontSize: 32, color: '#667eea' }} />
-                      <span style={{ fontSize: 12, color: theme === 'dark' ? '#ccc' : '#666' }}>
+                      <FolderOutlined style={{ color: '#667eea' }} />
+                      <span style={{ flex: 1, color: theme === 'dark' ? '#ccc' : '#666' }}>
                         {dir.name}
                       </span>
+                      <span style={{ color: theme === 'dark' ? '#888' : '#999', fontSize: 12 }}>
+                        {dir.type === 'bucket' ? '桶' : '目录'}
+                      </span>
                     </div>
-                  </Col>
-                ))}
-                {files.map((file, index) => (
-                  <Col key={`file-${index}`} xs={12} sm={8} md={6}>
+                  ))}
+                  {/* 文件列表 */}
+                  {paginatedFiles.map((file, index) => (
                     <div
+                      key={`file-${index}`}
                       style={{
                         padding: 12,
-                        borderRadius: 8,
+                        borderRadius: 4,
                         background: theme === 'dark' ? 'rgba(255,255,255,0.02)' : '#fff',
                         border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}`,
                         display: 'flex',
-                        flexDirection: 'column',
                         alignItems: 'center',
-                        gap: 8,
+                        gap: 12,
                         transition: 'all 0.2s',
                       }}
                     >
+                      <input
+                        type="checkbox"
+                        checked={selectedFiles.includes(file.path)}
+                        onChange={(e) => handleFileSelect(file, e.target.checked)}
+                        style={{ cursor: 'pointer' }}
+                      />
                       {getFileIcon(file.name)}
-                      <span style={{ fontSize: 12, color: theme === 'dark' ? '#ccc' : '#666' }}>
+                      <span style={{ flex: 1, color: theme === 'dark' ? '#ccc' : '#666' }}>
                         {file.name}
                       </span>
-                      {file.size && (
-                        <span style={{ fontSize: 11, color: theme === 'dark' ? '#888' : '#999' }}>
-                          {formatFileSize(file.size)}
-                        </span>
-                      )}
+                      <span style={{ color: theme === 'dark' ? '#888' : '#999', fontSize: 12, minWidth: 80 }}>
+                        {file.size ? formatFileSize(file.size) : '-'}
+                      </span>
+                      <span style={{ color: theme === 'dark' ? '#888' : '#999', fontSize: 12, minWidth: 150 }}>
+                        {formatDateTime(file.last_modified)}
+                      </span>
                     </div>
-                  </Col>
-                ))}
-              </Row>
-            </div>
-          )}
+                  ))}
+                </div>
+                
+                {/* 分页 */}
+                {totalItems > 0 && (
+                  <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ color: theme === 'dark' ? '#888' : '#999', fontSize: 12 }}>
+                        共 {totalItems} 项
+                      </span>
+                      {/* 始终显示分页按钮 */}
+                      <Button
+                        size="small"
+                        disabled={fileCurrentPage === 1}
+                        onClick={() => setFileCurrentPage(prev => prev - 1)}
+                      >
+                        上一页
+                      </Button>
+                      <span style={{ color: theme === 'dark' ? '#ccc' : '#666', fontSize: 12 }}>
+                        第 {fileCurrentPage} / {Math.ceil(totalItems / filePageSize)} 页
+                      </span>
+                      <Button
+                        size="small"
+                        disabled={fileCurrentPage >= Math.ceil(totalItems / filePageSize)}
+                        onClick={() => setFileCurrentPage(prev => prev + 1)}
+                      >
+                        下一页
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
+        
+        {/* 已选择文件列表 */}
+        {selectedFiles.length > 0 && (
+          <div style={{ marginTop: 16, width: '50%' }}>
+            <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
+              已选择文件 ({selectedFiles.length})
+            </div>
+            <div style={{ 
+              width: '100%',
+              maxHeight: 200,
+              overflowY: 'auto',
+              padding: 16,
+              borderRadius: 8,
+              background: theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#fafafa',
+              border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}`,
+            }}>
+              {selectedFiles.map((filePath, index) => {
+                const file = files.find(f => f.path === filePath);
+                return (
+                  <div
+                    key={`selected-${index}`}
+                    style={{
+                      padding: 12,
+                      marginBottom: 8,
+                      borderRadius: 4,
+                      background: theme === 'dark' ? 'rgba(255,255,255,0.02)' : '#fff',
+                      border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                    }}
+                  >
+                    {file ? getFileIcon(file.name) : <FileOutlined style={{ color: '#8c8c8c' }} />}
+                    <span style={{ flex: 1, color: theme === 'dark' ? '#ccc' : '#666' }}>
+                      {getFileName(filePath)}
+                    </span>
+                    {file && file.size && (
+                      <span style={{ color: theme === 'dark' ? '#888' : '#999', fontSize: 12 }}>
+                        {formatFileSize(file.size)}
+                      </span>
+                    )}
+                    <Button
+                      type="text"
+                      icon={<DeleteOutlined />}
+                      onClick={() => handleRemoveSelectedFile(filePath)}
+                      danger
+                      size="small"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -1027,6 +1445,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
                   value={newTag}
                   onChange={e => setNewTag(e.target.value)}
                   onPressEnter={handleAddTag}
+                  onBlur={handleAddTag}
                   placeholder="输入标签"
                   style={{ width: 120, height: 24 }}
                 />

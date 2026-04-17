@@ -275,6 +275,15 @@ class DocumentUploadHandler:
             except (json.JSONDecodeError, TypeError):
                 document_tags = []
 
+        # 处理切片配置（转换为JSON字符串）
+        import json
+        if document_chunk_config and isinstance(document_chunk_config, dict):
+            document_chunk_config = json.dumps(document_chunk_config, ensure_ascii=False)
+
+        # 处理标签（转换为JSON字符串）
+        if document_tags and isinstance(document_tags, list):
+            document_tags = json.dumps(document_tags, ensure_ascii=False)
+
         # 处理状态
         document_status = status if status is not None else True
 

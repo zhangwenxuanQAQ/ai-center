@@ -333,6 +333,43 @@ class RunningStatus:
     SCHEDULE = "schedule" # 定时调度
 
 
+class SourceConfigField:
+    """
+    数据来源配置字段定义
+    用于描述数据来源配置的一个字段
+    """
+    def __init__(
+        self,
+        key: str,
+        label: str,
+        field_type: str = "input",
+        default: Any = None,
+        description: str = "",
+        required: bool = False,
+        options: List[Dict[str, str]] = None,
+    ):
+        self.key = key
+        self.label = label
+        self.field_type = field_type
+        self.default = default
+        self.description = description
+        self.required = required
+        self.options = options
+
+    def to_dict(self) -> Dict[str, Any]:
+        result = {
+            "key": self.key,
+            "label": self.label,
+            "field_type": self.field_type,
+            "default": self.default,
+            "description": self.description,
+            "required": self.required,
+        }
+        if self.options:
+            result["options"] = self.options
+        return result
+
+
 class SourceConfigDefinition:
     """
     数据来源配置参数定义，根据数据来源类型展示不同的配置项
@@ -349,3 +386,93 @@ class SourceConfigDefinition:
     如果是自定义模板，暂时为空对象
     """
     
+    # 本地文档配置字段（空）
+    LOCAL_DOCUMENT_CONFIG: List[SourceConfigField] = []
+    
+    # 数据源 - 关系型数据库配置字段
+    RELATIONAL_DATABASE_CONFIG: List[SourceConfigField] = [
+        SourceConfigField(
+            key="datasource_id",
+            label="数据源ID",
+            field_type="input",
+            description="数据源ID",
+            required=True,
+        ),
+        SourceConfigField(
+            key="table_name",
+            label="表名",
+            field_type="input",
+            description="要查询的表名",
+            required=True,
+        ),
+        SourceConfigField(
+            key="column_names",
+            label="字段列表",
+            field_type="input",
+            description="要查询的字段列表，多个字段用逗号分隔",
+            required=False,
+        ),
+        SourceConfigField(
+            key="where_clause",
+            label="WHERE条件",
+            field_type="input",
+            description="查询条件，例如：id > 100",
+            required=False,
+        ),
+    ]
+    
+    # 数据源 - 文件系统配置字段
+    FILE_STORAGE_CONFIG: List[SourceConfigField] = [
+        SourceConfigField(
+            key="datasource_id",
+            label="数据源ID",
+            field_type="input",
+            description="数据源ID",
+            required=True,
+        ),
+        SourceConfigField(
+            key="bucket_name",
+            label="存储桶名",
+            field_type="input",
+            description="存储桶名称",
+            required=True,
+        ),
+        SourceConfigField(
+            key="location",
+            label="文件路径",
+            field_type="input",
+            description="文件在存储桶中的路径",
+            required=True,
+        ),
+    ]
+    
+    # 自定义模板配置字段（空）
+    CUSTOM_TEMPLATE_CONFIG: List[SourceConfigField] = []
+    
+    # 根据数据源类型获取配置字段
+    @classmethod
+    def get_config_fields(cls, source_type: str, datasource_type: str = None) -> List[SourceConfigField]:
+        """
+        根据数据来源类型获取配置字段
+        
+        Args:
+            source_type: 数据来源类型（local_document, datasource, custom_template）
+            datasource_type: 数据源类型（mysql, postgresql, oracle, s3, minio, rustfs等）
+            
+        Returns:
+            List[SourceConfigField]: 配置字段列表
+        """
+        if source_type == SourceType.LOCAL_DOCUMENT:
+            return cls.LOCAL_DOCUMENT_CONFIG
+        elif source_type == SourceType.DATASOURCE:
+            # 根据数据源类型返回不同的配置字段
+            if datasource_type in ['mysql', 'postgresql', 'oracle', 'sql_server']:
+                return cls.RELATIONAL_DATABASE_CONFIG
+            elif datasource_type in ['s3', 'minio', 'rustfs']:
+                return cls.FILE_STORAGE_CONFIG
+            else:
+                return []
+        elif source_type == SourceType.CUSTOM_TEMPLATE:
+            return cls.CUSTOM_TEMPLATE_CONFIG
+        else:
+            return []

@@ -497,7 +497,7 @@ class DatasourceService:
             return {"success": False, "message": f"获取Schema信息失败: {str(e)}"}
     
     @staticmethod
-    def list_files(datasource_id: str, bucket: str = None, prefix: str = None, max_keys: int = 100):
+    def list_files(datasource_id: str, bucket: str = None, prefix: str = None, max_keys: int = 100, search_keyword: str = None):
         """
         列出文件（仅适用于文件存储类型数据源）
         
@@ -506,6 +506,7 @@ class DatasourceService:
             bucket: Bucket名称（可选）
             prefix: 文件前缀/目录（可选）
             max_keys: 最大返回数量
+            search_keyword: 搜索关键词（可选）
             
         Returns:
             dict: 文件列表
@@ -521,7 +522,7 @@ class DatasourceService:
         
         try:
             ds_instance = DatasourceFactory.create(datasource_type, decrypted_config)
-            return ds_instance.list_files(bucket=bucket, prefix=prefix, max_keys=max_keys)
+            return ds_instance.list_files(bucket=bucket, prefix=prefix, max_keys=max_keys, search_keyword=search_keyword)
         except Exception as e:
             return {"success": False, "message": f"获取文件列表失败: {str(e)}"}
     

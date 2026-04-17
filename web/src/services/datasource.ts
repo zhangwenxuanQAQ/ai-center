@@ -188,11 +188,13 @@ export const datasourceService = {
    * @param bucket - Bucket名称（可选）
    * @param prefix - 文件前缀/目录（可选）
    * @param maxKeys - 最大返回数量
+   * @param searchKeyword - 搜索关键词（可选）
    */
-  listFiles: async (id: string, bucket?: string, prefix?: string, maxKeys: number = 100): Promise<any> => {
+  listFiles: async (id: string, bucket?: string, prefix?: string, maxKeys: number = 100, searchKeyword?: string): Promise<any> => {
     let params = [`max_keys=${maxKeys}`];
     if (bucket) params.push(`bucket=${encodeURIComponent(bucket)}`);
     if (prefix) params.push(`prefix=${encodeURIComponent(prefix)}`);
+    if (searchKeyword) params.push(`search_keyword=${encodeURIComponent(searchKeyword)}`);
     const queryString = params.length > 0 ? `?${params.join('&')}` : '';
     return http.get<any>(`/aicenter/v1/datasource/${id}/files${queryString}`);
   },

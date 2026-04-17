@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Layout, Tree, Table, Input, Select, Button, Tag, Spin, Pagination, Empty, Row, Col, Tooltip, Switch, message, Modal, Popconfirm, Form, TreeSelect } from 'antd';
 const { TextArea } = Input;
 import { SearchOutlined, PlusOutlined, FolderOutlined, FileTextOutlined, PlayCircleOutlined, PauseCircleOutlined, ReloadOutlined, UnorderedListOutlined, EditOutlined, DownloadOutlined, DeleteOutlined, UpOutlined, DownOutlined, CloseOutlined } from '@ant-design/icons';
@@ -112,7 +112,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
         searchName || undefined,
         filterFileType.length > 0 ? filterFileType : undefined,
         filterStatus.length > 0 ? filterStatus : undefined,
-        filterNewStatus || undefined
+        filterNewStatus !== null ? filterNewStatus : undefined
       );
       setDocuments(response.data || []);
       setTotalDocs(response.total || 0);
@@ -369,7 +369,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
     return categories.map(cat => buildTree(cat));
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = useCallback((status: string) => {
     switch (status) {
       case 'done':
         return 'success';
@@ -384,15 +384,15 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       default:
         return 'default';
     }
-  };
+  }, []);
 
-  const formatFileSize = (bytes: number) => {
+  const formatFileSize = useCallback((bytes: number) => {
     if (bytes === 0) return '0 B';
     const k = 1024;
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
+  }, []);
 
   const handleStatusChange = async (documentId: string, newStatus: string) => {
     try {
@@ -451,7 +451,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
     });
   };
 
-  const columns = [
+  const columns = useMemo(() => [
     {
       title: '文档名称',
       dataIndex: 'file_name',
@@ -602,11 +602,11 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
                 onClick={() => { setEditingDocument(record); setShowSetting(true); }}
               />
             </Tooltip>
-            {(record.source_type === 'local_document' || record.source_type === 'file_datasource') && (
+            {(record.source_type === 'local_document' || record.source_type === 'datasource') && (
               <Tooltip title="下载">
-                <Button 
+                <Button
                   type="text"
-                  size="small" 
+                  size="small"
                   icon={<DownloadOutlined />}
                   onClick={async () => {
                     try {
@@ -637,7 +637,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
         );
       },
     },
-  ];
+  ], [documentConstants, handleStatusChange, handleDelete, knowledgebase.id, getStatusColor, formatFileSize]);
 
   return (
     <Layout className="knowledgebase-layout" style={{ height: '100%' }}>
@@ -779,8 +779,8 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
           </Select>
           <Select
             placeholder="请选择状态"
-            value={filterNewStatus}
-            onChange={setFilterNewStatus}
+            value={filterNewStatus === true ? 'true' : filterNewStatus === false ? 'false' : null}
+            onChange={(value) => setFilterNewStatus(value === 'true' ? true : value === 'false' ? false : null)}
             allowClear
             style={{
               width: '150px',
@@ -791,8 +791,8 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
               color: theme === 'dark' ? '#ffffff' : '#000000'
             }}
           >
-            <Option key="true" value={true}>启用</Option>
-            <Option key="false" value={false}>禁用</Option>
+            <Option key="true" value="true">启用</Option>
+            <Option key="false" value="false">禁用</Option>
           </Select>
           <Button 
             icon={<CloseOutlined />}
@@ -823,11 +823,6 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
             <div className="loading-container">
               <Spin size="large" />
             </div>
-          ) : documents.length === 0 ? (
-            <Empty 
-              description="暂无文档" 
-              className={`empty-container ${theme === 'dark' ? 'dark' : 'light'}`} 
-            />
           ) : (
             <Table
               columns={columns}
@@ -842,6 +837,12 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
                 preserveSelectedRowKeys: true,
               }}
               size="small"
+              locale={{
+                emptyText: <Empty 
+                  description="暂无文档" 
+                  className={`empty-container ${theme === 'dark' ? 'dark' : 'light'}`} 
+                />
+              }}
             />
           )}
         </div>

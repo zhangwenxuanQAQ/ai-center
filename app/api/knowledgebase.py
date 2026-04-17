@@ -23,7 +23,7 @@ from app.services.knowledgebase.dto import (
 from app.utils.response import ResponseUtil, ApiResponse
 from app.constants.knowledgebase_constants import FILE_NAME_LEN_LIMIT
 from app.constants.knowledgebase_document_constants import (
-    CHUNK_METHOD_LABELS, CHUNK_METHOD_CONFIGS, SOURCE_TYPE_LABELS, SourceType
+    CHUNK_METHOD_LABELS, CHUNK_METHOD_CONFIGS, SOURCE_TYPE_LABELS, SourceType, SourceConfigDefinition
 )
 
 logger = logging.getLogger(__name__)
@@ -48,10 +48,22 @@ def get_document_constants():
     chunk_configs = {}
     for method_key, fields in CHUNK_METHOD_CONFIGS.items():
         chunk_configs[method_key] = [f.to_dict() for f in fields]
+    
+    # 构建来源配置定义
+    source_configs = {
+        "local_document": [f.to_dict() for f in SourceConfigDefinition.LOCAL_DOCUMENT_CONFIG],
+        "datasource": {
+            "relational_database": [f.to_dict() for f in SourceConfigDefinition.RELATIONAL_DATABASE_CONFIG],
+            "file_storage": [f.to_dict() for f in SourceConfigDefinition.FILE_STORAGE_CONFIG],
+        },
+        "custom_template": [f.to_dict() for f in SourceConfigDefinition.CUSTOM_TEMPLATE_CONFIG],
+    }
+    
     return ResponseUtil.success(data={
         "chunk_methods": chunk_methods,
         "source_types": source_types,
         "chunk_configs": chunk_configs,
+        "source_configs": source_configs,
     })
 
 

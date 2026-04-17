@@ -208,6 +208,10 @@ class KnowledgebaseDocumentBase(BaseModel):
         file_name: 文档文件名
         location: 文档存储路径
         file_size: 文档文件大小
+        mime_type: 文件MIME类型
+        source_type: 来源类型
+        source_config: 来源配置JSON
+        thumbnail: 文件缩略图
         running_status: 文档解析状态
         task_progress: 文档解析进度
         task_begin_at: 文档解析开始时间
@@ -225,6 +229,10 @@ class KnowledgebaseDocumentBase(BaseModel):
     file_name: Optional[str] = Field(None, max_length=255, description="文档文件名")
     location: Optional[str] = Field(None, max_length=512, description="文档存储路径")
     file_size: int = Field(default=0, description="文档文件大小(字节)")
+    mime_type: Optional[str] = Field(None, max_length=100, description="文件MIME类型")
+    source_type: Optional[str] = Field(None, max_length=50, description="来源类型")
+    source_config: Optional[dict] = Field(None, description="来源配置JSON对象")
+    thumbnail: Optional[str] = Field(None, description="文件缩略图")
     running_status: str = Field(default="pending", max_length=50, description="文档解析状态")
     status: bool = Field(default=True, description="文档状态")
     task_progress: float = Field(default=0, ge=0, le=1, description="文档解析进度(0-1)")
@@ -255,6 +263,10 @@ class KnowledgebaseDocumentUpdate(BaseModel):
         file_name: 文档文件名
         location: 文档存储路径
         file_size: 文档文件大小
+        mime_type: 文件MIME类型
+        source_type: 来源类型
+        source_config: 来源配置JSON
+        thumbnail: 文件缩略图
         running_status: 文档解析状态
         task_progress: 文档解析进度
         task_begin_at: 文档解析开始时间
@@ -272,6 +284,10 @@ class KnowledgebaseDocumentUpdate(BaseModel):
     file_name: Optional[str] = Field(None, max_length=255, description="文档文件名")
     location: Optional[str] = Field(None, max_length=512, description="文档存储路径")
     file_size: Optional[int] = Field(None, description="文档文件大小(字节)")
+    mime_type: Optional[str] = Field(None, max_length=100, description="文件MIME类型")
+    source_type: Optional[str] = Field(None, max_length=50, description="来源类型")
+    source_config: Optional[dict] = Field(None, description="来源配置JSON对象")
+    thumbnail: Optional[str] = Field(None, description="文件缩略图")
     running_status: Optional[str] = Field(None, max_length=50, description="文档解析状态")
     status: Optional[bool] = Field(None, description="文档状态")
     task_progress: Optional[float] = Field(None, ge=0, le=1, description="文档解析进度(0-1)")
