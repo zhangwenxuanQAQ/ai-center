@@ -473,7 +473,8 @@ class ChatMessageService:
         model_id: Optional[str] = None,
         chatbot_id: Optional[str] = None,
         config: Optional[str] = None,
-        message_id: Optional[str] = None
+        message_id: Optional[str] = None,
+        extra_content: Optional[Any] = None
     ) -> ChatMessage:
         """
         创建用户消息
@@ -485,6 +486,7 @@ class ChatMessageService:
             chatbot_id: 机器人ID
             config: 配置JSON
             message_id: 消息ID，用于标识重新回答或编辑问题
+            extra_content: 额外内容，如上传的文件信息
 
         Returns:
             ChatMessage: 用户消息对象
@@ -498,12 +500,21 @@ class ChatMessageService:
             # 只在有message_id时进行清理，确保历史消息不会被意外删除
             pass
 
+        import json
+        extra_content_str = None
+        if extra_content is not None:
+            if isinstance(extra_content, (dict, list)):
+                extra_content_str = json.dumps(extra_content, ensure_ascii=False)
+            else:
+                extra_content_str = str(extra_content)
+
         user_message = ChatMessage(
             message_id=uuid.uuid4().hex,
             chat_id=chat_id,
             config=config,
             role='user',
             content=user_content,
+            extra_content=extra_content_str,
             model_id=model_id,
             chatbot_id=chatbot_id,
             created_at=datetime.now().astimezone()

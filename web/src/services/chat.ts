@@ -22,6 +22,7 @@ export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'tool';
   content: string;
+  extra_content?: any;
   created_at: string;
   reasoning_content?: string;
   usage?: {
@@ -29,6 +30,23 @@ export interface Message {
     completion_tokens?: number;
     total_tokens?: number;
   };
+}
+
+export interface QueryItem {
+  type: 'text' | 'file_base64' | 'document';
+  content: string | Record<string, any>;
+  mime_type?: string;
+  file_name?: string;
+}
+
+export interface FileInfo {
+  type: 'local' | 'datasource';
+  file_name: string;
+  mime_type?: string;
+  base64_content?: string;
+  datasource_id?: string;
+  bucket?: string;
+  object_name?: string;
 }
 
 export const chatService = {
@@ -113,8 +131,35 @@ export const chatService = {
   },
 
   /**
-   * 流式发送消息
-   * @param content - 消息内容
+   * 发送消息（支持文件）
+   * @param query - 查询数组，支持text/file_base64/document类型
+   * @param modelId - 模型ID
+   * @param chatbotId - 机器人ID
+   * @param chatId - 对话ID
+   * @param config - 对话配置
+   * @param stream - 是否流式输出，默认true
+   */
+  sendMessageWithFiles: async (
+    query: QueryItem[],
+    modelId?: string,
+    chatbotId?: string,
+    chatId?: string,
+    config?: { temperature?: number; max_tokens?: number; top_p?: number },
+    stream: boolean = true
+  ): Promise<Message> => {
+    return http.post<Message>('/aicenter/v1/chat/completions', {
+      query,
+      model_id: modelId,
+      chatbot_id: chatbotId,
+      chat_id: chatId,
+      config: config,
+      stream: stream
+    });
+  },
+
+  /**
+   * 流式发送消息（支持文件）
+   * @param query - 查询数组，支持text/file_base64/document类型
    * @param modelId - 模型ID
    * @param chatbotId - 机器人ID
    * @param chatId - 对话ID
@@ -125,8 +170,8 @@ export const chatService = {
    * @param onError - 错误回调函数
    * @param onComplete - 完成回调函数
    */
-  sendMessageStream: async (
-    content: string,
+  sendMessageStreamWithFiles: async (
+    query: QueryItem[],
     modelId?: string,
     chatbotId?: string,
     chatId?: string,
@@ -153,7 +198,7 @@ export const chatService = {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          query: [{ type: 'text', content }],
+          query,
           model_id: modelId,
           chatbot_id: chatbotId,
           chat_id: chatId,
@@ -312,5 +357,63 @@ export const chatService = {
    */
   togglePinConversation: async (conversationId: string): Promise<Conversation> => {
     return http.post<Conversation>(`/aicenter/v1/chat/toggle_top/${conversationId}`);
+  },
+
+  /**
+   * 下载文件
+   * @param fileType - 文件类型：local/datasource
+   * @param fileName - 文件名
+   * @param base64Content - 本地文件的base64内容（local类型时必填）
+   * @param datasourceId - 数据源ID（datasource类型时必填）
+   * @param bucket - 桶名称（datasource类型时可选）
+   * @param objectName - 文件路径（datasource类型时必填）
+   */
+  downloadFile: async (
+    fileType: 'local' | 'datasource',
+    fileName: string,
+    base64Content?: string,
+    datasourceId?: string,
+    bucket?: string,
+    objectName?: string
+  ): Promise<void> => {
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+    let url = `${API_BASE_URL}/aicenter/v1/chat/download_file?file_type=${fileType}&file_name=${encodeURIComponent(fileName)}`;
+    
+    if (fileType === 'local' && base64Content) {
+      url += `&base64_content=${encodeURIComponent(base64Content)}`;
+    } else if (fileType === 'datasource') {
+      if (datasourceId) {
+        url += `&datasource_id=${datasourceId}`;
+      }
+      if (bucket) {
+        url += `&bucket=${encodeURIComponent(bucket)}`;
+      }
+      if (objectName) {
+        url += `&object_name=${encodeURIComponent(objectName)}`;
+      }
+    }
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST'
+      });
+
+      if (!response.ok) {
+        throw new Error('下载文件失败');
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error('下载文件失败:', error);
+      throw error;
+    }
   }
 };

@@ -121,6 +121,7 @@ class ChatMessageBase(BaseModel):
         messages: 消息内容JSON
         role: 角色
         content: 消息内容
+        extra_content: 额外内容JSON
         reasoning_content: 思考过程内容
         reasoning_time: 思考耗时（毫秒）
         avatar: 头像URL
@@ -133,11 +134,27 @@ class ChatMessageBase(BaseModel):
     messages: Optional[str] = Field(None, description="消息内容JSON")
     role: str = Field(..., max_length=20, description="角色：user/assistant/tool")
     content: str = Field(..., description="消息内容")
+    extra_content: Optional[Any] = Field(None, description="额外内容JSON")
     reasoning_content: Optional[str] = Field(None, description="思考过程内容")
     reasoning_time: Optional[int] = Field(None, description="思考耗时（毫秒）")
     avatar: Optional[str] = Field(None, max_length=500, description="头像URL")
     model_id: Optional[str] = Field(None, max_length=40, description="模型ID")
     chatbot_id: Optional[str] = Field(None, max_length=40, description="机器人ID")
+    
+    @field_validator('extra_content', mode='before')
+    @classmethod
+    def parse_extra_content(cls, v):
+        """解析extra_content字段，支持字符串和字典类型"""
+        if v is None:
+            return None
+        if isinstance(v, (dict, list)):
+            return v
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                return None
+        return None
 
 
 class ChatMessageCreate(BaseModel):
@@ -151,6 +168,7 @@ class ChatMessageCreate(BaseModel):
         messages: 消息内容JSON
         role: 角色
         content: 消息内容
+        extra_content: 额外内容JSON
         model_id: 模型ID
         chatbot_id: 机器人ID
     """
@@ -160,6 +178,7 @@ class ChatMessageCreate(BaseModel):
     messages: Optional[str] = Field(None, description="消息内容JSON")
     role: str = Field(..., max_length=20, description="角色：user/assistant/tool")
     content: str = Field(..., description="消息内容")
+    extra_content: Optional[Any] = Field(None, description="额外内容JSON")
     model_id: Optional[str] = Field(None, max_length=40, description="模型ID")
     chatbot_id: Optional[str] = Field(None, max_length=40, description="机器人ID")
 
@@ -180,12 +199,12 @@ class QueryItem(BaseModel):
     查询项DTO
     
     Attributes:
-        type: 类型（text/file_base64）
-        content: 内容
+        type: 类型（text/file_base64/document）
+        content: 内容（字符串或dict）
         mime_type: MIME类型
     """
     type: str = Field(..., description="类型：text/file_base64/document")
-    content: str = Field(..., description="内容")
+    content: Any = Field(..., description="内容")
     mime_type: Optional[str] = Field(None, description="MIME类型")
 
 

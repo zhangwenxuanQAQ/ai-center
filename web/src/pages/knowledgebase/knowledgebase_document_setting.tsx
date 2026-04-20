@@ -94,6 +94,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
   const [currentBucket, setCurrentBucket] = useState<string>('');
   const [currentPath, setCurrentPath] = useState<string>('');
   const [files, setFiles] = useState<any[]>([]);
+  const [allFiles, setAllFiles] = useState<any[]>([]);
   const [directories, setDirectories] = useState<any[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   const [fileSearchKeyword, setFileSearchKeyword] = useState<string>('');
@@ -284,6 +285,15 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       // http.get 已经返回了 data 字段，直接使用 result
       setDirectories(result?.directories || []);
       setFiles(result?.files || []);
+      // 更新allFiles，保存所有已加载的文件信息
+      if (result?.files && result.files.length > 0) {
+        setAllFiles(prev => {
+          const newFiles = result.files.filter((file: any) => 
+            !prev.some((prevFile: any) => prevFile.path === file.path)
+          );
+          return [...prev, ...newFiles];
+        });
+      }
       if (result?.bucket) {
         setCurrentBucket(result.bucket);
       }
@@ -567,8 +577,8 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
               // 文件存储类型：为每个已选择的文件创建一个单独的数据集记录
               // 根据 SourceConfigDefinition.FILE_STORAGE_CONFIG 定义字段
               for (const filePath of selectedFiles) {
-                // 从 files 数组中找到对应的文件信息
-                const file = files.find(f => f.path === filePath);
+                // 从 allFiles 数组中找到对应的文件信息
+                const file = allFiles.find(f => f.path === filePath);
                 
                 // 从后端获取的 source_configs 字段定义
                 const fileStorageConfigFields = constants?.source_configs?.datasource?.file_storage || [];
@@ -994,6 +1004,27 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
                       >
                         返回桶列表
                       </Button>
+                      {currentPath && (
+                        <>
+                          <Button 
+                            type="text" 
+                            icon={<ArrowLeftOutlined />} 
+                            onClick={() => {
+                              // 返回上级目录
+                              const pathParts = currentPath.split('/').filter(part => part);
+                              if (pathParts.length > 0) {
+                                pathParts.pop();
+                                const parentPath = pathParts.join('/');
+                                setFileSearchKeyword('');
+                                setFileCurrentPage(1);
+                                loadFileList(selectedDatasourceId, currentBucket, parentPath || undefined);
+                              }
+                            }}
+                          >
+                            返回上级目录
+                          </Button>
+                        </>
+                      )}
                       <span style={{ color: theme === 'dark' ? '#888' : '#999' }}>|</span>
                       <span style={{ color: theme === 'dark' ? '#ccc' : '#666' }}>
                         桶: {currentBucket}
@@ -1129,7 +1160,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
               border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}`,
             }}>
               {selectedFiles.map((filePath, index) => {
-                const file = files.find(f => f.path === filePath);
+                const file = allFiles.find(f => f.path === filePath);
                 return (
                   <div
                     key={`selected-${index}`}

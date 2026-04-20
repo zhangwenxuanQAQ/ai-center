@@ -236,7 +236,9 @@ class DatasourceService:
                 query = query.where(Datasource.code.contains(code))
             
             if datasource_type:
-                query = query.where(Datasource.type == datasource_type)
+                # 支持逗号分隔的多个数据源类型
+                datasource_types = [t.strip() for t in datasource_type.split(',')]
+                query = query.where(Datasource.type << datasource_types)
             
             total = query.count()
             query = query.order_by(Datasource.created_at.desc())

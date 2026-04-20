@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Input, Button, Switch, Modal, Slider, message, Popconfirm, Tooltip, Dropdown, Empty, Spin, Popover, InputNumber, Select } from 'antd';
-import { SendOutlined, ClearOutlined, SettingOutlined, RobotOutlined, BulbOutlined, LoadingOutlined, DownOutlined, RightOutlined, CopyOutlined, ReloadOutlined, EditOutlined, InfoCircleOutlined, StopOutlined } from '@ant-design/icons';
-import type { MenuProps } from 'antd';
+import { Input, Button, Switch, Modal, Slider, message, Popconfirm, Tooltip, Dropdown, Empty, Spin, Popover, InputNumber, Select, Steps, Upload, List } from 'antd';
+import { SendOutlined, ClearOutlined, SettingOutlined, RobotOutlined, BulbOutlined, LoadingOutlined, DownOutlined, RightOutlined, CopyOutlined, ReloadOutlined, EditOutlined, InfoCircleOutlined, StopOutlined, PaperClipOutlined, FolderOpenOutlined, FileTextOutlined, UploadOutlined, CloseCircleOutlined, InboxOutlined, FilePdfOutlined, FileWordOutlined, FileImageOutlined } from '@ant-design/icons';
+import DataSourceFileSelector from '../datasource/datasource data_select';
+import type { MenuProps, UploadProps } from 'antd';
 import MDEditor from '@uiw/react-md-editor';
 import { llmModelService, LLMModel } from '../../services/llm_model';
 import { chatbotService, Chatbot } from '../../services/chatbot';
-import { chatService, Conversation, Message } from '../../services/chat';
+import { chatService, Conversation, Message, QueryItem, FileInfo } from '../../services/chat';
+import { datasourceService, Datasource } from '../../services/datasource';
 
 const { TextArea } = Input;
 
@@ -33,6 +35,7 @@ interface Message {
     completion_tokens?: number;
     total_tokens?: number;
   };
+  extra_content?: any;
 }
 
 interface Conversation {
@@ -80,6 +83,19 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
   const [thinkingDuration, setThinkingDuration] = useState<Record<string, number>>({});
   const thinkingStartTimeRef = useRef<Record<string, number>>({});
   const isCreatingNewConversation = useRef(false);
+  
+  // 文件上传相关状态
+  const [selectedFiles, setSelectedFiles] = useState<QueryItem[]>([]);
+  const [isDataSourceModalVisible, setIsDataSourceModalVisible] = useState(false);
+  const [dataSourceStep, setDataSourceStep] = useState(0);
+  const [dataSources, setDataSources] = useState<Datasource[]>([]);
+  const [selectedDataSource, setSelectedDataSource] = useState<Datasource | null>(null);
+  const [selectedBucket, setSelectedBucket] = useState<string>('');
+  const [buckets, setBuckets] = useState<string[]>([]);
+  const [files, setFiles] = useState<any[]>([]);
+  const [selectedDataSourceFiles, setSelectedDataSourceFiles] = useState<any[]>([]);
+  const [loadingDataSources, setLoadingDataSources] = useState(false);
+  const [loadingFiles, setLoadingFiles] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -167,6 +183,64 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // 处理本地文件上传
+  const handleLocalFileUpload = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64Content = (e.target?.result as string).split(',')[1];
+      const mimeType = file.type || 'application/octet-stream';
+      
+      const newFile: QueryItem = {
+        type: 'file_base64',
+        content: base64Content,
+        mime_type: mimeType,
+        file_name: file.name
+      };
+      
+      setSelectedFiles(prev => [...prev, newFile]);
+    };
+    reader.readAsDataURL(file);
+    return false; // 阻止默认上传行为
+  };
+
+  // 移除已选择的文件
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // 处理数据源文件选择确认
+  const handleDataSourceFileConfirm = (files: any[]) => {
+    const newFiles: QueryItem[] = files.map(file => ({
+      type: 'document',
+      content: {
+        datasource_id: file.datasource_id,
+        bucket: file.bucket,
+        object_name: file.path,
+        file_name: file.name
+      },
+      file_name: file.name
+    }));
+    setSelectedFiles(prev => [...prev, ...newFiles]);
+  };
+
+  // 处理文件下载
+  const handleDownloadFile = async (fileInfo: FileInfo) => {
+    try {
+      await chatService.downloadFile(
+        fileInfo.type,
+        fileInfo.file_name,
+        fileInfo.base64_content,
+        fileInfo.datasource_id,
+        fileInfo.bucket,
+        fileInfo.object_name
+      );
+      message.success('文件下载成功');
+    } catch (error) {
+      console.error('Failed to download file:', error);
+      message.error('文件下载失败');
+    }
+  };
+
   const fetchModels = async () => {
     setLoadingModels(true);
     try {
@@ -218,7 +292,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         created_at: msg.created_at,
         reasoning_content: msg.reasoning_content,
         reasoning_time: msg.reasoning_time,
-        usage: msg.usage
+        usage: msg.usage,
+        extra_content: msg.extra_content
       }));
       setMessages(mappedMessages);
       
@@ -244,15 +319,35 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
   };
 
   const handleSend = async () => {
-    if (!inputValue.trim()) return;
+    if (!inputValue.trim() && selectedFiles.length === 0) return;
 
     let currentConversation = conversation;
+
+    // 构建查询数组
+    const query: QueryItem[] = [];
+    
+    // 添加文本内容
+    if (inputValue.trim()) {
+      query.push({
+        type: 'text',
+        content: inputValue.trim()
+      });
+    }
+    
+    // 添加文件内容
+    selectedFiles.forEach(file => {
+      query.push(file);
+    });
 
     // 如果没有选中的对话，先创建一个新对话
     if (!currentConversation) {
       try {
-        // 标题为用户问题的前20个字符
-        const title = inputValue.trim().substring(0, 20);
+        // 标题为用户问题的前20个字符或文件名
+        const title = inputValue.trim() 
+          ? inputValue.trim().substring(0, 20)
+          : selectedFiles.length > 0 
+            ? selectedFiles[0].file_name?.substring(0, 20) || '新对话'
+            : '新对话';
         
         // 标记正在创建新对话，防止 useEffect 清空消息
         isCreatingNewConversation.current = true;
@@ -281,16 +376,21 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       }
     }
 
+    // 构建用户消息显示内容
+    const displayContent = inputValue.trim() || (selectedFiles.length > 0 ? `${selectedFiles.length} 个文件` : '');
+    
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: inputValue,
+      content: displayContent,
+      extra_content: { files: selectedFiles },
       created_at: new Date().toISOString(),
     };
 
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
     setInputValue('');
+    setSelectedFiles([]);
     setLoading(true);
 
     const assistantMessageId = (Date.now() + 1).toString();
@@ -310,9 +410,9 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       // 发送消息到后端
       console.log('Sending message with config:', modelConfig);
       
-      // 使用流式发送
-      chatService.sendMessageStream(
-        inputValue,
+      // 使用流式发送（带文件）
+      chatService.sendMessageStreamWithFiles(
+        query,
         selectedModel?.id,
         selectedChatbot?.id,
         currentConversation?.id,
@@ -645,6 +745,41 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     return '/src/assets/llm/default.svg';
   };
 
+  // 根据文件类型获取图标
+  const getFileIcon = (fileName: string) => {
+    const extension = fileName.split('.').pop()?.toLowerCase();
+    if (!extension) return <FileTextOutlined />;
+    
+    switch (extension) {
+      case 'pdf':
+        return <FilePdfOutlined style={{ color: '#ff4d4f' }} />;
+      case 'doc':
+      case 'docx':
+        return <FileWordOutlined style={{ color: '#1890ff' }} />;
+      case 'txt':
+      case 'md':
+      case 'json':
+      case 'yaml':
+      case 'yml':
+      case 'xml':
+      case 'csv':
+        return <FileTextOutlined style={{ color: '#52c41a' }} />;
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+      case 'webp':
+        return <FileImageOutlined style={{ color: '#722ed1' }} />;
+      case 'mp3':
+      case 'wav':
+      case 'ogg':
+      case 'flac':
+        return <FileTextOutlined style={{ color: '#fa8c16' }} />;
+      default:
+        return <FileTextOutlined />;
+    }
+  };
+
   const renderConfigParam = (param: ConfigParam) => {
     const value = modelConfig[param.key] ?? param.default;
     
@@ -895,6 +1030,19 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     
     const isUser = msg.role === 'user';
     
+    // 解析消息中的文件信息
+    let files: FileInfo[] = [];
+    if (msg.extra_content && msg.extra_content.files) {
+      files = msg.extra_content.files.map((file: any) => ({
+        type: file.type,
+        file_name: file.file_name,
+        base64_content: file.type === 'file_base64' ? file.content : undefined,
+        datasource_id: file.type === 'document' ? file.content?.datasource_id : undefined,
+        bucket: file.type === 'document' ? file.content?.bucket : undefined,
+        object_name: file.type === 'document' ? file.content?.object_name : undefined
+      }));
+    }
+    
     return (
       <div key={msg.id} className={`message ${msg.role}`}>
         <div className={`message-avatar ${theme === 'dark' ? 'dark' : 'light'}`}>
@@ -960,6 +1108,50 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               )}
             </div>
           )}
+          
+          {/* 显示文件列表 */}
+          {files.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <List
+                dataSource={files}
+                renderItem={(file) => {
+                  // 计算文件大小（仅对本地文件）
+                  let fileSize = '';
+                  if (file.base64_content) {
+                    // Base64 编码的文件大小（大约）
+                    const base64Size = file.base64_content.length * 3 / 4;
+                    if (base64Size < 1024) {
+                      fileSize = `${base64Size.toFixed(0)} B`;
+                    } else if (base64Size < 1024 * 1024) {
+                      fileSize = `${(base64Size / 1024).toFixed(2)} KB`;
+                    } else {
+                      fileSize = `${(base64Size / (1024 * 1024)).toFixed(2)} MB`;
+                    }
+                  }
+                  
+                  return (
+                    <List.Item
+                      style={{ 
+                        cursor: 'pointer', 
+                        padding: '8px 12px',
+                        borderRadius: 4,
+                        backgroundColor: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
+                        marginBottom: 4
+                      }}
+                      onClick={() => handleDownloadFile(file)}
+                    >
+                      <List.Item.Meta
+                        avatar={getFileIcon(file.file_name)}
+                        title={file.file_name}
+                        description={fileSize || (file.datasource_id ? '来自数据源' : '点击下载')}
+                      />
+                    </List.Item>
+                  );
+                }}
+              />
+            </div>
+          )}
+          
           {editingMessageId === msg.id ? (
             <div className="message-edit-area">
               <TextArea
@@ -1139,23 +1331,143 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
 
       <div className="chat-input-area">
         <div className="chat-input-wrapper">
-          <TextArea
-            ref={inputRef}
-            value={inputValue}
-            onChange={e => setInputValue(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="输入消息... (Shift+Enter换行，Enter发送)"
-            autoSize={{ minRows: 5, maxRows: 12 }}
-            className={`chat-input ${theme === 'dark' ? 'dark' : 'light'}`}
-          />
+          <div style={{ position: 'relative' }}>
+            {/* 已选择的文件显示（内联方式） */}
+            {selectedFiles.length > 0 && (
+              <div style={{ marginBottom: 8, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {selectedFiles.map((file, index) => {
+                  // 计算文件大小（仅对本地文件）
+                  let fileSize = '';
+                  if (file.type === 'file_base64' && file.content) {
+                    // Base64 编码的文件大小（大约）
+                    const base64Size = file.content.length * 3 / 4;
+                    if (base64Size < 1024) {
+                      fileSize = `${base64Size.toFixed(0)} B`;
+                    } else if (base64Size < 1024 * 1024) {
+                      fileSize = `${(base64Size / 1024).toFixed(2)} KB`;
+                    } else {
+                      fileSize = `${(base64Size / (1024 * 1024)).toFixed(2)} MB`;
+                    }
+                  }
+                  
+                  return (
+                    <div
+                      key={index}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '4px 8px',
+                        borderRadius: 4,
+                        backgroundColor: theme === 'dark' ? 'rgba(102, 126, 234, 0.2)' : 'rgba(102, 126, 234, 0.1)',
+                        border: `1px solid ${theme === 'dark' ? 'rgba(102, 126, 234, 0.3)' : 'rgba(102, 126, 234, 0.2)'}`,
+                        fontSize: 12
+                      }}
+                    >
+                      {getFileIcon(file.file_name)}
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <div style={{ fontSize: 12, fontWeight: 500 }}>{file.file_name}</div>
+                        <div style={{ fontSize: 11, color: theme === 'dark' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(0, 0, 0, 0.45)' }}>
+                          {fileSize || (file.type === 'document' ? '来自数据源' : '')}
+                        </div>
+                      </div>
+                      <Button 
+                        type="text" 
+                        size="small" 
+                        danger
+                        icon={<CloseCircleOutlined />}
+                        onClick={() => handleRemoveFile(index)}
+                        style={{ marginLeft: 4 }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            
+            <TextArea
+              ref={inputRef}
+              value={inputValue}
+              onChange={e => setInputValue(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="输入消息... (Shift+Enter换行，Enter发送)"
+              autoSize={{ minRows: 5, maxRows: 12 }}
+              className={`chat-input ${theme === 'dark' ? 'dark' : 'light'}`}
+            />
+          </div>
           <div className="chat-input-inner-footer">
-            <div 
-              className={`deep-thinking-switch ${theme === 'dark' ? 'dark' : 'light'}`} 
-              onClick={() => setDeepThinking(!deepThinking)}
-            >
-              <BulbOutlined className={deepThinking ? 'bulb-active' : ''} />
-              <span>深度思考</span>
-              <Switch size="small" checked={deepThinking} onChange={setDeepThinking} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <div 
+                className={`deep-thinking-switch ${theme === 'dark' ? 'dark' : 'light'}`} 
+                onClick={() => setDeepThinking(!deepThinking)}
+              >
+                <BulbOutlined className={deepThinking ? 'bulb-active' : ''} />
+                <span>深度思考</span>
+                <Switch size="small" checked={deepThinking} onChange={setDeepThinking} />
+              </div>
+              
+              {/* 上传文件下拉菜单 */}
+              <Dropdown
+                menu={{
+                  items: [
+                    {
+                      key: 'local',
+                      label: (
+                        <div 
+                          style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: 8, 
+                            padding: '8px 16px',
+                            height: '36px',
+                            boxSizing: 'border-box'
+                          }}
+                        >
+                          <UploadOutlined />
+                          <span>上传本地文件</span>
+                        </div>
+                      ),
+                      onClick: () => {
+                        // 触发文件选择
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.multiple = true;
+                        input.onchange = (e) => {
+                          const files = (e.target as HTMLInputElement).files;
+                          if (files) {
+                            Array.from(files).forEach(file => handleLocalFileUpload(file));
+                          }
+                        };
+                        input.click();
+                      }
+                    },
+                    {
+                      key: 'datasource',
+                      label: (
+                        <div 
+                          style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: 8, 
+                            padding: '8px 16px', 
+                            height: '36px',
+                            boxSizing: 'border-box',
+                            cursor: 'pointer'
+                          }}
+                          onClick={() => setIsDataSourceModalVisible(true)}
+                        >
+                          <InboxOutlined />
+                          <span>从数据源选择文件</span>
+                        </div>
+                      )
+                    }
+                  ]
+                }}
+                trigger={['click']}
+                placement="bottomRight"
+              >
+                <Button icon={<PaperClipOutlined />} type="text" />
+              </Dropdown>
             </div>
           </div>
           <Button
@@ -1166,6 +1478,14 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           />
         </div>
       </div>
+      
+      {/* 数据源选择文件弹窗 */}
+      <DataSourceFileSelector
+        visible={isDataSourceModalVisible}
+        onCancel={() => setIsDataSourceModalVisible(false)}
+        onConfirm={handleDataSourceFileConfirm}
+        theme={theme}
+      />
 
       <Modal
         title="模型配置"

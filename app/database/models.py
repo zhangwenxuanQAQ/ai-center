@@ -322,6 +322,7 @@ class ChatMessage(SoftDeleteModel):
     messages = TextField(null=True, verbose_name="消息内容JSON")
     role = CharField(max_length=20, verbose_name="角色：user/assistant/system")
     content = TextField(verbose_name="消息内容")
+    extra_content = TextField(null=True, verbose_name="额外内容JSON，如上传的文件信息")
     reasoning_content = TextField(null=True, verbose_name="思考过程内容")
     reasoning_time = IntegerField(null=True, verbose_name="思考耗时（毫秒）")
     avatar = CharField(max_length=500, null=True, verbose_name="头像URL")

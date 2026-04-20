@@ -65,11 +65,36 @@ class ChatCoreService:
         Returns:
             Dict: OpenAI格式的用户消息
         """
-        has_image = any(item.type == 'file_base64' and item.mime_type and item.mime_type.startswith('image/') for item in query)
+        from app.services.chat.file_utils import get_file_from_datasource
+        
+        # 处理document类型的QueryItem，从数据源获取文件
+        processed_query = []
+        for item in query:
+            if item.type == 'document':
+                # 从数据源获取文件
+                content_dict = item.content if isinstance(item.content, dict) else {}
+                file_result = get_file_from_datasource(content_dict)
+                
+                if file_result.get('success'):
+                    file_data = file_result.get('data', {})
+                    # 转换为file_base64类型
+                    processed_query.append(QueryItem(
+                        type='file_base64',
+                        content=file_data.get('base64_content', ''),
+                        mime_type=file_data.get('mime_type')
+                    ))
+                else:
+                    # 获取失败，跳过该文件
+                    pass
+            else:
+                processed_query.append(item)
+        
+        # 检查是否有图片
+        has_image = any(item.type == 'file_base64' and item.mime_type and item.mime_type.startswith('image/') for item in processed_query)
         
         if has_image:
             content = []
-            for item in query:
+            for item in processed_query:
                 if item.type == 'text':
                     content.append({
                         'type': 'text',
@@ -88,7 +113,7 @@ class ChatCoreService:
                 'content': content
             }
         else:
-            text_content = ' '.join(item.content for item in query if item.type == 'text')
+            text_content = ' '.join(item.content for item in processed_query if item.type == 'text')
             return {
                 'role': 'user',
                 'content': text_content
@@ -459,13 +484,17 @@ class ChatCoreService:
             config=config
         )
         
+        from app.services.chat.file_utils import build_extra_content
+        extra_content = build_extra_content(query)
+        
         ChatMessageService.create_user_message(
             chat_id=chat_id,
             user_content=user_text,
             model_id=model_id,
             chatbot_id=chatbot_id,
             config=config,
-            message_id=message_id
+            message_id=message_id,
+            extra_content=extra_content
         )
         
         import time
@@ -857,13 +886,17 @@ class ChatCoreService:
             config=config
         )
         
+        from app.services.chat.file_utils import build_extra_content
+        extra_content = build_extra_content(query)
+        
         ChatMessageService.create_user_message(
             chat_id=chat_id,
             user_content=user_text,
             model_id=model_id,
             chatbot_id=chatbot_id,
             config=config,
-            message_id=message_id
+            message_id=message_id,
+            extra_content=extra_content
         )
         
         import time
