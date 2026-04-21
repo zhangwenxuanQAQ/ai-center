@@ -38,7 +38,7 @@ from tencentcloud.common.exception.tencent_cloud_sdk_exception import TencentClo
 from tencentcloud.lkeap.v20240522 import lkeap_client, models
 
 from common.config_utils import get_base_config
-from deepdoc.parser.pdf_parser import RAGFlowPdfParser
+from deepdoc.parser.pdf_parser import PdfParser
 
 
 class TencentCloudAPIClient:
@@ -196,7 +196,7 @@ class TencentCloudAPIClient:
             return None
 
 
-class TCADPParser(RAGFlowPdfParser):
+class TCADPParser(PdfParser):
     def __init__(self, secret_id: str = None, secret_key: str = None, region: str = "ap-guangzhou",
                  table_result_type: str = None, markdown_image_response_type: str = None):
         super().__init__()

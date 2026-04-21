@@ -220,10 +220,10 @@ requirements.txt                     # 依赖清单（已更新）
 ### 方式1：直接调用策略函数
 
 ```python
-from app.core.knowledge.rag.app.naive import chunk as naive_chunk
-from app.core.knowledge.rag.app.book import chunk as book_chunk
-from app.core.knowledge.rag.app.qa import chunk as qa_chunk
-from app.core.knowledge.rag.app.table import chunk as table_chunk
+from app.core.knowledgebase.rag.app.naive import chunk as naive_chunk
+from app.core.knowledgebase.rag.app.book import chunk as book_chunk
+from app.core.knowledgebase.rag.app.qa import chunk as qa_chunk
+from app.core.knowledgebase.rag.app.table import chunk as table_chunk
 
 # 示例1：使用Naive策略解析PDF
 with open("document.pdf", "rb") as f:
@@ -255,7 +255,7 @@ print(f"表格有 {len(result)} 行数据")
 ### 方式2：通过任务执行器（推荐）
 
 ```python
-from app.core.knowledge.rag.svr.task_executor import task_executor
+from app.core.knowledgebase.rag.svr.task_executor import task_executor
 
 # 提交不同类型的任务
 tasks = [
@@ -304,7 +304,7 @@ for task in tasks:
 ### 方式3：通过CHUNK_STRATEGIES映射表动态选择
 
 ```python
-from app.core.knowledge.rag.app import CHUNK_STRATEGIES
+from app.core.knowledgebase.rag.app import CHUNK_STRATEGIES
 
 def smart_chunk(filename, binary, file_type="auto"):
     """

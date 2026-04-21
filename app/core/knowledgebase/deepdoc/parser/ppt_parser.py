@@ -19,7 +19,7 @@ from io import BytesIO
 from pptx import Presentation
 
 
-class RAGFlowPptParser:
+class PptParser:
     def __init__(self):
         super().__init__()
         self._shape_cache = {}

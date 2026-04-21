@@ -69,7 +69,7 @@ def test_rag_tokenizer():
     print("=" * 60)
     
     try:
-        from app.core.knowledge.rag.nlp.rag_tokenizer import (
+        from app.core.knowledgebase.rag.nlp.rag_tokenizer import (
             RagTokenizer, tokenizer, tokenize, fine_grained_tokenize
         )
         
@@ -105,7 +105,7 @@ def test_nlp_module():
     print("=" * 60)
     
     try:
-        from app.core.knowledge.rag.nlp import (
+        from app.core.knowledgebase.rag.nlp import (
             naive_merge, naive_merge_with_images,
             num_tokens_from_string, is_english, is_chinese,
             concat_img
@@ -145,7 +145,7 @@ def test_utils_module():
     print("=" * 60)
     
     try:
-        from app.core.knowledge.rag.utils import (
+        from app.core.knowledgebase.rag.utils import (
             extract_embed_file,
             get_file_extension,
             is_supported_format,
@@ -191,7 +191,7 @@ def test_task_executor():
     print("=" * 60)
     
     try:
-        from app.core.knowledge.rag.svr.task_executor import (
+        from app.core.knowledgebase.rag.svr.task_executor import (
             TaskExecutor, task_executor,
             TaskStatus, TaskPriority,
             DocumentTask

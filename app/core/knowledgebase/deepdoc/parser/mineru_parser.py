@@ -34,7 +34,7 @@ import requests
 from PIL import Image
 from strenum import StrEnum
 
-from deepdoc.parser.pdf_parser import RAGFlowPdfParser
+from deepdoc.parser.pdf_parser import PdfParser
 
 LOCK_KEY_pdfplumber = "global_shared_lock_pdfplumber"
 if LOCK_KEY_pdfplumber not in sys.modules:
@@ -132,7 +132,7 @@ class MinerUParseOptions:
     table_enable: bool = True
 
 
-class MinerUParser(RAGFlowPdfParser):
+class MinerUParser(PdfParser):
     def __init__(self, mineru_path: str = "mineru", mineru_api: str = "", mineru_server_url: str = ""):
         self.mineru_api = mineru_api.rstrip("/")
         self.mineru_server_url = mineru_server_url.rstrip("/")

@@ -52,7 +52,7 @@ if LOCK_KEY_pdfplumber not in sys.modules:
     sys.modules[LOCK_KEY_pdfplumber] = threading.Lock()
 
 
-class RAGFlowPdfParser:
+class PdfParser:
     def __init__(self, **kwargs):
         """
         If you have trouble downloading HuggingFace models, -_^ this might help!!
@@ -1403,7 +1403,7 @@ class RAGFlowPdfParser:
                     self.total_page = len(self.pdf.pages)
 
         except Exception as e:
-            logging.exception(f"RAGFlowPdfParser __images__, exception: {e}")
+            logging.exception(f"PdfParser __images__, exception: {e}")
         logging.info(f"__images__ dedupe_chars cost {timer() - start}s")
 
         self.outlines = []
@@ -1623,7 +1623,7 @@ class RAGFlowPdfParser:
         for b in self.boxes:
             b["position_tag"] = self._line_tag(b, zoomin)
             b["image"] = self.crop(b["position_tag"], zoomin)
-            b["positions"] = [[pos[0][-1] + 1, *pos[1:]] for pos in RAGFlowPdfParser.extract_positions(b["position_tag"])]
+            b["positions"] = [[pos[0][-1] + 1, *pos[1:]] for pos in PdfParser.extract_positions(b["position_tag"])]
 
         insert_table_figures(tbls, "table")
         insert_table_figures(figs, "figure")
@@ -1803,7 +1803,7 @@ class PlainParser:
         raise NotImplementedError
 
 
-class VisionParser(RAGFlowPdfParser):
+class VisionParser(PdfParser):
     def __init__(self, vision_model, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.vision_model = vision_model

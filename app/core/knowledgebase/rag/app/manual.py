@@ -127,7 +127,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
 def _parse_manual_pdf(filename, binary=None, from_page=0, to_page=100000, callback=None, **kwargs):
     """解析PDF手册"""
     try:
-        from app.core.knowledge.deepdoc.parser import PdfParser
+        from app.core.knowledgebase.deepdoc.parser import PdfParser
         
         pdf_parser = PdfParser()
         sections, tables = pdf_parser(

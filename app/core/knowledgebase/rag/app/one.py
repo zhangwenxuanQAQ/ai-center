@@ -17,7 +17,7 @@ class Pdf:
     def __call__(self, filename, binary=None, from_page=0, to_page=100000, zoomin=3, callback=None):
         """解析PDF并保持原始文本顺序"""
         try:
-            from app.core.knowledge.deepdoc.parser import PdfParser
+            from app.core.knowledgebase.deepdoc.parser import PdfParser
             
             pdf_parser = PdfParser()
             
@@ -234,7 +234,7 @@ def _parse_pdf(filename, binary=None, from_page=0, to_page=100000, lang="Chinese
                 sections, tables = result[0], result[1]
                 return sections, tables, pdf_parser
         else:
-            from app.core.knowledge.deepdoc.parser import PdfParser
+            from app.core.knowledgebase.deepdoc.parser import PdfParser
             pdf_parser = PdfParser()
             sections, tables = pdf_parser(
                 filename if not binary else binary, 
@@ -290,7 +290,7 @@ def _read_text_file(filename, binary=None):
 def _parse_html(filename, binary=None):
     """解析HTML文件"""
     try:
-        from app.core.knowledge.deepdoc.parser import HtmlParser
+        from app.core.knowledgebase.deepdoc.parser import HtmlParser
         html_parser = HtmlParser()
         return html_parser(filename if not binary else binary, chunk_token_num=512)
     except Exception as e:

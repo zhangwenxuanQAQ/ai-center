@@ -20,7 +20,7 @@ import re
 from markdown import markdown
 
 
-class RAGFlowMarkdownParser:
+class MarkdownParser:
     def __init__(self, chunk_token_num=128):
         self.chunk_token_num = int(chunk_token_num)
 

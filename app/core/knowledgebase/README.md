@@ -63,7 +63,7 @@ app/core/knowledge/
 ### 基本使用
 
 ```python
-from app.core.knowledge.rag.app.naive import chunk
+from app.core.knowledgebase.rag.app.naive import chunk
 
 # 方式1：通过文件路径
 result = chunk(
@@ -96,7 +96,7 @@ for doc in result:
 ### 使用任务执行器
 
 ```python
-from app.core.knowledge.rag.svr.task_executor import (
+from app.core.knowledgebase.rag.svr.task_executor import (
     task_executor,
     create_and_execute_task,
     TaskStatus
@@ -331,7 +331,7 @@ chardet>=5.0.0
 继承 `RagTokenizer` 类：
 
 ```python
-from app.core.knowledge.rag.nlp.rag_tokenizer import RagTokenizer
+from app.core.knowledgebase.rag.nlp.rag_tokenizer import RagTokenizer
 
 class CustomTokenizer(RagTokenizer):
     def tokenize(self, text):

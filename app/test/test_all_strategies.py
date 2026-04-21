@@ -41,7 +41,7 @@ def test_all_strategies():
     print("=" * 70)
     
     try:
-        from app.core.knowledge.rag.nlp import (
+        from app.core.knowledgebase.rag.nlp import (
             rag_tokenizer, tokenize, fine_grained_tokenize,
             is_english, is_chinese, naive_merge, 
             num_tokens_from_string, tokenize_chunks
@@ -87,9 +87,9 @@ def test_all_strategies():
     
     for strategy_name, description in strategies:
         try:
-            module_path = f"app.core.knowledge.rag.app.{strategy_name}"
+            module_path = f"app.core.knowledgebase.rag.app.{strategy_name}"
             if strategy_name == 'naive':
-                from app.core.knowledge.rag.app.naive import chunk as chunk_func
+                from app.core.knowledgebase.rag.app.naive import chunk as chunk_func
             else:
                 __import__(module_path)
                 module = sys.modules[module_path]
@@ -118,7 +118,7 @@ def test_all_strategies():
     print("=" * 70)
     
     try:
-        from app.core.knowledge.rag.app import CHUNK_STRATEGIES
+        from app.core.knowledgebase.rag.app import CHUNK_STRATEGIES
         print(f"✓ CHUNK_STRATEGIES 映射表包含 {len(CHUNK_STRATEGIES)} 个策略:")
         for name in CHUNK_STRATEGIES.keys():
             status = "✓" if strategy_results.get(name, False) else "○"
@@ -134,7 +134,7 @@ def test_all_strategies():
     print("=" * 70)
     
     try:
-        from app.core.knowledge.rag.svr.task_executor import (
+        from app.core.knowledgebase.rag.svr.task_executor import (
             TaskExecutor, task_executor, TaskStatus, TaskPriority
         )
         

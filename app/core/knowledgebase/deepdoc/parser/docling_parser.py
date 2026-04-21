@@ -33,9 +33,9 @@ except Exception:
     DocumentConverter = None  
 
 try:
-    from deepdoc.parser.pdf_parser import RAGFlowPdfParser
+    from deepdoc.parser.pdf_parser import PdfParser
 except Exception:
-    class RAGFlowPdfParser:  
+    class PdfParser:  
         pass
 
 
@@ -55,7 +55,7 @@ class _BBox:
     y1: float
 
 
-class DoclingParser(RAGFlowPdfParser):
+class DoclingParser(PdfParser):
     def __init__(self):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.page_images: list[Image.Image] = []

@@ -26,7 +26,7 @@ from rag.nlp import find_codec
 ILLEGAL_CHARACTERS_RE = re.compile(r"[\000-\010]|[\013-\014]|[\016-\037]")
 
 
-class RAGFlowExcelParser:
+class ExcelParser:
     @staticmethod
     def _load_excel_to_workbook(file_like_object):
         if isinstance(file_like_object, bytes):
@@ -43,7 +43,7 @@ class RAGFlowExcelParser:
             try:
                 file_like_object.seek(0)
                 df = pd.read_csv(file_like_object, on_bad_lines='skip')
-                return RAGFlowExcelParser._dataframe_to_workbook(df)
+                return ExcelParser._dataframe_to_workbook(df)
 
             except Exception as e_csv:
                 raise Exception(f"Failed to parse CSV and convert to Excel Workbook: {e_csv}")
@@ -56,12 +56,12 @@ class RAGFlowExcelParser:
                 file_like_object.seek(0)
                 try:
                     dfs = pd.read_excel(file_like_object, sheet_name=None)
-                    return RAGFlowExcelParser._dataframe_to_workbook(dfs)
+                    return ExcelParser._dataframe_to_workbook(dfs)
                 except Exception as ex:
                     logging.info(f"pandas with default engine load error: {ex}, try calamine instead")
                     file_like_object.seek(0)
                     df = pd.read_excel(file_like_object, engine="calamine")
-                    return RAGFlowExcelParser._dataframe_to_workbook(df)
+                    return ExcelParser._dataframe_to_workbook(df)
             except Exception as e_pandas:
                 raise Exception(f"pandas.read_excel error: {e_pandas}, original openpyxl error: {e}")
 
@@ -78,9 +78,9 @@ class RAGFlowExcelParser:
     def _dataframe_to_workbook(df):
         # if contains multiple sheets use _dataframes_to_workbook
         if isinstance(df, dict) and len(df) > 1:
-            return RAGFlowExcelParser._dataframes_to_workbook(df)
+            return ExcelParser._dataframes_to_workbook(df)
 
-        df = RAGFlowExcelParser._clean_dataframe(df)
+        df = ExcelParser._clean_dataframe(df)
         wb = Workbook()
         ws = wb.active
         ws.title = "Data"
@@ -101,7 +101,7 @@ class RAGFlowExcelParser:
         wb.remove(default_sheet)
         
         for sheet_name, df in dfs.items():
-            df = RAGFlowExcelParser._clean_dataframe(df)
+            df = ExcelParser._clean_dataframe(df)
             ws = wb.create_sheet(title=sheet_name)
             for col_num, column_name in enumerate(df.columns, 1):
                 ws.cell(row=1, column=col_num, value=column_name)
@@ -200,7 +200,7 @@ class RAGFlowExcelParser:
 
     @staticmethod
     def _get_rows_limited(ws):
-        actual_rows = RAGFlowExcelParser._get_actual_row_count(ws)
+        actual_rows = ExcelParser._get_actual_row_count(ws)
         if actual_rows == 0:
             return []
         return list(ws.iter_rows(min_row=1, max_row=actual_rows))
@@ -209,7 +209,7 @@ class RAGFlowExcelParser:
         from html import escape
 
         file_like_object = BytesIO(fnm) if not isinstance(fnm, str) else fnm
-        wb = RAGFlowExcelParser._load_excel_to_workbook(file_like_object)
+        wb = ExcelParser._load_excel_to_workbook(file_like_object)
         tb_chunks = []
 
         def _fmt(v):
@@ -220,7 +220,7 @@ class RAGFlowExcelParser:
         for sheetname in wb.sheetnames:
             ws = wb[sheetname]
             try:
-                rows = RAGFlowExcelParser._get_rows_limited(ws)
+                rows = ExcelParser._get_rows_limited(ws)
             except Exception as e:
                 logging.warning(f"Skip sheet '{sheetname}' due to rows access error: {e}")
                 continue
@@ -266,13 +266,13 @@ class RAGFlowExcelParser:
 
     def __call__(self, fnm):
         file_like_object = BytesIO(fnm) if not isinstance(fnm, str) else fnm
-        wb = RAGFlowExcelParser._load_excel_to_workbook(file_like_object)
+        wb = ExcelParser._load_excel_to_workbook(file_like_object)
 
         res = []
         for sheetname in wb.sheetnames:
             ws = wb[sheetname]
             try:
-                rows = RAGFlowExcelParser._get_rows_limited(ws)
+                rows = ExcelParser._get_rows_limited(ws)
             except Exception as e:
                 logging.warning(f"Skip sheet '{sheetname}' due to rows access error: {e}")
                 continue
@@ -298,13 +298,13 @@ class RAGFlowExcelParser:
     @staticmethod
     def row_number(fnm, binary):
         if fnm.split(".")[-1].lower().find("xls") >= 0:
-            wb = RAGFlowExcelParser._load_excel_to_workbook(BytesIO(binary))
+            wb = ExcelParser._load_excel_to_workbook(BytesIO(binary))
             total = 0
 
             for sheetname in wb.sheetnames:
                 try:
                     ws = wb[sheetname]
-                    total += RAGFlowExcelParser._get_actual_row_count(ws)
+                    total += ExcelParser._get_actual_row_count(ws)
                 except Exception as e:
                     logging.warning(f"Skip sheet '{sheetname}' due to rows access error: {e}")
                     continue
@@ -317,5 +317,5 @@ class RAGFlowExcelParser:
 
 
 if __name__ == "__main__":
-    psr = RAGFlowExcelParser()
+    psr = ExcelParser()
     psr(sys.argv[1])

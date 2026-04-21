@@ -36,7 +36,7 @@ BLOCK_TAGS = [
 TITLE_TAGS = {"h1": "#", "h2": "##", "h3": "###", "h4": "#####", "h5": "#####", "h6": "######"}
 
 
-class RAGFlowHtmlParser:
+class HtmlParser:
     def __call__(self, fnm, binary=None, chunk_token_num=512):
         if binary:
             encoding = find_codec(binary)

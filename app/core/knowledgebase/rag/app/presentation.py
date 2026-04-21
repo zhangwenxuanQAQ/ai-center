@@ -29,7 +29,7 @@ class Pdf:
         每页作为一个chunk，并提取页面缩略图
         """
         try:
-            from app.core.knowledge.deepdoc.parser import PdfParser
+            from app.core.knowledgebase.deepdoc.parser import PdfParser
             
             pdf_parser = PdfParser()
             

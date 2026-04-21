@@ -385,7 +385,7 @@ def _parse_docx(filename, binary=None):
 
 def _parse_pdf(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", callback=None, **kwargs):
     """解析PDF文件"""
-    from app.core.knowledge.deepdoc.parser import PdfParser
+    from app.core.knowledgebase.deepdoc.parser import PdfParser
     
     try:
         pdf_parser = PdfParser()
@@ -403,7 +403,7 @@ def _parse_pdf(filename, binary=None, from_page=0, to_page=100000, lang="Chinese
 
 def _parse_excel(binary, filename):
     """解析Excel文件"""
-    from app.core.knowledge.deepdoc.parser import ExcelParser
+    from app.core.knowledgebase.deepdoc.parser import ExcelParser
     
     try:
         excel_parser = ExcelParser()
@@ -423,7 +423,7 @@ def _parse_excel(binary, filename):
 
 def _parse_txt(binary, filename, parser_config):
     """解析TXT文件"""
-    from app.core.knowledge.deepdoc.parser import TxtParser
+    from app.core.knowledgebase.deepdoc.parser import TxtParser
     
     try:
         txt_parser = TxtParser()
@@ -440,7 +440,7 @@ def _parse_txt(binary, filename, parser_config):
 
 def _parse_html(filename, binary, chunk_token_num):
     """解析HTML文件"""
-    from app.core.knowledge.deepdoc.parser import HtmlParser
+    from app.core.knowledgebase.deepdoc.parser import HtmlParser
     
     try:
         html_parser = HtmlParser()
@@ -453,7 +453,7 @@ def _parse_html(filename, binary, chunk_token_num):
 
 def _parse_json(binary, chunk_token_num):
     """解析JSON文件"""
-    from app.core.knowledge.deepdoc.parser import JsonParser
+    from app.core.knowledgebase.deepdoc.parser import JsonParser
     
     try:
         json_parser = JsonParser(chunk_token_num)
@@ -471,7 +471,7 @@ class _Markdown:
         self.chunk_token_num = chunk_token_num
         
     def __call__(self, filename, binary=None, separate_tables=True, delimiter="\n", return_section_images=False):
-        from app.core.knowledge.deepdoc.parser import MarkdownParser, MarkdownElementExtractor
+        from app.core.knowledgebase.deepdoc.parser import MarkdownParser, MarkdownElementExtractor
         from ..nlp import find_codec, concat_img
         
         try:

@@ -17,7 +17,7 @@ def test_redis_scheduler():
     print("\n1  模块导入测试")
     try:
         from app.database.redis_utils import redis_utils, REDIS_AVAILABLE
-        from app.core.knowledge.server.task_executor import (
+        from app.core.knowledgebase.server.task_executor import (
             TaskExecutor, task_executor, TaskStatus, DocumentTask
         )
         print("  成功导入Redis和任务调度器模块")
@@ -86,7 +86,7 @@ def test_redis_scheduler():
     # 测试4: 任务状态枚举
     print("\n4  任务状态枚举测试")
     try:
-        from app.core.knowledge.server.task_executor import TaskStatus
+        from app.core.knowledgebase.server.task_executor import TaskStatus
         
         statuses = [TaskStatus.PENDING, TaskStatus.RUNNING, 
                      TaskStatus.COMPLETED, TaskStatus.FAILED, 
@@ -103,7 +103,7 @@ def test_redis_scheduler():
     # 测试5: DocumentTask类
     print("\n5  DocumentTask类测试")
     try:
-        from app.core.knowledge.server.task_executor import DocumentTask
+        from app.core.knowledgebase.server.task_executor import DocumentTask
         
         task = DocumentTask(
             task_id="test_task_001",
@@ -125,7 +125,7 @@ def test_redis_scheduler():
     # 测试6: 任务执行器属性
     print("\n6  任务执行器属性测试")
     try:
-        from app.core.knowledge.server.task_executor import TaskExecutor
+        from app.core.knowledgebase.server.task_executor import TaskExecutor
         
         executor = TaskExecutor()
         
@@ -142,7 +142,7 @@ def test_redis_scheduler():
     # 测试7: 方法完整性
     print("\n7  方法完整性测试")
     try:
-        from app.core.knowledge.server.task_executor import TaskExecutor
+        from app.core.knowledgebase.server.task_executor import TaskExecutor
         
         methods = [
             'start', 'stop', 'submit_task', 
@@ -174,8 +174,8 @@ def test_redis_scheduler():
     # 测试8: 单例模式
     print("\n8  单例模式测试")
     try:
-        from app.core.knowledge.server.task_executor import task_executor as instance1
-        from app.core.knowledge.server.task_executor import task_executor as instance2
+        from app.core.knowledgebase.server.task_executor import task_executor as instance1
+        from app.core.knowledgebase.server.task_executor import task_executor as instance2
         
         assert instance1 is instance2, "单例模式失败：两个实例不相同"
         print("  单例模式验证通过")

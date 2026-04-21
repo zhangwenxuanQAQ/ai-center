@@ -21,7 +21,7 @@ from typing import Optional, Dict, Any, List
 from enum import Enum
 
 from app.database.redis_utils import redis_utils
-from app.core.knowledge.rag.app import CHUNK_STRATEGIES
+from app.core.knowledgebase.rag.app import CHUNK_STRATEGIES
 
 logger = logging.getLogger(__name__)
 

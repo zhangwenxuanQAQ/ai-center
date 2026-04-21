@@ -166,7 +166,7 @@ def _add_content(msg, content_type, text_list, html_list):
 def _parse_plain_text(text):
     """解析纯文本为sections"""
     try:
-        from app.core.knowledge.deepdoc.parser import TxtParser
+        from app.core.knowledgebase.deepdoc.parser import TxtParser
         return TxtParser.parser_txt(text)
     except Exception:
         return [(line, "") for line in text.split('\n') if line.strip()]
@@ -175,7 +175,7 @@ def _parse_plain_text(text):
 def _parse_html_text(html_text, chunk_token_num=512):
     """解析HTML文本"""
     try:
-        from app.core.knowledge.deepdoc.parser import HtmlParser
+        from app.core.knowledgebase.deepdoc.parser import HtmlParser
         return HtmlParser.parser_txt(html_text, chunk_token_num=chunk_token_num)
     except Exception:
         # 简单的HTML标签清理

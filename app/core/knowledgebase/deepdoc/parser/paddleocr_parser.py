@@ -30,10 +30,10 @@ import requests
 from PIL import Image
 
 try:
-    from deepdoc.parser.pdf_parser import RAGFlowPdfParser
+    from deepdoc.parser.pdf_parser import PdfParser
 except Exception:
 
-    class RAGFlowPdfParser:
+    class PdfParser:
         pass
 
 
@@ -147,7 +147,7 @@ class PaddleOCRConfig:
         return cls.from_dict(kwargs)
 
 
-class PaddleOCRParser(RAGFlowPdfParser):
+class PaddleOCRParser(PdfParser):
     """Parser for PDF documents using PaddleOCR API."""
 
     _ZOOMIN = 2

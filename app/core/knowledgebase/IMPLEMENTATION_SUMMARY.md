@@ -182,7 +182,7 @@ app/
 
 ### 基础用法
 ```python
-from app.core.knowledge.rag.app.naive import chunk
+from app.core.knowledgebase.rag.app.naive import chunk
 
 # 切片PDF文件
 result = chunk(
@@ -198,7 +198,7 @@ for doc in result[:3]:
 
 ### 使用任务执行器
 ```python
-from app.core.knowledge.rag.svr.task_executor import task_executor
+from app.core.knowledgebase.rag.svr.task_executor import task_executor
 
 # 提交任务
 task = task_executor.submit_task(

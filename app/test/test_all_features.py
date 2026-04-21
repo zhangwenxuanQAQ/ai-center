@@ -125,7 +125,7 @@ def test_all_features():
     print("=" * 80)
     
     try:
-        from app.core.knowledge.rag.nlp import (
+        from app.core.knowledgebase.rag.nlp import (
             rag_tokenizer, tokenize, fine_grained_tokenize,
             is_english, is_chinese, naive_merge, num_tokens_from_string
         )
@@ -157,7 +157,7 @@ def test_all_features():
     print("=" * 80)
     
     try:
-        from app.core.knowledge.rag.app import CHUNK_STRATEGIES
+        from app.core.knowledgebase.rag.app import CHUNK_STRATEGIES
         
         strategies = [
             "naive", "book", "paper", "laws", "manual", "qa",
@@ -191,7 +191,7 @@ def test_all_features():
     print("=" * 80)
     
     try:
-        from app.core.knowledge.rag.svr.task_executor import (
+        from app.core.knowledgebase.rag.svr.task_executor import (
             TaskExecutor, task_executor, TaskStatus, TaskPriority
         )
         
@@ -228,25 +228,25 @@ def test_all_features():
         # 测试解析器导入
         parsers = []
         try:
-            from app.core.knowledge.deepdoc.parser import PdfParser
+            from app.core.knowledgebase.deepdoc.parser import PdfParser
             parsers.append('PdfParser')
         except:
             pass
         
         try:
-            from app.core.knowledge.deepdoc.parser import DocxParser
+            from app.core.knowledgebase.deepdoc.parser import DocxParser
             parsers.append('DocxParser')
         except:
             pass
         
         try:
-            from app.core.knowledge.deepdoc.parser import ExcelParser
+            from app.core.knowledgebase.deepdoc.parser import ExcelParser
             parsers.append('ExcelParser')
         except:
             pass
         
         try:
-            from app.core.knowledge.deepdoc.parser import TxtParser
+            from app.core.knowledgebase.deepdoc.parser import TxtParser
             parsers.append('TxtParser')
         except:
             pass

@@ -67,11 +67,11 @@ redis:
 ```bash
 # Windows
 set MAX_CONCURRENT_TASKS=10
-python -m app.core.knowledge.server.task_executor
+python -m app.core.knowledgebase.server.task_executor
 
 # Linux/Mac
 export MAX_CONCURRENT_TASKS=10
-python -m app.core.knowledge.server.task_executor
+python -m app.core.knowledgebase.server.task_executor
 ```
 
 或者在代码中配置（修改 `task_executor.py`）：
@@ -118,13 +118,13 @@ MAX_CONCURRENT_TASKS = int(os.environ.get('MAX_CONCURRENT_TASKS', '5'))
 #### 方式 A：独立进程（推荐）
 
 ```bash
-python -m app.core.knowledge.server.task_executor
+python -m app.core.knowledgebase.server.task_executor
 ```
 
 #### 方式 B：在代码中启动
 
 ```python
-from app.core.knowledge.server.task_executor import task_executor
+from app.core.knowledgebase.server.task_executor import task_executor
 
 # 启动调度器
 task_executor.start()
@@ -143,7 +143,7 @@ except KeyboardInterrupt:
 ### 2. 提交任务
 
 ```python
-from app.core.knowledge.server.task_executor import task_executor
+from app.core.knowledgebase.server.task_executor import task_executor
 
 # 提交文档切片任务
 task = task_executor.submit_task(
@@ -166,7 +166,7 @@ print(f"任务已提交: {task.task_id}")
 ### 3. 查询任务状态
 
 ```python
-from app.core.knowledge.server.task_executor import task_executor
+from app.core.knowledgebase.server.task_executor import task_executor
 
 # 获取任务状态
 task = task_executor.get_task_status("my_task_001")
@@ -187,7 +187,7 @@ if task:
 ### 4. 取消任务
 
 ```python
-from app.core.knowledge.server.task_executor import task_executor
+from app.core.knowledgebase.server.task_executor import task_executor
 
 # 取消任务
 success = task_executor.cancel_task("my_task_001")
@@ -199,7 +199,7 @@ print(f"任务取消: {success}")
 ### 5. 清理任务
 
 ```python
-from app.core.knowledge.server.task_executor import task_executor
+from app.core.knowledgebase.server.task_executor import task_executor
 
 # 清理任务（从内存和Redis中删除）
 task_executor.cleanup_task("my_task_001")
@@ -283,7 +283,7 @@ if msg:
 
 ```python
 import time
-from app.core.knowledge.server.task_executor import (
+from app.core.knowledgebase.server.task_executor import (
     task_executor, TaskStatus
 )
 

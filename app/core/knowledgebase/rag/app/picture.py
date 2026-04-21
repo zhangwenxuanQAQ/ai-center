@@ -31,7 +31,7 @@ def get_ocr():
     global _ocr_instance
     if _ocr_instance is None:
         try:
-            from app.core.knowledge.deepdoc.vision.ocr import OCR
+            from app.core.knowledgebase.deepdoc.vision.ocr import OCR
             _ocr_instance = OCR()
         except ImportError:
             logger.warning("OCR模块不可用，将使用简单的文本提取")
