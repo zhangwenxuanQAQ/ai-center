@@ -108,7 +108,7 @@ def get_chunk_method_for_file(file_name: str) -> str:
     return get_chunk_method_by_file_type(file_type, file_name)
 
 
-def build_file_content_text(file_name: str, file_size: Optional[int], extracted_text: str) -> str:
+def build_file_content_text(file_name: str, file_size: Optional[int], extracted_text: str, index: int = 1) -> str:
     """
     构建文件内容文本，按照指定格式
 
@@ -116,14 +116,24 @@ def build_file_content_text(file_name: str, file_size: Optional[int], extracted_
         file_name: 文件名
         file_size: 文件大小（字节）
         extracted_text: 提取的文本内容
+        index: 文件索引，用于多个文件时区分
 
     Returns:
         str: 格式化后的文件内容文本
     """
-    parts = [f"文件名：{file_name}"]
+    if index == 1:
+        name_label = "文件名"
+        size_label = "文件大小"
+        content_label = "文件内容"
+    else:
+        name_label = f"文件名{index}"
+        size_label = f"文件{index}大小"
+        content_label = f"文件{index}内容"
+    
+    parts = [f"【{name_label}】：{file_name}"]
     if file_size is not None:
-        parts.append(f"文件大小：{file_size}")
-    parts.append(f"文件内容：{extracted_text}")
+        parts.append(f"【{size_label}】：{file_size}（字节）")
+    parts.append(f"【{content_label}】：{extracted_text}")
     return "\n".join(parts)
 
 
@@ -144,6 +154,7 @@ def build_user_prompt_with_documents(query: List[QueryItem], original_text: str)
     from app.services.chat.file_utils import get_file_from_datasource
 
     document_texts = []
+    file_index = 1
 
     for item in query:
         if item.type == 'file_base64':
@@ -161,8 +172,10 @@ def build_user_prompt_with_documents(query: List[QueryItem], original_text: str)
             extracted_text = extract_text_from_file(file_name, base64_content, chunk_method)
 
             if extracted_text:
-                file_text = build_file_content_text(file_name, file_size, extracted_text)
-                document_texts.append(file_text)
+                file_text = build_file_content_text(file_name, file_size, extracted_text, file_index)
+                # 每个文件内容用 ``` 包裹
+                document_texts.append(f"```\n{file_text}\n```")
+                file_index += 1
             else:
                 logger.warning(f"文件内容提取为空: {file_name}")
 
@@ -194,15 +207,18 @@ def build_user_prompt_with_documents(query: List[QueryItem], original_text: str)
             extracted_text = extract_text_from_file(file_name, base64_content, chunk_method)
 
             if extracted_text:
-                file_text = build_file_content_text(file_name, file_size, extracted_text)
-                document_texts.append(file_text)
+                file_text = build_file_content_text(file_name, file_size, extracted_text, file_index)
+                # 每个文件内容用 ``` 包裹
+                document_texts.append(f"```\n{file_text}\n```")
+                file_index += 1
             else:
                 logger.warning(f"文件内容提取为空: {file_name}")
 
     if not document_texts:
         return original_text
 
-    file_section = "\n\n".join(document_texts)
+    # 构建完整的文件部分
+    file_section = "上传的文件信息如下：\n\n" + "\n\n".join(document_texts)
 
     if original_text.strip():
         return f"{file_section}\n\n{original_text.strip()}"

@@ -149,7 +149,7 @@ def _process_book_sections(sections, doc, eng, parser_config):
     
     chunks = []
     chunk_token_num = int(parser_config.get("chunk_token_num", 512))
-    delimiter = parser_config.get("delimiter", "\n。；！？")
+    delimiter = parser_config.get("delimiter", "\n")
     
     for section in sections:
         if isinstance(section, list):
@@ -176,7 +176,7 @@ def _process_book_sections(sections, doc, eng, parser_config):
     return res
 
 
-def _book_naive_merge(text, chunk_token_num=512, delimiter="\n。；！？"):
+def _book_naive_merge(text, chunk_token_num=512, delimiter="\n"):
     """
     书籍专用文本合并算法
     

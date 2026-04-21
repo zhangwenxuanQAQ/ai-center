@@ -114,7 +114,7 @@ def concat_img(img1, img2):
         return image
 
 
-def naive_merge(sections, chunk_token_num=128, delimiter="\n。；！？", overlapped_percent=0):
+def naive_merge(sections, chunk_token_num=128, delimiter="\n", overlapped_percent=0):
     """
     简单文本合并，将切片按token数合并成chunk
     
@@ -186,7 +186,7 @@ def naive_merge(sections, chunk_token_num=128, delimiter="\n。；！？", overl
     return cks
 
 
-def naive_merge_with_images(texts, images, chunk_token_num=128, delimiter="\n。；！？", overlapped_percent=0):
+def naive_merge_with_images(texts, images, chunk_token_num=128, delimiter="\n", overlapped_percent=0):
     """
     带图片的简单文本合并
     

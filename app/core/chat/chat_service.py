@@ -16,6 +16,8 @@ from app.services.chat.service import ChatService, ChatMessageService
 from app.core.llm_model.factory import LLMFactory
 from app.core.llm_model.utils.tool_util import process_tool_calls
 from app.core.exceptions import ResourceNotFoundError
+from app.core.knowledgebase.utils.file_utils import filename_type
+from app.constants.knowledgebase_document_constants import FileType
 
 
 def _load_mcp_tool_util():
@@ -66,6 +68,7 @@ class ChatCoreService:
             Dict: OpenAI格式的用户消息
         """
         from app.services.chat.file_utils import get_file_from_datasource
+        from app.core.prompt.utils.user_prompt_builder import build_user_prompt_with_documents
         
         # 处理document类型的QueryItem，从数据源获取文件
         processed_query = []
@@ -77,11 +80,13 @@ class ChatCoreService:
                 
                 if file_result.get('success'):
                     file_data = file_result.get('data', {})
-                    # 转换为file_base64类型
+                    # 转换为file_base64类型，保留file_name和file_size
                     processed_query.append(QueryItem(
                         type='file_base64',
                         content=file_data.get('base64_content', ''),
-                        mime_type=file_data.get('mime_type')
+                        mime_type=file_data.get('mime_type'),
+                        file_name=content_dict.get('file_name'),
+                        file_size=content_dict.get('file_size') or file_data.get('file_size')
                     ))
                 else:
                     # 获取失败，跳过该文件
@@ -91,6 +96,15 @@ class ChatCoreService:
         
         # 检查是否有图片
         has_image = any(item.type == 'file_base64' and item.mime_type and item.mime_type.startswith('image/') for item in processed_query)
+        
+        # 检查是否有需要文本提取的文件（非图片、非音频）
+        needs_text_extraction = False
+        for item in processed_query:
+            if item.type == 'file_base64' and item.file_name:
+                file_type = filename_type(item.file_name)
+                if file_type not in (FileType.VISUAL, FileType.AURAL):
+                    needs_text_extraction = True
+                    break
         
         if has_image:
             content = []
@@ -113,11 +127,20 @@ class ChatCoreService:
                 'content': content
             }
         else:
-            text_content = ' '.join(item.content for item in processed_query if item.type == 'text')
-            return {
-                'role': 'user',
-                'content': text_content
-            }
+            # 如果有需要文本提取的文件，提取文本并拼接到用户提示词中
+            if needs_text_extraction:
+                original_text = ' '.join(item.content for item in processed_query if item.type == 'text')
+                document_text = build_user_prompt_with_documents(processed_query, original_text)
+                return {
+                    'role': 'user',
+                    'content': document_text
+                }
+            else:
+                text_content = ' '.join(item.content for item in processed_query if item.type == 'text')
+                return {
+                    'role': 'user',
+                    'content': text_content
+                }
     
     @staticmethod
     def get_model_config(model_id: str) -> Tuple[Dict[str, Any], str]:
@@ -728,11 +751,17 @@ class ChatCoreService:
                 )
 
                 chat_messages = ChatMessageService.get_messages_by_chat(chat_id)
-                system_message = messages[0] if messages else None
-                updated_messages = [{"role": msg.role, "content": msg.content , "reasoning_content": msg.reasoning_content , "message_id": msg.message_id} for msg in chat_messages.items]
-                if system_message:
-                    updated_messages.insert(0, system_message)
-                updated_messages.append(assistant_message_dict)
+                updated_messages = []
+                for i in range(len(messages)):
+                    if messages[i]['role'] != 'system':
+                        messages[i]['message_id'] = chat_messages.items[i].message_id
+                        messages[i]['reasoning_content'] = chat_messages.items[i].reasoning_content
+                    updated_messages.append(messages[i])
+                # updated_messages = [{"role": msg.role, "content": msg.content , "reasoning_content": msg.reasoning_content , "message_id": msg.message_id} for msg in chat_messages.items if not msg.role != 'system']
+                # system_message = messages[0] if messages else None
+                # if system_message:
+                #     updated_messages.insert(0, system_message)
+                # updated_messages.append(assistant_message_dict)
                 ChatService.update_messages(chat_id, updated_messages)
     
     @staticmethod
@@ -1035,11 +1064,17 @@ class ChatCoreService:
         )
 
         chat_messages = ChatMessageService.get_messages_by_chat(chat_id)
-        system_message = messages[0] if messages else None
-        updated_messages = [{"role": msg.role, "content": msg.content , "reasoning_content": msg.reasoning_content , "message_id": msg.message_id} for msg in chat_messages.items]
-        if system_message:
-            updated_messages.insert(0, system_message)
-        updated_messages.append(assistant_message_dict)
+        updated_messages = []
+        for i in range(len(messages)):
+            if messages[i]['role'] != 'system':
+                messages[i]['message_id'] = chat_messages.items[i].message_id
+                messages[i]['reasoning_content'] = chat_messages.items[i].reasoning_content
+            updated_messages.append(messages[i])
+        # updated_messages = [{"role": msg.role, "content": msg.content , "reasoning_content": msg.reasoning_content , "message_id": msg.message_id} for msg in chat_messages.items if not msg.role != 'system']
+        # system_message = messages[0] if messages else None
+        # if system_message:
+        #     updated_messages.insert(0, system_message)
+        # updated_messages.append(assistant_message_dict)
         ChatService.update_messages(chat_id, updated_messages)
 
         return {

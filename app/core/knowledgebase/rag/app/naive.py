@@ -64,7 +64,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
     is_eng = lang.lower() == "english"
     parser_config = kwargs.get("parser_config", {
         "chunk_token_num": 512,
-        "delimiter": "\n!?。；！？",
+        "delimiter": "\n",
         "layout_recognize": "DeepDOC",
         "analyze_hyperlink": True,
     })
@@ -139,15 +139,22 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
         chunks, images = _naive_merge_docx(
             sections, 
             int(parser_config.get("chunk_token_num", 128)), 
-            parser_config.get("delimiter", "\n!?。；！？"),
+            parser_config.get("delimiter", "\n"),
             table_context_size, 
             image_context_size
         )
 
+        # 将字典列表转换为tokenize_chunks_with_images期望的格式
+        text_chunks = []
+        image_list = []
+        for ck in chunks:
+            text_chunks.append(ck["text"])
+            image_list.append(ck["image"])
+
         callback(0.8, "DOCX解析完成")
         st = timer()
 
-        res.extend(tokenize_chunks_with_images(chunks, doc, is_eng, images, child_delimiters_pattern=child_deli))
+        res.extend(tokenize_chunks_with_images(text_chunks, doc, is_eng, image_list, child_delimiters_pattern=child_deli))
         logger.info(f"naive_merge({filename}): {timer() - st:.2f}s")
         res.extend(embed_res)
         res.extend(url_res)
@@ -206,7 +213,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
             filename,
             binary,
             separate_tables=False,
-            delimiter=parser_config.get("delimiter", "\n!?;。；！？"),
+            delimiter=parser_config.get("delimiter", "\n"),
             return_section_images=True,
         )
         is_markdown = True
@@ -292,7 +299,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
                 sections, 
                 section_images, 
                 int(parser_config.get("chunk_token_num", 128)), 
-                parser_config.get("delimiter", "\n!?。；！？"), 
+                parser_config.get("delimiter", "\n"), 
                 overlapped_percent
             )
             res.extend(tokenize_chunks_with_images(chunks, doc, is_eng, images, child_delimiters_pattern=child_deli))
@@ -300,7 +307,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
             chunks = naive_merge(
                 sections, 
                 int(parser_config.get("chunk_token_num", 128)), 
-                parser_config.get("delimiter", "\n!?。；！？"), 
+                parser_config.get("delimiter", "\n"), 
                 overlapped_percent
             )
             res.extend(tokenize_chunks(chunks, doc, is_eng, pdf_parser, child_delimiters_pattern=child_deli))
@@ -430,7 +437,7 @@ def _parse_txt(binary, filename, parser_config):
         sections = txt_parser(
             binary if binary else filename, 
             parser_config.get("chunk_token_num", 128),
-            parser_config.get("delimiter", "\n!?;。；！？")
+            parser_config.get("delimiter", "\n")
         )
         return sections
     except Exception as e:
@@ -527,7 +534,7 @@ class _Markdown:
         return remainder, tables
 
 
-def _naive_merge_docx(sections, chunk_token_num=128, delimiter="\n。；！？", table_context_size=0, image_context_size=0):
+def _naive_merge_docx(sections, chunk_token_num=128, delimiter="\n", table_context_size=0, image_context_size=0):
     """DOCX文件的naive合并"""
     if not sections:
         return [], []

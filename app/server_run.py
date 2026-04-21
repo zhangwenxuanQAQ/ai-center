@@ -772,6 +772,110 @@ try:
     except Exception as e:
         print(f"  统一表COLLATE失败: {e}")
 
+    # 修改messages字段类型为LONGTEXT
+    print("\n修改messages字段类型为LONGTEXT...")
+    try:
+        # 检查并修改chat表的messages字段
+        cursor = db.execute_sql("""
+            SELECT COUNT(*)
+            FROM information_schema.columns
+            WHERE table_name = 'chat'
+            AND column_name = 'messages'
+            AND data_type = 'text'
+        """)
+        result = cursor.fetchone()
+
+        if result[0] > 0:
+            db.execute_sql("ALTER TABLE chat MODIFY COLUMN messages LONGTEXT")
+            print("  字段 chat.messages 已成功修改为 LONGTEXT 类型")
+        else:
+            print("  字段 chat.messages 不是 TEXT 类型或已修改，跳过")
+
+        # 检查并修改chat_message表的messages字段
+        cursor = db.execute_sql("""
+            SELECT COUNT(*)
+            FROM information_schema.columns
+            WHERE table_name = 'chat_message'
+            AND column_name = 'messages'
+            AND data_type = 'text'
+        """)
+        result = cursor.fetchone()
+
+        if result[0] > 0:
+            db.execute_sql("ALTER TABLE chat_message MODIFY COLUMN messages LONGTEXT")
+            print("  字段 chat_message.messages 已成功修改为 LONGTEXT 类型")
+        else:
+            print("  字段 chat_message.messages 不是 TEXT 类型或已修改，跳过")
+
+        # 检查并修改chat_message表的content字段
+        cursor = db.execute_sql("""
+            SELECT COUNT(*)
+            FROM information_schema.columns
+            WHERE table_name = 'chat_message'
+            AND column_name = 'content'
+            AND data_type = 'text'
+        """)
+        result = cursor.fetchone()
+
+        if result[0] > 0:
+            db.execute_sql("ALTER TABLE chat_message MODIFY COLUMN content LONGTEXT")
+            print("  字段 chat_message.content 已成功修改为 LONGTEXT 类型")
+        else:
+            print("  字段 chat_message.content 不是 TEXT 类型或已修改，跳过")
+
+        # 检查并修改chat_message表的extra_content字段
+        # 强制修改为 LONGTEXT，不管当前是什么类型
+        print("  强制修改chat_message表的extra_content字段...")
+        try:
+            # 先查看当前字段类型
+            cursor = db.execute_sql("""
+                SELECT column_name, data_type, column_type
+                FROM information_schema.columns
+                WHERE table_name = 'chat_message'
+                AND column_name = 'extra_content'
+            """)
+            result = cursor.fetchone()
+            
+            if result:
+                print(f"  当前字段类型: {result[1]}, {result[2]}")
+                
+                # 强制修改为 LONGTEXT
+                db.execute_sql("ALTER TABLE chat_message MODIFY COLUMN extra_content LONGTEXT")
+                print("  字段 extra_content 已成功修改为 LONGTEXT 类型")
+                
+                # 再次验证
+                cursor = db.execute_sql("""
+                    SELECT column_name, data_type, column_type
+                    FROM information_schema.columns
+                    WHERE table_name = 'chat_message'
+                    AND column_name = 'extra_content'
+                """)
+                result = cursor.fetchone()
+                print(f"  修改后字段类型: {result[1]}, {result[2]}")
+            else:
+                print("  字段 extra_content 不存在")
+        except Exception as e:
+            print(f"  修改extra_content字段失败: {e}")
+
+        # 检查并修改chat_message表的reasoning_content字段
+        cursor = db.execute_sql("""
+            SELECT COUNT(*)
+            FROM information_schema.columns
+            WHERE table_name = 'chat_message'
+            AND column_name = 'reasoning_content'
+            AND data_type = 'text'
+        """)
+        result = cursor.fetchone()
+
+        if result[0] > 0:
+            db.execute_sql("ALTER TABLE chat_message MODIFY COLUMN reasoning_content LONGTEXT")
+            print("  字段 chat_message.reasoning_content 已成功修改为 LONGTEXT 类型")
+        else:
+            print("  字段 chat_message.reasoning_content 不是 TEXT 类型或已修改，跳过")
+
+    except Exception as e:
+        print(f"  修改messages字段类型失败: {e}")
+
     print("\n数据库迁移完成")
 except Exception as e:
     print(f"数据库迁移失败: {e}")
