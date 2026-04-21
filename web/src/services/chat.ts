@@ -37,16 +37,18 @@ export interface QueryItem {
   content: string | Record<string, any>;
   mime_type?: string;
   file_name?: string;
+  file_size?: number;
 }
 
 export interface FileInfo {
   type: 'local' | 'datasource';
   file_name: string;
   mime_type?: string;
+  file_size?: number;
   base64_content?: string;
   datasource_id?: string;
   bucket?: string;
-  object_name?: string;
+  location?: string;
 }
 
 export const chatService = {
@@ -366,7 +368,7 @@ export const chatService = {
    * @param base64Content - 本地文件的base64内容（local类型时必填）
    * @param datasourceId - 数据源ID（datasource类型时必填）
    * @param bucket - 桶名称（datasource类型时可选）
-   * @param objectName - 文件路径（datasource类型时必填）
+   * @param location - 文件路径（datasource类型时必填）
    */
   downloadFile: async (
     fileType: 'local' | 'datasource',
@@ -374,29 +376,46 @@ export const chatService = {
     base64Content?: string,
     datasourceId?: string,
     bucket?: string,
-    objectName?: string
+    location?: string
   ): Promise<void> => {
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-    let url = `${API_BASE_URL}/aicenter/v1/chat/download_file?file_type=${fileType}&file_name=${encodeURIComponent(fileName)}`;
     
-    if (fileType === 'local' && base64Content) {
-      url += `&base64_content=${encodeURIComponent(base64Content)}`;
-    } else if (fileType === 'datasource') {
-      if (datasourceId) {
-        url += `&datasource_id=${datasourceId}`;
-      }
-      if (bucket) {
-        url += `&bucket=${encodeURIComponent(bucket)}`;
-      }
-      if (objectName) {
-        url += `&object_name=${encodeURIComponent(objectName)}`;
-      }
-    }
-
     try {
-      const response = await fetch(url, {
-        method: 'POST'
-      });
+      let response;
+      
+      if (fileType === 'local' && base64Content) {
+        // 对于本地文件，使用POST请求的body发送base64内容
+        response = await fetch(`${API_BASE_URL}/aicenter/v1/chat/download_file`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            file_type: fileType,
+            file_name: fileName,
+            base64_content: base64Content
+          })
+        });
+      } else if (fileType === 'datasource') {
+        // 对于数据源文件，使用URL查询参数
+        let url = `${API_BASE_URL}/aicenter/v1/chat/download_file?file_type=${fileType}&file_name=${encodeURIComponent(fileName)}`;
+        
+        if (datasourceId) {
+          url += `&datasource_id=${datasourceId}`;
+        }
+        if (bucket) {
+          url += `&bucket=${encodeURIComponent(bucket)}`;
+        }
+        if (location) {
+          url += `&location=${encodeURIComponent(location)}`;
+        }
+        
+        response = await fetch(url, {
+          method: 'POST'
+        });
+      } else {
+        throw new Error('无效的文件类型或参数');
+      }
 
       if (!response.ok) {
         throw new Error('下载文件失败');

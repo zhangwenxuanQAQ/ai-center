@@ -20,7 +20,7 @@ def get_file_from_datasource(content: Dict[str, Any]) -> Dict[str, Any]:
             {
                 "datasource_id": "数据源ID",
                 "bucket": "桶名称（可选）",
-                "object_name": "文件路径",
+                "location": "文件路径",
                 "file_name": "文件名"
             }
     
@@ -40,13 +40,13 @@ def get_file_from_datasource(content: Dict[str, Any]) -> Dict[str, Any]:
     try:
         datasource_id = content.get("datasource_id")
         bucket = content.get("bucket")
-        object_name = content.get("object_name")
-        file_name = content.get("file_name", object_name.split("/")[-1] if object_name else "")
+        location = content.get("location")
+        file_name = content.get("file_name", location.split("/")[-1] if location else "")
         
         if not datasource_id:
             return {"success": False, "message": "数据源ID不能为空", "data": None}
         
-        if not object_name:
+        if not location:
             return {"success": False, "message": "文件路径不能为空", "data": None}
         
         # 获取数据源信息
@@ -65,7 +65,7 @@ def get_file_from_datasource(content: Dict[str, Any]) -> Dict[str, Any]:
         ds_instance = DatasourceFactory.create(datasource_type, decrypted_config)
         
         # 下载文件
-        download_result = ds_instance.download_file(bucket=bucket, object_name=object_name)
+        download_result = ds_instance.download_file(bucket=bucket, object_name=location)
         
         if not download_result.get("success"):
             return download_result
@@ -92,7 +92,7 @@ def get_file_from_datasource(content: Dict[str, Any]) -> Dict[str, Any]:
                 "base64_content": base64_content,
                 "datasource_id": datasource_id,
                 "bucket": bucket,
-                "object_name": object_name
+                "location": location
             }
         }
     except Exception as e:
@@ -131,8 +131,9 @@ def extract_file_info_from_query(query_items: list) -> list:
             # 本地上传的文件
             files_info.append({
                 "type": "local",
-                "file_name": getattr(item, "file_name", "unknown"),
+                "file_name": item.file_name or "unknown",
                 "mime_type": item.mime_type,
+                "file_size": item.file_size,
                 "base64_content": item.content if isinstance(item.content, str) else ""
             })
         elif item.type == "document":
@@ -142,8 +143,9 @@ def extract_file_info_from_query(query_items: list) -> list:
                 "type": "datasource",
                 "datasource_id": content_dict.get("datasource_id"),
                 "bucket": content_dict.get("bucket"),
-                "object_name": content_dict.get("object_name"),
-                "file_name": content_dict.get("file_name", content_dict.get("object_name", "unknown").split("/")[-1])
+                "location": content_dict.get("location"),
+                "file_name": content_dict.get("file_name", content_dict.get("location", "unknown").split("/")[-1]),
+                "file_size": content_dict.get("file_size")
             })
     
     return files_info

@@ -130,7 +130,7 @@ class ChatMessageBase(BaseModel):
     """
     message_id: str = Field(..., max_length=40, description="消息ID")
     chat_id: str = Field(..., max_length=40, description="对话ID")
-    config: Optional[str] = Field(None, description="消息配置JSON")
+    config: Optional[Any] = Field(None, description="消息配置JSON")
     messages: Optional[str] = Field(None, description="消息内容JSON")
     role: str = Field(..., max_length=20, description="角色：user/assistant/tool")
     content: str = Field(..., description="消息内容")
@@ -153,7 +153,24 @@ class ChatMessageBase(BaseModel):
             try:
                 return json.loads(v)
             except json.JSONDecodeError:
-                return None
+                # 如果解析失败，返回原始字符串值
+                return v
+        return None
+    
+    @field_validator('config', mode='before')
+    @classmethod
+    def parse_config(cls, v):
+        """解析config字段，支持字符串和字典类型"""
+        if v is None:
+            return None
+        if isinstance(v, (dict, list)):
+            return v
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                # 如果解析失败，返回原始字符串值
+                return v
         return None
 
 
@@ -174,7 +191,7 @@ class ChatMessageCreate(BaseModel):
     """
     message_id: str = Field(..., max_length=40, description="消息ID")
     chat_id: str = Field(..., max_length=40, description="对话ID")
-    config: Optional[str] = Field(None, description="消息配置JSON")
+    config: Optional[Any] = Field(None, description="消息配置JSON")
     messages: Optional[str] = Field(None, description="消息内容JSON")
     role: str = Field(..., max_length=20, description="角色：user/assistant/tool")
     content: str = Field(..., description="消息内容")
@@ -202,10 +219,21 @@ class QueryItem(BaseModel):
         type: 类型（text/file_base64/document）
         content: 内容（字符串或dict）
         mime_type: MIME类型
+        file_size: 文件大小（字节）
+        file_name: 文件名
+
+        当type为document时，content为dict，包含以下字段：
+        datasource_id: 数据源ID
+        bucket: Bucket名称
+        location: 文件路径
+        file_name: 文件名
+        file_size: 文件大小（字节）
     """
     type: str = Field(..., description="类型：text/file_base64/document")
     content: Any = Field(..., description="内容")
     mime_type: Optional[str] = Field(None, description="MIME类型")
+    file_size: Optional[int] = Field(None, description="文件大小（字节）")
+    file_name: Optional[str] = Field(None, description="文件名")
 
 
 class ChatRequest(BaseModel):

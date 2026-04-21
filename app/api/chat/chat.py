@@ -8,6 +8,7 @@ import base64
 from fastapi import APIRouter, Request, Query, Depends
 from fastapi.responses import StreamingResponse, Response
 from typing import Optional
+from pydantic import BaseModel, Field
 
 from app.services.chat.dto import (
     ChatCreate, ChatUpdate, Chat as ChatDTO,
@@ -245,7 +246,7 @@ async def get_chat_messages(
         - 200: 成功
     """
     result = ChatMessageService.get_messages_by_chat(chat_id)
-    return ResponseUtil.success(data=result.model_dump())
+    return ResponseUtil.success(data=result.model_dump(exclude_none=False))
 
 
 @router.post("/{chat_id}/clear_messages", summary="清空对话消息")
@@ -372,32 +373,55 @@ async def chat_completions(
         return ResponseUtil.error(message=f"聊天失败: {str(e)}")
 
 
+class DownloadFileRequest(BaseModel):
+    file_type: str = Field(..., description="文件类型：local/datasource")
+    file_name: str = Field(..., description="文件名")
+    base64_content: Optional[str] = Field(None, description="本地文件的base64内容")
+    datasource_id: Optional[str] = Field(None, description="数据源ID（datasource类型时必填）")
+    bucket: Optional[str] = Field(None, description="桶名称（datasource类型时可选）")
+    location: Optional[str] = Field(None, description="文件路径（datasource类型时必填）")
+
+
 @router.post("/download_file", summary="下载聊天中的文件")
 async def download_file(
     request: Request,
-    file_type: str = Query(..., description="文件类型：local/datasource"),
-    file_name: str = Query(..., description="文件名"),
+    params: Optional[DownloadFileRequest] = None,
+    file_type: Optional[str] = Query(None, description="文件类型：local/datasource"),
+    file_name: Optional[str] = Query(None, description="文件名"),
     base64_content: Optional[str] = Query(None, description="本地文件的base64内容"),
     datasource_id: Optional[str] = Query(None, description="数据源ID（datasource类型时必填）"),
     bucket: Optional[str] = Query(None, description="桶名称（datasource类型时可选）"),
-    object_name: Optional[str] = Query(None, description="文件路径（datasource类型时必填）")
+    location: Optional[str] = Query(None, description="文件路径（datasource类型时必填）")
 ):
     """
     下载聊天中的文件
     
     Args:
         request: 请求对象
+        params: 请求体参数（优先使用）
         file_type: 文件类型：local/datasource
         file_name: 文件名
         base64_content: 本地文件的base64内容（local类型时必填）
         datasource_id: 数据源ID（datasource类型时必填）
         bucket: 桶名称（datasource类型时可选）
-        object_name: 文件路径（datasource类型时必填）
+        location: 文件路径（datasource类型时必填）
         
     Returns:
         文件内容
     """
     try:
+        # 优先使用请求体参数
+        if params:
+            file_type = params.file_type
+            file_name = params.file_name
+            base64_content = params.base64_content
+            datasource_id = params.datasource_id
+            bucket = params.bucket
+            location = params.location
+        
+        if not file_type or not file_name:
+            return ResponseUtil.error(message="file_type和file_name不能为空")
+        
         if file_type == "local":
             if not base64_content:
                 return ResponseUtil.error(message="base64_content不能为空")
@@ -414,14 +438,14 @@ async def download_file(
                 }
             )
         elif file_type == "datasource":
-            if not datasource_id or not object_name:
-                return ResponseUtil.error(message="datasource_id和object_name不能为空")
+            if not datasource_id or not location:
+                return ResponseUtil.error(message="datasource_id和location不能为空")
             
             # 从数据源获取文件
             file_result = get_file_from_datasource({
                 "datasource_id": datasource_id,
                 "bucket": bucket,
-                "object_name": object_name,
+                "location": location,
                 "file_name": file_name
             })
             

@@ -507,11 +507,19 @@ class ChatMessageService:
                 extra_content_str = json.dumps(extra_content, ensure_ascii=False)
             else:
                 extra_content_str = str(extra_content)
+        
+        # 确保config是JSON字符串
+        config_str = None
+        if config is not None:
+            if isinstance(config, (dict, list)):
+                config_str = json.dumps(config, ensure_ascii=False)
+            else:
+                config_str = str(config)
 
         user_message = ChatMessage(
             message_id=uuid.uuid4().hex,
             chat_id=chat_id,
-            config=config,
+            config=config_str,
             role='user',
             content=user_content,
             extra_content=extra_content_str,
@@ -553,11 +561,21 @@ class ChatMessageService:
         # 确保助手消息的创建时间总是晚于用户消息
         # 使用当前时间，并添加一个微小的延迟以确保时间戳不同
         import time
+        import json
         time.sleep(0.001)  # 1毫秒延迟
+        
+        # 确保config是JSON字符串
+        config_str = None
+        if config is not None:
+            if isinstance(config, (dict, list)):
+                config_str = json.dumps(config, ensure_ascii=False)
+            else:
+                config_str = str(config)
+        
         assistant_message = ChatMessage(
             message_id=uuid.uuid4().hex,
             chat_id=chat_id,
-            config=config,
+            config=config_str,
             role='assistant',
             content=assistant_content,
             reasoning_content=reasoning_content,
@@ -594,11 +612,21 @@ class ChatMessageService:
         """
         # 确保工具消息的创建时间总是晚于助手消息
         import time
+        import json
         time.sleep(0.001)  # 1毫秒延迟
+        
+        # 确保config是JSON字符串
+        config_str = None
+        if config is not None:
+            if isinstance(config, (dict, list)):
+                config_str = json.dumps(config, ensure_ascii=False)
+            else:
+                config_str = str(config)
+        
         tool_message = ChatMessage(
             message_id=uuid.uuid4().hex,
             chat_id=chat_id,
-            config=config,
+            config=config_str,
             role='tool',
             content=tool_content,
             model_id=model_id,

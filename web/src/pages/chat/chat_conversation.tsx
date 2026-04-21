@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Input, Button, Switch, Modal, Slider, message, Popconfirm, Tooltip, Dropdown, Empty, Spin, Popover, InputNumber, Select, Steps, Upload, List } from 'antd';
-import { SendOutlined, ClearOutlined, SettingOutlined, RobotOutlined, BulbOutlined, LoadingOutlined, DownOutlined, RightOutlined, CopyOutlined, ReloadOutlined, EditOutlined, InfoCircleOutlined, StopOutlined, PaperClipOutlined, FolderOpenOutlined, FileTextOutlined, UploadOutlined, CloseCircleOutlined, InboxOutlined, FilePdfOutlined, FileWordOutlined, FileImageOutlined } from '@ant-design/icons';
+import { SendOutlined, ClearOutlined, SettingOutlined, RobotOutlined, BulbOutlined, LoadingOutlined, DownOutlined, RightOutlined, CopyOutlined, ReloadOutlined, EditOutlined, InfoCircleOutlined, StopOutlined, PaperClipOutlined, FolderOpenOutlined, FileTextOutlined, UploadOutlined, CloseCircleOutlined, InboxOutlined, FilePdfOutlined, FileWordOutlined, FileImageOutlined, DownloadOutlined } from '@ant-design/icons';
 import DataSourceFileSelector from '../datasource/datasource data_select';
 import type { MenuProps, UploadProps } from 'antd';
 import MDEditor from '@uiw/react-md-editor';
@@ -79,6 +79,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
   const [expandedReasoning, setExpandedReasoning] = useState<Set<string>>(new Set());
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState('');
+  const [editingFiles, setEditingFiles] = useState<any[]>([]); // 保存编辑消息的文件信息
   const [thinkingMessageId, setThinkingMessageId] = useState<string | null>(null);
   const [thinkingDuration, setThinkingDuration] = useState<Record<string, number>>({});
   const thinkingStartTimeRef = useRef<Record<string, number>>({});
@@ -194,7 +195,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         type: 'file_base64',
         content: base64Content,
         mime_type: mimeType,
-        file_name: file.name
+        file_name: file.name,
+        file_size: file.size
       };
       
       setSelectedFiles(prev => [...prev, newFile]);
@@ -215,10 +217,10 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       content: {
         datasource_id: file.datasource_id,
         bucket: file.bucket,
-        object_name: file.path,
-        file_name: file.name
-      },
-      file_name: file.name
+        location: file.path,
+        file_name: file.name,
+        file_size: file.size
+      }
     }));
     setSelectedFiles(prev => [...prev, ...newFiles]);
   };
@@ -232,7 +234,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         fileInfo.base64_content,
         fileInfo.datasource_id,
         fileInfo.bucket,
-        fileInfo.object_name
+        fileInfo.location
       );
       message.success('文件下载成功');
     } catch (error) {
@@ -379,11 +381,38 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     // 构建用户消息显示内容
     const displayContent = inputValue.trim() || (selectedFiles.length > 0 ? `${selectedFiles.length} 个文件` : '');
     
+    // 转换selectedFiles为FileInfo格式
+    const filesForDisplay = selectedFiles.map((file) => {
+      if (file.type === 'file_base64') {
+        return {
+          type: 'local',
+          file_name: file.file_name,
+          file_size: file.file_size,
+          base64_content: file.content,
+          datasource_id: undefined,
+          bucket: undefined,
+          location: undefined
+        };
+      } else if (file.type === 'document') {
+        const content = file.content as Record<string, any>;
+        return {
+          type: 'datasource',
+          file_name: content?.file_name,
+          file_size: content?.file_size,
+          base64_content: undefined,
+          datasource_id: content?.datasource_id,
+          bucket: content?.bucket,
+          location: content?.location
+        };
+      }
+      return file;
+    });
+    
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
       content: displayContent,
-      extra_content: { files: selectedFiles },
+      extra_content: { files: filesForDisplay },
       created_at: new Date().toISOString(),
     };
 
@@ -572,11 +601,20 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
   const handleEditMessage = (messageId: string, content: string) => {
     setEditingMessageId(messageId);
     setEditingContent(content);
+    
+    // 保存原消息的文件信息
+    const originalMessage = messages.find(m => m.id === messageId);
+    if (originalMessage && originalMessage.extra_content && originalMessage.extra_content.files) {
+      setEditingFiles(originalMessage.extra_content.files);
+    } else {
+      setEditingFiles([]);
+    }
   };
 
   const handleCancelEdit = () => {
     setEditingMessageId(null);
     setEditingContent('');
+    setEditingFiles([]);
   };
 
   const handleSaveEdit = async (messageId: string) => {
@@ -595,6 +633,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       id: Date.now().toString(),
       role: 'user',
       content: editingContent.trim(),
+      extra_content: editingFiles.length > 0 ? { files: editingFiles } : undefined,
       created_at: new Date().toISOString()
     };
     
@@ -647,62 +686,170 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     }
 
     try {
-      chatService.sendMessageStream(
-        content,
-        selectedModel?.id,
-        selectedChatbot?.id,
-        conversation?.id,
-        { ...modelConfig, deep_thinking: deepThinking },
-        messageId,
-        systemPrompt, // 系统提示词
-        (data) => {
-          setMessages(prev => prev.map(msg =>
-            msg.id === assistantMessageId
-              ? {
-                  ...msg,
-                  content: data.full_text,
-                  reasoning_content: data.full_reasoning
-                }
-              : msg
-          ));
-        },
-        (error) => {
-          console.error('Failed to send message:', error);
-          const errorMessage = typeof error === 'string' ? error : (error?.message || error?.error || '发送失败，请重试');
-          message.error(errorMessage);
-
-          setMessages(prev => prev.map(msg =>
-            msg.id === assistantMessageId
-              ? {
-                  ...msg,
-                  content: `抱歉，发送消息时出现错误：${errorMessage}`,
-                  reasoning_content: undefined
-                }
-              : msg
-          ));
-
-          if (deepThinking && thinkingStartTimeRef.current[assistantMessageId]) {
-            const duration = Date.now() - thinkingStartTimeRef.current[assistantMessageId];
-            setThinkingDuration(prev => ({
-              ...prev,
-              [assistantMessageId]: duration
-            }));
-          }
-          setLoading(false);
-          setThinkingMessageId(null);
-        },
-        () => {
-          if (deepThinking && thinkingStartTimeRef.current[assistantMessageId]) {
-            const duration = Date.now() - thinkingStartTimeRef.current[assistantMessageId];
-            setThinkingDuration(prev => ({
-              ...prev,
-              [assistantMessageId]: duration
-            }));
-          }
-          setLoading(false);
-          setThinkingMessageId(null);
+      // 检查是否需要发送文件
+      let hasFiles = false;
+      let query: QueryItem[] = [];
+      
+      if (messageId) {
+        // 编辑模式：从previousMessages中获取最新的用户消息
+        const lastUserMessage = previousMessages[previousMessages.length - 1];
+        
+        // 添加用户文本消息到query
+        if (lastUserMessage && lastUserMessage.content) {
+          query.push({
+            type: 'text',
+            content: lastUserMessage.content
+          });
         }
-      );
+        
+        // 添加文件信息到query
+        if (lastUserMessage && lastUserMessage.extra_content && lastUserMessage.extra_content.files) {
+          hasFiles = true;
+          // 将FileInfo格式转换为QueryItem格式
+          const fileQueryItems = lastUserMessage.extra_content.files.map((file: any) => {
+            if (file.type === 'local') {
+              return {
+                type: 'file_base64',
+                content: file.base64_content,
+                mime_type: file.mime_type,
+                file_name: file.file_name,
+                file_size: file.file_size
+              };
+            } else if (file.type === 'datasource') {
+              return {
+                type: 'document',
+                content: {
+                  datasource_id: file.datasource_id,
+                  bucket: file.bucket,
+                  location: file.location,
+                  file_name: file.file_name,
+                  file_size: file.file_size
+                }
+              };
+            }
+            return file;
+          });
+          query = [...query, ...fileQueryItems];
+        }
+      }
+      
+      if (hasFiles && query.length > 0) {
+        // 使用带文件的发送方法
+        chatService.sendMessageStreamWithFiles(
+          query,
+          selectedModel?.id,
+          selectedChatbot?.id,
+          conversation?.id,
+          { ...modelConfig, deep_thinking: deepThinking },
+          messageId,
+          systemPrompt,
+          (data) => {
+            setMessages(prev => prev.map(msg =>
+              msg.id === assistantMessageId
+                ? {
+                    ...msg,
+                    content: data.full_text,
+                    reasoning_content: data.full_reasoning
+                  }
+                : msg
+            ));
+          },
+          (error) => {
+            console.error('Failed to send message:', error);
+            const errorMessage = typeof error === 'string' ? error : (error?.message || error?.error || '发送失败，请重试');
+            message.error(errorMessage);
+
+            setMessages(prev => prev.map(msg =>
+              msg.id === assistantMessageId
+                ? {
+                    ...msg,
+                    content: `抱歉，发送消息时出现错误：${errorMessage}`,
+                    reasoning_content: undefined
+                  }
+                : msg
+            ));
+
+            if (deepThinking && thinkingStartTimeRef.current[assistantMessageId]) {
+              const duration = Date.now() - thinkingStartTimeRef.current[assistantMessageId];
+              setThinkingDuration(prev => ({
+                ...prev,
+                [assistantMessageId]: duration
+              }));
+            }
+            setLoading(false);
+            setThinkingMessageId(null);
+          },
+          () => {
+            if (deepThinking && thinkingStartTimeRef.current[assistantMessageId]) {
+              const duration = Date.now() - thinkingStartTimeRef.current[assistantMessageId];
+              setThinkingDuration(prev => ({
+                ...prev,
+                [assistantMessageId]: duration
+              }));
+            }
+            setLoading(false);
+            setThinkingMessageId(null);
+          }
+        );
+      } else {
+        // 使用普通发送方法
+        chatService.sendMessageStream(
+          content,
+          selectedModel?.id,
+          selectedChatbot?.id,
+          conversation?.id,
+          { ...modelConfig, deep_thinking: deepThinking },
+          messageId,
+          systemPrompt, // 系统提示词
+          (data) => {
+            setMessages(prev => prev.map(msg =>
+              msg.id === assistantMessageId
+                ? {
+                    ...msg,
+                    content: data.full_text,
+                    reasoning_content: data.full_reasoning
+                  }
+                : msg
+            ));
+          },
+          (error) => {
+            console.error('Failed to send message:', error);
+            const errorMessage = typeof error === 'string' ? error : (error?.message || error?.error || '发送失败，请重试');
+            message.error(errorMessage);
+
+            setMessages(prev => prev.map(msg =>
+              msg.id === assistantMessageId
+                ? {
+                    ...msg,
+                    content: `抱歉，发送消息时出现错误：${errorMessage}`,
+                    reasoning_content: undefined
+                  }
+                : msg
+            ));
+
+            if (deepThinking && thinkingStartTimeRef.current[assistantMessageId]) {
+              const duration = Date.now() - thinkingStartTimeRef.current[assistantMessageId];
+              setThinkingDuration(prev => ({
+                ...prev,
+                [assistantMessageId]: duration
+              }));
+            }
+            setLoading(false);
+            setThinkingMessageId(null);
+          },
+          () => {
+            if (deepThinking && thinkingStartTimeRef.current[assistantMessageId]) {
+              const duration = Date.now() - thinkingStartTimeRef.current[assistantMessageId];
+              setThinkingDuration(prev => ({
+                ...prev,
+                [assistantMessageId]: duration
+              }));
+            }
+            setLoading(false);
+            setThinkingMessageId(null);
+          }
+        );
+      }
     } catch (error) {
       console.error('Chat error:', error);
       setMessages(prev => prev.map(msg =>
@@ -747,6 +894,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
 
   // 根据文件类型获取图标
   const getFileIcon = (fileName: string) => {
+    if (!fileName) return <FileTextOutlined />;
     const extension = fileName.split('.').pop()?.toLowerCase();
     if (!extension) return <FileTextOutlined />;
     
@@ -1036,10 +1184,11 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       files = msg.extra_content.files.map((file: any) => ({
         type: file.type,
         file_name: file.file_name,
-        base64_content: file.type === 'file_base64' ? file.content : undefined,
-        datasource_id: file.type === 'document' ? file.content?.datasource_id : undefined,
-        bucket: file.type === 'document' ? file.content?.bucket : undefined,
-        object_name: file.type === 'document' ? file.content?.object_name : undefined
+        file_size: file.file_size,
+        base64_content: file.type === 'local' ? file.base64_content : undefined,
+        datasource_id: file.type === 'datasource' ? file.datasource_id : undefined,
+        bucket: file.type === 'datasource' ? file.bucket : undefined,
+        location: file.type === 'datasource' ? file.location : undefined
       }));
     }
     
@@ -1109,16 +1258,199 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             </div>
           )}
           
-          {/* 显示文件列表 */}
-          {files.length > 0 && (
-            <div style={{ marginBottom: 12 }}>
-              <List
-                dataSource={files}
-                renderItem={(file) => {
-                  // 计算文件大小（仅对本地文件）
+          {editingMessageId === msg.id ? (
+            <>
+              {/* 显示文件列表（在编辑框上方） */}
+              {editingFiles.length > 0 && (
+                <div style={{ marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {editingFiles.map((file, index) => {
+                    // 计算文件大小（使用实际文件大小）
+                    let fileSize = '';
+                    if (file.file_size) {
+                      const size = file.file_size;
+                      if (size < 1024) {
+                        fileSize = `${size.toFixed(0)} B`;
+                      } else if (size < 1024 * 1024) {
+                        fileSize = `${(size / 1024).toFixed(2)} KB`;
+                      } else {
+                        fileSize = `${(size / (1024 * 1024)).toFixed(2)} MB`;
+                      }
+                    } else if (file.base64_content) {
+                      // Base64 编码的文件大小（作为后备）
+                      const base64Size = file.base64_content.length * 3 / 4;
+                      if (base64Size < 1024) {
+                        fileSize = `${base64Size.toFixed(0)} B`;
+                      } else if (base64Size < 1024 * 1024) {
+                        fileSize = `${(base64Size / 1024).toFixed(2)} KB`;
+                      } else {
+                        fileSize = `${(base64Size / (1024 * 1024)).toFixed(2)} MB`;
+                      }
+                    }
+                    
+                    // 获取文件扩展名
+                    const fileName = file.file_name || '';
+                    const extension = fileName.split('.').pop()?.toUpperCase() || '';
+                    
+                    return (
+                      <div
+                        key={fileName || `file-${index}`}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '10px 12px',
+                          borderRadius: 6,
+                          backgroundColor: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
+                          border: `1px solid ${theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <div style={{ marginRight: 12, fontSize: 20 }}>
+                          {getFileIcon(fileName)}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ 
+                            fontSize: 14, 
+                            fontWeight: 500, 
+                            marginBottom: 2,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                          }}>
+                            {fileName}
+                          </div>
+                          <div style={{ 
+                            fontSize: 12, 
+                            color: theme === 'dark' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(0, 0, 0, 0.45)'
+                          }}>
+                            {extension} {fileSize ? `· ${fileSize}` : ''}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="message-edit-area">
+                <TextArea
+                  value={editingContent}
+                  onChange={(e) => setEditingContent(e.target.value)}
+                  autoSize={{ minRows: 3, maxRows: 8 }}
+                  style={{ width: '100%' }}
+                />
+                <div className="edit-actions">
+                  <Button size="small" onClick={handleCancelEdit}>取消</Button>
+                  <Button size="small" type="primary" onClick={() => handleSaveEdit(msg.id)}>发送</Button>
+                </div>
+              </div>
+            </>
+          ) : msg.content ? (
+            <>
+              {/* 显示文件列表（在文本消息上方） */}
+              {files.length > 0 && (
+                <div style={{ marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {files.map((file, index) => {
+                    // 计算文件大小（使用实际文件大小）
+                    let fileSize = '';
+                    if (file.file_size) {
+                      const size = file.file_size;
+                      if (size < 1024) {
+                        fileSize = `${size.toFixed(0)} B`;
+                      } else if (size < 1024 * 1024) {
+                        fileSize = `${(size / 1024).toFixed(2)} KB`;
+                      } else {
+                        fileSize = `${(size / (1024 * 1024)).toFixed(2)} MB`;
+                      }
+                    } else if (file.base64_content) {
+                      // Base64 编码的文件大小（作为后备）
+                      const base64Size = file.base64_content.length * 3 / 4;
+                      if (base64Size < 1024) {
+                        fileSize = `${base64Size.toFixed(0)} B`;
+                      } else if (base64Size < 1024 * 1024) {
+                        fileSize = `${(base64Size / 1024).toFixed(2)} KB`;
+                      } else {
+                        fileSize = `${(base64Size / (1024 * 1024)).toFixed(2)} MB`;
+                      }
+                    }
+                    
+                    // 获取文件扩展名
+                    const fileName = file.file_name || '';
+                    const extension = fileName.split('.').pop()?.toUpperCase() || '';
+                    
+                    return (
+                      <div
+                        key={fileName || `file-${index}`}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '10px 12px',
+                          borderRadius: 6,
+                          backgroundColor: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
+                          border: `1px solid ${theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <div style={{ marginRight: 12, fontSize: 20 }}>
+                          {getFileIcon(fileName)}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ 
+                            fontSize: 14, 
+                            fontWeight: 500, 
+                            marginBottom: 2,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                          }}>
+                            {fileName}
+                          </div>
+                          <div style={{ 
+                            fontSize: 12, 
+                            color: theme === 'dark' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(0, 0, 0, 0.45)'
+                          }}>
+                            {extension} {fileSize ? `· ${fileSize}` : ''}
+                          </div>
+                        </div>
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<DownloadOutlined />}
+                          onClick={() => handleDownloadFile(file)}
+                          style={{
+                            color: theme === 'dark' ? '#667eea' : '#1890ff'
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              
+              {/* 显示文本消息 */}
+              <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                <MDEditor.Markdown
+                  source={msg.content}
+                  className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                />
+              </div>
+            </>
+          ) : (
+            // 无文本消息时只显示文件列表
+            files.length > 0 && (
+              <div style={{ marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {files.map((file) => {
+                  // 计算文件大小（使用实际文件大小）
                   let fileSize = '';
-                  if (file.base64_content) {
-                    // Base64 编码的文件大小（大约）
+                  if (file.file_size) {
+                    const size = file.file_size;
+                    if (size < 1024) {
+                      fileSize = `${size.toFixed(0)} B`;
+                    } else if (size < 1024 * 1024) {
+                      fileSize = `${(size / 1024).toFixed(2)} KB`;
+                    } else {
+                      fileSize = `${(size / (1024 * 1024)).toFixed(2)} MB`;
+                    }
+                  } else if (file.base64_content) {
+                    // Base64 编码的文件大小（作为后备）
                     const base64Size = file.base64_content.length * 3 / 4;
                     if (base64Size < 1024) {
                       fileSize = `${base64Size.toFixed(0)} B`;
@@ -1129,50 +1461,59 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                     }
                   }
                   
+                  // 获取文件扩展名
+                  const fileName = file.file_name || '';
+                  const extension = fileName.split('.').pop()?.toUpperCase() || '';
+                  
                   return (
-                    <List.Item
-                      style={{ 
-                        cursor: 'pointer', 
-                        padding: '8px 12px',
-                        borderRadius: 4,
+                    <div
+                      key={fileName || `file-${index}`}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '10px 12px',
+                        borderRadius: 6,
                         backgroundColor: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
-                        marginBottom: 4
+                        border: `1px solid ${theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
+                        transition: 'all 0.2s ease'
                       }}
-                      onClick={() => handleDownloadFile(file)}
                     >
-                      <List.Item.Meta
-                        avatar={getFileIcon(file.file_name)}
-                        title={file.file_name}
-                        description={fileSize || (file.datasource_id ? '来自数据源' : '点击下载')}
+                      <div style={{ marginRight: 12, fontSize: 20 }}>
+                        {getFileIcon(fileName)}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ 
+                          fontSize: 14, 
+                          fontWeight: 500, 
+                          marginBottom: 2,
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis'
+                        }}>
+                          {fileName}
+                        </div>
+                        <div style={{ 
+                          fontSize: 12, 
+                          color: theme === 'dark' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(0, 0, 0, 0.45)'
+                        }}>
+                          {extension} {fileSize ? `· ${fileSize}` : ''}
+                        </div>
+                      </div>
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<DownloadOutlined />}
+                        onClick={() => handleDownloadFile(file)}
+                        style={{
+                          color: theme === 'dark' ? '#667eea' : '#1890ff'
+                        }}
                       />
-                    </List.Item>
+                    </div>
                   );
-                }}
-              />
-            </div>
-          )}
-          
-          {editingMessageId === msg.id ? (
-            <div className="message-edit-area">
-              <TextArea
-                value={editingContent}
-                onChange={(e) => setEditingContent(e.target.value)}
-                autoSize={{ minRows: 3, maxRows: 8 }}
-                style={{ width: '100%' }}
-              />
-              <div className="edit-actions">
-                <Button size="small" onClick={handleCancelEdit}>取消</Button>
-                <Button size="small" type="primary" onClick={() => handleSaveEdit(msg.id)}>发送</Button>
+                })}
               </div>
-            </div>
-          ) : msg.content ? (
-            <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-              <MDEditor.Markdown
-                source={msg.content}
-                className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
-              />
-            </div>
-          ) : null}
+            )
+          )}
           <div className="message-footer">
             <span className="message-time">
               {msg.created_at ? new Date(msg.created_at).toLocaleString('zh-CN', { 
@@ -1336,17 +1677,44 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             {selectedFiles.length > 0 && (
               <div style={{ marginBottom: 8, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {selectedFiles.map((file, index) => {
-                  // 计算文件大小（仅对本地文件）
+                  // 根据文件类型获取文件名和大小
+                  let fileName = '';
                   let fileSize = '';
-                  if (file.type === 'file_base64' && file.content) {
-                    // Base64 编码的文件大小（大约）
-                    const base64Size = file.content.length * 3 / 4;
-                    if (base64Size < 1024) {
-                      fileSize = `${base64Size.toFixed(0)} B`;
-                    } else if (base64Size < 1024 * 1024) {
-                      fileSize = `${(base64Size / 1024).toFixed(2)} KB`;
-                    } else {
-                      fileSize = `${(base64Size / (1024 * 1024)).toFixed(2)} MB`;
+                  
+                  if (file.type === 'file_base64') {
+                    fileName = file.file_name || '';
+                    // 优先使用实际文件大小，否则使用base64计算
+                    if (file.file_size) {
+                      const size = file.file_size;
+                      if (size < 1024) {
+                        fileSize = `${size.toFixed(0)} B`;
+                      } else if (size < 1024 * 1024) {
+                        fileSize = `${(size / 1024).toFixed(2)} KB`;
+                      } else {
+                        fileSize = `${(size / (1024 * 1024)).toFixed(2)} MB`;
+                      }
+                    } else if (file.content) {
+                      const base64Size = file.content.length * 3 / 4;
+                      if (base64Size < 1024) {
+                        fileSize = `${base64Size.toFixed(0)} B`;
+                      } else if (base64Size < 1024 * 1024) {
+                        fileSize = `${(base64Size / 1024).toFixed(2)} KB`;
+                      } else {
+                        fileSize = `${(base64Size / (1024 * 1024)).toFixed(2)} MB`;
+                      }
+                    }
+                  } else if (file.type === 'document') {
+                    const content = file.content as Record<string, any>;
+                    fileName = content?.file_name || '';
+                    if (content?.file_size) {
+                      const size = content.file_size;
+                      if (size < 1024) {
+                        fileSize = `${size.toFixed(0)} B`;
+                      } else if (size < 1024 * 1024) {
+                        fileSize = `${(size / 1024).toFixed(2)} KB`;
+                      } else {
+                        fileSize = `${(size / (1024 * 1024)).toFixed(2)} MB`;
+                      }
                     }
                   }
                   
@@ -1364,12 +1732,14 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                         fontSize: 12
                       }}
                     >
-                      {getFileIcon(file.file_name)}
+                      {getFileIcon(fileName)}
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <div style={{ fontSize: 12, fontWeight: 500 }}>{file.file_name}</div>
-                        <div style={{ fontSize: 11, color: theme === 'dark' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(0, 0, 0, 0.45)' }}>
-                          {fileSize || (file.type === 'document' ? '来自数据源' : '')}
-                        </div>
+                        <div style={{ fontSize: 12, fontWeight: 500 }}>{fileName}</div>
+                        {fileSize && (
+                          <div style={{ fontSize: 11, color: theme === 'dark' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(0, 0, 0, 0.45)' }}>
+                            {fileSize}
+                          </div>
+                        )}
                       </div>
                       <Button 
                         type="text" 
