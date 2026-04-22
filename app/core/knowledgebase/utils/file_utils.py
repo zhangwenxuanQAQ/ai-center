@@ -88,64 +88,9 @@ def get_mime_type(filename):
     Returns:
         str: MIME类型字符串
     """
-    suffix = get_file_suffix(filename)
-    mime_map = {
-        'pdf': 'application/pdf',
-        'doc': 'application/msword',
-        'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'xls': 'application/vnd.ms-excel',
-        'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'ppt': 'application/vnd.ms-powerpoint',
-        'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        'txt': 'text/plain',
-        'csv': 'text/csv',
-        'html': 'text/html',
-        'htm': 'text/html',
-        'xml': 'text/xml',
-        'json': 'application/json',
-        'md': 'text/markdown',
-        'py': 'text/x-python',
-        'js': 'text/javascript',
-        'java': 'text/x-java-source',
-        'c': 'text/x-c',
-        'cpp': 'text/x-c++src',
-        'h': 'text/x-chdr',
-        'php': 'text/x-php',
-        'go': 'text/x-go',
-        'ts': 'text/typescript',
-        'sh': 'text/x-shellscript',
-        'cs': 'text/x-csharp',
-        'kt': 'text/x-kotlin',
-        'sql': 'text/x-sql',
-        'yml': 'text/yaml',
-        'yaml': 'text/yaml',
-        'jpg': 'image/jpeg',
-        'jpeg': 'image/jpeg',
-        'png': 'image/png',
-        'gif': 'image/gif',
-        'svg': 'image/svg+xml',
-        'webp': 'image/webp',
-        'ico': 'image/x-icon',
-        'tif': 'image/tiff',
-        'tiff': 'image/tiff',
-        'bmp': 'image/bmp',
-        'mp3': 'audio/mpeg',
-        'wav': 'audio/wav',
-        'aac': 'audio/aac',
-        'ogg': 'audio/ogg',
-        'flac': 'audio/flac',
-        'mp4': 'video/mp4',
-        'avi': 'video/x-msvideo',
-        'mkv': 'video/x-matroska',
-        'mov': 'video/quicktime',
-        'eml': 'message/rfc822',
-        'msg': 'application/vnd.ms-outlook',
-        'rtf': 'application/rtf',
-        'zip': 'application/zip',
-        'rar': 'application/x-rar-compressed',
-        '7z': 'application/x-7z-compressed',
-    }
-    return mime_map.get(suffix, 'application/octet-stream')
+    import mimetypes
+    mime_type, _ = mimetypes.guess_type(file_name)
+    return mime_type or "application/octet-stream"
 
 
 def thumbnail_img(filename, blob):

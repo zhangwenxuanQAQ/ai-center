@@ -9,6 +9,7 @@ import json
 from typing import Dict, Any, Optional
 from app.services.datasource.service import DatasourceService
 from app.core.datasource.factory import DatasourceFactory
+from app.core.knowledgebase.utils.file_utils import get_mime_type
 
 
 def get_file_from_datasource(content: Dict[str, Any]) -> Dict[str, Any]:
@@ -97,21 +98,6 @@ def get_file_from_datasource(content: Dict[str, Any]) -> Dict[str, Any]:
         }
     except Exception as e:
         return {"success": False, "message": f"获取文件失败: {str(e)}", "data": None}
-
-
-def get_mime_type(file_name: str) -> str:
-    """
-    根据文件名获取MIME类型
-    
-    Args:
-        file_name: 文件名
-    
-    Returns:
-        str: MIME类型
-    """
-    import mimetypes
-    mime_type, _ = mimetypes.guess_type(file_name)
-    return mime_type or "application/octet-stream"
 
 
 def extract_file_info_from_query(query_items: list) -> list:

@@ -38,7 +38,7 @@ def _needs_text_extraction(mime_type: Optional[str], file_name: Optional[str]) -
     return True
 
 
-def extract_text_from_file(file_name: str, base64_content: str, chunk_method: str = "naive") -> Optional[str]:
+def extract_text_from_file(file_name: str, base64_content: str, chunk_method: str = "naive") -> str:
     """
     从文件中提取文本内容，使用RAG切片方法
 
@@ -48,18 +48,20 @@ def extract_text_from_file(file_name: str, base64_content: str, chunk_method: st
         chunk_method: 切片方法，默认为naive
 
     Returns:
-        str: 提取的文本内容，不同chunk之间用换行符隔开；提取失败返回None
+        str: 提取的文本内容，不同chunk之间用换行符隔开；提取失败返回错误信息
     """
     try:
         binary = base64.b64decode(base64_content)
     except Exception as e:
-        logger.error(f"base64解码失败: {file_name}, error: {e}")
-        return None
+        error_msg = f"文件解码失败: {file_name} - {str(e)}"
+        logger.error(error_msg)
+        return error_msg
 
     chunk_func = CHUNK_STRATEGIES.get(chunk_method)
     if not chunk_func:
-        logger.error(f"不支持的切片策略: {chunk_method}")
-        return None
+        error_msg = f"不支持的切片策略: {chunk_method}"
+        logger.error(error_msg)
+        return error_msg
 
     try:
         chunks = chunk_func(
@@ -73,14 +75,16 @@ def extract_text_from_file(file_name: str, base64_content: str, chunk_method: st
         if chunks and len(chunks) > 0:
             logger.info(f"第一个chunk的keys: {chunks[0].keys() if isinstance(chunks[0], dict) else type(chunks[0])}")
     except Exception as e:
+        error_msg = f"文件处理失败: {file_name} - {str(e)}"
         logger.error(f"文件切片失败: {file_name}, method: {chunk_method}, error: {e}")
         import traceback
         traceback.print_exc()
-        return None
+        return error_msg
 
     if not chunks:
-        logger.warning(f"文件切片结果为空: {file_name}")
-        return None
+        error_msg = f"文件切片结果为空: {file_name}"
+        logger.warning(error_msg)
+        return error_msg
 
     text_parts = []
     for i, chunk in enumerate(chunks):
