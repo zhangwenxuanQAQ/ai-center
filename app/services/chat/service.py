@@ -540,7 +540,8 @@ class ChatMessageService:
         config: Optional[str] = None,
         reasoning_content: Optional[str] = None,
         reasoning_time: Optional[int] = None,
-        avatar: Optional[str] = None
+        avatar: Optional[str] = None,
+        message_id: Optional[str] = None
     ) -> ChatMessage:
         """
         创建助手消息
@@ -554,6 +555,7 @@ class ChatMessageService:
             reasoning_content: 思考过程内容
             reasoning_time: 思考耗时（毫秒）
             avatar: 头像URL
+            message_id: 消息ID，如果不传则自动生成
             
         Returns:
             ChatMessage: 助手消息对象
@@ -573,7 +575,7 @@ class ChatMessageService:
                 config_str = str(config)
         
         assistant_message = ChatMessage(
-            message_id=uuid.uuid4().hex,
+            message_id=message_id or uuid.uuid4().hex,
             chat_id=chat_id,
             config=config_str,
             role='assistant',

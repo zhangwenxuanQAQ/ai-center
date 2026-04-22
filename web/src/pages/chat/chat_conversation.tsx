@@ -439,6 +439,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       // 发送消息到后端
       console.log('Sending message with config:', modelConfig);
       
+      const idTracker = { assistant: assistantMessageId, user: userMessage.id };
+
       // 使用流式发送（带文件）
       chatService.sendMessageStreamWithFiles(
         query,
@@ -449,25 +451,34 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         undefined, // messageId is undefined for new messages
         systemPrompt, // 系统提示词
         (data) => {
-          // 流式更新消息内容
-          setMessages(prev => prev.map(msg => 
-            msg.id === assistantMessageId 
-              ? {
-                  ...msg,
-                  content: data.full_text,
-                  reasoning_content: data.full_reasoning
-                }
-              : msg
-          ));
+          setMessages(prev => prev.map(msg => {
+            if (msg.id === idTracker.assistant) {
+              const updates: any = {
+                ...msg,
+                content: data.full_text,
+                reasoning_content: data.full_reasoning
+              };
+              if (data.assistant_message_id) {
+                idTracker.assistant = data.assistant_message_id;
+                updates.id = data.assistant_message_id;
+                setThinkingMessageId(data.assistant_message_id);
+              }
+              return updates;
+            }
+            if (data.user_message_id && msg.id === idTracker.user) {
+              idTracker.user = data.user_message_id;
+              return { ...msg, id: data.user_message_id };
+            }
+            return msg;
+          }));
         },
         (error) => {
           console.error('Failed to send message:', error);
           const errorMessage = typeof error === 'string' ? error : (error?.message || error?.error || '发送失败，请重试');
           message.error(errorMessage);
           
-          // 失败时显示错误消息
           setMessages(prev => prev.map(msg => 
-            msg.id === assistantMessageId 
+            msg.id === idTracker.assistant
               ? { 
                   ...msg, 
                   content: `抱歉，发送消息时出现错误：${errorMessage}`,
@@ -480,19 +491,18 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             const duration = Date.now() - thinkingStartTimeRef.current[assistantMessageId];
             setThinkingDuration(prev => ({
               ...prev,
-              [assistantMessageId]: duration
+              [idTracker.assistant]: duration
             }));
           }
           setLoading(false);
           setThinkingMessageId(null);
         },
         () => {
-          // 完成时的处理
           if (deepThinking && thinkingStartTimeRef.current[assistantMessageId]) {
             const duration = Date.now() - thinkingStartTimeRef.current[assistantMessageId];
             setThinkingDuration(prev => ({
               ...prev,
-              [assistantMessageId]: duration
+              [idTracker.assistant]: duration
             }));
           }
           setLoading(false);
@@ -626,26 +636,15 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     const messageIndex = messages.findIndex(m => m.id === messageId);
     if (messageIndex === -1) return;
 
+    // 截取到编辑消息之前的消息
     const updatedMessages = messages.slice(0, messageIndex);
     
-    // 创建编辑后的用户消息
-    const editedUserMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: editingContent.trim(),
-      extra_content: editingFiles.length > 0 ? { files: editingFiles } : undefined,
-      created_at: new Date().toISOString()
-    };
-    
-    const newMessages = [...updatedMessages, editedUserMessage];
-    setMessages(newMessages);
     setEditingMessageId(null);
     setEditingContent('');
-
     setInputValue('');
-    setTimeout(() => {
-      handleSendMessageWithMessages(newMessages, editingContent, messageId);
-    }, 100);
+    
+    // 直接调用 handleSendMessageWithMessages，它会处理用户消息的创建
+    handleSendMessageWithMessages(updatedMessages, editingContent, messageId);
   };
 
   const handleSendMessageWithMessages = async (
@@ -656,8 +655,9 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     if (loading) return;
 
     let newMessages = [...previousMessages];
+    let currentUserMessageId: string | undefined;
+    let userMessageForId: Message | undefined;
     
-    // 只在发送新消息时创建用户消息，重新回答时不创建
     if (!messageId) {
       const userMessage: Message = {
         id: Date.now().toString(),
@@ -665,6 +665,31 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         content: content.trim(),
         created_at: new Date().toISOString()
       };
+      currentUserMessageId = userMessage.id;
+      userMessageForId = userMessage;
+      newMessages = [...previousMessages, userMessage];
+    } else {
+      // 重新回答或编辑问题时，仍然创建临时用户消息，但保留 messageId 传给后端
+      let extraContent = undefined;
+      
+      // 检查是否有编辑文件
+      if (editingFiles.length > 0) {
+        extraContent = { files: editingFiles };
+      } else {
+        // 如果没有编辑文件，使用旧消息的 extra_content
+        const lastOldUserMessage = previousMessages[previousMessages.length - 1];
+        extraContent = lastOldUserMessage?.extra_content;
+      }
+      
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        role: 'user',
+        content: content.trim(),
+        created_at: new Date().toISOString(),
+        extra_content: extraContent
+      };
+      currentUserMessageId = userMessage.id;
+      userMessageForId = userMessage;
       newMessages = [...previousMessages, userMessage];
     }
     
@@ -691,8 +716,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       let query: QueryItem[] = [];
       
       if (messageId) {
-        // 编辑模式：从previousMessages中获取最新的用户消息
-        const lastUserMessage = previousMessages[previousMessages.length - 1];
+        // 编辑模式：使用我们刚刚创建的用户消息
+        const lastUserMessage = userMessageForId;
         
         // 添加用户文本消息到query
         if (lastUserMessage && lastUserMessage.content) {
@@ -734,6 +759,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       }
       
       if (hasFiles && query.length > 0) {
+        const idTracker = { assistant: assistantMessageId, user: currentUserMessageId };
         // 使用带文件的发送方法
         chatService.sendMessageStreamWithFiles(
           query,
@@ -744,15 +770,26 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           messageId,
           systemPrompt,
           (data) => {
-            setMessages(prev => prev.map(msg =>
-              msg.id === assistantMessageId
-                ? {
-                    ...msg,
-                    content: data.full_text,
-                    reasoning_content: data.full_reasoning
-                  }
-                : msg
-            ));
+            setMessages(prev => prev.map(msg => {
+              if (msg.id === idTracker.assistant) {
+                const updates: any = {
+                  ...msg,
+                  content: data.full_text,
+                  reasoning_content: data.full_reasoning
+                };
+                if (data.assistant_message_id) {
+                  idTracker.assistant = data.assistant_message_id;
+                  updates.id = data.assistant_message_id;
+                  setThinkingMessageId(data.assistant_message_id);
+                }
+                return updates;
+              }
+              if (data.user_message_id && idTracker.user && msg.id === idTracker.user) {
+                idTracker.user = data.user_message_id;
+                return { ...msg, id: data.user_message_id };
+              }
+              return msg;
+            }));
           },
           (error) => {
             console.error('Failed to send message:', error);
@@ -760,7 +797,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             message.error(errorMessage);
 
             setMessages(prev => prev.map(msg =>
-              msg.id === assistantMessageId
+              msg.id === idTracker.assistant
                 ? {
                     ...msg,
                     content: `抱歉，发送消息时出现错误：${errorMessage}`,
@@ -773,7 +810,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               const duration = Date.now() - thinkingStartTimeRef.current[assistantMessageId];
               setThinkingDuration(prev => ({
                 ...prev,
-                [assistantMessageId]: duration
+                [idTracker.assistant]: duration
               }));
             }
             setLoading(false);
@@ -784,7 +821,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               const duration = Date.now() - thinkingStartTimeRef.current[assistantMessageId];
               setThinkingDuration(prev => ({
                 ...prev,
-                [assistantMessageId]: duration
+                [idTracker.assistant]: duration
               }));
             }
             setLoading(false);
@@ -792,6 +829,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           }
         );
       } else {
+        const idTracker = { assistant: assistantMessageId, user: currentUserMessageId };
         // 使用普通发送方法
         chatService.sendMessageStream(
           content,
@@ -800,17 +838,28 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           conversation?.id,
           { ...modelConfig, deep_thinking: deepThinking },
           messageId,
-          systemPrompt, // 系统提示词
+          systemPrompt,
           (data) => {
-            setMessages(prev => prev.map(msg =>
-              msg.id === assistantMessageId
-                ? {
-                    ...msg,
-                    content: data.full_text,
-                    reasoning_content: data.full_reasoning
-                  }
-                : msg
-            ));
+            setMessages(prev => prev.map(msg => {
+              if (msg.id === idTracker.assistant) {
+                const updates: any = {
+                  ...msg,
+                  content: data.full_text,
+                  reasoning_content: data.full_reasoning
+                };
+                if (data.assistant_message_id) {
+                  idTracker.assistant = data.assistant_message_id;
+                  updates.id = data.assistant_message_id;
+                  setThinkingMessageId(data.assistant_message_id);
+                }
+                return updates;
+              }
+              if (data.user_message_id && idTracker.user && msg.id === idTracker.user) {
+                idTracker.user = data.user_message_id;
+                return { ...msg, id: data.user_message_id };
+              }
+              return msg;
+            }));
           },
           (error) => {
             console.error('Failed to send message:', error);
@@ -818,7 +867,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             message.error(errorMessage);
 
             setMessages(prev => prev.map(msg =>
-              msg.id === assistantMessageId
+              msg.id === idTracker.assistant
                 ? {
                     ...msg,
                     content: `抱歉，发送消息时出现错误：${errorMessage}`,
@@ -831,7 +880,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               const duration = Date.now() - thinkingStartTimeRef.current[assistantMessageId];
               setThinkingDuration(prev => ({
                 ...prev,
-                [assistantMessageId]: duration
+                [idTracker.assistant]: duration
               }));
             }
             setLoading(false);
@@ -842,7 +891,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               const duration = Date.now() - thinkingStartTimeRef.current[assistantMessageId];
               setThinkingDuration(prev => ({
                 ...prev,
-                [assistantMessageId]: duration
+                [idTracker.assistant]: duration
               }));
             }
             setLoading(false);
@@ -869,12 +918,11 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     if (userMessage.role !== 'user') return;
 
     // Remove all messages after and including the current assistant message
-    const updatedMessages = messages.slice(0, messageIndex);
-    setMessages(updatedMessages);
-
-    setTimeout(() => {
-      handleSendMessageWithMessages(updatedMessages, userMessage.content, userMessage.id);
-    }, 100);
+    // 同时也删除旧的用户消息，因为我们会在 handleSendMessageWithMessages 中添加新的用户消息
+    const updatedMessages = messages.slice(0, messageIndex - 1);
+    
+    // 直接调用 handleSendMessageWithMessages，它会处理消息添加
+    handleSendMessageWithMessages(updatedMessages, userMessage.content, userMessage.id);
   };
 
   const getProviderAvatar = (provider: string): string => {

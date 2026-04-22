@@ -160,6 +160,46 @@ export const chatService = {
   },
 
   /**
+   * 流式发送消息
+   * @param content - 消息内容
+   * @param modelId - 模型ID
+   * @param chatbotId - 机器人ID
+   * @param chatId - 对话ID
+   * @param config - 对话配置
+   * @param messageId - 消息ID，用于标识重新回答或编辑问题
+   * @param systemPrompt - 系统提示词
+   * @param onMessage - 消息回调函数
+   * @param onError - 错误回调函数
+   * @param onComplete - 完成回调函数
+   */
+  sendMessageStream: async (
+    content: string,
+    modelId?: string,
+    chatbotId?: string,
+    chatId?: string,
+    config?: { temperature?: number; max_tokens?: number; top_p?: number; deep_thinking?: boolean },
+    messageId?: string,
+    systemPrompt?: string,
+    onMessage?: (data: any) => void,
+    onError?: (error: any) => void,
+    onComplete?: () => void
+  ) => {
+    // 调用 sendMessageStreamWithFiles 方法，将文本内容转换为 query 数组
+    return chatService.sendMessageStreamWithFiles(
+      [{ type: 'text', content }],
+      modelId,
+      chatbotId,
+      chatId,
+      config,
+      messageId,
+      systemPrompt,
+      onMessage,
+      onError,
+      onComplete
+    );
+  },
+
+  /**
    * 流式发送消息（支持文件）
    * @param query - 查询数组，支持text/file_base64/document类型
    * @param modelId - 模型ID

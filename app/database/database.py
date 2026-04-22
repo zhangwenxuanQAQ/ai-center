@@ -26,7 +26,15 @@ def get_db_connection():
         MySQLDatabase: 数据库连接对象
     """
     try:
-        if db.is_closed():
+        # 尝试执行一个简单的查询来测试连接是否有效
+        if not db.is_closed():
+            try:
+                db.execute_sql('SELECT 1')
+            except Exception:
+                # 连接无效，重新连接
+                db.close()
+                db.connect(reuse_if_open=True)
+        else:
             db.connect(reuse_if_open=True)
     except Exception as e:
         logger.error(f"数据库连接失败: {e}")

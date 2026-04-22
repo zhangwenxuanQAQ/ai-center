@@ -340,7 +340,8 @@ class ChatCoreService:
         if user_prompt_messages:
             messages.extend(user_prompt_messages)
         
-        messages.extend(history_messages)
+        history_messages_without_system = [msg for msg in history_messages if msg['role'] != 'system']
+        messages.extend(history_messages_without_system)
         messages.append(user_message)
         
         return messages
@@ -510,7 +511,7 @@ class ChatCoreService:
         from app.services.chat.file_utils import build_extra_content
         extra_content = build_extra_content(query)
         
-        ChatMessageService.create_user_message(
+        user_msg = ChatMessageService.create_user_message(
             chat_id=chat_id,
             user_content=user_text,
             model_id=model_id,
@@ -519,6 +520,8 @@ class ChatCoreService:
             message_id=message_id,
             extra_content=extra_content
         )
+        user_message_id = user_msg.message_id
+        assistant_message_id = uuid.uuid4().hex
         
         import time
         start_time = time.time()
@@ -558,7 +561,9 @@ class ChatCoreService:
                         'reasoning_content': chunk.get('reasoning_content'),
                         'finish_reason': chunk.get('finish_reason'),
                         'usage': chunk.get('usage'),
-                        'chat_id': chat_id
+                        'chat_id': chat_id,
+                        'user_message_id': user_message_id,
+                        'assistant_message_id': assistant_message_id
                     }
                 
                 # 检查是否需要调用工具
@@ -588,7 +593,9 @@ class ChatCoreService:
                                     'message': tool_message_content,
                                     'requires_input': False
                                 },
-                                'chat_id': chat_id
+                                'chat_id': chat_id,
+                                'user_message_id': user_message_id,
+                                'assistant_message_id': assistant_message_id
                             }
                             messages.append({
                                 'role': 'tool',
@@ -609,7 +616,9 @@ class ChatCoreService:
                                     'message': tool_message_content,
                                     'requires_input': False
                                 },
-                                'chat_id': chat_id
+                                'chat_id': chat_id,
+                                'user_message_id': user_message_id,
+                                'assistant_message_id': assistant_message_id
                             }
                             messages.append({
                                 'role': 'tool',
@@ -640,7 +649,9 @@ class ChatCoreService:
                                             'tool_call_id': tool_call_id,
                                             'function_args': function_args
                                         },
-                                        'chat_id': chat_id
+                                        'chat_id': chat_id,
+                                        'user_message_id': user_message_id,
+                                        'assistant_message_id': assistant_message_id
                                     }
                                     
                                     # 这里需要等待用户输入参数
@@ -662,7 +673,9 @@ class ChatCoreService:
                                             'message': tool_message_content,
                                             'requires_input': False
                                         },
-                                        'chat_id': chat_id
+                                        'chat_id': chat_id,
+                                        'user_message_id': user_message_id,
+                                        'assistant_message_id': assistant_message_id
                                     }
                                     messages.append({
                                         'role': 'tool',
@@ -679,7 +692,9 @@ class ChatCoreService:
                                         'result': tool_result.get('result'),
                                         'requires_input': False
                                     },
-                                    'chat_id': chat_id
+                                    'chat_id': chat_id,
+                                    'user_message_id': user_message_id,
+                                    'assistant_message_id': assistant_message_id
                                 }
                                 # 保存工具消息到数据库
                                 ChatMessageService.create_tool_message(
@@ -747,21 +762,21 @@ class ChatCoreService:
                     config=config,
                     reasoning_content=reasoning_content if reasoning_content else None,
                     reasoning_time=reasoning_time,
-                    avatar=avatar
+                    avatar=avatar,
+                    message_id=assistant_message_id
                 )
 
                 chat_messages = ChatMessageService.get_messages_by_chat(chat_id)
                 updated_messages = []
+                msg_idx = 0
                 for i in range(len(messages)):
                     if messages[i]['role'] != 'system':
-                        messages[i]['message_id'] = chat_messages.items[i].message_id
-                        messages[i]['reasoning_content'] = chat_messages.items[i].reasoning_content
+                        if msg_idx < len(chat_messages.items):
+                            messages[i]['message_id'] = chat_messages.items[msg_idx].message_id
+                            messages[i]['reasoning_content'] = chat_messages.items[msg_idx].reasoning_content
+                        msg_idx += 1
                     updated_messages.append(messages[i])
-                # updated_messages = [{"role": msg.role, "content": msg.content , "reasoning_content": msg.reasoning_content , "message_id": msg.message_id} for msg in chat_messages.items if not msg.role != 'system']
-                # system_message = messages[0] if messages else None
-                # if system_message:
-                #     updated_messages.insert(0, system_message)
-                # updated_messages.append(assistant_message_dict)
+                updated_messages.append(assistant_message_dict)
                 ChatService.update_messages(chat_id, updated_messages)
     
     @staticmethod
@@ -1074,7 +1089,7 @@ class ChatCoreService:
         # system_message = messages[0] if messages else None
         # if system_message:
         #     updated_messages.insert(0, system_message)
-        # updated_messages.append(assistant_message_dict)
+        updated_messages.append(assistant_message_dict)
         ChatService.update_messages(chat_id, updated_messages)
 
         return {
