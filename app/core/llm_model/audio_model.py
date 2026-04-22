@@ -1,5 +1,6 @@
 """
 音频模型实现
+
 使用OpenAI SDK实现语音转录接口
 """
 from typing import Dict, Any, Generator
@@ -12,7 +13,6 @@ import base64
 
 logger = logging.getLogger(__name__)
 
-# 常见的ffmpeg安装位置
 FFMPEG_COMMON_LOCATIONS = [
     r"C:\Users\Admin\scoop\shims\ffmpeg.exe",
     r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",
@@ -25,15 +25,12 @@ FFMPEG_COMMON_LOCATIONS = [
     r"C:\Users\Admin\AppData\Local\Programs\ffmpeg\bin\ffmpeg.exe",
 ]
 
+
 def find_ffmpeg():
     """查找ffmpeg可执行文件"""
     try:
         import subprocess
-        result = subprocess.run(
-            ['ffmpeg', '-version'],
-            capture_output=True,
-            timeout=5
-        )
+        result = subprocess.run(['ffmpeg', '-version'], capture_output=True, timeout=5)
         if result.returncode == 0:
             logger.info("在系统PATH中找到ffmpeg")
             return 'ffmpeg'
@@ -48,6 +45,7 @@ def find_ffmpeg():
     logger.warning("未找到ffmpeg")
     return None
 
+
 def get_ffmpeg_path():
     """获取ffmpeg路径"""
     ffmpeg_path = os.environ.get('FFMPEG_PATH')
@@ -61,26 +59,22 @@ class AudioModel(BaseLLM):
     """音频模型实现"""
     
     def __init__(self, model_config: Dict[str, Any]):
-        """初始化大模型
-        Args:
-            model_config: 模型配置，包含api_key、endpoint等信息
-        """
+        """初始化大模型"""
         super().__init__(model_config)
-        self.client = OpenAI(
-            api_key=self.api_key,
-            base_url=self.endpoint
-        )
+        self.client = OpenAI(api_key=self.api_key, base_url=self.endpoint)
+    
+    def _cleanup_temp_files(self, *file_paths):
+        """清理临时文件"""
+        for file_path in file_paths:
+            if file_path and os.path.exists(file_path):
+                try:
+                    os.unlink(file_path)
+                except Exception:
+                    pass
     
     def _convert_to_wav(self, audio_path: str) -> tuple:
-        """将音频文件转换为wav格式
-        Args:
-            audio_path: 原音频文件路径
-        Returns:
-            (转换后的wav文件路径, 错误信息) - 如果成功，错误信息为None
-        """
-        ext = os.path.splitext(audio_path)[1].lower()
-        
-        if ext == '.wav':
+        """将音频文件转换为wav格式"""
+        if os.path.splitext(audio_path)[1].lower() == '.wav':
             return audio_path, None
         
         ffmpeg_exe = get_ffmpeg_path()
@@ -95,93 +89,81 @@ class AudioModel(BaseLLM):
             
             temp_wav = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
             temp_wav.close()
+            
             audio = AudioSegment.from_file(audio_path)
             audio.export(temp_wav.name, format='wav')
             logger.info(f"成功使用pydub转换音频文件: {audio_path} -> {temp_wav.name}")
             return temp_wav.name, None
         except ImportError:
             logger.warning("pydub未安装，尝试使用ffmpeg")
+            if not ffmpeg_exe:
+                return None, "音频转换失败: 未找到ffmpeg。请安装ffmpeg或将音频文件转换为wav格式"
+            
             try:
                 import subprocess
-                
-                if not ffmpeg_exe:
-                    error_msg = "音频转换失败: 未找到ffmpeg。请安装ffmpeg或将音频文件转换为wav格式"
-                    logger.error(error_msg)
-                    return None, error_msg
-                
                 temp_wav = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
                 temp_wav.close()
                 
-                result = subprocess.run(
-                    [ffmpeg_exe, '-i', audio_path, '-y', temp_wav.name],
-                    check=True,
-                    capture_output=True,
-                    text=True
-                )
+                subprocess.run([ffmpeg_exe, '-i', audio_path, '-y', temp_wav.name], 
+                              check=True, capture_output=True, text=True)
                 logger.info(f"成功使用ffmpeg转换音频文件: {audio_path} -> {temp_wav.name}")
                 return temp_wav.name, None
-            except FileNotFoundError:
-                error_msg = "音频转换失败: 未找到ffmpeg。请安装ffmpeg或将音频文件转换为wav格式"
-                logger.error(error_msg)
-                return None, error_msg
             except subprocess.CalledProcessError as e:
-                error_msg = f"音频转换失败: ffmpeg转换失败 - {e.stderr}"
-                logger.error(error_msg)
-                return None, error_msg
+                return None, f"音频转换失败: ffmpeg转换失败 - {e.stderr}"
             except Exception as e:
-                error_msg = f"音频转换失败: {str(e)}"
-                logger.error(error_msg)
-                return None, error_msg
+                return None, f"音频转换失败: {str(e)}"
         except Exception as e:
             error_msg = f"音频转换失败: {str(e)}"
-            logger.error(error_msg)
             if "ffmpeg" in str(e).lower() or "file not found" in str(e).lower():
                 if not ffmpeg_exe:
                     error_msg = "音频转换失败: pydub需要ffmpeg支持。请安装ffmpeg或将音频文件转换为wav格式"
             return None, error_msg
     
+    def _prepare_audio_input(self, prompt):
+        """准备音频输入"""
+        temp_file_path = None
+        converted_audio_path = None
+        
+        if isinstance(prompt, str):
+            if not os.path.exists(prompt):
+                return None, None, f'音频文件不存在: {prompt}'
+            converted_audio_path, error_msg = self._convert_to_wav(prompt)
+            if error_msg:
+                return None, None, error_msg
+        else:
+            if hasattr(prompt, 'read'):
+                audio_data = prompt.read()
+                temp_file = tempfile.NamedTemporaryFile(suffix='.tmp', delete=False)
+                temp_file.write(audio_data)
+                temp_file.close()
+                temp_file_path = temp_file.name
+                converted_audio_path, error_msg = self._convert_to_wav(temp_file_path)
+                if error_msg:
+                    self._cleanup_temp_files(temp_file_path)
+                    return None, None, error_msg
+            else:
+                return None, None, "不支持的音频输入格式"
+        
+        return temp_file_path, converted_audio_path, None
+    
     def generate(self, prompt: str, **kwargs) -> Dict[str, Any]:
-        """转录语音（非流式）
-        Args:
-            prompt: 语音文件路径或语音数据（如果是字符串则为文件路径）
-            **kwargs: 其他参数，如language、temperature等
-        Returns:
-            转录结果
-        """
+        """转录语音（非流式）"""
         if not self._validate_config():
             return {'error': 'Invalid configuration'}
         
+        temp_file_path = None
+        converted_audio_path = None
+        
         try:
-            temp_file_path = None
-            converted_audio_path = None
+            temp_file_path, converted_audio_path, error_msg = self._prepare_audio_input(prompt)
+            if error_msg:
+                return {'error': error_msg}
             
-            if isinstance(prompt, str):
-                if not os.path.exists(prompt):
-                    return {'error': f'音频文件不存在: {prompt}'}
-                
-                converted_audio_path, error_msg = self._convert_to_wav(prompt)
-                if error_msg:
-                    return {'error': error_msg}
-            else:
-                audio_data = prompt.read() if hasattr(prompt, 'read') else str(prompt)
-                if hasattr(prompt, 'read'):
-                    temp_file = tempfile.NamedTemporaryFile(suffix='.tmp', delete=False)
-                    temp_file.write(audio_data)
-                    temp_file.close()
-                    temp_file_path = temp_file.name
-                    converted_audio_path, error_msg = self._convert_to_wav(temp_file_path)
-                    if error_msg:
-                        return {'error': error_msg}
-            
-            # 读取音频文件并转换为base64
             with open(converted_audio_path, 'rb') as f:
                 audio_data = f.read()
             audio_base64 = base64.b64encode(audio_data).decode('utf-8')
-            
-            # 按照OpenAI规范，添加data:audio/wav;base64前缀
             audio_data_uri = f"data:audio/wav;base64,{audio_base64}"
             
-            # 使用chat.completions.create进行语音转录
             params = {
                 'model': self.model_name,
                 'messages': [
@@ -212,45 +194,17 @@ class AudioModel(BaseLLM):
             if hasattr(response, 'usage') and response.usage:
                 result['usage'] = response.usage.model_dump()
             
-            # 清理临时文件
-            if converted_audio_path and os.path.exists(converted_audio_path):
-                try:
-                    if isinstance(prompt, str) and converted_audio_path == prompt:
-                        pass
-                    else:
-                        os.unlink(converted_audio_path)
-                except:
-                    pass
-            
-            if temp_file_path and os.path.exists(temp_file_path):
-                try:
-                    os.unlink(temp_file_path)
-                except:
-                    pass
-            
             return result
         except Exception as e:
-            # 确保清理临时文件
-            try:
-                if 'converted_audio_path' in locals() and converted_audio_path and os.path.exists(converted_audio_path):
-                    if isinstance(prompt, str) and converted_audio_path == prompt:
-                        pass
-                    else:
-                        os.unlink(converted_audio_path)
-                if 'temp_file_path' in locals() and temp_file_path and os.path.exists(temp_file_path):
-                    os.unlink(temp_file_path)
-            except:
-                pass
             return {'error': str(e)}
+        finally:
+            if isinstance(prompt, str) and converted_audio_path == prompt:
+                self._cleanup_temp_files(temp_file_path)
+            else:
+                self._cleanup_temp_files(temp_file_path, converted_audio_path)
     
     def stream_generate(self, prompt: str, **kwargs) -> Generator[Dict[str, Any], None, None]:
-        """流式转录语音（语音转录暂不支持流式）
-        Args:
-            prompt: 语音文件路径或语音数据
-            **kwargs: 其他参数
-        Yields:
-            转录结果
-        """
+        """流式转录语音（语音转录暂不支持流式）"""
         if not self._validate_config():
             yield {'error': 'Invalid configuration'}
             return
@@ -263,20 +217,11 @@ class AudioModel(BaseLLM):
             yield {'error': str(e)}
     
     def stream_generate_with_messages(self, messages: list, **kwargs) -> Generator[Dict[str, Any], None, None]:
-        """使用消息列表流式生成（音频模型不支持）
-        Args:
-            messages: 消息列表
-            **kwargs: 其他参数
-        Yields:
-            错误信息
-        """
+        """使用消息列表流式生成（音频模型不支持）"""
         yield {'error': 'Audio model does not support chat messages'}
     
     def get_model_info(self) -> Dict[str, Any]:
-        """获取模型信息
-        Returns:
-            模型信息
-        """
+        """获取模型信息"""
         return {
             'model_name': self.model_name,
             'provider': self.provider,

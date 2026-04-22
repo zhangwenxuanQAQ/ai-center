@@ -230,6 +230,59 @@ class ModelTestUtils:
             }
     
     @staticmethod
+    def test_multimodal_model(model_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        测试全模态模型
+        
+        Args:
+            model_config: 模型配置
+            
+        Returns:
+            测试结果
+        """
+        try:
+            # 创建音频模型实例（全模态模型通常可以通过audio类型访问）
+            model = LLMFactory.create_model('audio', model_config)
+            
+            # 测试文件在前端的assets/llm/test目录下
+            audio_path = os.path.join(os.getcwd(), 'web', 'src', 'assets', 'llm', 'test', 'audio_test.m4a')
+            
+            if not os.path.exists(audio_path):
+                return {
+                    'success': False,
+                    'message': "测试失败: audio_test.m4a文件不存在"
+                }
+            
+            # 使用generate方法，传入音频文件
+            response = model.generate(audio_path)
+            
+            if 'error' in response:
+                return {
+                    'success': False,
+                    'message': f"测试失败: {response['error']}"
+                }
+            
+            if 'text' in response and response['text'].strip():
+                # 统计字数
+                word_count = len(response['text'].replace(' ', '').replace('\n', ''))
+                return {
+                    'success': True,
+                    'message': f"测试成功！模型能够正常处理音频，音频内容约有 {word_count} 个字",
+                    'result': response['text'][:100] + '...' if len(response['text']) > 100 else response['text'],
+                    'word_count': word_count
+                }
+            else:
+                return {
+                    'success': False,
+                    'message': "测试失败: 模型返回了空结果"
+                }
+        except Exception as e:
+            return {
+                'success': False,
+                'message': f"测试失败: {str(e)}"
+            }
+    
+    @staticmethod
     def test_embedding_model(model_config: Dict[str, Any]) -> Dict[str, Any]:
         """
         测试Embedding模型
@@ -337,6 +390,7 @@ class ModelTestUtils:
             'vision': ModelTestUtils.test_vision_model,
             'audio': ModelTestUtils.test_audio_model,
             'voice': ModelTestUtils.test_audio_model,
+            'multimodal': ModelTestUtils.test_multimodal_model,
             'tts': ModelTestUtils.test_tts_model,
             'embedding': ModelTestUtils.test_embedding_model,
             'rerank': ModelTestUtils.test_rerank_model
