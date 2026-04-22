@@ -75,6 +75,7 @@ class LLMModelBase(BaseModel):
         config: 模型参数配置
         support_image: 是否支持图片
         status: 状态
+        is_default: 是否默认模型
     """
     name: str = Field(..., min_length=1, max_length=100, description="模型名称，长度1-100个字符")
     provider: Optional[str] = Field(default="default", max_length=50, description="提供商，长度1-50个字符")
@@ -86,6 +87,7 @@ class LLMModelBase(BaseModel):
     config: Optional[str] = Field(None, description="模型参数配置，JSON格式字符串")
     support_image: bool = Field(default=False, description="是否支持图片")
     status: bool = Field(default=True, description="状态，True表示启用，False表示禁用")
+    is_default: Optional[bool] = Field(default=False, description="是否默认模型")
 
 
 class LLMModelCreate(LLMModelBase):
@@ -110,6 +112,7 @@ class LLMModelUpdate(BaseModel):
         config: 模型参数配置
         support_image: 是否支持图片
         status: 状态
+        is_default: 是否默认模型
     """
     name: Optional[str] = Field(None, min_length=1, max_length=100, description="模型名称，长度1-100个字符")
     provider: Optional[str] = Field(None, max_length=50, description="提供商，长度1-50个字符")
@@ -121,6 +124,7 @@ class LLMModelUpdate(BaseModel):
     config: Optional[str] = Field(None, description="模型参数配置，JSON格式字符串")
     support_image: Optional[bool] = Field(None, description="是否支持图片")
     status: Optional[bool] = Field(None, description="状态，True表示启用，False表示禁用")
+    is_default: Optional[bool] = Field(None, description="是否默认模型")
 
 
 class LLMModel(LLMModelBase, BaseDTO):

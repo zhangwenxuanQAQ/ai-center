@@ -29,6 +29,7 @@ export interface LLMModel {
   config?: Record<string, any>;
   support_image: boolean;
   status: boolean;
+  is_default?: boolean;
   created_at: string;
   updated_at?: string;
 }
@@ -121,7 +122,7 @@ export const llmModelService = {
    * 测试模型连接（通过模型ID）
    */
   testConnection: async (id: string): Promise<{ success: boolean; message: string; result?: string }> => {
-    return http.post<{ success: boolean; message: string; result?: string }>(`/aicenter/v1/llm_model/model/${id}/test`);
+    return http.post<{ success: boolean; message: string; result?: string }>(`/aicenter/v1/llm_model/model/${id}/test`, {}, { showError: false });
   },
   
   /**
@@ -134,7 +135,7 @@ export const llmModelService = {
     endpoint: string; 
     model_type: string;
   }): Promise<{ success: boolean; message: string; result?: string; support_image?: boolean }> => {
-    return http.post<{ success: boolean; message: string; result?: string; support_image?: boolean }>('/aicenter/v1/llm_model/test_config', data);
+    return http.post<{ success: boolean; message: string; result?: string; support_image?: boolean }>('/aicenter/v1/llm_model/test_config', data, { showError: false });
   },
   
   /**

@@ -1,7 +1,7 @@
 """
 模型工厂
 
-根据模型类型创建相应的模型实例
+根据模型类型创建对应的模型实例
 """
 
 from typing import Dict, Any
@@ -11,6 +11,7 @@ from app.core.llm_model.embedding_model import EmbeddingModel
 from app.core.llm_model.rerank_model import RerankModel
 from app.core.llm_model.vision_model import VisionModel
 from app.core.llm_model.tts_model import TTSModel
+from app.core.llm_model.audio_model import AudioModel
 
 
 class LLMFactory:
@@ -24,7 +25,7 @@ class LLMFactory:
         创建模型实例
         
         Args:
-            model_type: 模型类型，如text、embedding、rerank、vision、voice、multimodal、tts
+            model_type: 模型类型，如text、embedding、rerank、vision、voice、multimodal、tts、audio
             model_config: 模型配置
             
         Returns:
@@ -38,9 +39,8 @@ class LLMFactory:
             return RerankModel(model_config)
         elif model_type == 'vision':
             return VisionModel(model_config)
-        elif model_type == 'voice':
-            # 语音模型暂时使用文本模型实现
-            return TextModel(model_config)
+        elif model_type == 'voice' or model_type == 'audio':
+            return AudioModel(model_config)
         elif model_type == 'multimodal':
             # 全模态模型暂时使用文本模型实现
             return TextModel(model_config)

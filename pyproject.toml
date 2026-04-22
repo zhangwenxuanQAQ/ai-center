@@ -33,6 +33,7 @@ dependencies = [
     "elasticsearch>=8.0.0",
     "boto3>=1.28.0",
     "redis>=5.0.0",
+    "pydub",
 ]
 
 [tool.setuptools.packages.find]

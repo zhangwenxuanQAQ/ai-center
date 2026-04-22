@@ -4,7 +4,7 @@ LLM模型常量定义
 
 MODEL_TYPE = {
     "text": "文本模型",
-    "audio": "语音模型",
+    "audio": "音频模型",
     "vision": "视觉模型",
     "multimodal": "全模态模型",
     "embedding": "Embedding模型",

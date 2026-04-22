@@ -427,6 +427,7 @@ const LLMModelManagement: React.FC = () => {
       model_type: model.model_type,
       category_id: model.category_id,
       status: model.status,
+      is_default: model.is_default,
       endpoint: model.endpoint,
       api_key: model.api_key
     });
@@ -486,6 +487,7 @@ const LLMModelManagement: React.FC = () => {
         model_type: values.model_type,
         category_id: values.category_id,
         status: values.status,
+        is_default: values.is_default,
         endpoint: values.endpoint,
         api_key: values.api_key,
         tags: JSON.stringify(updatedTags),
@@ -568,6 +570,7 @@ const LLMModelManagement: React.FC = () => {
         model_type: values.model_type,
         category_id: values.category_id,
         status: values.status,
+        is_default: values.is_default,
         endpoint: values.endpoint,
         api_key: values.api_key,
         tags: JSON.stringify(updatedTags),
@@ -876,6 +879,9 @@ const LLMModelManagement: React.FC = () => {
                                 ) : (
                                   <Tag icon={<CloseCircleOutlined />} color="error">禁用</Tag>
                                 )}
+                                {model.is_default && (
+                                  <Tag color="blue">默认</Tag>
+                                )}
                               </div>
                             </div>
                             <div className="card-bottom">
@@ -952,7 +958,7 @@ const LLMModelManagement: React.FC = () => {
         footer={null}
         className={`llm-model-modal ${theme === 'dark' ? 'dark' : 'light'}`}
       >
-        <Form form={form} layout="vertical" initialValues={{ status: true, model_type: 'text' }}>
+        <Form form={form} layout="vertical" initialValues={{ status: true, model_type: 'text', is_default: false }}>
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item name="name" label="模型名称" rules={[{ required: true, message: '请输入模型名称' }]}>
@@ -975,9 +981,14 @@ const LLMModelManagement: React.FC = () => {
                 <TreeSelect placeholder="请选择分类" treeData={buildCategoryTreeSelectData()} treeDefaultExpandAll allowClear />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col span={6}>
               <Form.Item name="status" label="状态" valuePropName="checked">
                 <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+              </Form.Item>
+            </Col>
+            <Col span={6}>
+              <Form.Item name="is_default" label="是否默认" valuePropName="checked">
+                <Switch checkedChildren="是" unCheckedChildren="否" />
               </Form.Item>
             </Col>
           </Row>
@@ -1126,9 +1137,14 @@ const LLMModelManagement: React.FC = () => {
                 <TreeSelect placeholder="请选择分类" treeData={buildCategoryTreeSelectData()} treeDefaultExpandAll allowClear />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col span={6}>
               <Form.Item name="status" label="状态" valuePropName="checked">
                 <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+              </Form.Item>
+            </Col>
+            <Col span={6}>
+              <Form.Item name="is_default" label="是否默认" valuePropName="checked">
+                <Switch checkedChildren="是" unCheckedChildren="否" />
               </Form.Item>
             </Col>
           </Row>

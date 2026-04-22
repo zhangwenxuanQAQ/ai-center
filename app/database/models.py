@@ -226,6 +226,7 @@ class LLMModel(SoftDeleteModel):
     config = TextField(null=True, verbose_name="模型参数配置JSON")
     support_image = BooleanField(default=False, verbose_name="是否支持图片")
     status = BooleanField(default=True, verbose_name="状态")
+    is_default = BooleanField(default=False, verbose_name="是否默认模型")
     
     class Meta:
         table_name = 'llm_model'

@@ -69,7 +69,7 @@
 ##帮我模型LLM模型库前后端，功能如下：
 1. 增加LLM分类表llm_category , 字段参考mcp分类表。 前后端代码类似
 2. llm_model表增加tags，config，status字段。 tags存标签数组，config存模型参数json，status存启用/禁用。
-3. 模型类型分为文本模型，语音模型，视觉模型，全模态模型，embedding，rerank。 需要在llm_constants.py文件中定义
+3. 模型类型分为文本模型，音频模型，视觉模型，全模态模型，embedding，rerank。 需要在llm_constants.py文件中定义
 4.前端界面参看mcp页面，左侧分类树，右侧模型列表
 
 
@@ -682,3 +682,9 @@ POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
 【文件2内容】：提取后的文档内容文本，不同chunk之间
 用换行符隔开。
 ```
+
+## 新增音频模型实现类
+1. 在core/llm_model目录下新增一个文件audio_model.py，实现音频模型的调用。
+2. 音频模型的需要使用openai的api调用规范，使用client.audio.transcriptions.create方法.
+3. 代码风格需要保持和其他模型调用的代码一致。
+4. 测试模型连接方法时，如果是音频文件需要使用音频模型实现类

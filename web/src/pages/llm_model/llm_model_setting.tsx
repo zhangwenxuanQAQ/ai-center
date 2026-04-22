@@ -116,7 +116,8 @@ const LLMModelSetting: React.FC = () => {
         api_key: data.api_key,
         tags: data.tags,
         config: data.config,
-        status: data.status
+        status: data.status,
+        is_default: data.is_default
       });
       
       form.setFieldsValue({
@@ -126,7 +127,8 @@ const LLMModelSetting: React.FC = () => {
         endpoint: data.endpoint,
         api_key: data.api_key,
         support_image: data.support_image || false,
-        status: data.status
+        status: data.status,
+        is_default: data.is_default
       });
       
       const modelTags = data.tags ? (Array.isArray(data.tags) ? data.tags : JSON.parse(data.tags)) : [];
@@ -220,15 +222,12 @@ const LLMModelSetting: React.FC = () => {
           form.setFieldsValue({ support_image: result.support_image });
           setHasChanges(true);
         }
-      } else {
-        message.error(result.message || '连接测试失败');
       }
     } catch (error: any) {
       setConnectionTestResult({
         success: false,
         message: error.message || '连接测试失败'
       });
-      message.error('连接测试失败');
     } finally {
       setTestingConnection(false);
     }
@@ -1004,6 +1003,11 @@ const LLMModelSetting: React.FC = () => {
                     <Col span={12}>
                       <Form.Item name="status" label="状态" valuePropName="checked">
                         <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name="is_default" label="是否默认" valuePropName="checked">
+                        <Switch checkedChildren="是" unCheckedChildren="否" />
                       </Form.Item>
                     </Col>
                   </Row>

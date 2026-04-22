@@ -152,8 +152,6 @@ class ModelTestUtils:
             # 创建音频模型实例
             model = LLMFactory.create_model('audio', model_config)
             
-            # 测试音频处理
-            test_prompt = "请转录这段音频"
             # 测试文件在前端的assets/llm/test目录下
             audio_path = os.path.join(os.getcwd(), 'web', 'src', 'assets', 'llm', 'test', 'audio_test.m4a')
             
@@ -163,8 +161,8 @@ class ModelTestUtils:
                     'message': "测试失败: audio_test.m4a文件不存在"
                 }
             
-            # 这里需要根据实际的音频模型接口调整参数
-            response = model.generate(test_prompt, audio_path=audio_path)
+            # 使用VoiceModel的接口，直接传入文件路径
+            response = model.generate(audio_path)
             
             if 'error' in response:
                 return {
@@ -338,6 +336,7 @@ class ModelTestUtils:
             'text': ModelTestUtils.test_text_model,
             'vision': ModelTestUtils.test_vision_model,
             'audio': ModelTestUtils.test_audio_model,
+            'voice': ModelTestUtils.test_audio_model,
             'tts': ModelTestUtils.test_tts_model,
             'embedding': ModelTestUtils.test_embedding_model,
             'rerank': ModelTestUtils.test_rerank_model

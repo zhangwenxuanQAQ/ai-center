@@ -304,6 +304,13 @@ class LLMModelService:
             default_category = LLMCategoryService._get_or_create_default_category()
             model_data['category_id'] = default_category.id
         
+        # 如果设置为默认模型，将同类型的其他模型设置为非默认
+        if model_data.get('is_default'):
+            LLMModel.update(is_default=False).where(
+                (LLMModel.model_type == model_data['model_type']) &
+                (LLMModel.deleted == False)
+            ).execute()
+        
         db_llm_model = LLMModel(**model_data)
         db_llm_model.save(force_insert=True)
         return db_llm_model
@@ -454,6 +461,16 @@ class LLMModelService:
             
             if existing:
                 raise DuplicateResourceError(f"模型名称 '{update_data['name']}' 已存在")
+        
+        # 如果设置为默认模型，将同类型的其他模型设置为非默认
+        if 'is_default' in update_data and update_data['is_default']:
+            # 确定要使用的 model_type
+            target_model_type = update_data.get('model_type', db_llm_model.model_type)
+            LLMModel.update(is_default=False).where(
+                (LLMModel.model_type == target_model_type) &
+                (LLMModel.id != llm_model_id) &
+                (LLMModel.deleted == False)
+            ).execute()
         
         for field, value in update_data.items():
             setattr(db_llm_model, field, value)

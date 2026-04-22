@@ -289,6 +289,13 @@ try:
             print("  成功添加 support_image 字段")
         else:
             print("  support_image 字段已存在")
+        
+        # 添加 is_default 字段
+        if 'is_default' not in columns:
+            db.execute_sql("ALTER TABLE llm_model ADD COLUMN is_default TINYINT DEFAULT 0")
+            print("  成功添加 is_default 字段")
+        else:
+            print("  is_default 字段已存在")
     except Exception as e:
         print(f"  修改 llm_model 表结构失败: {e}")
     

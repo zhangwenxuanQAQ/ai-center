@@ -33,6 +33,9 @@ boto3>=1.28.0
 # Redis队列和任务调度
 redis>=5.0.0
 
+# 音频处理
+pydub
+
 # OCR和视觉识别（可选）
 # paddleocr>=2.7.0
 # paddlepaddle>=2.5.0
