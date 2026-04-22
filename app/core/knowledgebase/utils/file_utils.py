@@ -1,16 +1,33 @@
 """
 文件工具类
-提供文件类型判断、缩略图生成等功能
+提供文件类型判断、缩略图生成、音频转换等功能
 """
 
 import re
 import base64
 import threading
 import sys
+import os
+import tempfile
+import logging
 from io import BytesIO
 from pathlib import Path
 
 from app.constants.knowledgebase_document_constants import FileType
+
+logger = logging.getLogger(__name__)
+
+FFMPEG_COMMON_LOCATIONS = [
+    r"C:\Users\Admin\scoop\shims\ffmpeg.exe",
+    r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",
+    r"C:\ffmpeg\bin\ffmpeg.exe",
+    r"D:\ffmpeg\bin\ffmpeg.exe",
+    r"E:\ffmpeg\bin\ffmpeg.exe",
+    r"C:\Program Files (x86)\ffmpeg\bin\ffmpeg.exe",
+    r"D:\Program Files\ffmpeg\bin\ffmpeg.exe",
+    r"D:\anaconda\Library\bin\ffmpeg.exe",
+    r"C:\Users\Admin\AppData\Local\Programs\ffmpeg\bin\ffmpeg.exe",
+]
 
 LOCK_KEY_pdfplumber = "global_shared_lock_pdfplumber"
 if LOCK_KEY_pdfplumber not in sys.modules:
@@ -53,11 +70,11 @@ def filename_type(filename):
     ):
         return FileType.DOC
 
-    if re.match(r".*\.(wav|flac|ape|alac|wavpack|wv|mp3|aac|ogg|vorbis|opus)$", filename):
+    if re.match(r".*\.(wav|flac|ape|alac|wavpack|wv|mp3|aac|ogg|vorbis|opus|m4a|wma|aiff|aif)$", filename):
         return FileType.AURAL
 
     if re.match(
-        r".*\.(jpg|jpeg|png|tif|gif|pcx|tga|exif|fpx|svg|psd|cdr|pcd|dxf|ufo|eps|ai|raw|wmf|webp|avif|apng|icon|ico|mpg|mpeg|avi|rm|rmvb|mov|wmv|asf|dat|asx|wvx|mpe|mpa|mp4|mkv)$",
+        r".*\.(jpg|jpeg|png|tif|gif|pcx|tga|exif|fpx|svg|psd|cdr|pcd|dxf|ufo|eps|ai|raw|webp|avif|apng|icon|ico|mpg|mpeg|avi|rm|rmvb|mov|wmv|asf|dat|asx|wvx|mpe|mpa|mp4|mkv|webm|m4v|flv|ts|vob)$",
         filename
     ):
         return FileType.VISUAL
@@ -89,7 +106,7 @@ def get_mime_type(filename):
         str: MIME类型字符串
     """
     import mimetypes
-    mime_type, _ = mimetypes.guess_type(file_name)
+    mime_type, _ = mimetypes.guess_type(filename)
     return mime_type or "application/octet-stream"
 
 
@@ -237,3 +254,136 @@ def get_chunk_method_by_file_type(file_type, filename, default_chunk_method="nai
     if re.search(r"\.(msg|eml)$", filename, re.IGNORECASE):
         return "email"
     return default_chunk_method
+
+
+def find_ffmpeg():
+    """查找ffmpeg可执行文件"""
+    try:
+        import subprocess
+        result = subprocess.run(['ffmpeg', '-version'], capture_output=True, timeout=5)
+        if result.returncode == 0:
+            logger.info("在系统PATH中找到ffmpeg")
+            return 'ffmpeg'
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+    
+    for loc in FFMPEG_COMMON_LOCATIONS:
+        if os.path.exists(loc):
+            logger.info(f"在常见位置找到ffmpeg: {loc}")
+            return loc
+    
+    logger.warning("未找到ffmpeg")
+    return None
+
+
+def get_ffmpeg_path():
+    """获取ffmpeg路径"""
+    ffmpeg_path = os.environ.get('FFMPEG_PATH')
+    if ffmpeg_path and os.path.exists(ffmpeg_path):
+        logger.info(f"从环境变量FFMPEG_PATH获取ffmpeg: {ffmpeg_path}")
+        return ffmpeg_path
+    return find_ffmpeg()
+
+
+def cleanup_temp_files(*file_paths):
+    """清理临时文件"""
+    for file_path in file_paths:
+        if file_path and os.path.exists(file_path):
+            try:
+                os.unlink(file_path)
+            except Exception:
+                pass
+
+
+def convert_to_wav(audio_path: str) -> tuple:
+    """将音频文件转换为wav格式
+    
+    Args:
+        audio_path: 原始音频文件路径
+    
+    Returns:
+        tuple: (转换后的wav文件路径, 错误信息)，成功时错误信息为None
+    """
+    if os.path.splitext(audio_path)[1].lower() == '.wav':
+        return audio_path, None
+    
+    ffmpeg_exe = get_ffmpeg_path()
+    
+    try:
+        from pydub import AudioSegment
+        if ffmpeg_exe and ffmpeg_exe != 'ffmpeg':
+            ffmpeg_dir = os.path.dirname(ffmpeg_exe)
+            if ffmpeg_dir not in os.environ.get('PATH', ''):
+                os.environ['PATH'] = ffmpeg_dir + os.pathsep + os.environ.get('PATH', '')
+                logger.info(f"已将ffmpeg目录添加到PATH: {ffmpeg_dir}")
+        
+        temp_wav = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+        temp_wav.close()
+        
+        audio = AudioSegment.from_file(audio_path)
+        audio.export(temp_wav.name, format='wav')
+        logger.info(f"成功使用pydub转换音频文件: {audio_path} -> {temp_wav.name}")
+        return temp_wav.name, None
+    except ImportError:
+        logger.warning("pydub未安装，尝试使用ffmpeg")
+        if not ffmpeg_exe:
+            return None, "音频转换失败: 未找到ffmpeg。请安装ffmpeg或将音频文件转换为wav格式"
+        
+        try:
+            import subprocess
+            temp_wav = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+            temp_wav.close()
+            
+            subprocess.run([ffmpeg_exe, '-i', audio_path, '-y', temp_wav.name], 
+                          check=True, capture_output=True, text=True)
+            logger.info(f"成功使用ffmpeg转换音频文件: {audio_path} -> {temp_wav.name}")
+            return temp_wav.name, None
+        except subprocess.CalledProcessError as e:
+            return None, f"音频转换失败: ffmpeg转换失败 - {e.stderr}"
+        except Exception as e:
+            return None, f"音频转换失败: {str(e)}"
+    except Exception as e:
+        error_msg = f"音频转换失败: {str(e)}"
+        if "ffmpeg" in str(e).lower() or "file not found" in str(e).lower():
+            if not ffmpeg_exe:
+                error_msg = "音频转换失败: pydub需要ffmpeg支持。请安装ffmpeg或将音频文件转换为wav格式"
+        return None, error_msg
+
+
+def convert_base64_audio_to_wav(base64_content: str, original_filename: str) -> tuple:
+    """将base64编码的音频转换为wav格式
+    
+    Args:
+        base64_content: base64编码的音频数据
+        original_filename: 原始文件名，用于确定文件扩展名
+    
+    Returns:
+        tuple: (转换后的wav文件的base64编码, 错误信息)，成功时错误信息为None
+    """
+    temp_file_path = None
+    converted_audio_path = None
+    
+    try:
+        # 先将base64保存为临时文件
+        binary_data = base64.b64decode(base64_content)
+        suffix = os.path.splitext(original_filename)[1].lower() or '.tmp'
+        temp_file = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+        temp_file.write(binary_data)
+        temp_file.close()
+        temp_file_path = temp_file.name
+        
+        # 转换为wav
+        converted_audio_path, error_msg = convert_to_wav(temp_file_path)
+        if error_msg:
+            return None, error_msg
+        
+        # 读取转换后的wav文件并编码为base64
+        with open(converted_audio_path, 'rb') as f:
+            wav_data = f.read()
+        wav_base64 = base64.b64encode(wav_data).decode('utf-8')
+        
+        return wav_base64, None
+    finally:
+        cleanup_temp_files(temp_file_path)
+        if converted_audio_path and converted_audio_path != temp_file_path:
+            cleanup_temp_files(converted_audio_path)

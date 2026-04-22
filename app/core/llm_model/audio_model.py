@@ -11,48 +11,14 @@ import tempfile
 import logging
 import base64
 
+from app.core.knowledgebase.utils.file_utils import (
+    find_ffmpeg,
+    get_ffmpeg_path,
+    cleanup_temp_files,
+    convert_to_wav,
+)
+
 logger = logging.getLogger(__name__)
-
-FFMPEG_COMMON_LOCATIONS = [
-    r"C:\Users\Admin\scoop\shims\ffmpeg.exe",
-    r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",
-    r"C:\ffmpeg\bin\ffmpeg.exe",
-    r"D:\ffmpeg\bin\ffmpeg.exe",
-    r"E:\ffmpeg\bin\ffmpeg.exe",
-    r"C:\Program Files (x86)\ffmpeg\bin\ffmpeg.exe",
-    r"D:\Program Files\ffmpeg\bin\ffmpeg.exe",
-    r"D:\anaconda\Library\bin\ffmpeg.exe",
-    r"C:\Users\Admin\AppData\Local\Programs\ffmpeg\bin\ffmpeg.exe",
-]
-
-
-def find_ffmpeg():
-    """查找ffmpeg可执行文件"""
-    try:
-        import subprocess
-        result = subprocess.run(['ffmpeg', '-version'], capture_output=True, timeout=5)
-        if result.returncode == 0:
-            logger.info("在系统PATH中找到ffmpeg")
-            return 'ffmpeg'
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
-    
-    for loc in FFMPEG_COMMON_LOCATIONS:
-        if os.path.exists(loc):
-            logger.info(f"在常见位置找到ffmpeg: {loc}")
-            return loc
-    
-    logger.warning("未找到ffmpeg")
-    return None
-
-
-def get_ffmpeg_path():
-    """获取ffmpeg路径"""
-    ffmpeg_path = os.environ.get('FFMPEG_PATH')
-    if ffmpeg_path and os.path.exists(ffmpeg_path):
-        logger.info(f"从环境变量FFMPEG_PATH获取ffmpeg: {ffmpeg_path}")
-        return ffmpeg_path
-    return find_ffmpeg()
 
 
 class AudioModel(BaseLLM):
@@ -63,62 +29,6 @@ class AudioModel(BaseLLM):
         super().__init__(model_config)
         self.client = OpenAI(api_key=self.api_key, base_url=self.endpoint)
     
-    def _cleanup_temp_files(self, *file_paths):
-        """清理临时文件"""
-        for file_path in file_paths:
-            if file_path and os.path.exists(file_path):
-                try:
-                    os.unlink(file_path)
-                except Exception:
-                    pass
-    
-    def _convert_to_wav(self, audio_path: str) -> tuple:
-        """将音频文件转换为wav格式"""
-        if os.path.splitext(audio_path)[1].lower() == '.wav':
-            return audio_path, None
-        
-        ffmpeg_exe = get_ffmpeg_path()
-        
-        try:
-            from pydub import AudioSegment
-            if ffmpeg_exe and ffmpeg_exe != 'ffmpeg':
-                ffmpeg_dir = os.path.dirname(ffmpeg_exe)
-                if ffmpeg_dir not in os.environ.get('PATH', ''):
-                    os.environ['PATH'] = ffmpeg_dir + os.pathsep + os.environ.get('PATH', '')
-                    logger.info(f"已将ffmpeg目录添加到PATH: {ffmpeg_dir}")
-            
-            temp_wav = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
-            temp_wav.close()
-            
-            audio = AudioSegment.from_file(audio_path)
-            audio.export(temp_wav.name, format='wav')
-            logger.info(f"成功使用pydub转换音频文件: {audio_path} -> {temp_wav.name}")
-            return temp_wav.name, None
-        except ImportError:
-            logger.warning("pydub未安装，尝试使用ffmpeg")
-            if not ffmpeg_exe:
-                return None, "音频转换失败: 未找到ffmpeg。请安装ffmpeg或将音频文件转换为wav格式"
-            
-            try:
-                import subprocess
-                temp_wav = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
-                temp_wav.close()
-                
-                subprocess.run([ffmpeg_exe, '-i', audio_path, '-y', temp_wav.name], 
-                              check=True, capture_output=True, text=True)
-                logger.info(f"成功使用ffmpeg转换音频文件: {audio_path} -> {temp_wav.name}")
-                return temp_wav.name, None
-            except subprocess.CalledProcessError as e:
-                return None, f"音频转换失败: ffmpeg转换失败 - {e.stderr}"
-            except Exception as e:
-                return None, f"音频转换失败: {str(e)}"
-        except Exception as e:
-            error_msg = f"音频转换失败: {str(e)}"
-            if "ffmpeg" in str(e).lower() or "file not found" in str(e).lower():
-                if not ffmpeg_exe:
-                    error_msg = "音频转换失败: pydub需要ffmpeg支持。请安装ffmpeg或将音频文件转换为wav格式"
-            return None, error_msg
-    
     def _prepare_audio_input(self, prompt):
         """准备音频输入"""
         temp_file_path = None
@@ -127,7 +37,7 @@ class AudioModel(BaseLLM):
         if isinstance(prompt, str):
             if not os.path.exists(prompt):
                 return None, None, f'音频文件不存在: {prompt}'
-            converted_audio_path, error_msg = self._convert_to_wav(prompt)
+            converted_audio_path, error_msg = convert_to_wav(prompt)
             if error_msg:
                 return None, None, error_msg
         else:
@@ -137,9 +47,9 @@ class AudioModel(BaseLLM):
                 temp_file.write(audio_data)
                 temp_file.close()
                 temp_file_path = temp_file.name
-                converted_audio_path, error_msg = self._convert_to_wav(temp_file_path)
+                converted_audio_path, error_msg = convert_to_wav(temp_file_path)
                 if error_msg:
-                    self._cleanup_temp_files(temp_file_path)
+                    cleanup_temp_files(temp_file_path)
                     return None, None, error_msg
             else:
                 return None, None, "不支持的音频输入格式"
@@ -199,9 +109,9 @@ class AudioModel(BaseLLM):
             return {'error': str(e)}
         finally:
             if isinstance(prompt, str) and converted_audio_path == prompt:
-                self._cleanup_temp_files(temp_file_path)
+                cleanup_temp_files(temp_file_path)
             else:
-                self._cleanup_temp_files(temp_file_path, converted_audio_path)
+                cleanup_temp_files(temp_file_path, converted_audio_path)
     
     def stream_generate(self, prompt: str, **kwargs) -> Generator[Dict[str, Any], None, None]:
         """流式转录语音（语音转录暂不支持流式）"""

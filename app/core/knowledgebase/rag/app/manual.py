@@ -33,7 +33,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
         naive_merge,
         tokenize_chunks,
         rag_tokenizer,
-        tokenize,
+        tokenize_doc,
         is_english,
     )
     
@@ -77,7 +77,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
             else:
                 content = str(section_content)
                 
-            tokenize(d, content, eng)
+            tokenize_doc(d, content, eng)
             res.append(d)
         
         callback(0.8, "PDF手册解析完成")
@@ -98,7 +98,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
             else:
                 content = str(section_content)
                 
-            tokenize(d, content, eng)
+            tokenize_doc(d, content, eng)
             res.append(d)
         
         callback(0.8, "DOCX手册解析完成")
@@ -113,7 +113,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
         for section_title, section_content in manual_sections:
             d = copy.deepcopy(doc)
             d["manual_section_kwd"] = section_title
-            tokenize(d, section_content, eng)
+            tokenize_doc(d, section_content, eng)
             res.append(d)
         
         callback(0.8, "Markdown手册解析完成")

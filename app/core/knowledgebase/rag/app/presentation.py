@@ -142,7 +142,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
     Returns:
         list: 切片后的文档列表
     """
-    from ..nlp import rag_tokenizer, tokenize
+    from ..nlp import rag_tokenizer, tokenize_doc
     
     if parser_config is None:
         parser_config = {}
@@ -171,7 +171,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
                 if img and Image and isinstance(img, Image.Image):
                     d["image"] = img
                 
-                tokenize(d, txt, eng)
+                tokenize_doc(d, txt, eng)
                 res.append(d)
             
             callback(0.8, f"PPT解析完成，共 {len(res)} 页")
@@ -219,7 +219,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
                  0, img.size[1] if img and hasattr(img, 'size') else 0)
             ]
             
-            tokenize(d, txt, eng)
+            tokenize_doc(d, txt, eng)
             res.append(d)
         
         callback(0.8, f"PDF演示文稿解析完成，共 {len(res)} 页")

@@ -49,15 +49,15 @@ def chunk(filename, binary, tenant_id="", lang="Chinese", callback=None, **kwarg
         filename: 文件名或文件路径
         binary: 文件二进制数据
         tenant_id: 租户ID（用于调用LLM）
-        lang: 语言 ("Chinese" 或 "English")
+        lang: 语言（"Chinese"或"English"）
         callback: 进度回调函数 callback(progress, message)
-        **kwargs: 其他参数，包括:
+        **kwargs: 其他参数，包括：
             - image_context_size: 图片上下文大小
             
     Returns:
         list: 切片后的文档列表
     """
-    from ..nlp import rag_tokenizer, tokenize
+    from ..nlp import rag_tokenizer, tokenize_doc
     
     doc = {
         "docnm_kwd": filename,
@@ -79,6 +79,9 @@ def chunk(filename, binary, tenant_id="", lang="Chinese", callback=None, **kwarg
 
 def _process_image(filename, binary, tenant_id, lang, doc, eng, image_ctx, callback, **kwargs):
     """处理图片文件"""
+    from ..nlp import tokenize_doc
+    callback = callback or (lambda prog, msg: None)
+    
     if Image is None:
         raise ImportError("请安装Pillow: pip install Pillow")
     
@@ -116,7 +119,7 @@ def _process_image(filename, binary, tenant_id, lang, doc, eng, image_ctx, callb
     
     # 判断是否需要使用视觉LLM增强
     if txt and ((eng and len(txt.split()) > 32) or len(txt) > 32):
-        tokenize(doc, txt, eng)
+        tokenize_doc(doc, txt, eng)
         callback(0.8, "OCR结果较长，跳过VLM增强")
         return attach_media_context([doc], 0, image_ctx)
     
@@ -126,12 +129,12 @@ def _process_image(filename, binary, tenant_id, lang, doc, eng, image_ctx, callb
         ans = _describe_with_vision_model(img, **kwargs)
         callback(0.8, f"CV LLM响应: {ans[:32]}...")
         txt += "\n" + ans
-        tokenize(doc, txt, eng)
+        tokenize_doc(doc, txt, eng)
         return attach_media_context([doc], 0, image_ctx)
     except Exception as e:
         logger.warning(f"视觉LLM描述失败: {e}")
         if txt:
-            tokenize(doc, txt, eng)
+            tokenize_doc(doc, txt, eng)
             return attach_media_context([doc], 0, image_ctx)
         callback(-1, str(e))
         return []
@@ -139,6 +142,9 @@ def _process_image(filename, binary, tenant_id, lang, doc, eng, image_ctx, callb
 
 def _process_video(filename, binary, tenant_id, lang, doc, eng, callback, **kwargs):
     """处理视频文件"""
+    from ..nlp import tokenize_doc
+    callback = callback or (lambda prog, msg: None)
+    
     doc.update({
         "doc_type_kwd": "video",
     })
@@ -149,8 +155,7 @@ def _process_video(filename, binary, tenant_id, lang, doc, eng, callback, **kwar
         callback(0.8, f"Sequence2Txt LLM响应: {ans[:32]}...")
         ans += "\n" + ans
         
-        from ..nlp import tokenize
-        tokenize(doc, ans, eng)
+        tokenize_doc(doc, ans, eng)
         return [doc]
         
     except Exception as e:

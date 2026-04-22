@@ -35,6 +35,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
         rag_tokenizer,
         num_tokens_from_string,
         is_english,
+        tokenize_doc,
     )
     
     parser_config = kwargs.get("parser_config", {
@@ -170,7 +171,7 @@ def _process_book_sections(sections, doc, eng, parser_config):
     res = []
     for ck in chunks:
         d = copy.deepcopy(doc)
-        tokenize(d, ck, eng)
+        tokenize_doc(d, ck, eng)
         res.append(d)
         
     return res
@@ -216,15 +217,6 @@ def _book_naive_merge(text, chunk_token_num=512, delimiter="\n"):
         cks.append(current_chunk.strip())
     
     return cks
-
-
-def tokenize(d, txt, eng):
-    """内部tokenize函数"""
-    from ..nlp.rag_tokenizer import tokenize as tk, fine_grained_tokenize
-    
-    d["content_with_weight"] = txt
-    d["content_ltks"] = tk(txt)
-    d["content_sm_ltks"] = fine_grained_tokenize(d["content_ltks"])
 
 
 if __name__ == "__main__":

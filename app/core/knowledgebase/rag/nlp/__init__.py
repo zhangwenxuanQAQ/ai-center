@@ -16,6 +16,7 @@ from .search import (
     tokenize_chunks_with_images,
     tokenize_table,
     add_positions,
+    tokenize_doc,
 )
 
 __all__ = [
@@ -34,4 +35,5 @@ __all__ = [
     "tokenize_chunks_with_images",
     "tokenize_table",
     "add_positions",
+    "tokenize_doc",
 ]

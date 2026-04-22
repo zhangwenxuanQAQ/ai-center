@@ -20,7 +20,8 @@ def _needs_text_extraction(mime_type: Optional[str], file_name: Optional[str]) -
     """
     判断文件是否需要文本提取
     
-    图片和音频文件不需要文本提取，其他文件需要
+    所有文件类型都可能需要文本提取（取决于模型能力）
+    对于视觉和音频文件，如果模型不支持直接处理，也需要文本提取
     
     Args:
         mime_type: MIME类型
@@ -32,9 +33,7 @@ def _needs_text_extraction(mime_type: Optional[str], file_name: Optional[str]) -
     if not file_name:
         return True
     
-    file_type = filename_type(file_name)
-    if file_type in (FileType.VISUAL, FileType.AURAL):
-        return False
+    # 现在所有文件类型都可能需要文本提取
     return True
 
 

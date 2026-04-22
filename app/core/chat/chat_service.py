@@ -7,6 +7,7 @@
 import json
 import uuid
 import base64
+import os
 import importlib.util
 from typing import List, Dict, Any, Optional, Generator, Tuple
 
@@ -57,18 +58,46 @@ class ChatCoreService:
     """
     
     @staticmethod
-    def convert_query_to_message(query: List[QueryItem]) -> Dict[str, Any]:
+    def _model_supports_images(model_type: str) -> bool:
+        """
+        判断模型是否支持处理图片
+        
+        Args:
+            model_type: 模型类型
+            
+        Returns:
+            bool: 是否支持图片
+        """
+        return model_type in ('vision', 'multimodal')
+    
+    @staticmethod
+    def _model_supports_audio(model_type: str) -> bool:
+        """
+        判断模型是否支持处理音频
+        
+        Args:
+            model_type: 模型类型
+            
+        Returns:
+            bool: 是否支持音频
+        """
+        return model_type in ('audio', 'multimodal')
+    
+    @staticmethod
+    def convert_query_to_message(query: List[QueryItem], model_type: Optional[str] = None) -> Dict[str, Any]:
         """
         将query数组转换为OpenAI格式的用户消息
         
         Args:
             query: 查询数组
+            model_type: 模型类型，用于判断如何处理文件
             
         Returns:
             Dict: OpenAI格式的用户消息
         """
         from app.services.chat.file_utils import get_file_from_datasource
         from app.core.prompt.utils.user_prompt_builder import build_user_prompt_with_documents
+        from app.core.knowledgebase.utils.file_utils import convert_base64_audio_to_wav
         
         # 处理document类型的QueryItem，从数据源获取文件
         processed_query = []
@@ -80,33 +109,67 @@ class ChatCoreService:
                 
                 if file_result.get('success'):
                     file_data = file_result.get('data', {})
+                    base64_content = file_data.get('base64_content', '')
+                    file_name = content_dict.get('file_name')
+                    
+                    # 如果是音频文件，转换为wav格式
+                    if file_name and filename_type(file_name) == FileType.AURAL:
+                        wav_base64, error_msg = convert_base64_audio_to_wav(base64_content, file_name)
+                        if wav_base64:
+                            base64_content = wav_base64
+                            # 更新文件名为wav格式
+                            name_without_ext = os.path.splitext(file_name)[0]
+                            file_name = f"{name_without_ext}.wav"
+                    
                     # 转换为file_base64类型，保留file_name和file_size
                     processed_query.append(QueryItem(
                         type='file_base64',
-                        content=file_data.get('base64_content', ''),
+                        content=base64_content,
                         mime_type=file_data.get('mime_type'),
-                        file_name=content_dict.get('file_name'),
+                        file_name=file_name,
                         file_size=content_dict.get('file_size') or file_data.get('file_size')
                     ))
                 else:
                     # 获取失败，跳过该文件
                     pass
+            elif item.type == 'file_base64' and item.file_name and filename_type(item.file_name) == FileType.AURAL:
+                # 如果是音频文件，转换为wav格式
+                base64_content = item.content
+                file_name = item.file_name
+                
+                wav_base64, error_msg = convert_base64_audio_to_wav(base64_content, file_name)
+                if wav_base64:
+                    base64_content = wav_base64
+                    # 更新文件名为wav格式
+                    name_without_ext = os.path.splitext(file_name)[0]
+                    file_name = f"{name_without_ext}.wav"
+                
+                processed_query.append(QueryItem(
+                    type='file_base64',
+                    content=base64_content,
+                    mime_type=item.mime_type,
+                    file_name=file_name,
+                    file_size=item.file_size
+                ))
             else:
                 processed_query.append(item)
         
-        # 检查是否有图片
-        has_image = any(item.type == 'file_base64' and item.mime_type and item.mime_type.startswith('image/') for item in processed_query)
+        # 判断模型能力
+        supports_images = ChatCoreService._model_supports_images(model_type) if model_type else False
+        supports_audio = ChatCoreService._model_supports_audio(model_type) if model_type else False
         
-        # 检查是否有需要文本提取的文件（非图片、非音频）
-        needs_text_extraction = False
-        for item in processed_query:
-            if item.type == 'file_base64' and item.file_name:
-                file_type = filename_type(item.file_name)
-                if file_type not in (FileType.VISUAL, FileType.AURAL):
-                    needs_text_extraction = True
-                    break
+        # 检查是否有图片且模型支持图片，或者有音频且模型支持音频
+        has_direct_image = supports_images and any(
+            item.type == 'file_base64' and item.mime_type and item.mime_type.startswith('image/') 
+            for item in processed_query
+        )
+        has_direct_audio = supports_audio and any(
+            item.type == 'file_base64' and item.file_name and filename_type(item.file_name) == FileType.AURAL 
+            for item in processed_query
+        )
         
-        if has_image:
+        # 如果可以直接处理某些媒体文件，构建multimodal格式的消息
+        if has_direct_image or has_direct_audio:
             content = []
             for item in processed_query:
                 if item.type == 'text':
@@ -115,20 +178,47 @@ class ChatCoreService:
                         'text': item.content
                     })
                 elif item.type == 'file_base64' and item.mime_type and item.mime_type.startswith('image/'):
-                    content.append({
-                        'type': 'image_url',
-                        'image_url': {
-                            'url': f'data:{item.mime_type};base64,{item.content}'
-                        }
-                    })
+                    if supports_images:
+                        # 模型支持图片，直接发送图片
+                        content.append({
+                            'type': 'image_url',
+                            'image_url': {
+                                'url': f'data:{item.mime_type};base64,{item.content}'
+                            }
+                        })
+                    # 模型不支持图片的话，会在后面通过build_user_prompt_with_documents处理
+                elif item.type == 'file_base64' and item.file_name and filename_type(item.file_name) == FileType.AURAL:
+                    if supports_audio:
+                        # 模型支持音频，直接发送音频
+                        content.append({
+                            'type': 'input_audio',
+                            'input_audio': {
+                                'data': f'data:audio;base64,{item.content}',
+                                'format': 'wav'
+                            }
+                        })
+                    # 模型不支持音频的话，会在后面通过build_user_prompt_with_documents处理
             
-            return {
-                'role': 'user',
-                'content': content
-            }
-        else:
-            # 如果有需要文本提取的文件，提取文本并拼接到用户提示词中
-            if needs_text_extraction:
+            # 如果有多模态内容但也有需要文本提取的文件，需要通过build_user_prompt_with_documents处理
+            has_other_files = any(
+                item.type == 'file_base64' and item.file_name and 
+                filename_type(item.file_name) not in (FileType.VISUAL, FileType.AURAL)
+                for item in processed_query
+            )
+            
+            # 需要检查是否有图片或音频但模型不支持的情况
+            has_unsupported_image = not supports_images and any(
+                item.type == 'file_base64' and item.mime_type and item.mime_type.startswith('image/') 
+                for item in processed_query
+            )
+            has_unsupported_audio = not supports_audio and any(
+                item.type == 'file_base64' and item.file_name and filename_type(item.file_name) == FileType.AURAL 
+                for item in processed_query
+            )
+            
+            if has_other_files or has_unsupported_image or has_unsupported_audio:
+                # 有其他需要文本提取的文件，或者有不被支持的媒体文件
+                # 对于这种情况，我们需要统一处理所有文件，通过文本提取方式
                 original_text = ' '.join(item.content for item in processed_query if item.type == 'text')
                 document_text = build_user_prompt_with_documents(processed_query, original_text)
                 return {
@@ -136,11 +226,19 @@ class ChatCoreService:
                     'content': document_text
                 }
             else:
-                text_content = ' '.join(item.content for item in processed_query if item.type == 'text')
+                # 只有支持的媒体文件和文本，直接返回多模态格式
                 return {
                     'role': 'user',
-                    'content': text_content
+                    'content': content
                 }
+        else:
+            # 没有可以直接处理的媒体文件，所有文件都通过文本提取方式处理
+            original_text = ' '.join(item.content for item in processed_query if item.type == 'text')
+            document_text = build_user_prompt_with_documents(processed_query, original_text)
+            return {
+                'role': 'user',
+                'content': document_text
+            }
     
     @staticmethod
     def get_model_config(model_id: str) -> Tuple[Dict[str, Any], str]:
@@ -387,7 +485,6 @@ class ChatCoreService:
         Yields:
             Dict: 流式响应数据
         """
-        user_message = ChatCoreService.convert_query_to_message(query)
         user_text = ChatCoreService.extract_text_from_query(query)
         
         config_dict = {}
@@ -489,6 +586,10 @@ class ChatCoreService:
                 return
         
         model_config, llm_config , model_type = ChatCoreService.get_model_config(model_id)
+        
+        # 现在获取了模型类型，转换查询为消息
+        user_message = ChatCoreService.convert_query_to_message(query, model_type)
+        
         model = LLMFactory.create_model(model_type, model_config)
         
         messages = ChatCoreService.build_messages(system_prompt, history_messages, user_message, user_prompt_messages)
@@ -806,7 +907,6 @@ class ChatCoreService:
         Returns:
             Dict: 响应数据
         """
-        user_message = ChatCoreService.convert_query_to_message(query)
         user_text = ChatCoreService.extract_text_from_query(query)
         
         # 处理config参数，统一转换为字典
@@ -911,6 +1011,10 @@ class ChatCoreService:
                 return {'error': '未指定模型', 'chat_id': chat_id}
         
         model_config, llm_config, model_type = ChatCoreService.get_model_config(model_id)
+        
+        # 现在获取了模型类型，转换查询为消息
+        user_message = ChatCoreService.convert_query_to_message(query, model_type)
+        
         model = LLMFactory.create_model(model_type, model_config)
         
         messages = ChatCoreService.build_messages(system_prompt, history_messages, user_message, user_prompt_messages)

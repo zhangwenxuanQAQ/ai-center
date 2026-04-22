@@ -7,6 +7,10 @@ import os
 import re
 import tempfile
 import logging
+import json
+
+from app.database.models import LLMModel
+from app.core.llm_model.factory import LLMFactory
 
 logger = logging.getLogger(__name__)
 
@@ -35,13 +39,14 @@ def chunk(filename, binary, tenant_id="", lang="Chinese", callback=None, **kwarg
     Returns:
         list: 切片后的文档列表
     """
-    from ..nlp import rag_tokenizer, tokenize
+    from ..nlp import rag_tokenizer, tokenize_doc
     
     doc = {"docnm_kwd": filename}
     doc["title_tks"] = rag_tokenizer.tokenize(re.sub(r"\.[a-zA-Z]+$", "", filename))
     doc["title_sm_tws"] = rag_tokenizer.fine_grained_tokenize(doc["title_tks"])
     
     is_english = lang.lower() == "english"
+    callback = callback or (lambda prog, msg: None)
     
     try:
         _, ext = os.path.splitext(filename)
@@ -65,7 +70,7 @@ def chunk(filename, binary, tenant_id="", lang="Chinese", callback=None, **kwarg
         ans = _transcribe_audio(tmp_path, **kwargs)
         callback(0.8, f"转录完成: {ans[:32]}...")
         
-        tokenize(doc, ans, is_english)
+        tokenize_doc(doc, ans, is_english)
         return [doc]
         
     except Exception as e:
@@ -81,11 +86,77 @@ def chunk(filename, binary, tenant_id="", lang="Chinese", callback=None, **kwarg
                 logger.warning(f"无法删除临时文件: {tmp_path}, 错误: {e}")
 
 
+def _get_suitable_model():
+    """
+    获取合适的音频转录模型
+    
+    优先级：
+    1. 默认音频模型 (is_default=True, model_type='audio')
+    2. 最新创建的音频模型 (model_type='audio')
+    3. 默认全模态模型 (is_default=True, model_type='multimodal')
+    4. 最新创建的全模态模型 (model_type='multimodal')
+    
+    Returns:
+        LLMModel: 合适的模型对象，没有则抛出异常
+        
+    Raises:
+        RuntimeError: 没有找到可用的模型
+    """
+    # 1. 查找默认音频模型
+    model = LLMModel.select().where(
+        (LLMModel.model_type == 'audio') &
+        (LLMModel.is_default == True) &
+        (LLMModel.status == True) &
+        (LLMModel.deleted == False)
+    ).first()
+    
+    if model:
+        logger.info(f"使用默认音频模型: %s", model.name)
+        return model
+    
+    # 2. 查找最新创建的音频模型
+    model = LLMModel.select().where(
+        (LLMModel.model_type == 'audio') &
+        (LLMModel.status == True) &
+        (LLMModel.deleted == False)
+    ).order_by(LLMModel.created_at.desc()).first()
+    
+    if model:
+        logger.info(f"使用最新音频模型: %s", model.name)
+        return model
+    
+    # 3. 查找默认全模态模型
+    model = LLMModel.select().where(
+        (LLMModel.model_type == 'multimodal') &
+        (LLMModel.is_default == True) &
+        (LLMModel.status == True) &
+        (LLMModel.deleted == False)
+    ).first()
+    
+    if model:
+        logger.info(f"使用默认全模态模型: %s", model.name)
+        return model
+    
+    # 4. 查找最新创建的全模态模型
+    model = LLMModel.select().where(
+        (LLMModel.model_type == 'multimodal') &
+        (LLMModel.status == True) &
+        (LLMModel.deleted == False)
+    ).order_by(LLMModel.created_at.desc()).first()
+    
+    if model:
+        logger.info(f"使用最新全模态模型: %s", model.name)
+        return model
+    
+    # 都没有找到，抛出异常
+    raise RuntimeError("请在模型库中创建音频模型或全模态模型")
+
+
 def _transcribe_audio(file_path, **kwargs):
     """
     音频转文字
     
-    使用ASR模型将音频转换为文本
+    使用ASR模型将音频转换为文字
     
     Args:
         file_path: 音频文件路径
@@ -93,23 +164,38 @@ def _transcribe_audio(file_path, **kwargs):
         
     Returns:
         str: 转录文本
+        
+    Raises:
+        RuntimeError: 转录失败
     """
-    # TODO: 集成实际的ASR模型
-    # 可选方案：
-    # 1. OpenAI Whisper API
-    # 2. 本地 Whisper 模型
-    # 3. Azure Speech Service
-    # 4. 百度/阿里云/腾讯云 ASR API
-    
-    # 返回占位符文本
-    return (
-        "[音频转录内容]\n"
-        "注意: 请配置语音转文字模型以启用自动转录功能。\n"
-        "支持的模型：\n"
-        "- OpenAI Whisper\n"
-        "- Azure Speech Service\n"
-        "- 本地Whisper模型"
-    )
+    try:
+        # 获取合适的模型
+        db_model = _get_suitable_model()
+        
+        # 构建模型配置
+        model_config = {
+            'api_key': db_model.api_key,
+            'endpoint': db_model.endpoint,
+            'name': db_model.name,
+            'provider': db_model.provider,
+            'model_name': db_model.name
+        }
+        
+        # 创建模型实例
+        model = LLMFactory.create_model(db_model.model_type, model_config)
+        
+        # 调用模型进行音频转录
+        result = model.generate(file_path, **kwargs)
+        
+        if 'error' in result:
+            raise RuntimeError(f"音频转录失败: %s", result['error'])
+        
+        # 返回转录文本
+        return result.get('text', '')
+        
+    except Exception as e:
+        logger.error(f"音频转录异常: %s", str(e), exc_info=True)
+        raise RuntimeError(f"音频转录失败: {str(e)}")
 
 
 if __name__ == "__main__":

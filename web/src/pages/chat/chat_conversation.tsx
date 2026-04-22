@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Input, Button, Switch, Modal, Slider, message, Popconfirm, Tooltip, Dropdown, Empty, Spin, Popover, InputNumber, Select, Steps, Upload, List } from 'antd';
-import { SendOutlined, ClearOutlined, SettingOutlined, RobotOutlined, BulbOutlined, LoadingOutlined, DownOutlined, RightOutlined, CopyOutlined, ReloadOutlined, EditOutlined, InfoCircleOutlined, StopOutlined, PaperClipOutlined, FolderOpenOutlined, FileTextOutlined, UploadOutlined, CloseCircleOutlined, InboxOutlined, FilePdfOutlined, FileWordOutlined, FileImageOutlined, DownloadOutlined } from '@ant-design/icons';
+import { SendOutlined, ClearOutlined, SettingOutlined, RobotOutlined, BulbOutlined, LoadingOutlined, DownOutlined, RightOutlined, CopyOutlined, ReloadOutlined, EditOutlined, InfoCircleOutlined, StopOutlined, PaperClipOutlined, FolderOpenOutlined, FileTextOutlined, UploadOutlined, CloseCircleOutlined, InboxOutlined, FilePdfOutlined, FileWordOutlined, FileImageOutlined, SoundOutlined, DownloadOutlined } from '@ant-design/icons';
 import DataSourceFileSelector from '../datasource/datasource data_select';
 import type { MenuProps, UploadProps } from 'antd';
 import MDEditor from '@uiw/react-md-editor';
@@ -650,7 +650,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
   const handleSendMessageWithMessages = async (
     previousMessages: Message[],
     content: string,
-    messageId?: string
+    messageId?: string,
+    extraContent?: any
   ) => {
     if (loading) return;
 
@@ -670,15 +671,18 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       newMessages = [...previousMessages, userMessage];
     } else {
       // 重新回答或编辑问题时，仍然创建临时用户消息，但保留 messageId 传给后端
-      let extraContent = undefined;
+      let finalExtraContent = undefined;
       
       // 检查是否有编辑文件
       if (editingFiles.length > 0) {
-        extraContent = { files: editingFiles };
+        finalExtraContent = { files: editingFiles };
+      } else if (extraContent) {
+        // 使用传入的 extraContent（重新回答时会传入）
+        finalExtraContent = extraContent;
       } else {
         // 如果没有编辑文件，使用旧消息的 extra_content
         const lastOldUserMessage = previousMessages[previousMessages.length - 1];
-        extraContent = lastOldUserMessage?.extra_content;
+        finalExtraContent = lastOldUserMessage?.extra_content;
       }
       
       const userMessage: Message = {
@@ -686,7 +690,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         role: 'user',
         content: content.trim(),
         created_at: new Date().toISOString(),
-        extra_content: extraContent
+        extra_content: finalExtraContent
       };
       currentUserMessageId = userMessage.id;
       userMessageForId = userMessage;
@@ -922,7 +926,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     const updatedMessages = messages.slice(0, messageIndex - 1);
     
     // 直接调用 handleSendMessageWithMessages，它会处理消息添加
-    handleSendMessageWithMessages(updatedMessages, userMessage.content, userMessage.id);
+    handleSendMessageWithMessages(updatedMessages, userMessage.content, userMessage.id, userMessage.extra_content);
   };
 
   const getProviderAvatar = (provider: string): string => {
@@ -970,7 +974,12 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       case 'wav':
       case 'ogg':
       case 'flac':
-        return <FileTextOutlined style={{ color: '#fa8c16' }} />;
+      case 'aac':
+      case 'm4a':
+      case 'aiff':
+      case 'ape':
+      case 'wma':
+        return <SoundOutlined style={{ color: '#fa8c16' }} />;
       default:
         return <FileTextOutlined />;
     }

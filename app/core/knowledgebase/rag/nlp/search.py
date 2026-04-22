@@ -345,7 +345,7 @@ def tokenize_chunks(chunks, doc, eng, pdf_parser=None, child_delimiters_pattern=
             res.extend(split_with_pattern(d, child_delimiters_pattern, ck, eng))
             continue
 
-        _tokenize(d, ck, eng)
+        tokenize_doc(d, ck, eng)
         res.append(d)
     return res
 
@@ -368,7 +368,7 @@ def tokenize_chunks_with_images(chunks, doc, eng, images, child_delimiters_patte
             res.extend(split_with_pattern(d, child_delimiters_pattern, ck, eng))
             continue
             
-        _tokenize(d, ck, eng)
+        tokenize_doc(d, ck, eng)
         res.append(d)
     return res
 
@@ -383,13 +383,12 @@ def tokenize_table(tbls, doc, eng, batch_size=10):
             continue
         if isinstance(rows, str):
             d = copy.deepcopy(doc)
-            _tokenize(d, rows, eng)
+            tokenize_doc(d, rows, eng)
             d["content_with_weight"] = rows
             d["doc_type_kwd"] = "table"
             if img:
                 d["image"] = img
-                if d["content_with_weight"].find("<tr>") < 0:
-                    d["doc_type_kwd"] = "image"
+                if d["content_with_weight"].find("<tr>") < 0:                    d["doc_type_kwd"] = "image"
             if poss:
                 add_positions(d, poss)
             res.append(d)
@@ -399,19 +398,18 @@ def tokenize_table(tbls, doc, eng, batch_size=10):
         for i in range(0, len(rows), batch_size):
             d = copy.deepcopy(doc)
             r = de.join(rows[i:i + batch_size])
-            _tokenize(d, r, eng)
+            tokenize_doc(d, r, eng)
             d["doc_type_kwd"] = "table"
             if img:
                 d["image"] = img
-                if d["content_with_weight"].find("<tr>") < 0:
-                    d["doc_type_kwd"] = "image"
+                if d["content_with_weight"].find("<tr>") < 0:                    d["doc_type_kwd"] = "image"
             add_positions(d, poss)
             res.append(d)
     return res
 
 
-def _tokenize(d, txt, eng):
-    """内部tokenize函数"""
+def tokenize_doc(d, txt, eng):
+    """文档tokenize函数，将文本进行分词处理并更新文档"""
     d["content_with_weight"] = txt
     t = re.sub(r"</?(table|td|caption|tr|th)( [^<>]{0,12})?>", " ", txt)
     d["content_ltks"] = tokenize(t)
@@ -427,7 +425,7 @@ def split_with_pattern(d, pattern: str, content: str, eng) -> list:
     except re.error as e:
         logger.warning(f"Invalid delimiter regex pattern '{pattern}': {e}")
         dd = copy.deepcopy(d)
-        _tokenize(dd, content, eng)
+        tokenize_doc(dd, content, eng)
         return [dd]
 
     txts = [txt for txt in compiled_pattern.split(content)]
@@ -438,7 +436,7 @@ def split_with_pattern(d, pattern: str, content: str, eng) -> list:
         if j + 1 < len(txts):
             txt += txts[j + 1]
         dd = copy.deepcopy(d)
-        _tokenize(dd, txt, eng)
+        tokenize_doc(dd, txt, eng)
         docs.append(dd)
     return docs
 
@@ -471,4 +469,5 @@ __all__ = [
     'tokenize_chunks_with_images',
     'tokenize_table',
     'add_positions',
+    'tokenize_doc',
 ]

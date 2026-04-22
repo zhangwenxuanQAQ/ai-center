@@ -78,7 +78,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
     Returns:
         list: 包含单个文档元素的列表
     """
-    from ..nlp import rag_tokenizer, tokenize
+    from ..nlp import rag_tokenizer, tokenize_doc
     
     parser_config = kwargs.get("parser_config", {
         "chunk_token_num": 512,
@@ -182,7 +182,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
     
     # 合并所有内容为一个chunk
     full_text = "\n".join(str(s) for s in sections if s)
-    tokenize(doc, full_text, eng)
+    tokenize_doc(doc, full_text, eng)
     
     return [doc]
 

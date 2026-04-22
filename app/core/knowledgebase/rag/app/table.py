@@ -227,7 +227,7 @@ def chunk(filename, binary=None, from_page=0, to_page=10000000000, lang="Chinese
     Returns:
         list: 切片后的文档列表
     """
-    from ..nlp import rag_tokenizer, tokenize
+    from ..nlp import rag_tokenizer, tokenize_doc
     
     if pd is None:
         raise ImportError("请安装pandas: pip install pandas")
@@ -373,7 +373,7 @@ def chunk(filename, binary=None, from_page=0, to_page=10000000000, lang="Chinese
                 continue
             
             formatted_text = "\n".join([f"- {field}: {value}" for field, value in row_fields])
-            tokenize(d, formatted_text, eng)
+            tokenize_doc(d, formatted_text, eng)
             res.append(d)
     
     if tbls:

@@ -42,8 +42,8 @@ class LLMFactory:
         elif model_type == 'voice' or model_type == 'audio':
             return AudioModel(model_config)
         elif model_type == 'multimodal':
-            # 全模态模型暂时使用文本模型实现
-            return TextModel(model_config)
+            # 全模态模型使用视觉模型实现，支持图片和音频
+            return VisionModel(model_config)
         elif model_type == 'tts':
             return TTSModel(model_config)
         else:

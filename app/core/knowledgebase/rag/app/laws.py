@@ -33,7 +33,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
         naive_merge,
         tokenize_chunks,
         rag_tokenizer,
-        tokenize,
+        tokenize_doc,
         is_english,
     )
     
@@ -74,7 +74,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
             d["article_title_kwd"] = article_title
             
             full_text = f"{article_title}\n{article_content}" if article_title else article_content
-            tokenize(d, full_text, eng)
+            tokenize_doc(d, full_text, eng)
             res.append(d)
         
         callback(0.8, "PDF法规解析完成")
@@ -92,7 +92,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
             d["article_title_kwd"] = article_title
             
             full_text = f"{article_title}\n{article_content}" if article_title else article_content
-            tokenize(d, full_text, eng)
+            tokenize_doc(d, full_text, eng)
             res.append(d)
         
         callback(0.8, "DOCX法规解析完成")
@@ -110,7 +110,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
             d["article_title_kwd"] = article_title
             
             full_text = f"{article_title}\n{article_content}" if article_title else article_content
-            tokenize(d, full_text, eng)
+            tokenize_doc(d, full_text, eng)
             res.append(d)
         
         callback(0.8, "TXT法规解析完成")
