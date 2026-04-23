@@ -188,8 +188,8 @@ def build_user_prompt_with_documents(query: List[QueryItem], original_text: str)
 
             mime_type = None
             if '.' in file_name:
-                import mimetypes
-                mime_type, _ = mimetypes.guess_type(file_name)
+                from app.core.knowledgebase.utils.file_utils import get_mime_type
+                mime_type = get_mime_type(file_name)
 
             if not _needs_text_extraction(mime_type, file_name):
                 continue

@@ -115,22 +115,32 @@ def extract_file_info_from_query(query_items: list) -> list:
     for item in query_items:
         if item.type == "file_base64":
             # 本地上传的文件
+            mime_type = item.mime_type
+            # 如果mime_type为空，根据文件名自动检测
+            if not mime_type and item.file_name:
+                from app.core.knowledgebase.utils.file_utils import get_mime_type
+                mime_type = get_mime_type(item.file_name)
             files_info.append({
                 "type": "local",
                 "file_name": item.file_name or "unknown",
-                "mime_type": item.mime_type,
+                "mime_type": mime_type,
                 "file_size": item.file_size,
                 "base64_content": item.content if isinstance(item.content, str) else ""
             })
         elif item.type == "document":
             # 数据源文件
             content_dict = item.content if isinstance(item.content, dict) else {}
+            file_name = content_dict.get("file_name", content_dict.get("location", "unknown").split("/")[-1])
+            # 为数据源文件也添加mime_type字段
+            from app.core.knowledgebase.utils.file_utils import get_mime_type
+            mime_type = get_mime_type(file_name)
             files_info.append({
                 "type": "datasource",
                 "datasource_id": content_dict.get("datasource_id"),
                 "bucket": content_dict.get("bucket"),
                 "location": content_dict.get("location"),
-                "file_name": content_dict.get("file_name", content_dict.get("location", "unknown").split("/")[-1]),
+                "file_name": file_name,
+                "mime_type": mime_type,
                 "file_size": content_dict.get("file_size")
             })
     

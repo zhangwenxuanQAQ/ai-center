@@ -456,11 +456,16 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       title: '文档名称',
       dataIndex: 'file_name',
       key: 'file_name',
+      width: 100,
       render: (text: string, record: KnowledgebaseDocument) => (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <FileTextOutlined />
-          <span>{text || '未命名文档'}</span>
-        </div>
+        <Tooltip title={text || '未命名文档'}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
+            <FileTextOutlined />
+            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {text || '未命名文档'}
+            </span>
+          </div>
+        </Tooltip>
       ),
     },
     {
@@ -830,7 +835,8 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
               rowKey="id"
               pagination={false}
               className={`knowledgebase-document-table ${theme === 'dark' ? 'dark' : 'light'}`}
-              scroll={{ x: 'max-content', y: 'calc(100vh - 300px)' }}
+              scroll={{ x: true, y: 'calc(100vh - 300px)' }}
+              tableLayout="fixed"
               rowSelection={{
                 selectedRowKeys,
                 onChange: (selectedKeys) => setSelectedRowKeys(selectedKeys),

@@ -58,17 +58,31 @@ class ChatCoreService:
     """
     
     @staticmethod
-    def _model_supports_images(model_type: str) -> bool:
+    def _model_supports_images(model_type: str, model_id: Optional[str] = None) -> bool:
         """
         判断模型是否支持处理图片
         
         Args:
             model_type: 模型类型
+            model_id: 模型ID，用于查询数据库中的support_image字段
             
         Returns:
             bool: 是否支持图片
         """
-        return model_type in ('vision', 'multimodal')
+        if model_type in ('vision', 'multimodal'):
+            return True
+        elif model_type == 'text' and model_id:
+            # 如果是文本模型，查询数据库中的support_image字段
+            try:
+                from app.database.models import LLMModel
+                model = LLMModel.get(
+                    (LLMModel.id == model_id) &
+                    (LLMModel.deleted == False)
+                )
+                return model.support_image if hasattr(model, 'support_image') else False
+            except LLMModel.DoesNotExist:
+                return False
+        return False
     
     @staticmethod
     def _model_supports_audio(model_type: str) -> bool:
@@ -84,13 +98,14 @@ class ChatCoreService:
         return model_type in ('audio', 'multimodal')
     
     @staticmethod
-    def convert_query_to_message(query: List[QueryItem], model_type: Optional[str] = None) -> Dict[str, Any]:
+    def convert_query_to_message(query: List[QueryItem], model_type: Optional[str] = None, model_id: Optional[str] = None) -> Dict[str, Any]:
         """
         将query数组转换为OpenAI格式的用户消息
         
         Args:
             query: 查询数组
             model_type: 模型类型，用于判断如何处理文件
+            model_id: 模型ID，用于查询数据库中的support_image字段
             
         Returns:
             Dict: OpenAI格式的用户消息
@@ -132,22 +147,32 @@ class ChatCoreService:
                 else:
                     # 获取失败，跳过该文件
                     pass
-            elif item.type == 'file_base64' and item.file_name and filename_type(item.file_name) == FileType.AURAL:
-                # 如果是音频文件，转换为wav格式
+            elif item.type == 'file_base64':
+                # 处理file_base64类型，自动检测mime_type
                 base64_content = item.content
                 file_name = item.file_name
+                mime_type = item.mime_type
                 
-                wav_base64, error_msg = convert_base64_audio_to_wav(base64_content, file_name)
-                if wav_base64:
-                    base64_content = wav_base64
-                    # 更新文件名为wav格式
-                    name_without_ext = os.path.splitext(file_name)[0]
-                    file_name = f"{name_without_ext}.wav"
+                # 如果mime_type为空，根据文件名自动检测
+                if not mime_type and file_name:
+                    from app.core.knowledgebase.utils.file_utils import get_mime_type
+                    mime_type = get_mime_type(file_name)
+                
+                # 如果是音频文件，转换为wav格式
+                if file_name and filename_type(file_name) == FileType.AURAL:
+                    wav_base64, error_msg = convert_base64_audio_to_wav(base64_content, file_name)
+                    if wav_base64:
+                        base64_content = wav_base64
+                        # 更新文件名为wav格式
+                        name_without_ext = os.path.splitext(file_name)[0]
+                        file_name = f"{name_without_ext}.wav"
+                        # 更新mime_type为音频格式
+                        mime_type = 'audio/wav'
                 
                 processed_query.append(QueryItem(
                     type='file_base64',
                     content=base64_content,
-                    mime_type=item.mime_type,
+                    mime_type=mime_type,
                     file_name=file_name,
                     file_size=item.file_size
                 ))
@@ -155,7 +180,7 @@ class ChatCoreService:
                 processed_query.append(item)
         
         # 判断模型能力
-        supports_images = ChatCoreService._model_supports_images(model_type) if model_type else False
+        supports_images = ChatCoreService._model_supports_images(model_type, model_id) if model_type else False
         supports_audio = ChatCoreService._model_supports_audio(model_type) if model_type else False
         
         # 检查是否有图片且模型支持图片，或者有音频且模型支持音频
@@ -589,7 +614,7 @@ class ChatCoreService:
         model_config, llm_config , model_type = ChatCoreService.get_model_config(model_id)
         
         # 现在获取了模型类型，转换查询为消息
-        user_message = ChatCoreService.convert_query_to_message(query, model_type)
+        user_message = ChatCoreService.convert_query_to_message(query, model_type, model_id)
         
         model = LLMFactory.create_model(model_type, model_config)
         
@@ -1014,7 +1039,7 @@ class ChatCoreService:
         model_config, llm_config, model_type = ChatCoreService.get_model_config(model_id)
         
         # 现在获取了模型类型，转换查询为消息
-        user_message = ChatCoreService.convert_query_to_message(query, model_type)
+        user_message = ChatCoreService.convert_query_to_message(query, model_type, model_id)
         
         model = LLMFactory.create_model(model_type, model_config)
         
