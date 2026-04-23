@@ -49,7 +49,7 @@ class TextModel(BaseLLM):
         
         Args:
             prompt: 提示词
-            **kwargs: 其他参数，如temperature、top_p、max_tokens、image、tools等
+            **kwargs: 其他参数，如temperature、top_p、max_tokens、image、image_url、tools等
             
         Returns:
             生成结果
@@ -59,21 +59,35 @@ class TextModel(BaseLLM):
         
         try:
             image = kwargs.pop('image', None)
+            image_url = kwargs.pop('image_url', None)
             tools = kwargs.pop('tools', None)
             
-            if image:
+            # 处理图片参数：支持 image（base64）和 image_url（URL或data URI）
+            if image or image_url:
+                image_content = []
+                if image:
+                    # image 是 base64 编码的图片数据
+                    image_content.append({
+                        'type': 'image_url',
+                        'image_url': {
+                            'url': f'data:image/jpeg;base64,{image}'
+                        }
+                    })
+                if image_url:
+                    # image_url 可以是 URL 或 data URI
+                    image_content.append({
+                        'type': 'image_url',
+                        'image_url': {
+                            'url': image_url
+                        }
+                    })
+                
                 messages = [
                     {
                         'role': 'user', 
                         'content': [
-                            {'type': 'text', 'text': prompt},
-                            {
-                                'type': 'image_url',
-                                'image_url': {
-                                    'url': f'data:image/jpeg;base64,{image}'
-                                }
-                            }
-                        ]
+                            {'type': 'text', 'text': prompt}
+                        ] + image_content
                     }
                 ]
             else:
@@ -121,10 +135,10 @@ class TextModel(BaseLLM):
         
         Args:
             prompt: 提示词
-            **kwargs: 其他参数，如temperature、top_p、max_tokens、image等
+            **kwargs: 其他参数，如temperature、top_p、max_tokens、image、image_url、tools等
             
         Yields:
-            流式生成的结果
+            流式生成的结果，包含text、reasoning_content（思考过程）、usage（token消耗）、tool_calls（工具调用）
         """
         if not self._validate_config():
             yield {'error': 'Invalid configuration'}
@@ -132,20 +146,35 @@ class TextModel(BaseLLM):
         
         try:
             image = kwargs.pop('image', None)
+            image_url = kwargs.pop('image_url', None)
+            tools = kwargs.pop('tools', None)
             
-            if image:
+            # 处理图片参数：支持 image（base64）和 image_url（URL或data URI）
+            if image or image_url:
+                image_content = []
+                if image:
+                    # image 是 base64 编码的图片数据
+                    image_content.append({
+                        'type': 'image_url',
+                        'image_url': {
+                            'url': f'data:image/jpeg;base64,{image}'
+                        }
+                    })
+                if image_url:
+                    # image_url 可以是 URL 或 data URI
+                    image_content.append({
+                        'type': 'image_url',
+                        'image_url': {
+                            'url': image_url
+                        }
+                    })
+                
                 messages = [
                     {
                         'role': 'user', 
                         'content': [
-                            {'type': 'text', 'text': prompt},
-                            {
-                                'type': 'image_url',
-                                'image_url': {
-                                    'url': f'data:image/jpeg;base64,{image}'
-                                }
-                            }
-                        ]
+                            {'type': 'text', 'text': prompt}
+                        ] + image_content
                     }
                 ]
             else:
@@ -165,10 +194,15 @@ class TextModel(BaseLLM):
                 'stream_options': {'include_usage': True}
             }
             
+            if tools:
+                params['tools'] = tools
+            
             params = self._handle_deep_thinking(params, kwargs)
             params.update(kwargs)
             
             stream = self.client.chat.completions.create(**params)
+            
+            tool_calls_data = {}
             
             for chunk in stream:
                 if chunk.choices:
@@ -180,6 +214,28 @@ class TextModel(BaseLLM):
                     }
                     if hasattr(choice.delta, 'reasoning_content') and choice.delta.reasoning_content:
                         result['reasoning_content'] = choice.delta.reasoning_content
+                    
+                    if hasattr(choice.delta, 'tool_calls') and choice.delta.tool_calls:
+                        for tool_call in choice.delta.tool_calls:
+                            idx = tool_call.index
+                            if idx not in tool_calls_data:
+                                tool_calls_data[idx] = {
+                                    'id': tool_call.id,
+                                    'type': tool_call.type,
+                                    'function': {
+                                        'name': '',
+                                        'arguments': ''
+                                    }
+                                }
+                            if tool_call.function:
+                                if tool_call.function.name:
+                                    tool_calls_data[idx]['function']['name'] += tool_call.function.name
+                                if tool_call.function.arguments:
+                                    tool_calls_data[idx]['function']['arguments'] += tool_call.function.arguments
+                        
+                        if tool_calls_data:
+                            result['tool_calls'] = list(tool_calls_data.values())
+                    
                     yield result
                 elif chunk.usage:
                     yield {

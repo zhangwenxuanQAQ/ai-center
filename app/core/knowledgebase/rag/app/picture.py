@@ -5,6 +5,7 @@
 
 import io
 import re
+import base64
 import logging
 
 try:
@@ -17,12 +18,13 @@ try:
 except ImportError:
     Image = None
 
+from app.core.llm_model.factory import LLMFactory
+from ..utils.model_selector import get_suitable_vision_model, get_suitable_audio_model
+
 logger = logging.getLogger(__name__)
 
-# 支持的视频格式
 VIDEO_EXTS = [".mp4", ".mov", ".avi", ".flv", ".mpeg", ".mpg", ".webm", ".wmv", ".3gp", ".3gpp", ".mkv"]
 
-# OCR实例（延迟初始化）
 _ocr_instance = None
 
 
@@ -68,11 +70,8 @@ def chunk(filename, binary, tenant_id="", lang="Chinese", callback=None, **kwarg
     parser_config = kwargs.get("parser_config", {}) or {}
     image_ctx = max(0, int(parser_config.get("image_context_size", 0) or 0))
     
-    # 视频文件处理
     if any(filename.lower().endswith(ext) for ext in VIDEO_EXTS):
         return _process_video(filename, binary, tenant_id, lang, doc, eng, callback, **kwargs)
-    
-    # 图片文件处理
     else:
         return _process_image(filename, binary, tenant_id, lang, doc, eng, image_ctx, callback, **kwargs)
 
@@ -97,7 +96,6 @@ def _process_image(filename, binary, tenant_id, lang, doc, eng, image_ctx, callb
         "doc_type_kwd": "image",
     })
     
-    # OCR文字识别
     ocr = get_ocr()
     txt = ""
     
@@ -110,20 +108,17 @@ def _process_image(filename, binary, tenant_id, lang, doc, eng, image_ctx, callb
             logger.warning(f"OCR识别失败: {e}")
             txt = ""
     else:
-        # 简单的文本提取（如果可用）
         try:
             if hasattr(img, 'text'):
                 txt = getattr(img, 'text', '')
         except:
             txt = ""
     
-    # 判断是否需要使用视觉LLM增强
     if txt and ((eng and len(txt.split()) > 32) or len(txt) > 32):
         tokenize_doc(doc, txt, eng)
         callback(0.8, "OCR结果较长，跳过VLM增强")
         return attach_media_context([doc], 0, image_ctx)
     
-    # 尝试使用视觉LLM描述图片
     try:
         callback(0.4, "使用CV LLM描述图片")
         ans = _describe_with_vision_model(img, **kwargs)
@@ -150,7 +145,6 @@ def _process_video(filename, binary, tenant_id, lang, doc, eng, callback, **kwar
     })
     
     try:
-        # 尝试使用语音转文字LLM
         ans = _transcribe_audio(binary, **kwargs)
         callback(0.8, f"Sequence2Txt LLM响应: {ans[:32]}...")
         ans += "\n" + ans
@@ -168,34 +162,126 @@ def _describe_with_vision_model(image, **kwargs):
     """
     使用视觉语言模型描述图片
     
-    这是一个简化实现，实际项目中应该集成具体的VLM服务
+    自动选择合适的视觉模型进行图片描述
+    
+    Args:
+        image: PIL Image对象
+        **kwargs: 额外参数
+        
+    Returns:
+        str: 图片描述文本
+        
+    Raises:
+        RuntimeError: 没有找到可用的视觉模型
     """
-    # TODO: 集成实际的视觉语言模型服务
-    # 例如：OpenAI GPT-4V, Claude Vision, Qwen-VL等
+    db_model = get_suitable_vision_model()
     
-    # 返回基于图片基本信息的简单描述
-    width, height = image.size if hasattr(image, 'size') else (0, 0)
+    if not db_model:
+        width, height = image.size if hasattr(image, 'size') else (0, 0)
+        return (
+            f"[图片描述]\n"
+            f"尺寸: {width}x{height}\n"
+            f"模式: {image.mode if hasattr(image, 'mode') else 'unknown'}\n"
+            f"注意: 未找到可用的视觉模型，请在模型库中创建视觉模型、支持图片的文本模型或全模态模型"
+        )
     
-    description = (
-        f"[图片描述]\n"
-        f"尺寸: {width}x{height}\n"
-        f"模式: {image.mode if hasattr(image, 'mode') else 'unknown'}\n"
-        f"注意: 请配置视觉语言模型以获得更详细的描述"
-    )
+    model_config = {
+        'api_key': db_model.api_key,
+        'endpoint': db_model.endpoint,
+        'name': db_model.name,
+        'provider': db_model.provider,
+        'model_name': db_model.name
+    }
     
-    return description
+    model = LLMFactory.create_model(db_model.model_type, model_config)
+    
+    with io.BytesIO() as img_binary:
+        try:
+            image.save(img_binary, format="JPEG")
+        except Exception:
+            img_binary.seek(0)
+            img_binary.truncate()
+            image.save(img_binary, format="PNG")
+        
+        img_binary.seek(0)
+        img_data = img_binary.read()
+        img_base64 = base64.b64encode(img_data).decode('utf-8')
+        img_data_uri = f"data:image/jpeg;base64,{img_base64}"
+    
+    prompt = "请详细描述这张图片的内容。"
+    
+    # 过滤掉不应该传递给模型的参数，只保留模型支持的参数
+    allowed_params = {'temperature', 'max_tokens', 'top_p', 'frequency_penalty', 
+                      'presence_penalty', 'deep_thinking', 'tools', 'stream'}
+    model_kwargs = {k: v for k, v in kwargs.items() if k in allowed_params}
+    
+    result = model.generate(prompt, image_url=img_data_uri, **model_kwargs)
+    
+    if 'error' in result:
+        raise RuntimeError(f"视觉模型描述失败: {result['error']}")
+    
+    return result.get('text', '')
 
 
 def _transcribe_audio(binary, **kwargs):
     """
     音频/视频转录
     
-    这是一个简化实现，实际项目中应该集成Whisper等ASR模型
-    """
-    # TODO: 集成实际的音频转录模型
-    # 例如：OpenAI Whisper, Azure Speech Service等
+    自动选择合适的音频模型进行语音转录
     
-    return "[视频/音频内容]\n注意: 请配置语音转文字模型以进行自动转录"
+    Args:
+        binary: 音频/视频二进制数据
+        **kwargs: 额外参数
+        
+    Returns:
+        str: 转录文本
+        
+    Raises:
+        RuntimeError: 没有找到可用的音频模型
+    """
+    import tempfile
+    import os
+    from app.core.knowledgebase.utils.file_utils import convert_to_wav, cleanup_temp_files
+    
+    db_model = get_suitable_audio_model()
+    
+    if not db_model:
+        return "[视频/音频内容]\n注意: 未找到可用的音频模型，请在模型库中创建音频模型或全模态模型"
+    
+    model_config = {
+        'api_key': db_model.api_key,
+        'endpoint': db_model.endpoint,
+        'name': db_model.name,
+        'provider': db_model.provider,
+        'model_name': db_model.name
+    }
+    
+    model = LLMFactory.create_model(db_model.model_type, model_config)
+    
+    tmp_path = ""
+    try:
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmpf:
+            tmpf.write(binary)
+            tmpf.flush()
+            tmp_path = os.path.abspath(tmpf.name)
+        
+        # 过滤掉不应该传递给模型的参数，只保留模型支持的参数
+        allowed_params = {'temperature', 'max_tokens', 'top_p', 'frequency_penalty', 
+                          'presence_penalty', 'deep_thinking', 'tools', 'stream'}
+        model_kwargs = {k: v for k, v in kwargs.items() if k in allowed_params}
+        
+        result = model.generate(tmp_path, **model_kwargs)
+        
+        if 'error' in result:
+            raise RuntimeError(f"音频转录失败: {result['error']}")
+        
+        return result.get('text', '')
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
 
 
 def vision_llm_chunk(binary, vision_model=None, prompt=None, callback=None):
@@ -217,7 +303,6 @@ def vision_llm_chunk(binary, vision_model=None, prompt=None, callback=None):
     txt = ""
     
     try:
-        # 跳过太小的裁剪图
         if hasattr(img, "size"):
             min_side = 11
             if img.size[0] < min_side or img.size[1] < min_side:
@@ -234,13 +319,11 @@ def vision_llm_chunk(binary, vision_model=None, prompt=None, callback=None):
             
             img_binary.seek(0)
             
-            # 调用视觉模型
             if vision_model:
                 ans = vision_model.describe_with_prompt(img_binary.read(), prompt)
             else:
                 ans = _describe_with_vision_model(Image.open(img_binary) if Image else None)
             
-            # 清理markdown块
             if ans.startswith("```"):
                 lines = ans.split("\n")
                 if lines[0].startswith("```"):
@@ -269,7 +352,6 @@ def attach_media_context(docs, start, image_ctx):
     Returns:
         list: 处理后的文档列表
     """
-    # 简化实现，直接返回原文档
     return docs
 
 

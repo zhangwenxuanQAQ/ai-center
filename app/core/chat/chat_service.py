@@ -567,9 +567,10 @@ class ChatCoreService:
                     (ChatMessage.chat_id == chat_id) &
                     (ChatMessage.deleted == False)
                 )
+                # 查找历史消息中对应的消息 - 只根据 message_id 匹配，不比较 content
                 for i in reversed(range(len(history_messages))):
                     msg = history_messages[i]
-                    if msg.get('role') == 'user' and msg.get('content') == target_message.content and msg.get('message_id') == message_id:
+                    if msg.get('role') == 'user' and msg.get('message_id') == message_id:
                         history_messages = history_messages[:i]
                         break
             except ChatMessage.DoesNotExist:
@@ -834,7 +835,7 @@ class ChatCoreService:
                 if reasoning_content and reasoning_end_time:
                     reasoning_time = int((reasoning_end_time - start_time) * 1000)
                 
-                assistant_message_dict = {'role': 'assistant', 'content': full_response}
+                assistant_message_dict = {'role': 'assistant', 'content': full_response , 'message_id': assistant_message_id}
                 if reasoning_content:
                     assistant_message_dict['reasoning_content'] = reasoning_content
 
@@ -991,10 +992,10 @@ class ChatCoreService:
                     (ChatMessage.chat_id == chat_id) &
                     (ChatMessage.deleted == False)
                 )
-                # 查找历史消息中对应的消息
+                # 查找历史消息中对应的消息 - 只根据 message_id 匹配，不比较 content
                 for i in reversed(range(len(history_messages))):
                     msg = history_messages[i]
-                    if msg.get('role') == 'user' and msg.get('content') == target_message.content and msg.get('message_id') == message_id:
+                    if msg.get('role') == 'user' and msg.get('message_id') == message_id:
                         # 移除从该用户消息开始的所有消息
                         history_messages = history_messages[:i]
                         break
@@ -1037,7 +1038,7 @@ class ChatCoreService:
         from app.services.chat.file_utils import build_extra_content
         extra_content = build_extra_content(query)
         
-        ChatMessageService.create_user_message(
+        user_msg = ChatMessageService.create_user_message(
             chat_id=chat_id,
             user_content=user_text,
             model_id=model_id,
@@ -1046,6 +1047,8 @@ class ChatCoreService:
             message_id=message_id,
             extra_content=extra_content
         )
+        user_message_id = user_msg.message_id
+        assistant_message_id = uuid.uuid4().hex
         
         import time
         start_time = time.time()
@@ -1150,7 +1153,7 @@ class ChatCoreService:
         if full_reasoning:
             reasoning_time = int((time.time() - start_time) * 1000)
         
-        assistant_message_dict = {'role': 'assistant', 'content': full_response}
+        assistant_message_dict = {'role': 'assistant', 'content': full_response , 'message_id': assistant_message_id}
         if full_reasoning:
             assistant_message_dict['reasoning_content'] = full_reasoning
 
@@ -1184,10 +1187,13 @@ class ChatCoreService:
 
         chat_messages = ChatMessageService.get_messages_by_chat(chat_id)
         updated_messages = []
+        msg_idx = 0
         for i in range(len(messages)):
             if messages[i]['role'] != 'system':
-                messages[i]['message_id'] = chat_messages.items[i].message_id
-                messages[i]['reasoning_content'] = chat_messages.items[i].reasoning_content
+                if msg_idx < len(chat_messages.items):
+                    messages[i]['message_id'] = chat_messages.items[msg_idx].message_id
+                    messages[i]['reasoning_content'] = chat_messages.items[msg_idx].reasoning_content
+                msg_idx += 1
             updated_messages.append(messages[i])
         # updated_messages = [{"role": msg.role, "content": msg.content , "reasoning_content": msg.reasoning_content , "message_id": msg.message_id} for msg in chat_messages.items if not msg.role != 'system']
         # system_message = messages[0] if messages else None
@@ -1200,5 +1206,7 @@ class ChatCoreService:
             'text': full_response,
             'reasoning_content': result.get('reasoning_content'),
             'usage': result.get('usage'),
-            'chat_id': chat_id
+            'chat_id': chat_id,
+            'user_message_id': user_message_id,
+            'assistant_message_id': assistant_message_id
         }

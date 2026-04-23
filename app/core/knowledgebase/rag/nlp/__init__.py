@@ -3,6 +3,7 @@
 提供分词、文本处理、搜索等NLP功能
 """
 
+from . import rag_tokenizer
 from .rag_tokenizer import RagTokenizer, tokenizer, tokenize, fine_grained_tokenize
 from .search import (
     is_english,
@@ -20,6 +21,7 @@ from .search import (
 )
 
 __all__ = [
+    "rag_tokenizer",
     "RagTokenizer",
     "tokenizer", 
     "tokenize",

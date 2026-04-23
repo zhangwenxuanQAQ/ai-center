@@ -9,8 +9,8 @@ import tempfile
 import logging
 import json
 
-from app.database.models import LLMModel
 from app.core.llm_model.factory import LLMFactory
+from ..utils.model_selector import get_suitable_audio_model
 
 logger = logging.getLogger(__name__)
 
@@ -86,72 +86,6 @@ def chunk(filename, binary, tenant_id="", lang="Chinese", callback=None, **kwarg
                 logger.warning(f"无法删除临时文件: {tmp_path}, 错误: {e}")
 
 
-def _get_suitable_model():
-    """
-    获取合适的音频转录模型
-    
-    优先级：
-    1. 默认音频模型 (is_default=True, model_type='audio')
-    2. 最新创建的音频模型 (model_type='audio')
-    3. 默认全模态模型 (is_default=True, model_type='multimodal')
-    4. 最新创建的全模态模型 (model_type='multimodal')
-    
-    Returns:
-        LLMModel: 合适的模型对象，没有则抛出异常
-        
-    Raises:
-        RuntimeError: 没有找到可用的模型
-    """
-    # 1. 查找默认音频模型
-    model = LLMModel.select().where(
-        (LLMModel.model_type == 'audio') &
-        (LLMModel.is_default == True) &
-        (LLMModel.status == True) &
-        (LLMModel.deleted == False)
-    ).first()
-    
-    if model:
-        logger.info(f"使用默认音频模型: %s", model.name)
-        return model
-    
-    # 2. 查找最新创建的音频模型
-    model = LLMModel.select().where(
-        (LLMModel.model_type == 'audio') &
-        (LLMModel.status == True) &
-        (LLMModel.deleted == False)
-    ).order_by(LLMModel.created_at.desc()).first()
-    
-    if model:
-        logger.info(f"使用最新音频模型: %s", model.name)
-        return model
-    
-    # 3. 查找默认全模态模型
-    model = LLMModel.select().where(
-        (LLMModel.model_type == 'multimodal') &
-        (LLMModel.is_default == True) &
-        (LLMModel.status == True) &
-        (LLMModel.deleted == False)
-    ).first()
-    
-    if model:
-        logger.info(f"使用默认全模态模型: %s", model.name)
-        return model
-    
-    # 4. 查找最新创建的全模态模型
-    model = LLMModel.select().where(
-        (LLMModel.model_type == 'multimodal') &
-        (LLMModel.status == True) &
-        (LLMModel.deleted == False)
-    ).order_by(LLMModel.created_at.desc()).first()
-    
-    if model:
-        logger.info(f"使用最新全模态模型: %s", model.name)
-        return model
-    
-    # 都没有找到，抛出异常
-    raise RuntimeError("请在模型库中创建音频模型或全模态模型")
-
-
 def _transcribe_audio(file_path, **kwargs):
     """
     音频转文字
@@ -170,7 +104,10 @@ def _transcribe_audio(file_path, **kwargs):
     """
     try:
         # 获取合适的模型
-        db_model = _get_suitable_model()
+        db_model = get_suitable_audio_model()
+        
+        if not db_model:
+            raise RuntimeError("请在模型库中创建音频模型或全模态模型")
         
         # 构建模型配置
         model_config = {
@@ -184,8 +121,13 @@ def _transcribe_audio(file_path, **kwargs):
         # 创建模型实例
         model = LLMFactory.create_model(db_model.model_type, model_config)
         
+        # 过滤掉不应该传递给模型的参数，只保留模型支持的参数
+        allowed_params = {'temperature', 'max_tokens', 'top_p', 'frequency_penalty', 
+                          'presence_penalty', 'deep_thinking', 'tools', 'stream'}
+        model_kwargs = {k: v for k, v in kwargs.items() if k in allowed_params}
+        
         # 调用模型进行音频转录
-        result = model.generate(file_path, **kwargs)
+        result = model.generate(file_path, **model_kwargs)
         
         if 'error' in result:
             raise RuntimeError(f"音频转录失败: %s", result['error'])
