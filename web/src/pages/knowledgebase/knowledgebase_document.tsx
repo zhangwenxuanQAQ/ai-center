@@ -456,7 +456,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       title: '文档名称',
       dataIndex: 'file_name',
       key: 'file_name',
-      width: 100,
+      width: 250,
       render: (text: string, record: KnowledgebaseDocument) => (
         <Tooltip title={text || '未命名文档'}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
@@ -503,6 +503,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       title: '标签',
       dataIndex: 'tags',
       key: 'tags',
+      width: 100,
       render: (tags: string[]) => (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
           {tags && tags.length > 0 ? tags.map((tag, index) => (
@@ -515,7 +516,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       title: '所属分类',
       dataIndex: 'category_name',
       key: 'category_name',
-      width: 150,
+      width: 120,
       render: (categoryName: string) => (
         <span>{categoryName || '-'}</span>
       ),
@@ -524,7 +525,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       title: '创建时间',
       dataIndex: 'created_at',
       key: 'created_at',
-      width: 180,
+      width: 150,
       render: (createdAt: string) => (
         <span>{createdAt ? new Date(createdAt).toLocaleString() : '-'}</span>
       ),
@@ -835,8 +836,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
               rowKey="id"
               pagination={false}
               className={`knowledgebase-document-table ${theme === 'dark' ? 'dark' : 'light'}`}
-              scroll={{ x: true, y: 'calc(100vh - 300px)' }}
-              tableLayout="fixed"
+              scroll={{ x: 1200, y: 'calc(100vh - 300px)' }}
               rowSelection={{
                 selectedRowKeys,
                 onChange: (selectedKeys) => setSelectedRowKeys(selectedKeys),
