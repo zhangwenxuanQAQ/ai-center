@@ -2,6 +2,9 @@
 LLM模型常量定义
 """
 
+PAGERANK_FLD = "pagerank_fea"
+TAG_FLD = "tag_feas"
+
 MODEL_TYPE = {
     "text": "文本模型",
     "audio": "音频模型",

@@ -19,7 +19,7 @@ import re
 import json
 import os
 import pandas as pd
-from rag.nlp import rag_tokenizer
+from app.core.knowledgebase.rag.nlp import rag_tokenizer
 from . import regions
 
 

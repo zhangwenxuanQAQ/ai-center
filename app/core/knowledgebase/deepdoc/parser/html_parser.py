@@ -15,16 +15,39 @@
 #  limitations under the License.
 #
 
-from rag.nlp import find_codec, rag_tokenizer
+from app.core.knowledgebase.rag.nlp import find_codec, rag_tokenizer
 import uuid
-import chardet
-from bs4 import BeautifulSoup, NavigableString, Tag, Comment
 import html
+from bs4 import BeautifulSoup, NavigableString, Tag, Comment
+
+# 尝试导入 chardet，如果不可用则使用备用方案
+try:
+    import chardet
+    has_chardet = True
+except ImportError:
+    has_chardet = False
+    import locale
 
 def get_encoding(file):
     with open(file,'rb') as f:
-        tmp = chardet.detect(f.read())
-        return tmp['encoding']
+        content = f.read()
+        if has_chardet:
+            tmp = chardet.detect(content)
+            return tmp['encoding']
+        else:
+            # 当chardet不可用时，使用备用方案
+            try:
+                # 尝试使用UTF-8
+                content.decode('utf-8')
+                return 'utf-8'
+            except UnicodeDecodeError:
+                try:
+                    # 尝试使用GBK
+                    content.decode('gbk')
+                    return 'gbk'
+                except UnicodeDecodeError:
+                    # 使用系统默认编码
+                    return locale.getpreferredencoding() or 'utf-8'
 
 BLOCK_TAGS = [
     "h1", "h2", "h3", "h4", "h5", "h6",

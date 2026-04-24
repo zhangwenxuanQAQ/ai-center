@@ -20,7 +20,7 @@ import os
 import sys
 
 
-from common.misc_utils import thread_pool_exec
+from app.utils.misc_utils import thread_pool_exec
 
 sys.path.insert(
     0,

@@ -12,13 +12,13 @@ from .search import (
     concat_img,
     naive_merge,
     naive_merge_with_images,
-    num_tokens_from_string,
     tokenize_chunks,
     tokenize_chunks_with_images,
     tokenize_table,
     add_positions,
     tokenize_doc,
 )
+from app.utils.token_utils import num_tokens_from_string
 
 __all__ = [
     "rag_tokenizer",

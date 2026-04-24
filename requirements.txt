@@ -36,6 +36,12 @@ redis>=5.0.0
 # 音频处理
 pydub
 
+# 编码检测
+chardet
+
+# HTML解析
+beautifulsoup4
+
 # OCR和视觉识别（可选）
 # paddleocr>=2.7.0
 # paddlepaddle>=2.5.0

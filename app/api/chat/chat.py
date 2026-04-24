@@ -304,6 +304,9 @@ async def chat_completions(
     """
     user_id = get_user_id(request)
     
+    # 打印请求体日志
+    logger.info(f"聊天接口请求体: {chat_request.model_dump()}")
+    
     if not chat_request.query:
         return ResponseUtil.error(message="query参数不能为空")
     

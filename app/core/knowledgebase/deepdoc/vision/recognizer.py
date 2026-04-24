@@ -22,7 +22,7 @@ import cv2
 from functools import cmp_to_key
 
 
-from common.file_utils import get_project_base_directory
+from app.utils.file_utils import get_project_base_directory
 from .operators import *  # noqa: F403
 from .operators import preprocess
 from . import operators
@@ -42,9 +42,10 @@ class Recognizer:
 
         """
         if not model_dir:
+            from app.utils.file_utils import get_project_base_directory
             model_dir = os.path.join(
                         get_project_base_directory(),
-                        "rag/res/deepdoc")
+                        "app/core/knowledgebase/rag/res/deepdoc")
         self.ort_sess, self.run_options = load_model(model_dir, task_name)
         self.input_names = [node.name for node in self.ort_sess.get_inputs()]
         self.output_names = [node.name for node in self.ort_sess.get_outputs()]

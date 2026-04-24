@@ -21,9 +21,9 @@ import os
 
 from huggingface_hub import snapshot_download
 
-from common.file_utils import get_project_base_directory
-from common.misc_utils import pip_install_torch
-from common import settings
+from app.utils.file_utils import get_project_base_directory
+from app.utils.misc_utils import pip_install_torch
+from app.core.knowledgebase.rag import settings
 from .operators import *  # noqa: F403
 from . import operators
 import math
@@ -554,9 +554,10 @@ class OCR:
         """
         if not model_dir:
             try:
+                from app.utils.file_utils import get_project_base_directory
                 model_dir = os.path.join(
                         get_project_base_directory(),
-                        "rag/res/deepdoc")
+                        "app/core/knowledgebase/rag/res/deepdoc")
                 
                 # Append muti-gpus task to the list
                 if settings.PARALLEL_DEVICES > 0:
@@ -570,8 +571,9 @@ class OCR:
                     self.text_recognizer = [TextRecognizer(model_dir)]
 
             except Exception:
+                from app.utils.file_utils import get_project_base_directory
                 model_dir = snapshot_download(repo_id="InfiniFlow/deepdoc",
-                                              local_dir=os.path.join(get_project_base_directory(), "rag/res/deepdoc"),
+                                              local_dir=os.path.join(get_project_base_directory(), "app/core/knowledgebase/rag/res/deepdoc"),
                                               local_dir_use_symlinks=False)
                 
                 if settings.PARALLEL_DEVICES > 0:

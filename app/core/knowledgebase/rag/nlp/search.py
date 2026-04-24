@@ -271,45 +271,6 @@ def naive_merge_with_images(texts, images, chunk_token_num=128, delimiter="\n", 
     return cks, result_images
 
 
-def num_tokens_from_string(string: str) -> int:
-    """
-    计算字符串的token数量（粗略估算）
-    
-    Args:
-        string: 输入字符串
-        
-    Returns:
-        int: token数量
-    """
-    if not string:
-        return 0
-        
-    # 中文字符按字符计算，英文按单词计算
-    count = 0
-    current_word = ""
-    
-    for char in string:
-        if '\u4e00' <= char <= '\u9fff':
-            # CJK字符每个算一个token
-            if current_word:
-                count += 1
-                current_word = ""
-            count += 1
-        elif char.isalpha():
-            current_word += char
-        elif char.isdigit():
-            current_word += char
-        else:
-            if current_word:
-                count += 1
-                current_word = ""
-                
-    if current_word:
-        count += 1
-        
-    return max(count, 1)
-
-
 def tokenize_chunks(chunks, doc, eng, pdf_parser=None, child_delimiters_pattern=None):
     """
     对chunks进行tokenize处理

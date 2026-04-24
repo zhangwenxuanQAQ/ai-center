@@ -21,7 +21,7 @@
 import json
 from typing import Any
 
-from rag.nlp import find_codec
+from app.core.knowledgebase.rag.nlp import find_codec
 
 
 class JsonParser:

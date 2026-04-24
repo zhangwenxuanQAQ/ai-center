@@ -36,16 +36,12 @@ from pypdf import PdfReader as pdf2_read
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 
-from common.file_utils import get_project_base_directory
-from common.misc_utils import pip_install_torch
-from deepdoc.vision import OCR, AscendLayoutRecognizer, LayoutRecognizer, Recognizer, TableStructureRecognizer
-from rag.nlp import rag_tokenizer
-from rag.prompts.generator import vision_llm_describe_prompt
-from common import settings
-
-
-
-from common.misc_utils import thread_pool_exec
+from app.utils.file_utils import get_project_base_directory
+from app.core.knowledgebase.deepdoc.vision import OCR, AscendLayoutRecognizer, LayoutRecognizer, Recognizer, TableStructureRecognizer
+from app.core.knowledgebase.rag.nlp import rag_tokenizer
+from app.core.knowledgebase.rag.prompts.generator import vision_llm_describe_prompt
+from app.core.knowledgebase.rag import settings
+from app.utils.misc_utils import thread_pool_exec, pip_install_torch
 
 LOCK_KEY_pdfplumber = "global_shared_lock_pdfplumber"
 if LOCK_KEY_pdfplumber not in sys.modules:
@@ -98,10 +94,10 @@ class PdfParser:
         except Exception:
             logging.info("No torch found.")
         try:
-            model_dir = os.path.join(get_project_base_directory(), "rag/res/deepdoc")
+            model_dir = os.path.join(get_project_base_directory(), "app/core/knowledgebase/rag/res/deepdoc")
             self.updown_cnt_mdl.load_model(os.path.join(model_dir, "updown_concat_xgb.model"))
         except Exception:
-            model_dir = snapshot_download(repo_id="InfiniFlow/text_concat_xgb_v1.0", local_dir=os.path.join(get_project_base_directory(), "rag/res/deepdoc"), local_dir_use_symlinks=False)
+            model_dir = snapshot_download(repo_id="InfiniFlow/text_concat_xgb_v1.0", local_dir=os.path.join(get_project_base_directory(), "app/core/knowledgebase/rag/res/deepdoc"), local_dir_use_symlinks=False)
             self.updown_cnt_mdl.load_model(os.path.join(model_dir, "updown_concat_xgb.model"))
 
         self.page_from = 0

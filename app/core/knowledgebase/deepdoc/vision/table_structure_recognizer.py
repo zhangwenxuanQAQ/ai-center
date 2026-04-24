@@ -21,8 +21,8 @@ from collections import Counter
 import numpy as np
 from huggingface_hub import snapshot_download
 
-from common.file_utils import get_project_base_directory
-from rag.nlp import rag_tokenizer
+from app.utils.file_utils import get_project_base_directory
+from app.core.knowledgebase.rag.nlp import rag_tokenizer
 
 from .recognizer import Recognizer
 
@@ -39,14 +39,16 @@ class TableStructureRecognizer(Recognizer):
 
     def __init__(self):
         try:
-            super().__init__(self.labels, "tsr", os.path.join(get_project_base_directory(), "rag/res/deepdoc"))
+            from app.utils.file_utils import get_project_base_directory
+            super().__init__(self.labels, "tsr", os.path.join(get_project_base_directory(), "app/core/knowledgebase/rag/res/deepdoc"))
         except Exception:
+            from app.utils.file_utils import get_project_base_directory
             super().__init__(
                 self.labels,
                 "tsr",
                 snapshot_download(
                     repo_id="InfiniFlow/deepdoc",
-                    local_dir=os.path.join(get_project_base_directory(), "rag/res/deepdoc"),
+                    local_dir=os.path.join(get_project_base_directory(), "app/core/knowledgebase/rag/res/deepdoc"),
                     local_dir_use_symlinks=False,
                 ),
             )
@@ -579,7 +581,8 @@ class TableStructureRecognizer(Recognizer):
 
         from ais_bench.infer.interface import InferSession
 
-        model_dir = os.path.join(get_project_base_directory(), "rag/res/deepdoc")
+        from app.utils.file_utils import get_project_base_directory
+        model_dir = os.path.join(get_project_base_directory(), "app/core/knowledgebase/rag/res/deepdoc")
         model_file_path = os.path.join(model_dir, "tsr.om")
 
         if not os.path.exists(model_file_path):
