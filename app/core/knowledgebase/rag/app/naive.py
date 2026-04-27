@@ -390,18 +390,53 @@ def _parse_docx(filename, binary=None):
     return new_line
 
 
-def _parse_pdf(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", callback=None, **kwargs):
-    """解析PDF文件"""
-    from app.core.knowledgebase.deepdoc.parser import PdfParser
+def _parse_pdf(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", callback=None, layout_recognizer="DeepDOC", **kwargs):
+    """
+    解析PDF文件
+    
+    Args:
+        filename: 文件名或二进制数据
+        binary: 二进制数据
+        from_page: 起始页码
+        to_page: 结束页码
+        lang: 语言
+        callback: 回调函数
+        layout_recognizer: 布局识别器，支持 "DeepDOC" 和 "Plain Text"
+        **kwargs: 其他参数
+        
+    Returns:
+        sections: 文本段落列表
+        tables: 表格列表
+        pdf_parser: 解析器实例
+    """
+    from app.core.knowledgebase.deepdoc.parser import PdfParser, PlainParser
     
     try:
-        pdf_parser = PdfParser()
-        sections, tables = pdf_parser(
-            filename if not binary else binary, 
-            from_page=from_page, 
-            to_page=to_page, 
-            callback=callback
-        )
+        if layout_recognizer == "DeepDOC":
+            pdf_parser = PdfParser()
+            sections, tables = pdf_parser(
+                filename if not binary else binary, 
+                from_page=from_page, 
+                to_page=to_page, 
+                callback=callback
+            )
+        elif layout_recognizer == "Plain Text":
+            pdf_parser = PlainParser()
+            sections, tables = pdf_parser(
+                filename if not binary else binary, 
+                from_page=from_page, 
+                to_page=to_page
+            )
+        else:
+            logger.warning(f"Unknown layout_recognizer: {layout_recognizer}, using DeepDOC as default")
+            pdf_parser = PdfParser()
+            sections, tables = pdf_parser(
+                filename if not binary else binary, 
+                from_page=from_page, 
+                to_page=to_page, 
+                callback=callback
+            )
+            
         return sections, tables, pdf_parser
     except Exception as e:
         logger.error(f"Failed to parse PDF file: {e}")

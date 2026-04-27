@@ -34,6 +34,7 @@ interface ChunkConfigFieldDef {
   min_value?: number;
   max_value?: number;
   step?: number;
+  sub_configs?: Record<string, ChunkConfigFieldDef[]>;
 }
 
 interface DocumentConstants {
@@ -478,6 +479,14 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     const defaultConfig: Record<string, unknown> = {};
     fields.forEach(field => {
       defaultConfig[field.key] = field.default;
+      // 初始化子配置的默认值
+      if (field.sub_configs) {
+        Object.values(field.sub_configs).forEach(subFields => {
+          subFields.forEach(subField => {
+            defaultConfig[subField.key] = subField.default;
+          });
+        });
+      }
     });
     setChunkConfig(defaultConfig);
   };
@@ -1363,6 +1372,34 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
               <div style={{ width: '100%' }}>
                 {renderConfigField(field)}
               </div>
+              {/* 渲染子配置 */}
+              {field.sub_configs && field.field_type === 'select' && (
+                <div style={{ marginTop: 12, marginLeft: 12, paddingLeft: 12, borderLeft: `2px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}` }}>
+                  {field.sub_configs[chunkConfig[field.key] as string]?.map(subField => (
+                    <div key={subField.key} style={{ marginBottom: 12 }}>
+                      <div style={{ 
+                        marginBottom: 4,
+                        fontSize: 13,
+                        color: theme === 'dark' ? '#ccc' : '#666',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        justifyContent: 'flex-start',
+                      }}>
+                        {subField.label}
+                        {subField.description && (
+                          <Tooltip title={subField.description}>
+                            <span style={{ color: theme === 'dark' ? '#666' : '#999', fontSize: 12, cursor: 'help' }}>[?]</span>
+                          </Tooltip>
+                        )}
+                      </div>
+                      <div style={{ width: '100%' }}>
+                        {renderConfigField(subField)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -1417,6 +1454,15 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
               <Select.Option key={opt.value} value={opt.value}>{opt.label}</Select.Option>
             ))}
           </Select>
+        );
+      case 'switch':
+        return (
+          <Switch
+            checked={value as boolean}
+            onChange={v => handleChunkConfigChange(field.key, v)}
+            checkedChildren="是"
+            unCheckedChildren="否"
+          />
         );
       case 'input':
       default:

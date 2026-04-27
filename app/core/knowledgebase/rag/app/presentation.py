@@ -49,7 +49,7 @@ class Pdf:
             pdf_parser._text_merge()
             
             # 5. 提取表格和图片
-            tbls = pdf_parser._extract_table_figure(True, zoomin, True, True)
+            tbls, figs = pdf_parser._extract_table_figure(True, zoomin, True, True, False)
             
             # 6. 按页重组内容
             from collections import defaultdict

@@ -81,6 +81,7 @@ class ChunkConfigField:
         min_value: float = None,
         max_value: float = None,
         step: float = None,
+        sub_configs: Dict[str, List['ChunkConfigField']] = None,
     ):
         self.key = key
         self.label = label
@@ -92,6 +93,7 @@ class ChunkConfigField:
         self.min_value = min_value
         self.max_value = max_value
         self.step = step
+        self.sub_configs = sub_configs
 
     def to_dict(self) -> Dict[str, Any]:
         result = {
@@ -110,6 +112,10 @@ class ChunkConfigField:
             result["max_value"] = self.max_value
         if self.step is not None:
             result["step"] = self.step
+        if self.sub_configs:
+            result["sub_configs"] = {
+                k: [f.to_dict() for f in v] for k, v in self.sub_configs.items()
+            }
         return result
 
 
@@ -141,6 +147,24 @@ NAIVE_CHUNK_CONFIG: List[ChunkConfigField] = [
             {"label": "DeepDOC", "value": "DeepDOC"},
             {"label": "纯文本", "value": "Plain Text"},
         ],
+        sub_configs={
+            "DeepDOC": [
+                ChunkConfigField(
+                    key="need_image",
+                    label="是否提取图片",
+                    field_type="switch",
+                    default=True,
+                    description="是否从PDF中提取图片",
+                ),
+                ChunkConfigField(
+                    key="return_html",
+                    label="表格返回HTML格式",
+                    field_type="switch",
+                    default=True,
+                    description="表格是否返回HTML格式",
+                ),
+            ]
+        }
     ),
     ChunkConfigField(
         key="overlapped_percent",

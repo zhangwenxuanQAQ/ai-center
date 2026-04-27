@@ -37,7 +37,7 @@ class Pdf:
             pdf_parser._text_merge()
             
             # 5. 提取表格
-            tbls = pdf_parser._extract_table_figure(True, zoomin, True, True)
+            tbls, figs = pdf_parser._extract_table_figure(True, zoomin, True, True, False)
             
             # 6. 向下合并
             pdf_parser._concat_downward()

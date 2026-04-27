@@ -463,6 +463,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 updates.id = data.assistant_message_id;
                 setThinkingMessageId(data.assistant_message_id);
               }
+              // 更新created_at为当前时间，确保与用户消息时间不同
+              updates.created_at = new Date().toISOString();
               return updates;
             }
             if (data.user_message_id && msg.id === idTracker.user) {
@@ -786,6 +788,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                   updates.id = data.assistant_message_id;
                   setThinkingMessageId(data.assistant_message_id);
                 }
+                // 更新created_at为当前时间，确保与用户消息时间不同
+                updates.created_at = new Date().toISOString();
                 return updates;
               }
               if (data.user_message_id && idTracker.user && msg.id === idTracker.user) {
@@ -856,6 +860,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                   updates.id = data.assistant_message_id;
                   setThinkingMessageId(data.assistant_message_id);
                 }
+                // 更新created_at为当前时间，确保与用户消息时间不同
+                updates.created_at = new Date().toISOString();
                 return updates;
               }
               if (data.user_message_id && idTracker.user && msg.id === idTracker.user) {

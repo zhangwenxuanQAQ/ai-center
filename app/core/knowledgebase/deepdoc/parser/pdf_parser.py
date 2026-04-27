@@ -1263,9 +1263,9 @@ class PdfParser:
         else:
             assert len(positions) == len(res)
             if need_position:
-                return list(zip(res, positions))
+                return list(zip(res, positions)), []
             else:
-                return res
+                return res, []
 
     def proj_match(self, line):
         if len(line) <= 2:
@@ -1522,7 +1522,7 @@ class PdfParser:
         if len(self.boxes) == 0 and zoomin < 9:
             self.__images__(fnm, zoomin * 3, page_from, page_to, callback)
 
-    def __call__(self, fnm, need_image=True, zoomin=3, return_html=False, auto_rotate_tables=None, from_page=0, to_page=100000, callback=None):
+    def __call__(self, fnm, need_image=True, zoomin=3, return_html=True, auto_rotate_tables=None, from_page=0, to_page=100000, callback=None, need_position=True, separate_tables_figures=True):
         """
         Parse a PDF file.
 
@@ -1538,6 +1538,8 @@ class PdfParser:
             from_page: Start page number
             to_page: End page number
             callback: Progress callback function
+            need_position: Whether to return position information
+            separate_tables_figures: Whether to separate tables and figures in output
         """
         if auto_rotate_tables is None:
             auto_rotate_tables = os.getenv("TABLE_AUTO_ROTATE", "true").lower() in ("true", "1", "yes")
@@ -1548,7 +1550,7 @@ class PdfParser:
         self._text_merge()
         self._concat_downward()
         self._filter_forpages()
-        tbls = self._extract_table_figure(need_image, zoomin, return_html, False)
+        tbls, figs = self._extract_table_figure(need_image, zoomin, return_html, need_position, separate_tables_figures)
         return self.__filterout_scraps(deepcopy(self.boxes), zoomin), tbls
 
     def parse_into_bboxes(self, fnm, callback=None, zoomin=3):
