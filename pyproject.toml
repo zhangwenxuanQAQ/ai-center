@@ -39,7 +39,7 @@ dependencies = [
     "python-docx>=1.2.0",
     "markdown>=3.10.2",
     "pdfplumber>=0.11.9",
-    "xgboost>=3.2.0",
+    "xgboost==3.0.0",
     "huggingface-hub>=1.11.0",
     "pypdf>=6.10.2",
     "scikit-learn>=1.7.2",
@@ -50,6 +50,10 @@ dependencies = [
     "pyclipper>=1.4.0",
     "json-repair>=0.59.4",
     "tiktoken>=0.12.0",
+    "nest-asyncio>=1.6.0",
+    "hanziconv",
+    "nltk",
+    "pygtrie",
 ]
 
 [tool.setuptools.packages.find]

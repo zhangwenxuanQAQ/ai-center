@@ -22,6 +22,9 @@ import random
 import re
 import sys
 import threading
+import nest_asyncio
+
+nest_asyncio.apply()
 from collections import Counter, defaultdict
 from copy import deepcopy
 from io import BytesIO
@@ -96,7 +99,7 @@ class PdfParser:
         try:
             model_dir = os.path.join(get_project_base_directory(), "app/core/knowledgebase/rag/res/deepdoc")
             self.updown_cnt_mdl.load_model(os.path.join(model_dir, "updown_concat_xgb.model"))
-        except Exception:
+        except Exception as e:
             model_dir = snapshot_download(repo_id="InfiniFlow/text_concat_xgb_v1.0", local_dir=os.path.join(get_project_base_directory(), "app/core/knowledgebase/rag/res/deepdoc"), local_dir_use_symlinks=False)
             self.updown_cnt_mdl.load_model(os.path.join(model_dir, "updown_concat_xgb.model"))
 
@@ -1499,7 +1502,12 @@ class PdfParser:
 
         start = timer()
 
-        asyncio.run(__img_ocr_launcher())
+        nest_asyncio.apply()
+
+        async def run_ocr():
+            await __img_ocr_launcher()
+
+        asyncio.run(run_ocr())
 
         logging.info(f"__images__ {len(self.page_images)} pages cost {timer() - start}s")
 
@@ -1514,7 +1522,7 @@ class PdfParser:
         if len(self.boxes) == 0 and zoomin < 9:
             self.__images__(fnm, zoomin * 3, page_from, page_to, callback)
 
-    def __call__(self, fnm, need_image=True, zoomin=3, return_html=False, auto_rotate_tables=None):
+    def __call__(self, fnm, need_image=True, zoomin=3, return_html=False, auto_rotate_tables=None, from_page=0, to_page=100000, callback=None):
         """
         Parse a PDF file.
 
@@ -1527,11 +1535,14 @@ class PdfParser:
                                None: Use TABLE_AUTO_ROTATE env var setting (default: True)
                                True: Enable auto orientation correction
                                False: Disable auto orientation correction
+            from_page: Start page number
+            to_page: End page number
+            callback: Progress callback function
         """
         if auto_rotate_tables is None:
             auto_rotate_tables = os.getenv("TABLE_AUTO_ROTATE", "true").lower() in ("true", "1", "yes")
 
-        self.__images__(fnm, zoomin)
+        self.__images__(fnm, zoomin, page_from=from_page, page_to=to_page, callback=callback)
         self._layouts_rec(zoomin)
         self._table_transformer_job(zoomin, auto_rotate=auto_rotate_tables)
         self._text_merge()

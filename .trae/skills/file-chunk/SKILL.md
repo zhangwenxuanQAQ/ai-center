@@ -5,7 +5,7 @@ description: 文档切片后端代码实现
 
 ## 使用场景
 - 使用Deepdoc以及大模型进行文档切片
-- 需要参考RAGFLOW项目的rag代码， ragflow项目源码在本系统目录 F:\project\ragflow-0.24.0
+- 需要参考RAGFLOW项目的rag代码， ragflow项目源码在本系统目录 F:\project\ragflow-0.22.1
 
 ## 技术栈
 - Deepdoc

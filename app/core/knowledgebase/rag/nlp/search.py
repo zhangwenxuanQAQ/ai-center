@@ -10,6 +10,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from collections import Counter, defaultdict
 
 from .rag_tokenizer import tokenizer, tokenize, fine_grained_tokenize
+from app.utils.token_utils import num_tokens_from_string
 
 logger = logging.getLogger(__name__)
 
@@ -337,9 +338,22 @@ def tokenize_chunks_with_images(chunks, doc, eng, images, child_delimiters_patte
 def tokenize_table(tbls, doc, eng, batch_size=10):
     """
     对表格进行tokenize处理
+    支持两种格式：
+    - [((img, rows), poss), ...] - 带位置信息的格式
+    - [(img, rows), ...] - 不带位置信息的格式
     """
     res = []
-    for (img, rows), poss in tbls:
+    for item in tbls:
+        if isinstance(item, tuple) and len(item) == 2:
+            first, second = item
+            if isinstance(first, tuple) and len(first) == 2:
+                img, rows = first
+                poss = second
+            else:
+                img, rows = first, second
+                poss = None
+        else:
+            continue
         if not rows:
             continue
         if isinstance(rows, str):

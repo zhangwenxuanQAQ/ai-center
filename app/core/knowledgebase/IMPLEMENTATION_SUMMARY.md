@@ -24,7 +24,7 @@
 
 ### 3. 复制Deepdoc目录
 - **目标**: `app/core/knowledge/deepdoc/`
-- **来源**: `F:\project\ragflow-0.24.0\deepdoc/`
+- **来源**: `F:\project\ragflow-0.22.1\deepdoc/`
 - **包含内容**:
   - parser/ - 各种文档格式解析器（PDF, DOCX, Excel, TXT, HTML, JSON, Markdown, PPT等）
   - vision/ - 视觉识别模块（OCR、布局识别、表格结构识别）

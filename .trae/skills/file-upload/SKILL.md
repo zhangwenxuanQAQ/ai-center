@@ -5,7 +5,7 @@ description: 知识库数据集文档上传功能前后端代码实现
 
 ## 使用场景
 - 知识库详情页面-数据集文档上传
-- 需要参考RAGFLOW项目的document_app.py代码中的upload接口以及FileService的上传文档逻辑， ragflow项目源码在本系统目录 F:\project\ragflow-0.24.0
+- 需要参考RAGFLOW项目的document_app.py代码中的upload接口以及FileService的上传文档逻辑， ragflow项目源码在本系统目录 F:\project\ragflow-0.22.1
 
 ## 技术栈
 - Rustfs
