@@ -110,21 +110,27 @@ class ESUtils:
             port = es_config.get('port', 9200)
             username = es_config.get('username', 'elastic')
             password = es_config.get('password', '')
+            scheme = es_config.get('scheme', 'http')
 
+            es_url = f"{scheme}://{host}:{port}"
+            
+            common_params = {
+                "max_retries": 3,
+                "retry_on_timeout": True,
+                "verify_certs": False,
+                "request_timeout": 30,
+            }
+            
             if username and password:
                 self._es_client = Elasticsearch(
-                    hosts=[f"http://{host}:{port}"],
+                    hosts=[es_url],
                     basic_auth=(username, password),
-                    timeout=30,
-                    max_retries=3,
-                    retry_on_timeout=True,
+                    **common_params
                 )
             else:
                 self._es_client = Elasticsearch(
-                    hosts=[f"http://{host}:{port}"],
-                    timeout=30,
-                    max_retries=3,
-                    retry_on_timeout=True,
+                    hosts=[es_url],
+                    **common_params
                 )
 
             # 测试连接
@@ -143,7 +149,7 @@ class ESUtils:
             if not self._is_version_valid:
                 error_msg = (
                     f"Elasticsearch版本不支持! "
-                    f"当前版本: {self._es_version}, 要求版本: 8.x及以上"
+                    f"当前版本: {self._es_version}, 要求版本: 8.x或9.x"
                 )
                 logger.error(error_msg)
                 raise ValueError(error_msg)
@@ -161,10 +167,10 @@ class ESUtils:
 
     def _check_es_version(self) -> bool:
         """
-        检查ES版本是否为8.x
+        检查ES版本是否为8.x或9.x
         
         Returns:
-            bool: 如果版本号以8开头返回True，否则False
+            bool: 如果版本号为8或9开头返回True，否则False
         """
         if not self._es_version:
             return False
@@ -172,7 +178,8 @@ class ESUtils:
         major_version = self._es_version.split('.')[0]
         
         try:
-            return int(major_version) == 8
+            version_int = int(major_version)
+            return version_int == 8 or version_int == 9
         except ValueError:
             logger.warning(f"无法解析ES版本号: {self._es_version}")
             return False
@@ -219,6 +226,80 @@ class ESUtils:
     def check_connection(self) -> bool:
         """检查ES连接状态"""
         return self._es_client.ping()
+
+    @retry_on_failure
+    def get_cluster_health(self) -> Dict[str, Any]:
+        """
+        获取集群健康状态
+        
+        Returns:
+            Dict: 集群健康信息，包含status、number_of_nodes、number_of_data_nodes等
+        """
+        health = self._es_client.cluster.health()
+        return {
+            "status": health.get("status", "unknown"),
+            "number_of_nodes": health.get("number_of_nodes", 0),
+            "number_of_data_nodes": health.get("number_of_data_nodes", 0),
+            "active_primary_shards": health.get("active_primary_shards", 0),
+            "active_shards": health.get("active_shards", 0),
+            "relocating_shards": health.get("relocating_shards", 0),
+            "initializing_shards": health.get("initializing_shards", 0),
+            "unassigned_shards": health.get("unassigned_shards", 0),
+            "delayed_unassigned_shards": health.get("delayed_unassigned_shards", 0),
+            "number_of_pending_tasks": health.get("number_of_pending_tasks", 0),
+            "number_of_in_flight_fetch": health.get("number_of_in_flight_fetch", 0),
+            "task_max_waiting_in_queue_millis": health.get("task_max_waiting_in_queue_millis", 0),
+            "active_shards_percent_as_number": health.get("active_shards_percent_as_number", 0),
+        }
+
+    @retry_on_failure
+    def get_cluster_stats(self) -> Dict[str, Any]:
+        """
+        获取集群统计信息
+        
+        Returns:
+            Dict: 集群统计信息，包含节点数、存储、索引等
+        """
+        stats = self._es_client.cluster.stats()
+        nodes = stats.get("nodes", {})
+        indices = stats.get("indices", {})
+        return {
+            "nodes_count": nodes.get("count", {}).get("total", 0),
+            "data_nodes_count": nodes.get("count", {}).get("data", 0),
+            "coordinating_only_nodes": nodes.get("count", {}).get("coordinating_only", 0),
+            "heap_max_in_bytes": nodes.get("jvm", {}).get("heap_max_in_bytes", 0),
+            "heap_used_in_bytes": nodes.get("jvm", {}).get("heap_used_in_bytes", 0),
+            "indices_count": indices.get("count", 0),
+            "docs_count": indices.get("docs", {}).get("count", 0),
+            "store_size_in_bytes": indices.get("store", {}).get("size_in_bytes", 0),
+            "shards_total": indices.get("shards", {}).get("total", 0),
+            "shards_primaries": indices.get("shards", {}).get("primaries", 0),
+        }
+
+    @retry_on_failure
+    def get_indices_info(self) -> List[Dict[str, Any]]:
+        """
+        获取所有索引信息
+        
+        Returns:
+            List[Dict]: 索引信息列表
+        """
+        indices = self._es_client.indices.get_alias("*")
+        result = []
+        for index_name, info in indices.items():
+            if not index_name.startswith("."):
+                stats = self._es_client.indices.stats(index=index_name)
+                index_stats = stats.get("indices", {}).get(index_name, {})
+                result.append({
+                    "name": index_name,
+                    "health": info.get("health", "unknown"),
+                    "status": info.get("status", "unknown"),
+                    "docs_count": index_stats.get("total", {}).get("docs", {}).get("count", 0),
+                    "store_size": index_stats.get("total", {}).get("store", {}).get("size_in_bytes", 0),
+                    "primaries": info.get("settings", {}).get("index", {}).get("number_of_shards", 1),
+                    "replicas": info.get("settings", {}).get("index", {}).get("number_of_replicas", 0),
+                })
+        return result
 
     @retry_on_failure
     def create_index(self, index_name: str, mappings: Dict[str, Any] = None) -> bool:

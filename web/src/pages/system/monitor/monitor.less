@@ -221,9 +221,9 @@
   }
 
   .db-metrics-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 16px;
     margin-top: 8px;
     padding-top: 8px;
 
@@ -238,43 +238,43 @@
     .metric-cell {
       display: flex;
       align-items: center;
-      padding: 5px 8px;
+      padding: 5px 10px;
       border-radius: 6px;
       font-size: 13px;
+      white-space: nowrap;
+      min-width: 120px;
 
       .dark & {
         background: rgba(255, 255, 255, 0.03);
       }
 
       .light & {
-        background: rgba(0, 0, 0, 0.02);
+        background: rgba(0, 0, 0, 0.03);
       }
 
       .metric-label {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        min-width: 80px;
-        text-align: left;
-      }
+        flex-shrink: 0;
+        margin-right: 8px;
+        white-space: nowrap;
 
-      .desc-icon {
-        font-size: 12px;
-        color: #999;
-        cursor: help;
+        .desc-icon {
+          font-size: 12px;
+          margin-left: 4px;
+          color: #999;
+          cursor: help;
 
-        &:hover {
-          color: #667eea;
+          &:hover {
+            color: #667eea;
+          }
         }
       }
 
       .metric-val {
-        margin-left: auto;
-        font-weight: 600;
+        margin-left: 8px;
         font-family: 'Monaco', 'Menlo', monospace;
+        white-space: nowrap;
 
         .metric-unit {
-          font-weight: normal;
           font-size: 11px;
           margin-left: 2px;
           color: #999;
@@ -323,7 +323,7 @@
       }
 
       .stat-val {
-        margin-left: auto;
+        margin-left: 8px;
         font-family: 'Monaco', 'Menlo', monospace;
 
         .stat-unit {

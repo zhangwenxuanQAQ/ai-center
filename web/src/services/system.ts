@@ -55,7 +55,7 @@ export interface ModuleStats {
 
 export interface SystemOverview {
   version: string;
-  databases: DatabaseInfo[];
+  servers: DatabaseInfo[];
   modules: ModuleStats;
 }
 
@@ -105,10 +105,10 @@ export const systemService = {
   },
 
   /**
-   * 获取数据库状态
+   * 获取服务状态
    */
   getDatabaseStatus: async (): Promise<DatabaseInfo[]> => {
-    return http.get<DatabaseInfo[]>('/aicenter/v1/system/monitor/databases');
+    return http.get<DatabaseInfo[]>('/aicenter/v1/system/monitor/servers');
   },
 
   /**
@@ -166,4 +166,24 @@ export const systemService = {
   getDatasourceStats: async (): Promise<DatasourceStats> => {
     return http.get<DatasourceStats>('/aicenter/v1/system/monitor/stats/datasource');
   },
+
+  /**
+   * 获取MCP Server监控信息
+   */
+  getMcpServerMonitor: async (): Promise<McpServerInfo[]> => {
+    return http.get<McpServerInfo[]>('/aicenter/v1/system/monitor/mcp-servers');
+  },
 };
+
+export interface McpServerInfo {
+  id: number;
+  name: string;
+  host: string;
+  port: number;
+  status: string;
+  error: string | null;
+  tools_count: number;
+  version: string | null;
+  available_tools: string[];
+  metrics: MonitorMetric[];
+}

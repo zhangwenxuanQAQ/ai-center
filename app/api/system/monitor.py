@@ -23,19 +23,19 @@ def get_system_version():
     return ResponseUtil.success(data={"version": version}, message="获取系统版本号成功")
 
 
-@router.get("/monitor/databases", response_model=ApiResponse)
-def get_database_status():
+@router.get("/monitor/servers", response_model=ApiResponse)
+def get_server_status():
     """
-    获取系统数据库状态
+    获取系统服务状态
     
-    读取server_config.yaml中的数据库配置，并获取各数据库的监控信息
+    读取server_config.yaml中的服务配置，并获取各服务的监控信息（包括MCP Server）
     敏感信息（密码等）不会返回
     
     Returns:
-        ApiResponse: 统一格式的响应对象，包含数据库状态列表
+        ApiResponse: 统一格式的响应对象，包含服务状态列表
     """
-    databases = MonitorService.get_database_status()
-    return ResponseUtil.success(data=databases, message="获取数据库状态成功")
+    servers = MonitorService.get_server_status()
+    return ResponseUtil.success(data=servers, message="获取服务状态成功")
 
 
 @router.get("/monitor/modules", response_model=ApiResponse)
@@ -57,18 +57,18 @@ def get_system_overview():
     """
     获取系统监控概览
     
-    一次性获取系统版本号、数据库状态和功能模块统计信息
+    一次性获取系统版本号、服务状态和功能模块统计信息
     
     Returns:
         ApiResponse: 统一格式的响应对象，包含完整的监控概览数据
     """
     version = MonitorService.get_version()
-    databases = MonitorService.get_database_status()
+    servers = MonitorService.get_server_status()
     modules = MonitorService.get_module_stats()
     return ResponseUtil.success(
         data={
             "version": version,
-            "databases": databases,
+            "servers": servers,
             "modules": modules,
         },
         message="获取系统监控概览成功"
@@ -157,3 +157,6 @@ def get_datasource_stats():
     """
     stats = MonitorService.get_datasource_stats()
     return ResponseUtil.success(data=stats, message="获取数据源统计信息成功")
+
+
+

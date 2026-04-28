@@ -279,7 +279,7 @@ const SystemMonitor: React.FC = () => {
     { key: 'overview', label: '总览', icon: <DashboardOutlined />, color: '#667eea', getCount: () => 0 },
     { key: 'chatbot', label: '机器人', icon: <RobotOutlined />, color: '#667eea', getCount: () => overview?.modules.chatbot_count || 0 },
     { key: 'knowledgebase', label: '知识库', icon: <BookOutlined />, color: '#52c41a', getCount: () => overview?.modules.knowledgebase_count || 0 },
-    { key: 'mcp', label: 'MCP服务', icon: <ApiOutlined />, color: '#13c2c2', getCount: () => overview?.modules.mcp_server_count || 0 },
+    { key: 'mcp', label: 'MCP服务', icon: <ApiOutlined />, color: '#13c2c2', getCount: () => overview?.servers?.find(s => s.type === 'mcp')?.monitor_info?.metrics?.find(m => m.name_en === 'tools_count')?.value || 0 },
     { key: 'prompt', label: '提示词', icon: <CommentOutlined />, color: '#eb2f96', getCount: () => overview?.modules.prompt_count || 0 },
     { key: 'model', label: '模型', icon: <SettingOutlined />, color: '#1890ff', getCount: () => overview?.modules.model_count || 0 },
     { key: 'datasource', label: '数据源', icon: <CloudServerOutlined />, color: '#faad14', getCount: () => overview?.modules.datasource_count || 0 },
@@ -338,11 +338,11 @@ const SystemMonitor: React.FC = () => {
             </div>
           </div>
 
-          {/* 数据库状态 */}
+          {/* 服务监控 */}
           <div className="section-block">
             <div className="section-header">
               <DatabaseOutlined className="section-icon" />
-              <span className="section-title">数据库状态</span>
+              <span className="section-title">服务监控</span>
               <Button
                 type="text"
                 size="small"
@@ -352,7 +352,7 @@ const SystemMonitor: React.FC = () => {
               />
             </div>
             <div className="database-list">
-              {overview?.databases?.map(db => renderDatabaseCard(db))}
+              {overview?.servers?.map(db => renderDatabaseCard(db))}
             </div>
           </div>
 

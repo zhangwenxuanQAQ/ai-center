@@ -17,6 +17,7 @@ es:
   port: 9200
   username: 'elastic'
   password: '123456'
+  scheme: 'https'
 redis:
   db: 1
   username: ''
