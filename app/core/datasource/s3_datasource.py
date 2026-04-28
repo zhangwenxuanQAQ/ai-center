@@ -281,3 +281,56 @@ class S3Datasource(DatasourceBase):
             return {"success": False, "message": "缺少boto3依赖，请执行: pip install boto3"}
         except Exception as e:
             return {"success": False, "message": f"文件下载失败: {str(e)}"}
+
+    def get_monitor_info(self) -> Dict[str, Any]:
+        """
+        获取S3服务监控信息
+        
+        Returns:
+            Dict[str, Any]: 包含监控信息的字典
+        """
+        try:
+            import boto3
+            client = boto3.client(
+                's3',
+                endpoint_url=self.config.get('endpoint_url'),
+                aws_access_key_id=self.config.get('access_key', ''),
+                aws_secret_access_key=self.config.get('secret_key', ''),
+                region_name=self.config.get('region', 'us-east-1'),
+            )
+            response = client.list_buckets()
+            buckets = response.get('Buckets', [])
+            bucket_count = len(buckets)
+
+            total_objects = 0
+            total_size = 0
+            for bucket_info in buckets:
+                try:
+                    bucket_name = bucket_info.get('Name', '')
+                    list_response = client.list_objects_v2(Bucket=bucket_name)
+                    objects = list_response.get('Contents', [])
+                    total_objects += len(objects)
+                    total_size += sum(obj.get('Size', 0) for obj in objects)
+                except Exception:
+                    pass
+
+            return {
+                "success": True,
+                "message": "获取S3监控信息成功",
+                "data": {
+                    "status": "connected",
+                    "version": "",
+                    "metrics": [
+                        {"name_en": "bucket_count", "name_zh": "Bucket数量", "value": bucket_count, "unit": "个", "status": "normal", "description": "S3中创建的存储桶总数"},
+                        {"name_en": "object_count", "name_zh": "对象总数", "value": total_objects, "unit": "个", "status": "normal", "description": "所有Bucket中的存储对象总数"},
+                    ],
+                    "stats": [
+                        {"name_en": "storage_total", "name_zh": "存储总量", "value": round(total_size / 1024 / 1024, 2), "unit": "MB", "description": "所有对象占用的总存储空间"},
+                        {"name_en": "region", "name_zh": "区域", "value": self.config.get('region', 'us-east-1'), "unit": "", "description": "S3服务的AWS区域标识"},
+                    ]
+                }
+            }
+        except ImportError:
+            return {"success": False, "message": "缺少boto3依赖，请执行: pip install boto3", "data": {"status": "disconnected"}}
+        except Exception as e:
+            return {"success": False, "message": f"获取S3监控信息失败: {str(e)}", "data": {"status": "disconnected"}}

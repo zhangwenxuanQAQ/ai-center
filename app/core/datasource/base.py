@@ -147,3 +147,25 @@ class DatasourceBase(ABC):
             "message": "此数据源类型不支持获取表字段操作",
             "data": None
         }
+
+    def get_monitor_info(self) -> Dict[str, Any]:
+        """
+        获取数据源监控信息
+        
+        返回数据源的运行状态、性能指标和统计数据，用于系统监控页面展示
+        
+        Returns:
+            Dict[str, Any]: 包含监控信息的字典
+                - success: 是否获取成功
+                - message: 结果消息
+                - data: 监控信息数据，包含以下字段：
+                    - status: 连接状态 (connected/disconnected)
+                    - version: 数据源版本号
+                    - metrics: 性能指标列表，每项包含 name, value, unit, status
+                    - stats: 统计数据列表，每项包含 name, value, unit
+        """
+        return {
+            "success": False,
+            "message": "此数据源类型不支持监控信息获取",
+            "data": None
+        }

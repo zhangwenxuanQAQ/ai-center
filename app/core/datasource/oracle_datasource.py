@@ -202,3 +202,75 @@ class OracleDatasource(DatasourceBase):
             return {"success": False, "message": "缺少oracledb依赖，请执行: pip install oracledb"}
         except Exception as e:
             return {"success": False, "message": f"获取表字段失败: {str(e)}"}
+
+    def get_monitor_info(self) -> Dict[str, Any]:
+        """
+        获取Oracle数据库监控信息
+        
+        Returns:
+            Dict[str, Any]: 包含监控信息的字典
+        """
+        try:
+            import oracledb
+            dsn = f"{self.config.get('host', 'localhost')}:{self.config.get('port', 1521)}/{self.config.get('service_name', '')}"
+            connection = oracledb.connect(
+                user=self.config.get('username', ''),
+                password=self.config.get('password', ''),
+                dsn=dsn,
+            )
+            cursor = connection.cursor()
+
+            cursor.execute("SELECT BANNER FROM v$version WHERE ROWNUM = 1")
+            version_row = cursor.fetchone()
+            version = version_row[0] if version_row else ''
+
+            cursor.execute("SELECT count(*) FROM v$session WHERE status = 'ACTIVE'")
+            conn_row = cursor.fetchone()
+            active_connections = int(conn_row[0]) if conn_row else 0
+
+            cursor.execute(
+                "SELECT (SYSDATE - startup_time) * 86400 AS uptime_seconds FROM v$instance"
+            )
+            uptime_row = cursor.fetchone()
+            uptime_seconds = int(uptime_row[0]) if uptime_row and uptime_row[0] else 0
+
+            username = self.config.get('username', '').upper()
+            cursor.execute(
+                "SELECT count(*) FROM user_tables"
+            )
+            count_row = cursor.fetchone()
+            table_count = int(count_row[0]) if count_row else 0
+
+            cursor.execute(
+                "SELECT sum(bytes) / 1024 / 1024 AS size_mb FROM user_segments"
+            )
+            size_row = cursor.fetchone()
+            db_size = round(float(size_row[0] or 0), 2) if size_row else 0
+
+            connection.close()
+
+            days, remainder = divmod(uptime_seconds, 86400)
+            hours, remainder = divmod(remainder, 3600)
+            minutes, _ = divmod(remainder, 60)
+            uptime_str = f"{days}天{hours}小时{minutes}分钟"
+
+            return {
+                "success": True,
+                "message": "获取Oracle监控信息成功",
+                "data": {
+                    "status": "connected",
+                    "version": version,
+                    "metrics": [
+                        {"name_en": "active_sessions", "name_zh": "活跃连接数", "value": active_connections, "unit": "个", "status": "normal", "description": "当前状态为ACTIVE的数据库会话数"},
+                    ],
+                    "stats": [
+                        {"name_en": "uptime", "name_zh": "运行时间", "value": uptime_str, "unit": "", "description": "Oracle实例自启动以来的连续运行时长"},
+                        {"name_en": "tablespace_size", "name_zh": "表空间大小", "value": db_size, "unit": "MB", "description": "当前用户下所有段对象占用的磁盘空间"},
+                        {"name_en": "table_count", "name_zh": "表数量", "value": table_count, "unit": "个", "description": "当前用户下的数据表总数"},
+                    ]
+                }
+            }
+        except ImportError:
+            return {"success": False, "message": "缺少oracledb依赖，请执行: pip install oracledb", "data": {"status": "disconnected"}}
+        except Exception as e:
+            return {"success": False, "message": f"获取Oracle监控信息失败: {str(e)}", "data": {"status": "disconnected"}}

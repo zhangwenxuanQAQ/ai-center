@@ -220,3 +220,91 @@ class PostgreSQLDatasource(DatasourceBase):
             return {"success": False, "message": "缺少psycopg2依赖，请执行: pip install psycopg2-binary"}
         except Exception as e:
             return {"success": False, "message": f"获取表字段失败: {str(e)}"}
+
+    def get_monitor_info(self) -> Dict[str, Any]:
+        """
+        获取PostgreSQL数据库监控信息
+        
+        Returns:
+            Dict[str, Any]: 包含监控信息的字典
+        """
+        try:
+            import psycopg2
+            from psycopg2.extras import RealDictCursor
+            connection = psycopg2.connect(
+                host=self.config.get('host', 'localhost'),
+                port=int(self.config.get('port', 5432)),
+                user=self.config.get('username', ''),
+                password=self.config.get('password', ''),
+                dbname=self.config.get('database', ''),
+                connect_timeout=10,
+            )
+            with connection.cursor(cursor_factory=RealDictCursor) as cursor:
+                cursor.execute("SELECT version()")
+                version_row = cursor.fetchone()
+                version = version_row['version'] if version_row else ''
+
+                cursor.execute("SELECT count(*) AS cnt FROM pg_stat_activity")
+                conn_row = cursor.fetchone()
+                connections = int(conn_row['cnt']) if conn_row else 0
+
+                cursor.execute("SELECT setting AS max_conn FROM pg_settings WHERE name = 'max_connections'")
+                max_conn_row = cursor.fetchone()
+                max_connections = int(max_conn_row['max_conn']) if max_conn_row else 0
+
+                cursor.execute(
+                    "SELECT EXTRACT(EPOCH FROM now() - pg_postmaster_start_time())::bigint AS uptime"
+                )
+                uptime_row = cursor.fetchone()
+                uptime_seconds = int(uptime_row['uptime']) if uptime_row else 0
+
+                target_db = self.config.get('database', '')
+                db_size = 0
+                table_count = 0
+                if target_db:
+                    cursor.execute("SELECT pg_database_size(%s) AS size", (target_db,))
+                    size_row = cursor.fetchone()
+                    db_size = round(float(size_row['size']) / 1024 / 1024, 2) if size_row else 0
+
+                    schema_name = self.config.get('schema', 'public')
+                    cursor.execute(
+                        "SELECT count(*) AS cnt FROM information_schema.tables "
+                        "WHERE table_schema = %s AND table_type = 'BASE TABLE'",
+                        (schema_name,)
+                    )
+                    count_row = cursor.fetchone()
+                    table_count = int(count_row['cnt']) if count_row else 0
+
+                cursor.execute("SELECT sum(xact_commit + xact_rollback) AS total_queries FROM pg_stat_database")
+                queries_row = cursor.fetchone()
+                total_queries = int(queries_row['total_queries'] or 0) if queries_row else 0
+
+            connection.close()
+
+            days, remainder = divmod(uptime_seconds, 86400)
+            hours, remainder = divmod(remainder, 3600)
+            minutes, _ = divmod(remainder, 60)
+            uptime_str = f"{days}天{hours}小时{minutes}分钟"
+
+            return {
+                "success": True,
+                "message": "获取PostgreSQL监控信息成功",
+                "data": {
+                    "status": "connected",
+                    "version": version.split(',')[0] if version else '',
+                    "metrics": [
+                        {"name_en": "connections", "name_zh": "连接数", "value": connections, "unit": "个", "status": "normal" if connections < max_connections * 0.8 else "warning", "description": "当前活跃的数据库会话数"},
+                        {"name_en": "max_connections", "name_zh": "最大连接数", "value": max_connections, "unit": "个", "status": "normal", "description": "允许的最大并发连接数配置值"},
+                        {"name_en": "total_transactions", "name_zh": "总事务数", "value": total_queries, "unit": "次", "status": "normal", "description": "PostgreSQL启动以来提交和回滚的事务总数"},
+                    ],
+                    "stats": [
+                        {"name_en": "uptime", "name_zh": "运行时间", "value": uptime_str, "unit": "", "description": "PostgreSQL服务自启动以来的连续运行时长"},
+                        {"name_en": "database_size", "name_zh": "数据库大小", "value": db_size, "unit": "MB", "description": "当前数据库占用的磁盘空间大小"},
+                        {"name_en": "table_count", "name_zh": "表数量", "value": table_count, "unit": "个", "description": "当前Schema中的数据表总数"},
+                    ]
+                }
+            }
+        except ImportError:
+            return {"success": False, "message": "缺少psycopg2依赖，请执行: pip install psycopg2-binary", "data": {"status": "disconnected"}}
+        except Exception as e:
+            return {"success": False, "message": f"获取PostgreSQL监控信息失败: {str(e)}", "data": {"status": "disconnected"}}

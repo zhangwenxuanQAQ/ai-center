@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { Layout, Menu, Button, Card, ConfigProvider, theme as antTheme } from 'antd';
-import { HomeOutlined, MessageOutlined, SettingOutlined, LogoutOutlined, RobotOutlined, BookOutlined, DatabaseOutlined, CommentOutlined, MoonOutlined, SunOutlined, MenuFoldOutlined, MenuUnfoldOutlined, HistoryOutlined, TeamOutlined, ToolOutlined, FileTextOutlined, CloudServerOutlined } from '@ant-design/icons';
+import { HomeOutlined, MessageOutlined, SettingOutlined, LogoutOutlined, RobotOutlined, BookOutlined, DatabaseOutlined, CommentOutlined, MoonOutlined, SunOutlined, MenuFoldOutlined, MenuUnfoldOutlined, HistoryOutlined, TeamOutlined, ToolOutlined, FileTextOutlined, CloudServerOutlined, DashboardOutlined, DesktopOutlined } from '@ant-design/icons';
 import { useState, useEffect } from 'react';
 import './styles/index.css';
 import './styles/common.css';
@@ -21,6 +21,7 @@ import PromptSetting from './pages/prompt/prompt_setting.tsx';
 import User from './pages/user/user.tsx';
 import Chat from './pages/chat/chat.tsx';
 import Datasource from './pages/datasource/datasource.tsx';
+import SystemMonitor from './pages/system/monitor/monitor.tsx';
 
 const { Header, Content, Sider } = Layout;
 
@@ -88,7 +89,7 @@ function App() {
               mode="inline"
               style={{ height: 'calc(100% - 48px)', borderRight: 0, textAlign: 'left' }}
               defaultSelectedKeys={['1']}
-              defaultOpenKeys={['sub1', 'sub2', 'sub3']}
+              defaultOpenKeys={['sub1', 'sub2', 'sub3', 'sub4']}
             >
               <Menu.Item key="1" icon={<HomeOutlined />}>
                 <Link to="/">首页</Link>
@@ -121,6 +122,11 @@ function App() {
               <Menu.SubMenu key="sub3" title="日志" icon={<FileTextOutlined />}>
                 <Menu.Item key="9" icon={<HistoryOutlined />}>
                   <Link to="/chats">问答日志</Link>
+                </Menu.Item>
+              </Menu.SubMenu>
+              <Menu.SubMenu key="sub4" title="系统" icon={<DesktopOutlined />}>
+                <Menu.Item key="10" icon={<DashboardOutlined />}>
+                  <Link to="/system/monitor">监控</Link>
                 </Menu.Item>
               </Menu.SubMenu>
             </Menu>
@@ -182,6 +188,7 @@ function App() {
                   <Route path="/users" element={<User />} />
                   <Route path="/chats" element={<Chat />} />
                   <Route path="/datasources" element={<Datasource />} />
+                  <Route path="/system/monitor" element={<SystemMonitor />} />
                 </Routes>
               </Card>
             </Content>

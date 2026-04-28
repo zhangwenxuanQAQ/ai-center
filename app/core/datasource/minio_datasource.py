@@ -280,3 +280,54 @@ class MinIODatasource(DatasourceBase):
             return {"success": False, "message": "缺少minio依赖，请执行: pip install minio"}
         except Exception as e:
             return {"success": False, "message": f"文件下载失败: {str(e)}"}
+
+    def get_monitor_info(self) -> Dict[str, Any]:
+        """
+        获取MinIO服务监控信息
+        
+        Returns:
+            Dict[str, Any]: 包含监控信息的字典
+        """
+        try:
+            from minio import Minio
+            secure = self.config.get('secure', False)
+            client = Minio(
+                endpoint=self.config.get('endpoint_url', ''),
+                access_key=self.config.get('access_key', ''),
+                secret_key=self.config.get('secret_key', ''),
+                secure=secure,
+            )
+            buckets = client.list_buckets()
+            bucket_count = len(buckets)
+
+            total_objects = 0
+            total_size = 0
+            for bucket in buckets:
+                try:
+                    objects = client.list_objects(bucket.name, recursive=True)
+                    for obj in objects:
+                        if not obj.is_dir:
+                            total_objects += 1
+                            total_size += obj.size or 0
+                except Exception:
+                    pass
+
+            return {
+                "success": True,
+                "message": "获取MinIO监控信息成功",
+                "data": {
+                    "status": "connected",
+                    "version": "",
+                    "metrics": [
+                        {"name_en": "bucket_count", "name_zh": "Bucket数量", "value": bucket_count, "unit": "个", "status": "normal", "description": "MinIO中创建的存储桶总数"},
+                        {"name_en": "object_count", "name_zh": "对象总数", "value": total_objects, "unit": "个", "status": "normal", "description": "所有Bucket中的存储对象总数"},
+                    ],
+                    "stats": [
+                        {"name_en": "storage_total", "name_zh": "存储总量", "value": round(total_size / 1024 / 1024, 2), "unit": "MB", "description": "所有对象占用的总存储空间"},
+                    ]
+                }
+            }
+        except ImportError:
+            return {"success": False, "message": "缺少minio依赖，请执行: pip install minio", "data": {"status": "disconnected"}}
+        except Exception as e:
+            return {"success": False, "message": f"获取MinIO监控信息失败: {str(e)}", "data": {"status": "disconnected"}}

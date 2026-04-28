@@ -135,3 +135,81 @@ class SQLServerDatasource(DatasourceBase):
             return {"success": False, "message": "缺少pymssql依赖，请执行: pip install pymssql"}
         except Exception as e:
             return {"success": False, "message": f"获取Schema信息失败: {str(e)}"}
+
+    def get_monitor_info(self) -> Dict[str, Any]:
+        """
+        获取SQL Server数据库监控信息
+        
+        Returns:
+            Dict[str, Any]: 包含监控信息的字典
+        """
+        try:
+            import pymssql
+            connection = pymssql.connect(
+                server=self.config.get('host', 'localhost'),
+                port=int(self.config.get('port', 1433)),
+                user=self.config.get('username', ''),
+                password=self.config.get('password', ''),
+                database=self.config.get('database', ''),
+                login_timeout=10,
+            )
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT @@VERSION AS version")
+                version_row = cursor.fetchone()
+                version = version_row[0] if version_row else ''
+
+                cursor.execute("SELECT count(*) FROM sys.dm_exec_connections")
+                conn_row = cursor.fetchone()
+                connections = int(conn_row[0]) if conn_row else 0
+
+                cursor.execute(
+                    "SELECT DATEDIFF(SECOND, sqlserver_start_time, GETDATE()) AS uptime_seconds "
+                    "FROM sys.dm_os_sys_info"
+                )
+                uptime_row = cursor.fetchone()
+                uptime_seconds = int(uptime_row[0]) if uptime_row else 0
+
+                target_db = self.config.get('database', '')
+                db_size = 0
+                table_count = 0
+                if target_db:
+                    cursor.execute(
+                        "SELECT SUM(size) * 8 / 1024 AS size_mb FROM sys.master_files WHERE database_id = DB_ID(%s)",
+                        (target_db,)
+                    )
+                    size_row = cursor.fetchone()
+                    db_size = float(size_row[0] or 0) if size_row else 0
+
+                    cursor.execute(
+                        "SELECT count(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'"
+                    )
+                    count_row = cursor.fetchone()
+                    table_count = int(count_row[0]) if count_row else 0
+
+            connection.close()
+
+            days, remainder = divmod(uptime_seconds, 86400)
+            hours, remainder = divmod(remainder, 3600)
+            minutes, _ = divmod(remainder, 60)
+            uptime_str = f"{days}天{hours}小时{minutes}分钟"
+
+            return {
+                "success": True,
+                "message": "获取SQL Server监控信息成功",
+                "data": {
+                    "status": "connected",
+                    "version": version.split('\n')[0] if version else '',
+                    "metrics": [
+                        {"name_en": "connections", "name_zh": "连接数", "value": connections, "unit": "个", "status": "normal", "description": "当前正在执行的连接数"},
+                    ],
+                    "stats": [
+                        {"name_en": "uptime", "name_zh": "运行时间", "value": uptime_str, "unit": "", "description": "SQL Server自启动以来的连续运行时长"},
+                        {"name_en": "database_size", "name_zh": "数据库大小", "value": db_size, "unit": "MB", "description": "当前数据库的数据文件占用空间大小"},
+                        {"name_en": "table_count", "name_zh": "表数量", "value": table_count, "unit": "个", "description": "当前数据库中的用户表总数"},
+                    ]
+                }
+            }
+        except ImportError:
+            return {"success": False, "message": "缺少pymssql依赖，请执行: pip install pymssql", "data": {"status": "disconnected"}}
+        except Exception as e:
+            return {"success": False, "message": f"获取SQL Server监控信息失败: {str(e)}", "data": {"status": "disconnected"}}
