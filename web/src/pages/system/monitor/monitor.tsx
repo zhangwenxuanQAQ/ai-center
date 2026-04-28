@@ -69,6 +69,12 @@ const SystemMonitor: React.FC = () => {
     fetchOverview();
   }, [fetchOverview]);
 
+  useEffect(() => {
+    if (overview && selectedModule === 'overview') {
+      handleModuleClick('overview');
+    }
+  }, [overview, selectedModule]);
+
   const refreshDatabase = async (dbType: string) => {
     setDbLoading(dbType);
     try {
