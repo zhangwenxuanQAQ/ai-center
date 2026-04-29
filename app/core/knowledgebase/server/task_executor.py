@@ -395,6 +395,15 @@ class TaskExecutor:
                 self._update_kb_stats(task.kb_id, token_count, len(task.result))
 
             doc.save()
+            
+            self._publish_doc_event(task.kb_id, {
+                "doc_id": task.doc_id,
+                "running_status": doc.running_status,
+                "task_progress": task.progress,
+                "task_progress_message": task.progress_message,
+                "chunk_num": doc.chunk_num,
+                "token_num": doc.token_num,
+            })
         except KnowledgebaseDocument.DoesNotExist:
             logger.warning(f"文档不存在: {task.doc_id}")
         except Exception as e:
@@ -409,6 +418,14 @@ class TaskExecutor:
             kb.save()
         except Exception as e:
             logger.error(f"更新知识库统计失败: {e}")
+
+    def _publish_doc_event(self, kb_id: str, event_data: Dict[str, Any]):
+        """推送文档事件到Redis频道"""
+        try:
+            channel = f"kb:{kb_id}:doc_events"
+            redis_utils.publish(channel, event_data)
+        except Exception as e:
+            logger.warning(f"推送文档事件失败: {e}")
 
     def _set_progress(self, task: DocumentTask, prog: float = None, msg: str = "Processing..."):
         """设置任务进度并更新数据库"""

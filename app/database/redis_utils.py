@@ -391,6 +391,51 @@ class RedisUtils:
                 logger.warning(f"Redis.get_pending_msg {queue} got exception: {e}")
         return []
 
+    def publish(self, channel: str, message: Any) -> bool:
+        """
+        发布消息到频道
+        
+        Args:
+            channel: 频道名称
+            message: 消息内容（自动JSON序列化）
+            
+        Returns:
+            bool: 是否发布成功
+        """
+        if not self._redis_client:
+            return False
+
+        try:
+            msg_str = json.dumps(message, ensure_ascii=False)
+            self._redis_client.publish(channel, msg_str)
+            return True
+        except Exception as e:
+            logger.warning(f"Redis.publish {channel} got exception: {e}")
+            self._reconnect()
+            return False
+
+    def subscribe(self, channel: str):
+        """
+        订阅频道
+        
+        Args:
+            channel: 频道名称
+            
+        Returns:
+            pubsub: Redis pubsub对象
+        """
+        if not self._redis_client:
+            return None
+
+        try:
+            pubsub = self._redis_client.pubsub()
+            pubsub.subscribe(channel)
+            return pubsub
+        except Exception as e:
+            logger.warning(f"Redis.subscribe {channel} got exception: {e}")
+            self._reconnect()
+            return None
+
 
 # 全局单例实例
 redis_utils = RedisUtils()

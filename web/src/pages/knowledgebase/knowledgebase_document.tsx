@@ -73,6 +73,41 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
     setSelectedRowKeys([]);
   }, [selectedCategory, searchName, filterFileType, filterStatus, filterNewStatus]);
 
+  useEffect(() => {
+    const eventSource = new EventSource(`/aicenter/v1/knowledgebase/document_events/${knowledgebase.id}`);
+    
+    eventSource.addEventListener('update', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        setDocuments(prevDocs => {
+          return prevDocs.map(doc => {
+            if (doc.id === data.doc_id) {
+              return {
+                ...doc,
+                running_status: data.running_status,
+                task_progress: data.task_progress,
+                task_progress_message: data.task_progress_message,
+                chunk_num: data.chunk_num,
+                token_num: data.token_num,
+              };
+            }
+            return doc;
+          });
+        });
+      } catch (error) {
+        console.error('Failed to parse SSE event:', error);
+      }
+    });
+
+    eventSource.onerror = (error) => {
+      console.error('SSE connection error:', error);
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, [knowledgebase.id]);
+
   const getAllCategoryKeys = (categories: KnowledgebaseDocumentCategory[]): string[] => {
     let keys: string[] = [];
     categories.forEach(category => {
@@ -508,9 +543,12 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       key: 'running_status',
       width: 120,
       render: (status: string, record: KnowledgebaseDocument) => {
+        const statusLabel = DOCUMENT_RUNNING_STATUS[status as keyof typeof DOCUMENT_RUNNING_STATUS] || status;
+        const progress = (record.task_progress * 100).toFixed(0);
+        const isRunning = status === 'running' || status === 'waiting';
         const statusTag = (
           <Tag color={getStatusColor(status)}>
-            {DOCUMENT_RUNNING_STATUS[status as keyof typeof DOCUMENT_RUNNING_STATUS] || status}
+            {isRunning ? `${statusLabel} ${progress}%` : statusLabel}
           </Tag>
         );
         
@@ -599,7 +637,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       title: '所属分类',
       dataIndex: 'category_name',
       key: 'category_name',
-      width: 120,
+      width: 100,
       render: (categoryName: string) => (
         <span>{categoryName || '-'}</span>
       ),

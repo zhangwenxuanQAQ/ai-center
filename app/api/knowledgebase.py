@@ -999,3 +999,60 @@ def get_task_executor_status(kb_id: str):
     except Exception as e:
         logger.error(f"获取任务执行器状态失败: {e}")
         return ResponseUtil.error(message=str(e))
+
+
+@router.get("/document_events/{kb_id}")
+async def document_events(kb_id: str):
+    """
+    SSE端点：推送文档任务状态更新事件
+    
+    Args:
+        kb_id: 知识库ID
+        
+    Returns:
+        StreamingResponse: SSE事件流
+    """
+    import asyncio
+    from app.database.redis_utils import redis_utils as ru
+    
+    async def event_generator():
+        channel = f"kb:{kb_id}:doc_events"
+        pubsub = None
+        
+        try:
+            if ru.is_available:
+                pubsub = ru.subscribe(channel)
+            
+            yield f"event: connected\ndata: {{\"message\": \"Connected to knowledgebase {kb_id}\"}}\n\n"
+            
+            while True:
+                if pubsub:
+                    try:
+                        message = pubsub.get_message(timeout=1)
+                        if message and message["type"] == "message":
+                            data = message["data"]
+                            yield f"event: update\ndata: {data}\n\n"
+                    except Exception as e:
+                        logger.warning(f"获取Redis消息失败: {e}")
+                
+                await asyncio.sleep(0.5)
+                
+        except asyncio.CancelledError:
+            logger.info(f"SSE连接关闭: {kb_id}")
+        finally:
+            if pubsub:
+                try:
+                    pubsub.unsubscribe()
+                    pubsub.close()
+                except Exception:
+                    pass
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
