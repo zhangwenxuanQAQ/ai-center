@@ -175,6 +175,13 @@ class DocumentUploadHandler:
             status=status,
         )
 
+        try:
+            from app.core.knowledgebase.server.task_executor import task_executor as te
+            te.run_document_task(doc.id)
+            logger.info(f"文档上传后自动提交切片任务: {doc.id}")
+        except Exception as e:
+            logger.warning(f"文档上传后自动提交切片任务失败: {e}")
+
         return doc
 
     @staticmethod

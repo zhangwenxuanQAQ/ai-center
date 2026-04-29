@@ -756,6 +756,44 @@ try:
     except Exception as e:
         print(f"  更新 knowledgebase_document 表字段失败: {e}")
 
+    # 为 knowledgebase_document 表添加 task_progress_message 字段
+    print("\n为 knowledgebase_document 表添加 task_progress_message 字段...")
+    try:
+        cursor = db.execute_sql("DESCRIBE knowledgebase_document;")
+        columns = [column[0] for column in cursor.fetchall()]
+
+        if 'task_progress_message' not in columns:
+            db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN task_progress_message VARCHAR(500) DEFAULT NULL AFTER task_progress")
+            print("  task_progress_message 字段已添加")
+        else:
+            print("  task_progress_message 字段已存在，跳过")
+
+        if 'mime_type' not in columns:
+            db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN mime_type VARCHAR(100) DEFAULT NULL AFTER file_size")
+            print("  mime_type 字段已添加")
+        else:
+            print("  mime_type 字段已存在，跳过")
+
+        if 'source_type' not in columns:
+            db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN source_type VARCHAR(50) DEFAULT NULL AFTER mime_type")
+            print("  source_type 字段已添加")
+        else:
+            print("  source_type 字段已存在，跳过")
+
+        if 'source_config' not in columns:
+            db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN source_config TEXT DEFAULT NULL AFTER source_type")
+            print("  source_config 字段已添加")
+        else:
+            print("  source_config 字段已存在，跳过")
+
+        if 'thumbnail' not in columns:
+            db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN thumbnail TEXT DEFAULT NULL AFTER source_config")
+            print("  thumbnail 字段已添加")
+        else:
+            print("  thumbnail 字段已存在，跳过")
+    except Exception as e:
+        print(f"  为 knowledgebase_document 表添加字段失败: {e}")
+
     # 统一所有表的COLLATE为utf8mb4_0900_ai_ci
     print("\n统一所有表的COLLATE字符集为utf8mb4_0900_ai_ci...")
     try:
@@ -891,7 +929,7 @@ mcp_enabled = config.config.get('mcp', {}).get('enabled', False)
 mcp_process = None
 
 if mcp_enabled:
-    print("\n[3/3] 启动MCP服务...")
+    print("\n[3/4] 启动MCP服务...")
     mcp_host = config.config.get('mcp', {}).get('host', '127.0.0.1')
     mcp_port = config.config.get('mcp', {}).get('port', 8082)
     
@@ -902,7 +940,16 @@ if mcp_enabled:
     )
     print(f"MCP服务已启动: http://{mcp_host}:{mcp_port}/mcp")
 else:
-    print("\n[3/3] MCP服务未启用（配置文件中mcp.enabled=false）")
+    print("\n[3/4] MCP服务未启用（配置文件中mcp.enabled=false）")
+
+# 启动文档切片任务执行器
+print("\n[4/4] 启动文档切片任务执行器...")
+try:
+    from app.core.knowledgebase.server import task_executor
+    task_executor.start()
+    print("文档切片任务执行器已启动")
+except Exception as e:
+    print(f"文档切片任务执行器启动失败: {e}")
 
 print("\n" + "=" * 80)
 print("AI Center 服务启动成功！")

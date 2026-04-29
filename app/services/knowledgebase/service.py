@@ -500,17 +500,32 @@ class KnowledgebaseDocumentService:
 
         # 自动获取 mime_type 和 file_type
         from app.core.knowledgebase.utils.file_utils import get_mime_type, filename_type
+        from app.constants.knowledgebase_document_constants import validate_chunk_method, get_default_chunk_method
         
         # 优先使用 file_name，其次使用 location
         filename = doc_data.get('file_name') or doc_data.get('location')
+        file_type_str = doc_data.get('file_type')
+        
         if filename:
             # 获取 MIME 类型
             if not doc_data.get('mime_type'):
                 doc_data['mime_type'] = get_mime_type(filename)
             # 获取文件类型
-            if not doc_data.get('file_type'):
+            if not file_type_str:
                 file_type_str = filename_type(filename)
                 doc_data['file_type'] = file_type_str
+        
+        # 验证并设置切片方法
+        chunk_method = doc_data.get('chunk_method')
+        if chunk_method and file_type_str:
+            is_valid, message = validate_chunk_method(chunk_method, file_type_str, filename)
+            if not is_valid:
+                # 使用默认的切片方法
+                doc_data['chunk_method'] = get_default_chunk_method(file_type_str, filename)
+                logger.warning(f"{message}，使用默认方法: {doc_data['chunk_method']}")
+        elif not chunk_method and file_type_str:
+            # 如果没有指定切片方法，使用默认的
+            doc_data['chunk_method'] = get_default_chunk_method(file_type_str, filename)
 
         db_doc = KnowledgebaseDocument(**doc_data)
         db_doc.save(force_insert=True)
@@ -692,7 +707,7 @@ class KnowledgebaseDocumentService:
             KnowledgebaseDocument: 知识库文档对象，不存在则返回None
         """
         try:
-            doc = KnowledgebaseDocument.get_by_id(document_id)
+            doc = KnowledgebaseDocument.get(KnowledgebaseDocument.id == document_id)
             if doc.deleted:
                 return None
             return doc
@@ -716,7 +731,7 @@ class KnowledgebaseDocumentService:
             ResourceNotFoundError: 知识库文档不存在
         """
         try:
-            db_doc = KnowledgebaseDocument.get_by_id(document_id)
+            db_doc = KnowledgebaseDocument.get(KnowledgebaseDocument.id == document_id)
             if db_doc.deleted:
                 raise ResourceNotFoundError(message=f"知识库文档 {document_id} 不存在")
         except KnowledgebaseDocument.DoesNotExist:
@@ -872,7 +887,7 @@ class KnowledgebaseDocumentService:
             ResourceNotFoundError: 知识库文档不存在
         """
         try:
-            db_doc = KnowledgebaseDocument.get_by_id(document_id)
+            db_doc = KnowledgebaseDocument.get(KnowledgebaseDocument.id == document_id)
             if db_doc.deleted:
                 raise ResourceNotFoundError(message=f"知识库文档 {document_id} 不存在")
         except KnowledgebaseDocument.DoesNotExist:
@@ -888,6 +903,13 @@ class KnowledgebaseDocumentService:
                 )
             except Exception as e:
                 logger.warning(f"删除RustFS文件失败 {db_doc.kb_id}/{db_doc.location}: {e}")
+
+        # 删除ES中的切片数据
+        try:
+            from app.core.knowledgebase.server.task_executor import task_executor as te
+            te.delete_document_chunks(db_doc.kb_id, document_id)
+        except Exception as e:
+            logger.warning(f"删除ES切片数据失败: {e}")
 
         db_doc.deleted = True
         db_doc.deleted_at = datetime.now()

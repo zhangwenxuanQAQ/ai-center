@@ -347,9 +347,106 @@ CHUNK_METHOD_CONFIGS: Dict[str, List[ChunkConfigField]] = {
 }
 
 
+# 文件类型对应的可选切片方法配置
+FILE_TYPE_CHUNK_METHODS: Dict[str, List[str]] = {
+    FileType.VISUAL: [ChunkMethod.PICTURE],
+    FileType.PDF: [
+        ChunkMethod.NAIVE, ChunkMethod.QA, ChunkMethod.RESUME, 
+        ChunkMethod.MANUAL, ChunkMethod.PAPER, ChunkMethod.BOOK, 
+        ChunkMethod.LAWS, ChunkMethod.PRESENTATION, ChunkMethod.ONE
+    ],
+    FileType.DOC: [
+        ChunkMethod.NAIVE, ChunkMethod.QA, ChunkMethod.RESUME, 
+        ChunkMethod.MANUAL, ChunkMethod.BOOK, ChunkMethod.LAWS, 
+        ChunkMethod.ONE
+    ],
+    FileType.AURAL: [ChunkMethod.AUDIO],
+    FileType.OTHER: [ChunkMethod.ONE],
+}
+
+
+# 后缀名对应的可选切片方法配置
+EXTENSION_CHUNK_METHODS: Dict[str, List[str]] = {
+    "ppt": [ChunkMethod.PRESENTATION],
+    "pptx": [ChunkMethod.PRESENTATION],
+    "pages": [ChunkMethod.PRESENTATION],
+    "msg": [ChunkMethod.EMAIL],
+    "eml": [ChunkMethod.EMAIL],
+    "xls": [ChunkMethod.NAIVE, ChunkMethod.QA, ChunkMethod.TABLE, ChunkMethod.ONE],
+    "xlsx": [ChunkMethod.NAIVE, ChunkMethod.QA, ChunkMethod.TABLE, ChunkMethod.ONE],
+}
+
+
+def get_available_chunk_methods(file_type: str, filename: str = None) -> List[str]:
+    """
+    根据文件类型和文件名获取可用的切片方法列表
+    
+    Args:
+        file_type: 文件类型（FileType枚举值）
+        filename: 文件名（可选，用于检查后缀名）
+    
+    Returns:
+        List[str]: 可用的切片方法列表
+    """
+    # 首先检查是否有特定的后缀名规则
+    if filename:
+        ext = filename.split('.')[-1].lower() if '.' in filename else ''
+        if ext in EXTENSION_CHUNK_METHODS:
+            return EXTENSION_CHUNK_METHODS[ext]
+    
+    # 然后检查文件类型规则
+    if file_type in FILE_TYPE_CHUNK_METHODS:
+        return FILE_TYPE_CHUNK_METHODS[file_type]
+    
+    # 默认返回
+    return [ChunkMethod.ONE]
+
+
+def get_default_chunk_method(file_type: str, filename: str = None) -> str:
+    """
+    根据文件类型和文件名获取默认的切片方法
+    
+    Args:
+        file_type: 文件类型（FileType枚举值）
+        filename: 文件名（可选，用于检查后缀名）
+    
+    Returns:
+        str: 默认的切片方法
+    """
+    available_methods = get_available_chunk_methods(file_type, filename)
+    if available_methods:
+        return available_methods[0]
+    return ChunkMethod.ONE
+
+
+def validate_chunk_method(chunk_method: str, file_type: str, filename: str = None) -> tuple[bool, str]:
+    """
+    验证切片方法是否有效
+    
+    Args:
+        chunk_method: 要验证的切片方法
+        file_type: 文件类型（FileType枚举值）
+        filename: 文件名（可选，用于检查后缀名）
+    
+    Returns:
+        tuple[bool, str]: (是否有效, 提示信息)
+    """
+    available_methods = get_available_chunk_methods(file_type, filename)
+    
+    if chunk_method in available_methods:
+        return True, ""
+    
+    if available_methods:
+        return False, f"切片方法 '{chunk_method}' 不可用，可用的方法有: {', '.join(available_methods)}"
+    
+    return False, f"切片方法 '{chunk_method}' 不可用，默认使用: {ChunkMethod.ONE}"
+
+
+
 class RunningStatus:
     """文档运行状态枚举"""
     PENDING = "pending" # 未开始
+    WAITING = "waiting" # 等待执行
     RUNNING = "running" # 运行中
     CANCEL = "cancel" # 已取消
     DONE = "done" # 已完成

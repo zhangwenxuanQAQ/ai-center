@@ -122,7 +122,7 @@ class DocumentService:
             ResourceNotFoundError: 文档不存在
         """
         try:
-            doc = KnowledgebaseDocument.get_by_id(document_id)
+            doc = KnowledgebaseDocument.get(KnowledgebaseDocument.id == document_id)
             if doc.deleted:
                 raise ResourceNotFoundError(message=f"文档 {document_id} 不存在")
         except KnowledgebaseDocument.DoesNotExist:

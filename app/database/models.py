@@ -180,6 +180,7 @@ class KnowledgebaseDocument(SoftDeleteModel):
     running_status = CharField(max_length=50, default="pending", verbose_name="文档解析状态")
     status = BooleanField(default=True, verbose_name="文档状态")
     task_progress = FloatField(default=0, verbose_name="文档解析进度(0-1)")
+    task_progress_message = CharField(max_length=500, null=True, verbose_name="文档解析进度消息")
     task_begin_at = DateTimeField(null=True, verbose_name="文档解析开始时间")
     task_end_at = DateTimeField(null=True, verbose_name="文档解析结束时间")
     task_duration = IntegerField(default=0, verbose_name="文档解析耗时(毫秒)")

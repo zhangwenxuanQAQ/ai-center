@@ -70,6 +70,7 @@ export interface KnowledgebaseDocument {
   task_begin_at?: string;
   task_end_at?: string;
   task_duration: number;
+  task_progress_message?: string;
   created_at: string;
   updated_at?: string;
 }
@@ -454,5 +455,55 @@ export const knowledgebaseService = {
       console.error('下载文档失败:', error);
       throw error;
     }
+  },
+
+  /**
+   * 执行文档切片任务
+   */
+  runDocumentTask: async (kbId: string, documentId: string): Promise<void> => {
+    return http.post(`/aicenter/v1/knowledgebase/${kbId}/document/${documentId}/run`);
+  },
+
+  /**
+   * 停止文档切片任务
+   */
+  stopDocumentTask: async (kbId: string, documentId: string): Promise<void> => {
+    return http.post(`/aicenter/v1/knowledgebase/${kbId}/document/${documentId}/stop`);
+  },
+
+  /**
+   * 获取文档任务状态
+   */
+  getDocumentTaskStatus: async (kbId: string, documentId: string): Promise<{ status: string; progress: number; message?: string }> => {
+    return http.get(`/aicenter/v1/knowledgebase/${kbId}/document/${documentId}/task_status`);
+  },
+
+  /**
+   * 批量执行文档切片任务
+   */
+  batchRunDocumentTasks: async (kbId: string, documentIds: string[]): Promise<void> => {
+    return http.post(`/aicenter/v1/knowledgebase/${kbId}/document/batch_run`, documentIds);
+  },
+
+  /**
+   * 获取任务执行器状态
+   */
+  getTaskExecutorStatus: async (kbId: string): Promise<{ is_running: boolean; active_tasks: number; queue_size: number }> => {
+    return http.get(`/aicenter/v1/knowledgebase/${kbId}/task_executor_status`);
+  },
+
+  getAvailableChunkMethods: async (
+    fileType: string,
+    fileName?: string
+  ): Promise<{
+    available_methods: Array<{ key: string; label: string; is_default: boolean }>;
+    default_method: string;
+  }> => {
+    const params = [`file_type=${fileType}`];
+    if (fileName) {
+      params.push(`file_name=${encodeURIComponent(fileName)}`);
+    }
+    const queryString = params.length > 0 ? `?${params.join('&')}` : '';
+    return http.get(`/aicenter/v1/knowledgebase/chunk_methods/available${queryString}`);
   },
 };

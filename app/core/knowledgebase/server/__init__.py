@@ -3,15 +3,13 @@
 提供任务调度和执行服务
 """
 
-from .task_executor import (
-    TaskStatus,
-    DocumentTask,
-    TaskExecutor,
-    task_executor,
-)
+from .task_executor import TaskStatus, TaskCanceledException, DocumentTask, TaskExecutor
+
+task_executor = TaskExecutor()
 
 __all__ = [
     'TaskStatus',
+    'TaskCanceledException',
     'DocumentTask',
     'TaskExecutor',
     'task_executor',

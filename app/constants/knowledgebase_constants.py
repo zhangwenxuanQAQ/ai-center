@@ -22,6 +22,7 @@ DOCUMENT_CHUNK_METHOD = {
 
 DOCUMENT_RUNNING_STATUS = {
     "pending": "未开始",
+    "waiting": "等待执行",
     "running": "运行中",
     "cancel": "已取消",
     "done": "已完成",

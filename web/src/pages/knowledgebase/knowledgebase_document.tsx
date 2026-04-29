@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Layout, Tree, Table, Input, Select, Button, Tag, Spin, Pagination, Empty, Row, Col, Tooltip, Switch, message, Modal, Popconfirm, Form, TreeSelect } from 'antd';
+import { Layout, Tree, Table, Input, Select, Button, Tag, Spin, Pagination, Empty, Row, Col, Tooltip, Switch, message, Modal, Popconfirm, Form, TreeSelect, Popover, Descriptions } from 'antd';
 const { TextArea } = Input;
-import { SearchOutlined, PlusOutlined, FolderOutlined, FileTextOutlined, PlayCircleOutlined, PauseCircleOutlined, ReloadOutlined, UnorderedListOutlined, EditOutlined, DownloadOutlined, DeleteOutlined, UpOutlined, DownOutlined, CloseOutlined } from '@ant-design/icons';
+import { SearchOutlined, PlusOutlined, FolderOutlined, FileTextOutlined, PlayCircleOutlined, PauseCircleOutlined, ReloadOutlined, UnorderedListOutlined, EditOutlined, DownloadOutlined, DeleteOutlined, UpOutlined, DownOutlined, CloseOutlined, SettingOutlined } from '@ant-design/icons';
 import type { TreeDataNode, TreeProps } from 'antd';
 import { knowledgebaseService, Knowledgebase, KnowledgebaseDocument, KnowledgebaseDocumentCategory } from '../../services/knowledgebase';
 import { DOCUMENT_RUNNING_STATUS, DOCUMENT_CHUNK_METHOD } from '../../constants/knowledgebase';
 import KnowledgebaseDocumentSetting from './knowledgebase_document_setting';
+import ChunkMethodModal from './chunk-method-modal';
 import '../../styles/common.css';
 import './knowledgebase.less';
 
@@ -35,6 +36,8 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
   const [editingDocument, setEditingDocument] = useState<KnowledgebaseDocument | undefined>(undefined);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [documentConstants, setDocumentConstants] = useState<any>(null);
+  const [chunkModalVisible, setChunkModalVisible] = useState(false);
+  const [chunkModalDocument, setChunkModalDocument] = useState<KnowledgebaseDocument | null>(null);
   
   // 分类管理相关状态
   const [isCategoryModalVisible, setIsCategoryModalVisible] = useState(false);
@@ -374,6 +377,8 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       case 'done':
         return 'success';
       case 'running':
+        return 'success';
+      case 'waiting':
         return 'processing';
       case 'pending':
       case 'schedule':
@@ -422,6 +427,28 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
     } catch (error) {
       console.error('Failed to delete document:', error);
       message.error('文档删除失败');
+    }
+  };
+
+  const handleRunTask = async (documentId: string) => {
+    try {
+      await knowledgebaseService.runDocumentTask(knowledgebase.id, documentId);
+      message.success('任务已提交');
+      fetchDocuments();
+    } catch (error: any) {
+      console.error('Failed to run document task:', error);
+      message.error(error.message || '任务提交失败');
+    }
+  };
+
+  const handleStopTask = async (documentId: string) => {
+    try {
+      await knowledgebaseService.stopDocumentTask(knowledgebase.id, documentId);
+      message.success('任务已停止');
+      fetchDocuments();
+    } catch (error: any) {
+      console.error('Failed to stop document task:', error);
+      message.error(error.message || '停止任务失败');
     }
   };
 
@@ -480,11 +507,67 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       dataIndex: 'running_status',
       key: 'running_status',
       width: 120,
-      render: (status: string) => (
-        <Tag color={getStatusColor(status)}>
-          {DOCUMENT_RUNNING_STATUS[status as keyof typeof DOCUMENT_RUNNING_STATUS] || status}
-        </Tag>
-      ),
+      render: (status: string, record: KnowledgebaseDocument) => {
+        const statusTag = (
+          <Tag color={getStatusColor(status)}>
+            {DOCUMENT_RUNNING_STATUS[status as keyof typeof DOCUMENT_RUNNING_STATUS] || status}
+          </Tag>
+        );
+        
+        // 格式化耗时（毫秒转秒）
+        const formatDuration = (ms: number) => {
+          if (ms < 1000) {
+            return `${ms}毫秒`;
+          }
+          return `${(ms / 1000).toFixed(2)}秒`;
+        };
+        
+        // 使用 Popover 显示详细信息
+        const popoverContent = (
+          <Descriptions size="small" column={1} style={{ width: '400px' }}>
+            <Descriptions.Item label="当前状态">
+              <Tag color={getStatusColor(status)}>
+                {DOCUMENT_RUNNING_STATUS[status as keyof typeof DOCUMENT_RUNNING_STATUS] || status}
+              </Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label="进度">{(record.task_progress * 100).toFixed(1)}%</Descriptions.Item>
+            {record.task_progress_message && (
+              <Descriptions.Item label="消息">
+                <div style={{ maxWidth: '360px', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
+                  {record.task_progress_message}
+                </div>
+              </Descriptions.Item>
+            )}
+            {record.task_begin_at && (
+              <Descriptions.Item label="开始时间">
+                {new Date(record.task_begin_at).toLocaleString()}
+              </Descriptions.Item>
+            )}
+            {record.task_end_at && (
+              <Descriptions.Item label="结束时间">
+                {new Date(record.task_end_at).toLocaleString()}
+              </Descriptions.Item>
+            )}
+            {record.task_duration > 0 && (
+              <Descriptions.Item label="耗时">
+                {formatDuration(record.task_duration)}
+              </Descriptions.Item>
+            )}
+          </Descriptions>
+        );
+        
+        return (
+          <Popover
+            content={popoverContent}
+            title="任务详情"
+            placement="top"
+            trigger="hover"
+            getPopupContainer={() => document.body}
+          >
+            {statusTag}
+          </Popover>
+        );
+      },
     },
     {
       title: '切片方法',
@@ -547,7 +630,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
     {
       title: '操作',
       key: 'action',
-      width: 180,
+      width: 240,
       fixed: 'right' as const,
       render: (_, record: KnowledgebaseDocument) => {
         const getStatusButton = () => {
@@ -560,6 +643,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
                     size="small" 
                     icon={<PauseCircleOutlined />}
                     style={{ color: '#1890ff' }}
+                    onClick={() => handleStopTask(record.id)}
                   />
                 </Tooltip>
               );
@@ -567,14 +651,20 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
             case 'fail':
             case 'cancel':
               return (
-                <Tooltip title="重新执行">
+                <Popconfirm
+                  title="确认重新执行"
+                  description="重新执行将删除原有切片数据，确定要继续吗？"
+                  okText="确定"
+                  cancelText="取消"
+                  onConfirm={() => handleRunTask(record.id)}
+                >
                   <Button 
                     type="text"
                     size="small" 
                     icon={<ReloadOutlined />}
                     style={{ color: '#52c41a' }}
                   />
-                </Tooltip>
+                </Popconfirm>
               );
             default:
               return (
@@ -584,6 +674,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
                     size="small" 
                     icon={<PlayCircleOutlined />}
                     style={{ color: '#52c41a' }}
+                    onClick={() => handleRunTask(record.id)}
                   />
                 </Tooltip>
               );
@@ -600,10 +691,21 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
                 icon={<UnorderedListOutlined />}
               />
             </Tooltip>
-            <Tooltip title="编辑">
-              <Button 
+            <Tooltip title="修改切片方法">
+              <Button
                 type="text"
-                size="small" 
+                size="small"
+                icon={<SettingOutlined />}
+                onClick={() => {
+                  setChunkModalDocument(record);
+                  setChunkModalVisible(true);
+                }}
+              />
+            </Tooltip>
+            <Tooltip title="编辑">
+              <Button
+                type="text"
+                size="small"
                 icon={<EditOutlined />}
                 onClick={() => { setEditingDocument(record); setShowSetting(true); }}
               />
@@ -643,7 +745,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
         );
       },
     },
-  ], [documentConstants, handleStatusChange, handleDelete, knowledgebase.id, getStatusColor, formatFileSize]);
+  ], [documentConstants, handleStatusChange, handleDelete, handleRunTask, handleStopTask, knowledgebase.id, getStatusColor, formatFileSize]);
 
   return (
     <Layout className="knowledgebase-layout" style={{ height: '100%' }}>
@@ -978,6 +1080,24 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
           </Form.Item>
         </Form>
       </Modal>
+
+      {/* 修改切片方法弹窗 */}
+      {chunkModalDocument && (
+        <ChunkMethodModal
+          visible={chunkModalVisible}
+          onCancel={() => {
+            setChunkModalVisible(false);
+            setChunkModalDocument(null);
+          }}
+          onSuccess={() => {
+            setChunkModalVisible(false);
+            setChunkModalDocument(null);
+            fetchDocuments();
+          }}
+          document={chunkModalDocument}
+          knowledgebaseId={knowledgebase.id}
+        />
+      )}
     </Layout>
   );
 };

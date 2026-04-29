@@ -245,15 +245,9 @@ def get_chunk_method_by_file_type(file_type, filename, default_chunk_method="nai
     Returns:
         str: chunk方法名称
     """
-    if file_type == FileType.VISUAL:
-        return "picture"
-    if file_type == FileType.AURAL:
-        return "audio"
-    if re.search(r"\.(ppt|pptx|pages)$", filename, re.IGNORECASE):
-        return "presentation"
-    if re.search(r"\.(msg|eml)$", filename, re.IGNORECASE):
-        return "email"
-    return default_chunk_method
+    from app.constants.knowledgebase_document_constants import get_default_chunk_method, ChunkMethod
+    
+    return get_default_chunk_method(file_type, filename)
 
 
 def find_ffmpeg():

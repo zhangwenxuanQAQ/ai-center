@@ -23,7 +23,8 @@ from app.services.knowledgebase.dto import (
 from app.utils.response import ResponseUtil, ApiResponse
 from app.constants.knowledgebase_constants import FILE_NAME_LEN_LIMIT
 from app.constants.knowledgebase_document_constants import (
-    CHUNK_METHOD_LABELS, CHUNK_METHOD_CONFIGS, SOURCE_TYPE_LABELS, SourceType, SourceConfigDefinition
+    CHUNK_METHOD_LABELS, CHUNK_METHOD_CONFIGS, SOURCE_TYPE_LABELS, SourceType, SourceConfigDefinition,
+    get_available_chunk_methods, get_default_chunk_method
 )
 
 logger = logging.getLogger(__name__)
@@ -64,6 +65,38 @@ def get_document_constants():
         "source_types": source_types,
         "chunk_configs": chunk_configs,
         "source_configs": source_configs,
+    })
+
+
+@router.get("/chunk_methods/available", response_model=ApiResponse)
+def get_available_chunk_methods_api(
+    file_type: str = Query(..., description="文件类型"),
+    filename: str = Query(None, description="文件名（可选，用于检查后缀名）")
+):
+    """
+    获取特定文件类型可用的切片方法
+    
+    Args:
+        file_type: 文件类型
+        filename: 文件名（可选，用于检查后缀名）
+    
+    Returns:
+        ApiResponse: 包含可用切片方法和默认切片方法的响应
+    """
+    available_methods = get_available_chunk_methods(file_type, filename)
+    default_method = get_default_chunk_method(file_type, filename)
+    
+    method_list = []
+    for method in available_methods:
+        method_list.append({
+            "key": method,
+            "label": CHUNK_METHOD_LABELS.get(method, method),
+            "is_default": method == default_method
+        })
+    
+    return ResponseUtil.success(data={
+        "available_methods": method_list,
+        "default_method": default_method
     })
 
 
@@ -765,4 +798,204 @@ def delete_document_category(kb_id: str, category_id: str):
         db_category = KnowledgebaseDocumentCategoryService.delete_category(category_id)
         return ResponseUtil.success(data=db_category.__data__, message="知识库文档分类删除成功")
     except ValueError as e:
+        return ResponseUtil.error(message=str(e))
+
+
+# ==================== 文档切片任务相关接口 ====================
+
+@router.post("/{kb_id}/document/{document_id}/run", response_model=ApiResponse)
+def run_document_task(kb_id: str, document_id: str):
+    """
+    执行文档切片任务
+
+    将文档提交到切片任务队列，执行切片、Embedding和ES存储的完整流水线。
+    切片方法从文档配置中获取，向量模型从知识库配置中获取。
+
+    Args:
+        kb_id: 知识库ID
+        document_id: 文档ID
+
+    Returns:
+        ApiResponse: 统一格式的响应对象，包含任务信息
+    """
+    try:
+        from app.core.knowledgebase.server import task_executor
+
+        doc = KnowledgebaseDocumentService.get_document(document_id)
+        if doc is None:
+            return ResponseUtil.not_found(message=f"文档 {document_id} 不存在")
+        if doc.kb_id != kb_id:
+            return ResponseUtil.bad_request(message="文档不属于该知识库")
+
+        task = task_executor.run_document_task(document_id)
+        if task is None:
+            return ResponseUtil.error(message="提交切片任务失败，请检查文档和知识库配置")
+
+        return ResponseUtil.success(
+            data={
+                "task_id": task.task_id,
+                "doc_id": task.doc_id,
+                "status": task.status.value,
+                "progress": task.progress,
+                "progress_message": task.progress_message,
+            },
+            message="切片任务已提交"
+        )
+    except Exception as e:
+        logger.error(f"执行文档切片任务失败: {e}")
+        return ResponseUtil.error(message=str(e))
+
+
+@router.post("/{kb_id}/document/{document_id}/stop", response_model=ApiResponse)
+def stop_document_task(kb_id: str, document_id: str):
+    """
+    停止文档切片任务
+
+    Args:
+        kb_id: 知识库ID
+        document_id: 文档ID
+
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    try:
+        from app.core.knowledgebase.server import task_executor
+
+        success = task_executor.stop_document_task(document_id)
+        if success:
+            return ResponseUtil.success(message="停止任务请求已发送")
+        else:
+            return ResponseUtil.error(message="停止任务失败，任务可能不存在")
+    except Exception as e:
+        logger.error(f"停止文档切片任务失败: {e}")
+        return ResponseUtil.error(message=str(e))
+
+
+@router.post("/{kb_id}/document/{document_id}/delete_chunks", response_model=ApiResponse)
+def delete_document_chunks(kb_id: str, document_id: str):
+    """
+    删除文档切片数据
+
+    删除ES中该文档的所有切片数据，并重置文档状态。
+
+    Args:
+        kb_id: 知识库ID
+        document_id: 文档ID
+
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    try:
+        from app.core.knowledgebase.server import task_executor
+
+        success = task_executor.delete_document_chunks(kb_id, document_id)
+        if success:
+            return ResponseUtil.success(message="切片数据已删除")
+        else:
+            return ResponseUtil.error(message="删除切片数据失败")
+    except Exception as e:
+        logger.error(f"删除文档切片数据失败: {e}")
+        return ResponseUtil.error(message=str(e))
+
+
+@router.post("/{kb_id}/document/batch_run", response_model=ApiResponse)
+async def batch_run_documents(kb_id: str, request: Request):
+    """
+    批量执行文档切片任务
+
+    Args:
+        kb_id: 知识库ID
+        request: 请求对象，包含文档ID列表
+
+    Returns:
+        ApiResponse: 统一格式的响应对象，包含成功和失败的文档ID
+    """
+    try:
+        from app.core.knowledgebase.server import task_executor
+
+        doc_ids = await request.json()
+        if not isinstance(doc_ids, list):
+            return ResponseUtil.bad_request(message="请求体必须是文档ID列表")
+
+        results = task_executor.batch_run_documents(doc_ids)
+        return ResponseUtil.success(
+            data=results,
+            message=f"批量提交完成: 成功{len(results['success'])}个, 失败{len(results['failed'])}个"
+        )
+    except Exception as e:
+        logger.error(f"批量执行文档切片任务失败: {e}")
+        return ResponseUtil.error(message=str(e))
+
+
+@router.get("/{kb_id}/document/{document_id}/task_status", response_model=ApiResponse)
+def get_document_task_status(kb_id: str, document_id: str):
+    """
+    获取文档切片任务状态
+
+    Args:
+        kb_id: 知识库ID
+        document_id: 文档ID
+
+    Returns:
+        ApiResponse: 统一格式的响应对象，包含任务状态信息
+    """
+    try:
+        from app.core.knowledgebase.server import task_executor
+
+        task = task_executor.get_task_status(document_id)
+        if task is None:
+            doc = KnowledgebaseDocumentService.get_document(document_id)
+            if doc is None:
+                return ResponseUtil.not_found(message=f"文档 {document_id} 不存在")
+            return ResponseUtil.success(
+                data={
+                    "task_id": document_id,
+                    "status": doc.get("running_status", "pending"),
+                    "progress": doc.get("task_progress", 0),
+                    "progress_message": doc.get("task_progress_message", ""),
+                },
+                message="获取任务状态成功"
+            )
+
+        return ResponseUtil.success(
+            data={
+                "task_id": task.task_id,
+                "doc_id": task.doc_id,
+                "status": task.status.value,
+                "progress": task.progress,
+                "progress_message": task.progress_message,
+                "error": task.error,
+                "started_at": task.started_at.isoformat() if task.started_at else None,
+                "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+            },
+            message="获取任务状态成功"
+        )
+    except Exception as e:
+        logger.error(f"获取文档任务状态失败: {e}")
+        return ResponseUtil.error(message=str(e))
+
+
+@router.get("/{kb_id}/task_executor_status", response_model=ApiResponse)
+def get_task_executor_status(kb_id: str):
+    """
+    获取任务执行器状态
+
+    Args:
+        kb_id: 知识库ID
+
+    Returns:
+        ApiResponse: 统一格式的响应对象，包含执行器状态信息
+    """
+    try:
+        from app.database.redis_utils import redis_utils as ru
+        heartbeat = ru.get_obj("chunk_executor_heartbeat")
+        if heartbeat:
+            return ResponseUtil.success(data=heartbeat, message="获取执行器状态成功")
+        else:
+            return ResponseUtil.success(
+                data={"status": "no_heartbeat", "message": "执行器心跳数据不可用"},
+                message="执行器可能未启动"
+            )
+    except Exception as e:
+        logger.error(f"获取任务执行器状态失败: {e}")
         return ResponseUtil.error(message=str(e))
