@@ -3,9 +3,10 @@ Elasticsearch工具类
 用于文档切片后的向量存储和检索
 
 功能特性:
-- 自动版本检查（要求ES 8.x）
+- 自动版本检查（要求ES 8.x或9.x）
 - 全局重试机制（ATTEMPT_TIME=2）
 - 完善的错误处理和日志记录
+- 兼容ES 9.x Python客户端（不支持位置参数和body参数）
 """
 
 import logging
@@ -26,23 +27,22 @@ from app.configs.config import config as app_config
 
 logger = logging.getLogger(__name__)
 
-# 全局重试次数配置
 ATTEMPT_TIME = 2
 
 
 def retry_on_failure(func: Callable) -> Callable:
     """
     重试装饰器
-    
+
     为ES操作提供自动重试机制，当操作失败时会自动重试ATTEMPT_TIME次
-    
+
     执行流程:
     - 第1次: 初始执行
     - 第2~ATTEMPT_TIME+1次: 重试执行（每次间隔递增）
-    
+
     Args:
         func: 需要添加重试机制的函数
-        
+
     Returns:
         Callable: 包装后的函数
     """
@@ -51,10 +51,10 @@ def retry_on_failure(func: Callable) -> Callable:
         if not self._es_client:
             logger.error("ES客户端未初始化")
             return self._get_default_return_value(func.__name__)
-        
+
         last_exception = None
-        total_attempts = 1 + ATTEMPT_TIME  # 初始执行 + 重试次数
-        
+        total_attempts = 1 + ATTEMPT_TIME
+
         for attempt in range(1, total_attempts + 1):
             try:
                 result = func(self, *args, **kwargs)
@@ -67,11 +67,11 @@ def retry_on_failure(func: Callable) -> Callable:
                     f"{func.__name__} 第{attempt}/{total_attempts}次尝试失败: {e}"
                 )
                 if attempt < total_attempts:
-                    time.sleep(0.5 * attempt)  # 递增延迟
-        
+                    time.sleep(0.5 * attempt)
+
         logger.error(f"{func.__name__} 经过{total_attempts}次尝试后仍然失败: {last_exception}")
         return self._get_default_return_value(func.__name__)
-    
+
     return wrapper
 
 
@@ -92,17 +92,17 @@ class ESUtils:
     def _initialize(self):
         """
         初始化ES连接并进行版本检查
-        
+
         功能:
         1. 建立ES连接
         2. 获取并验证ES版本号
-        3. 如果版本不是8.x，记录错误日志并抛出异常
+        3. 如果版本不是8.x或9.x，记录错误日志并抛出异常
         """
         if not ELASTICSEARCH_AVAILABLE:
             logger.warning("Elasticsearch库未安装，ES功能不可用。请运行: pip install elasticsearch")
             self._es_client = None
             return
-            
+
         try:
             es_config = app_config.config.get('es', {})
 
@@ -113,14 +113,14 @@ class ESUtils:
             scheme = es_config.get('scheme', 'http')
 
             es_url = f"{scheme}://{host}:{port}"
-            
+
             common_params = {
                 "max_retries": 3,
                 "retry_on_timeout": True,
                 "verify_certs": False,
                 "request_timeout": 30,
             }
-            
+
             if username and password:
                 self._es_client = Elasticsearch(
                     hosts=[es_url],
@@ -133,19 +133,17 @@ class ESUtils:
                     **common_params
                 )
 
-            # 测试连接
             if not self._es_client.ping():
                 logger.error(f"无法连接到Elasticsearch: {host}:{port}")
                 raise ConnectionError(f"无法连接到Elasticsearch服务: {host}:{port}")
-            
-            # 获取ES版本信息
+
             info = self._es_client.info()
             version_info = info.get('version', {})
             version_number = version_info.get('number', 'unknown')
-            
-            self._es_version = str(version_number).split('-')[0]  # 去掉可能的SNAPSHOT后缀
+
+            self._es_version = str(version_number).split('-')[0]
             self._is_version_valid = self._check_es_version()
-            
+
             if not self._is_version_valid:
                 error_msg = (
                     f"Elasticsearch版本不支持! "
@@ -153,14 +151,14 @@ class ESUtils:
                 )
                 logger.error(error_msg)
                 raise ValueError(error_msg)
-            
+
             logger.info(
                 f"成功连接到Elasticsearch: {host}:{port}, "
                 f"版本: {self._es_version}"
             )
-            
+
         except (ConnectionError, ValueError):
-            raise  # 版本检查或连接错误直接抛出
+            raise
         except Exception as e:
             logger.error(f"初始化Elasticsearch连接失败: {e}")
             self._es_client = None
@@ -168,15 +166,15 @@ class ESUtils:
     def _check_es_version(self) -> bool:
         """
         检查ES版本是否为8.x或9.x
-        
+
         Returns:
             bool: 如果版本号为8或9开头返回True，否则False
         """
         if not self._es_version:
             return False
-            
+
         major_version = self._es_version.split('.')[0]
-        
+
         try:
             version_int = int(major_version)
             return version_int == 8 or version_int == 9
@@ -187,10 +185,10 @@ class ESUtils:
     def _get_default_return_value(self, method_name: str):
         """
         根据方法名返回默认值
-        
+
         Args:
             method_name: 方法名
-            
+
         Returns:
             方法的默认返回值
         """
@@ -204,6 +202,9 @@ class ESUtils:
             'delete_by_query': 0,
             'count_documents': 0,
             'check_connection': False,
+            'get_indices_info': [],
+            'get_cluster_health': {},
+            'get_cluster_stats': {},
         }
         return default_returns.get(method_name, None)
 
@@ -231,9 +232,9 @@ class ESUtils:
     def get_cluster_health(self) -> Dict[str, Any]:
         """
         获取集群健康状态
-        
+
         Returns:
-            Dict: 集群健康信息，包含status、number_of_nodes、number_of_data_nodes等
+            Dict: 集群健康信息
         """
         health = self._es_client.cluster.health()
         return {
@@ -256,9 +257,9 @@ class ESUtils:
     def get_cluster_stats(self) -> Dict[str, Any]:
         """
         获取集群统计信息
-        
+
         Returns:
-            Dict: 集群统计信息，包含节点数、存储、索引等
+            Dict: 集群统计信息
         """
         stats = self._es_client.cluster.stats()
         nodes = stats.get("nodes", {})
@@ -280,11 +281,11 @@ class ESUtils:
     def get_indices_info(self) -> List[Dict[str, Any]]:
         """
         获取所有索引信息
-        
+
         Returns:
             List[Dict]: 索引信息列表
         """
-        indices = self._es_client.indices.get_alias("*")
+        indices = self._es_client.indices.get_alias(name="*")
         result = []
         for index_name, info in indices.items():
             if not index_name.startswith("."):
@@ -314,28 +315,30 @@ class ESUtils:
             bool: 是否创建成功
         """
         if not self._es_client.indices.exists(index=index_name):
-            body = {
-                "settings": {
-                    "number_of_shards": 1,
-                    "number_of_replicas": 0,
-                },
-                "mappings": mappings or {
-                    "properties": {
-                        "content": {"type": "text", "analyzer": "ik_max_word"},
-                        "content_vector": {
-                            "type": "dense_vector",
-                            "dims": 1024,
-                            "index": True,
-                            "similarity": "cosine",
-                        },
-                        "doc_name": {"type": "keyword"},
-                        "doc_type": {"type": "keyword"},
-                        "kb_id": {"type": "keyword"},
-                        "created_at": {"type": "date"},
-                    }
-                },
+            settings = {
+                "number_of_shards": 1,
+                "number_of_replicas": 0,
             }
-            self._es_client.indices.create(index=index_name, body=body)
+            index_mappings = mappings or {
+                "properties": {
+                    "content": {"type": "text", "analyzer": "ik_max_word"},
+                    "content_vector": {
+                        "type": "dense_vector",
+                        "dims": 1024,
+                        "index": True,
+                        "similarity": "cosine",
+                    },
+                    "doc_name": {"type": "keyword"},
+                    "doc_type": {"type": "keyword"},
+                    "kb_id": {"type": "keyword"},
+                    "created_at": {"type": "date"},
+                }
+            }
+            self._es_client.indices.create(
+                index=index_name,
+                settings=settings,
+                mappings=index_mappings,
+            )
             logger.info(f"成功创建索引: {index_name}")
             return True
         else:
@@ -354,7 +357,7 @@ class ESUtils:
         Returns:
             bool: 是否插入成功
         """
-        res = self._es_client.index(index=index_name, body=doc)
+        res = self._es_client.index(index=index_name, document=doc)
         logger.debug(f"插入文档成功, _id: {res.get('_id')}")
         return True
 
@@ -401,9 +404,10 @@ class ESUtils:
         Returns:
             List[Dict]: 文档列表
         """
+        es_query = query.get("query", query) if isinstance(query, dict) else query
         res = self._es_client.search(
             index=index_name,
-            body=query,
+            query=es_query,
             size=size,
             from_=from_,
         )
@@ -418,6 +422,7 @@ class ESUtils:
         kb_id: str = None,
         top_k: int = 10,
         min_score: float = 0.0,
+        vector_field: str = "content_vector",
     ) -> List[Dict[str, Any]]:
         """
         向量相似度搜索（带重试机制）
@@ -428,32 +433,35 @@ class ESUtils:
             kb_id: 知识库ID（可选）
             top_k: 返回Top K结果
             min_score: 最小相似度分数
+            vector_field: 向量字段名
 
         Returns:
             List[Dict]: 相似文档列表
         """
-        query_body = {
-            "size": top_k,
-            "min_score": min_score,
-            "query": {
-                "script_score": {
-                    "query": {"match_all": {}},
-                    "script": {
-                        "source": "cosineSimilarity(params.query_vector, 'content_vector') + 1.0",
-                        "params": {"query_vector": vector},
-                    },
-                }
-            },
-        }
-
+        filter_query = {"match_all": {}}
         if kb_id:
-            query_body["query"]["script_score"]["query"] = {
+            filter_query = {
                 "bool": {
                     "filter": [{"term": {"kb_id": kb_id}}]
                 }
             }
 
-        res = self._es_client.search(index=index_name, body=query_body)
+        script_source = f"cosineSimilarity(params.query_vector, '{vector_field}') + 1.0"
+
+        res = self._es_client.search(
+            index=index_name,
+            min_score=min_score,
+            size=top_k,
+            query={
+                "script_score": {
+                    "query": filter_query,
+                    "script": {
+                        "source": script_source,
+                        "params": {"query_vector": vector},
+                    },
+                }
+            },
+        )
         hits = res.get('hits', {}).get('hits', [])
         results = []
         for hit in hits:
@@ -492,9 +500,10 @@ class ESUtils:
         Returns:
             int: 删除的文档数量
         """
+        es_query = query.get("query", query) if isinstance(query, dict) else query
         res = self._es_client.delete_by_query(
             index=index_name,
-            body=query,
+            query=es_query,
             wait_for_completion=True,
         )
         deleted_count = res.get('deleted', 0)
@@ -513,11 +522,13 @@ class ESUtils:
         Returns:
             int: 文档数量
         """
-        body = query if query else {"query": {"match_all": {}}}
-        res = self._es_client.count(index=index_name, body=body)
+        if query:
+            es_query = query.get("query", query) if isinstance(query, dict) else query
+            res = self._es_client.count(index=index_name, query=es_query)
+        else:
+            res = self._es_client.count(index=index_name)
         count = res.get('count', 0)
         return count
 
 
-# 全局单例实例
 es_utils = ESUtils()

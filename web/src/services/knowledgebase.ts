@@ -315,7 +315,7 @@ export const knowledgebaseService = {
   },
 
   /**
-   * 获取文档常量配置（切片方法、来源类型、切片配置）
+   * 获取文档常量配置（切片方法、来源类型、切片配置、运行状态）
    */
   getDocumentConstants: async (): Promise<{
     chunk_methods: Array<{ key: string; label: string }>;
@@ -332,6 +332,7 @@ export const knowledgebaseService = {
       max_value?: number;
       step?: number;
     }>>;
+    running_status: Record<string, string>;
   }> => {
     return http.get('/aicenter/v1/knowledgebase/document_constants');
   },

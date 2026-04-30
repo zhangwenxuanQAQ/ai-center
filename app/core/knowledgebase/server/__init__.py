@@ -3,12 +3,13 @@
 提供任务调度和执行服务
 """
 
-from .task_executor import TaskStatus, TaskCanceledException, DocumentTask, TaskExecutor
+from .task_executor import TaskCanceledException, DocumentTask, TaskExecutor
+from app.constants.knowledgebase_document_constants import RunningStatus
 
 task_executor = TaskExecutor()
 
 __all__ = [
-    'TaskStatus',
+    'RunningStatus',
     'TaskCanceledException',
     'DocumentTask',
     'TaskExecutor',

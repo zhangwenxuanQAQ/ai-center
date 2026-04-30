@@ -4,7 +4,7 @@ const { TextArea } = Input;
 import { SearchOutlined, PlusOutlined, FolderOutlined, FileTextOutlined, PlayCircleOutlined, PauseCircleOutlined, ReloadOutlined, UnorderedListOutlined, EditOutlined, DownloadOutlined, DeleteOutlined, UpOutlined, DownOutlined, CloseOutlined, SettingOutlined } from '@ant-design/icons';
 import type { TreeDataNode, TreeProps } from 'antd';
 import { knowledgebaseService, Knowledgebase, KnowledgebaseDocument, KnowledgebaseDocumentCategory } from '../../services/knowledgebase';
-import { DOCUMENT_RUNNING_STATUS, DOCUMENT_CHUNK_METHOD } from '../../constants/knowledgebase';
+import { DOCUMENT_CHUNK_METHOD } from '../../constants/knowledgebase';
 import KnowledgebaseDocumentSetting from './knowledgebase_document_setting';
 import ChunkMethodModal from './chunk-method-modal';
 import '../../styles/common.css';
@@ -469,7 +469,22 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
     try {
       await knowledgebaseService.runDocumentTask(knowledgebase.id, documentId);
       message.success('任务已提交');
-      fetchDocuments();
+      // 只更新解析状态列，不刷新整个表格
+      setDocuments(prevDocuments => 
+        prevDocuments.map(doc => 
+          doc.id === documentId 
+            ? { 
+                ...doc, 
+                running_status: 'waiting', 
+                task_progress: 0, 
+                task_progress_message: '',
+                task_begin_at: null,
+                task_end_at: null,
+                task_duration: 0
+              } 
+            : doc
+        )
+      );
     } catch (error: any) {
       console.error('Failed to run document task:', error);
       message.error(error.message || '任务提交失败');
@@ -480,7 +495,19 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
     try {
       await knowledgebaseService.stopDocumentTask(knowledgebase.id, documentId);
       message.success('任务已停止');
-      fetchDocuments();
+      // 只更新解析状态列，不刷新整个表格
+      setDocuments(prevDocuments => 
+        prevDocuments.map(doc => 
+          doc.id === documentId 
+            ? { 
+                ...doc, 
+                running_status: 'cancel', 
+                task_progress: 0,
+                task_progress_message: '任务已取消'
+              } 
+            : doc
+        )
+      );
     } catch (error: any) {
       console.error('Failed to stop document task:', error);
       message.error(error.message || '停止任务失败');
@@ -543,7 +570,8 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       key: 'running_status',
       width: 120,
       render: (status: string, record: KnowledgebaseDocument) => {
-        const statusLabel = DOCUMENT_RUNNING_STATUS[status as keyof typeof DOCUMENT_RUNNING_STATUS] || status;
+        const runningStatusMap = documentConstants?.running_status || {};
+        const statusLabel = runningStatusMap[status] || status;
         const progress = (record.task_progress * 100).toFixed(0);
         const isRunning = status === 'running' || status === 'waiting';
         const statusTag = (
@@ -565,7 +593,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
           <Descriptions size="small" column={1} style={{ width: '400px' }}>
             <Descriptions.Item label="当前状态">
               <Tag color={getStatusColor(status)}>
-                {DOCUMENT_RUNNING_STATUS[status as keyof typeof DOCUMENT_RUNNING_STATUS] || status}
+                {runningStatusMap[status] || status}
               </Tag>
             </Descriptions.Item>
             <Descriptions.Item label="进度">{(record.task_progress * 100).toFixed(1)}%</Descriptions.Item>
@@ -919,9 +947,13 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
             maxTagCount={1}
             maxTagTextLength={10}
           >
-            {Object.entries(DOCUMENT_RUNNING_STATUS).map(([key, label]) => (
-              <Option key={key} value={key}>{label}</Option>
-            ))}
+            {documentConstants?.running_status ? (
+              Object.entries(documentConstants.running_status).map(([key, label]) => (
+                <Option key={key} value={key}>{label}</Option>
+              ))
+            ) : (
+              <Option value="pending">未开始</Option>
+            )}
           </Select>
           <Select
             placeholder="请选择状态"

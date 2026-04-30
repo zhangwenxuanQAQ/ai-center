@@ -19,5 +19,5 @@ import os
 # PDF解析并行设备数量
 PARALLEL_DEVICES = int(os.getenv("PARALLEL_DEVICES", "1"))
 DOC_MAXIMUM_SIZE = int(os.getenv("DOC_MAXIMUM_SIZE", 128 * 1024 * 1024))
-DOC_BULK_SIZE = int(os.getenv("PARALLEL_DEVICES", "5"))
-EMBEDDING_BATCH_SIZE = int(os.getenv("PARALLEL_DEVICES", "16"))
+DOC_BULK_SIZE = int(os.getenv("DOC_BULK_SIZE", 5))
+EMBEDDING_BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", 16))

@@ -134,9 +134,10 @@ def test_all_strategies():
     print("=" * 70)
     
     try:
-        from app.core.knowledgebase.rag.svr.task_executor import (
-            TaskExecutor, task_executor, TaskStatus, TaskPriority
+        from app.core.knowledgebase.server.task_executor import (
+            TaskExecutor, task_executor, TaskPriority
         )
+        from app.constants.knowledgebase_document_constants import RunningStatus
         
         print(f"✓ TaskExecutor 已初始化")
         print(f"   支持的策略类型 ({len(task_executor.SUPPORTED_PARSE_TYPES)} 种):")
@@ -152,7 +153,7 @@ def test_all_strategies():
         )
         
         print(f"✓ 任务提交成功: {test_task.task_id}")
-        print(f"   状态: {test_task.status.value}")
+        print(f"   状态: {test_task.status}")
         print(f"   类型: {test_task.parse_type}")
         
         # 清理测试任务

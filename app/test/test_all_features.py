@@ -191,9 +191,10 @@ def test_all_features():
     print("=" * 80)
     
     try:
-        from app.core.knowledgebase.rag.svr.task_executor import (
-            TaskExecutor, task_executor, TaskStatus, TaskPriority
+        from app.core.knowledgebase.server.task_executor import (
+            TaskExecutor, task_executor, TaskPriority
         )
+        from app.constants.knowledgebase_document_constants import RunningStatus
         
         print(f"✓ 任务执行器导入成功")
         print(f"  - 支持的策略类型: {len(task_executor.SUPPORTED_PARSE_TYPES)} 种")
@@ -207,7 +208,7 @@ def test_all_features():
         )
         
         print(f"  - 任务提交: {test_task.task_id}")
-        print(f"  - 任务状态: {test_task.status.value}")
+        print(f"  - 任务状态: {test_task.status}")
         
         # 清理
         task_executor.cancel_task("test_comprehensive")

@@ -43,13 +43,7 @@ MAPPING_JSON_PATH = os.path.join(
 )
 
 
-class TaskStatus(Enum):
-    """任务状态枚举"""
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
+from app.constants.knowledgebase_document_constants import RunningStatus
 
 
 class TaskCanceledException(Exception):
@@ -81,7 +75,7 @@ class DocumentTask:
         self.lang = lang
         self.parser_config = parser_config or {}
         self.embedding_model_id = embedding_model_id
-        self.status = TaskStatus.PENDING
+        self.status = RunningStatus.PENDING
         self.created_at = datetime.now()
         self.started_at: Optional[datetime] = None
         self.completed_at: Optional[datetime] = None
@@ -281,7 +275,7 @@ class TaskExecutor:
             logger.info(f"任务已提交到队列: {task_id}, 文档: {filename}")
         else:
             logger.error(f"任务提交到队列失败: {task_id}")
-            task.status = TaskStatus.FAILED
+            task.status = RunningStatus.FAIL
             task.error = "Failed to enqueue task"
             self._update_document_status(task)
 
@@ -298,7 +292,7 @@ class TaskExecutor:
             "lang": task.lang,
             "parser_config": task.parser_config,
             "embedding_model_id": task.embedding_model_id,
-            "status": task.status.value,
+            "status": task.status,
             "progress": task.progress,
             "progress_message": task.progress_message,
             "created_at": task.created_at.isoformat(),
@@ -332,7 +326,7 @@ class TaskExecutor:
             parser_config=task_data.get("parser_config"),
             embedding_model_id=task_data.get("embedding_model_id"),
         )
-        task.status = TaskStatus(task_data["status"])
+        task.status = task_data["status"]
         task.progress = task_data.get("progress", 0)
         task.progress_message = task_data.get("progress_message", "")
         task.error = task_data.get("error")
@@ -366,14 +360,7 @@ class TaskExecutor:
             if doc.deleted:
                 return
 
-            status_mapping = {
-                TaskStatus.PENDING: RunningStatus.PENDING,
-                TaskStatus.RUNNING: RunningStatus.RUNNING,
-                TaskStatus.COMPLETED: RunningStatus.DONE,
-                TaskStatus.FAILED: RunningStatus.FAIL,
-                TaskStatus.CANCELLED: RunningStatus.CANCEL,
-            }
-            doc.running_status = status_mapping.get(task.status, RunningStatus.PENDING)
+            doc.running_status = task.status
             doc.task_progress = task.progress
             doc.task_progress_message = task.progress_message
 
@@ -385,7 +372,7 @@ class TaskExecutor:
                     delta = task.completed_at - task.started_at
                     doc.task_duration = int(delta.total_seconds() * 1000)
 
-            if task.status == TaskStatus.COMPLETED and task.result:
+            if task.status == RunningStatus.DONE and task.result:
                 doc.chunk_num = len(task.result)
                 token_count = sum(
                     chunk.get("token_num", 0) for chunk in task.result
@@ -438,7 +425,11 @@ class TaskExecutor:
                 prog = -1
 
             if prog is not None:
-                task.progress = min(max(prog, 0), 1.0)
+                new_progress = min(max(prog, 0), 1.0)
+                if new_progress < task.progress:
+                    logger.warning(f"进度回退被阻止: 当前进度 {task.progress:.2%}, 新进度 {new_progress:.2%}")
+                else:
+                    task.progress = new_progress
             
             timestamp = datetime.now().strftime("%H:%M:%S")
             new_msg = f"[{timestamp}] {msg}"
@@ -488,18 +479,8 @@ class TaskExecutor:
             logger.error(f"获取Embedding模型失败: {e}")
             return None
 
-    def _get_vector_size(self, embedding_model_id: str) -> int:
+    def _get_vector_size(self, embedding_model_id: str, embedding_model: Any = None) -> int:
         """根据Embedding模型获取向量维度"""
-        try:
-            llm_model = LLMModel.get(LLMModel.id == embedding_model_id)
-            if llm_model and llm_model.config:
-                config = json.loads(llm_model.config) if isinstance(llm_model.config, str) else llm_model.config
-                dims = config.get("dims", config.get("dimensions"))
-                if dims:
-                    return int(dims)
-        except Exception:
-            pass
-
         model_name = ""
         try:
             llm_model = LLMModel.get(LLMModel.id == embedding_model_id)
@@ -513,10 +494,18 @@ class TaskExecutor:
             return 768
         elif "512" in model_name:
             return 512
+        
+        if embedding_model:
+            try:
+                vect, _ = embedding_model.encode(["test"])
+                return len(vect[0])
+            except Exception as e:
+                logger.warning(f"通过encode方法获取向量维度失败: {e}")
+        
         return 1024
 
     def _build_chunks(self, task: DocumentTask) -> List[Dict[str, Any]]:
-        """执行文档切片"""
+        """执行文档切片（含关键词提取）"""
         from app.core.knowledgebase.rag.app import CHUNK_STRATEGIES
 
         self._set_progress(task, 0.0, "开始切片...")
@@ -538,7 +527,68 @@ class TaskExecutor:
         )
 
         self._set_progress(task, 0.5, f"切片完成，共 {len(result)} 个切片")
+
+        auto_keywords = task.parser_config.get("auto_keywords", 1)
+        if auto_keywords > 0 and task.text_model_id:
+            self._extract_keywords(task, result, auto_keywords)
+
         return result
+
+    def _extract_keywords(self, task: DocumentTask, chunks: List[Dict[str, Any]], topn: int):
+        """提取切片关键词"""
+        import asyncio
+        from app.core.knowledgebase.rag.prompts.generator import keyword_extraction
+        from app.core.knowledgebase.rag.utils.common_utils import get_llm_cache, set_llm_cache
+
+        self._set_progress(task, 0.5, "开始提取关键词...")
+
+        text_model = self._get_text_model(task.text_model_id)
+        if not text_model:
+            logger.warning(f"文本模型获取失败，跳过关键词提取: {task.text_model_id}")
+            return
+
+        model_name = text_model.model_name
+        total = len(chunks)
+        processed = 0
+
+        async def extract_chunk_keywords_async(i: int, chunk: Dict[str, Any]) -> tuple:
+            """异步提取单个切片的关键词"""
+            content = chunk.get("content_with_weight", chunk.get("content", ""))
+            if not content or not content.strip():
+                return i, chunk, None
+
+            gen_conf = {"topn": topn}
+            cached = get_llm_cache(model_name, content, "keywords", gen_conf)
+            if cached:
+                return i, chunk, cached
+
+            try:
+                kwd = await keyword_extraction(text_model, content, topn)
+                if kwd and kwd.find("**ERROR**") < 0:
+                    set_llm_cache(model_name, content, kwd, "keywords", gen_conf)
+                    return i, chunk, kwd
+                return i, chunk, None
+            except Exception as e:
+                logger.warning(f"切片 {i} 关键词提取异常: {e}")
+                return i, chunk, None
+
+        async def process_all_chunks():
+            """异步处理所有切片"""
+            nonlocal processed
+            tasks = [extract_chunk_keywords_async(i, chunk) for i, chunk in enumerate(chunks)]
+            for future in asyncio.as_completed(tasks):
+                i, chunk, keywords = await future
+                if keywords:
+                    chunk["important_kwd"] = [k.strip() for k in keywords.split(",") if k.strip()]
+                processed += 1
+
+                if processed % 10 == 0 or processed == total:
+                    progress = 0.5 + 0.1 * (processed / total)
+                    self._set_progress(task, progress, f"关键词提取进度: {processed}/{total}")
+
+        asyncio.run(process_all_chunks())
+
+        self._set_progress(task, 0.6, f"关键词提取完成，共处理 {total} 个切片")
 
     def _embedding_chunks(
         self,
@@ -546,70 +596,133 @@ class TaskExecutor:
         embedding_model: Any,
         task: DocumentTask,
     ) -> List[Dict[str, Any]]:
-        """对切片进行Embedding向量化"""
-        self._set_progress(task, 0.5, "开始向量化...")
-
-        total = len(chunks)
-        for i, chunk in enumerate(chunks):
-            content = chunk.get("content_with_weight", chunk.get("content", ""))
-            if not content or not content.strip():
-                continue
-
+        """对切片进行Embedding向量化（参考RAGFLOW实现）"""
+        import re
+        import numpy as np
+        
+        self._set_progress(task, 0.6, "开始向量化...")
+        
+        parser_config = task.parser_config or {}
+        filename_embd_weight = parser_config.get("filename_embd_weight", 0.1) or 0.1
+        
+        titles = []
+        contents = []
+        for chunk in chunks:
+            title = chunk.get("docnm_kwd", task.filename or "Title")
+            titles.append(title)
+            
+            content = "\n".join(chunk.get("question_kwd", []))
+            if not content:
+                content = chunk.get("content_with_weight", chunk.get("content", ""))
+            content = re.sub(r"</?(table|td|caption|tr|th)( [^<>]{0,12})?>", " ", content)
+            if not content:
+                content = "None"
+            contents.append(content)
+        
+        total_tokens = 0
+        title_embeddings = None
+        content_embeddings = None
+        vector_size = 0
+        
+        if len(titles) == len(contents) and len(titles) > 0:
             try:
-                result = embedding_model.generate(content)
-                if "error" in result:
-                    logger.warning(f"切片 {i} 向量化失败: {result['error']}")
-                    continue
-
-                embedding = result.get("embedding", [])
-                chunk["embedding"] = embedding
+                title_embeddings, title_tokens = embedding_model.encode(titles[:1])
+                if len(titles) > 1:
+                    title_embeddings = np.tile(title_embeddings[0], (len(titles), 1))
+                total_tokens += title_tokens
             except Exception as e:
-                logger.warning(f"切片 {i} 向量化异常: {e}")
-
-            progress = 0.5 + 0.4 * ((i + 1) / total)
-            if (i + 1) % 10 == 0 or i == total - 1:
-                self._set_progress(
-                    task, progress,
-                    f"向量化进度: {i + 1}/{total}"
-                )
-
-        self._set_progress(task, 0.9, f"向量化完成，共处理 {total} 个切片")
+                logger.warning(f"标题向量化失败: {e}")
+                title_embeddings = None
+        
+        batch_size = 16
+        all_content_embeddings = []
+        for i in range(0, len(contents), batch_size):
+            batch = contents[i:i + batch_size]
+            try:
+                batch_embeddings, batch_tokens = embedding_model.encode(batch)
+                all_content_embeddings.append(batch_embeddings)
+                total_tokens += batch_tokens
+            except Exception as e:
+                logger.warning(f"批次 {i//batch_size} 向量化失败: {e}")
+                continue
+            
+            progress = 0.6 + 0.3 * ((i + batch_size) / len(contents))
+            self._set_progress(task, progress, f"向量化进度: {min(i + batch_size, len(contents))}/{len(contents)}")
+        
+        if all_content_embeddings:
+            content_embeddings = np.concatenate(all_content_embeddings, axis=0)
+        
+        if content_embeddings is not None and len(content_embeddings) > 0:
+            vector_size = len(content_embeddings[0])
+        elif title_embeddings is not None and len(title_embeddings) > 0:
+            vector_size = len(title_embeddings[0])
+        
+        if vector_size == 0:
+            vector_size = self._get_vector_size(task.embedding_model_id, embedding_model) if task.embedding_model_id else 1024
+        
+        q_vec_field = f"q_{vector_size}_vec"
+        
+        title_w = float(filename_embd_weight)
+        if (title_embeddings is not None and content_embeddings is not None and 
+            title_embeddings.ndim == 2 and content_embeddings.ndim == 2 and 
+            title_embeddings.shape == content_embeddings.shape):
+            final_embeddings = title_w * title_embeddings + (1 - title_w) * content_embeddings
+        elif content_embeddings is not None:
+            final_embeddings = content_embeddings
+        elif title_embeddings is not None:
+            final_embeddings = np.tile(title_embeddings[0] if len(title_embeddings) > 0 else np.zeros(vector_size), (len(chunks), 1))
+        else:
+            final_embeddings = np.zeros((len(chunks), vector_size))
+        
+        for i, chunk in enumerate(chunks):
+            if i < len(final_embeddings):
+                v = final_embeddings[i].tolist()
+                chunk["embedding"] = v
+                chunk[q_vec_field] = v
+            
+            content = contents[i] if i < len(contents) else ""
+            chunk["tkn_cnt_int"] = len(content.split()) if content else 0
+        
+        self._set_progress(task, 0.85, f"向量化完成，共处理 {len(chunks)} 个切片，token总数: {total_tokens}")
         return chunks
 
     def _insert_es(self, chunks: List[Dict[str, Any]], task: DocumentTask):
-        """将切片插入Elasticsearch"""
+        """将切片插入Elasticsearch（使用chunk原始数据）"""
         self._set_progress(task, 0.9, "开始写入ES...")
 
         if not es_utils.is_available:
             raise RuntimeError("Elasticsearch不可用，无法存储切片数据")
 
-        vector_size = self._get_vector_size(task.embedding_model_id) if task.embedding_model_id else 1024
+        vector_size = None
+        for chunk in chunks:
+            for key in chunk:
+                if key.startswith("q_") and key.endswith("_vec"):
+                    vector_size = int(key[2:-4])
+                    break
+            if vector_size:
+                break
+        
+        if not vector_size:
+            vector_size = self._get_vector_size(task.embedding_model_id) if task.embedding_model_id else 1024
+        
         self._init_kb_index(task.kb_id, vector_size)
 
-        vector_field = f"{vector_size}_vec"
         docs_to_insert = []
 
         for i, chunk in enumerate(chunks):
-            content = chunk.get("content_with_weight", chunk.get("content", ""))
-            doc = {
-                "doc_id": task.doc_id,
-                "kb_id": task.kb_id,
-                "doc_name": task.filename,
-                "chunk_id": f"{task.doc_id}_{i}",
-                "content_with_weight": content,
-            }
+            doc = dict(chunk)
 
-            for key, value in chunk.items():
-                if key in ("content_with_weight", "content", "embedding"):
-                    continue
-                doc[key] = value
+            doc["doc_id"] = task.doc_id
+            doc["kb_id"] = task.kb_id
+            doc["doc_name"] = task.filename
+            doc["chunk_id"] = f"{task.doc_id}_{i}"
+            doc["create_time"] = str(datetime.now()).replace("T", " ")[:19]
+            doc["create_timestamp_flt"] = datetime.now().timestamp()
 
-            embedding = chunk.get("embedding")
-            if embedding:
-                doc[vector_field] = embedding
+            if "image" in doc:
+                del doc["image"]
 
-            if "content_ltks" not in doc and content:
-                doc["content_ltks"] = content
+            doc.pop("embedding", None)
 
             docs_to_insert.append(doc)
 
@@ -701,7 +814,7 @@ class TaskExecutor:
 
             if self._has_canceled(task.task_id):
                 logger.info(f"任务已被取消: {task_id}")
-                task.status = TaskStatus.CANCELLED
+                task.status = RunningStatus.CANCEL
                 task.completed_at = datetime.now()
                 self._save_task(task)
                 self._update_document_status(task)
@@ -711,19 +824,19 @@ class TaskExecutor:
             self._add_active_task(task_id)
 
             try:
-                task.status = TaskStatus.RUNNING
+                task.status = RunningStatus.RUNNING
                 task.started_at = datetime.now()
                 self._set_progress(task, 0.0, "开始处理...")
 
                 try:
                     self._execute_chunk(task)
                 except TaskCanceledException:
-                    task.status = TaskStatus.CANCELLED
+                    task.status = RunningStatus.CANCEL
                     self._set_progress(task, 1.0, "任务已取消")
                     task.completed_at = datetime.now()
                 except Exception as e:
                     logger.exception(f"任务执行异常 {task_id}: {e}")
-                    task.status = TaskStatus.FAILED
+                    task.status = RunningStatus.FAIL
                     task.error = str(e)
                     self._set_progress(task, -1, f"任务失败: {str(e)[:200]}")
                     task.completed_at = datetime.now()
@@ -732,7 +845,7 @@ class TaskExecutor:
                 self._update_document_status(task)
 
                 msg.ack()
-                logger.info(f"任务处理完成: {task_id}, 状态: {task.status.value}")
+                logger.info(f"任务处理完成: {task_id}, 状态: {task.status}")
 
             finally:
                 self._remove_active_task(task_id)
@@ -759,7 +872,7 @@ class TaskExecutor:
         chunks = self._build_chunks(task)
         if not chunks:
             task.result = []
-            task.status = TaskStatus.COMPLETED
+            task.status = RunningStatus.DONE
             task.completed_at = datetime.now()
             task.progress = 1.0
             task.progress_message = "文档切片为空，无需处理"
@@ -767,7 +880,7 @@ class TaskExecutor:
 
         embedding_model = None
         if task.embedding_model_id:
-            self._set_progress(task, 0.5, "初始化Embedding模型...")
+            self._set_progress(task, 0.6, "初始化Embedding模型...")
             embedding_model = self._get_embedding_model(task.embedding_model_id)
 
         if embedding_model:
@@ -778,11 +891,14 @@ class TaskExecutor:
 
         self._insert_es(chunks, task)
 
+        total_tokens = sum(chunk.get("tkn_cnt_int", 0) for chunk in chunks)
+        task.token_num = total_tokens
+
         task.result = chunks
-        task.status = TaskStatus.COMPLETED
+        task.status = RunningStatus.DONE
         task.completed_at = datetime.now()
 
-        logger.info(f"切片流水线完成: {task.task_id}, {len(chunks)} 个切片")
+        logger.info(f"切片流水线完成: {task.task_id}, {len(chunks)} 个切片, token总数: {total_tokens}")
 
     def _heartbeat_loop(self):
         """心跳检测循环"""
@@ -809,13 +925,13 @@ class TaskExecutor:
         failed_count = 0
 
         for task in self._tasks.values():
-            if task.status == TaskStatus.PENDING:
+            if task.status == RunningStatus.PENDING:
                 pending_count += 1
-            elif task.status == TaskStatus.RUNNING:
+            elif task.status == RunningStatus.RUNNING:
                 running_count += 1
-            elif task.status == TaskStatus.COMPLETED:
+            elif task.status == RunningStatus.DONE:
                 completed_count += 1
-            elif task.status == TaskStatus.FAILED:
+            elif task.status == RunningStatus.FAIL:
                 failed_count += 1
 
         active_count = self._get_active_task_count()
@@ -849,7 +965,7 @@ class TaskExecutor:
         if not task:
             return False
 
-        if task.status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED):
+        if task.status in (RunningStatus.DONE, RunningStatus.FAIL, RunningStatus.CANCEL):
             return True
 
         redis_utils.set(f"{self.CANCEL_KEY_PREFIX}{task_id}", "1", exp=3600)
@@ -899,6 +1015,15 @@ class TaskExecutor:
             doc.token_num = 0
             doc.chunk_num = 0
             doc.save()
+            
+            self._publish_doc_event(doc.kb_id, {
+                "doc_id": doc.id,
+                "running_status": doc.running_status,
+                "task_progress": 0,
+                "task_progress_message": "",
+                "chunk_num": 0,
+                "token_num": 0,
+            })
 
             task = self.submit_task(
                 doc_id=doc.id,

@@ -4,9 +4,12 @@ Embedding模型实现
 使用OpenAI SDK实现文本嵌入接口
 """
 
-from typing import Dict, Any
+import re
+from typing import Dict, Any, List, Tuple
+import numpy as np
 from openai import OpenAI
 from app.core.llm_model.base import BaseLLM
+from app.utils.token_utils import truncate
 
 
 class EmbeddingModel(BaseLLM):
@@ -22,11 +25,11 @@ class EmbeddingModel(BaseLLM):
             model_config: 模型配置，包含api_key、endpoint等信息
         """
         super().__init__(model_config)
-        # 初始化OpenAI客户端
         self.client = OpenAI(
             api_key=self.api_key,
             base_url=self.endpoint
         )
+        self.max_length = model_config.get("max_length", 8191)
     
     def generate(self, prompt: str, **kwargs) -> Dict[str, Any]:
         """
@@ -43,19 +46,15 @@ class EmbeddingModel(BaseLLM):
             return {'error': 'Invalid configuration'}
         
         try:
-            # 构建参数字典，包含默认值和用户传入的参数
             params = {
                 'model': self.model_name,
                 'input': prompt,
                 'encoding_format': 'float'
             }
-            # 更新为用户传入的参数
             params.update(kwargs)
             
-            # 使用OpenAI SDK生成嵌入
             response = self.client.embeddings.create(**params)
             
-            # 格式化响应
             return {
                 'embedding': response.data[0].embedding,
                 'usage': response.usage.model_dump() if response.usage else {},
@@ -63,6 +62,69 @@ class EmbeddingModel(BaseLLM):
             }
         except Exception as e:
             return {'error': str(e)}
+    
+    def encode(self, texts: List[str]) -> Tuple[np.ndarray, int]:
+        """
+        批量编码文本，返回向量数组和总token数
+        
+        Args:
+            texts: 文本列表
+            
+        Returns:
+            Tuple[np.ndarray, int]: 向量数组和总token数
+        """
+        from app.core.knowledgebase.rag.settings import EMBEDDING_BATCH_SIZE
+        
+        texts = [truncate(t, self.max_length) for t in texts]
+        embeddings = []
+        total_tokens = 0
+        
+        for i in range(0, len(texts), EMBEDDING_BATCH_SIZE):
+            batch = texts[i:i + EMBEDDING_BATCH_SIZE]
+            try:
+                response = self.client.embeddings.create(
+                    input=batch,
+                    model=self.model_name,
+                    encoding_format="float"
+                )
+                embeddings.extend([d.embedding for d in response.data])
+                total_tokens += self._total_token_count(response)
+            except Exception as e:
+                raise e
+        
+        return np.array(embeddings), total_tokens
+    
+    def encode_queries(self, text: str) -> Tuple[np.ndarray, int]:
+        """
+        编码单个查询文本
+        
+        Args:
+            text: 查询文本
+            
+        Returns:
+            Tuple[np.ndarray, int]: 向量和token数
+        """
+        text = truncate(text, self.max_length)
+        response = self.client.embeddings.create(
+            input=[text],
+            model=self.model_name,
+            encoding_format="float"
+        )
+        return np.array(response.data[0].embedding), self._total_token_count(response)
+    
+    def _total_token_count(self, response) -> int:
+        """
+        从响应中获取总token数
+        
+        Args:
+            response: OpenAI响应对象
+            
+        Returns:
+            int: 总token数
+        """
+        if response.usage:
+            return response.usage.total_tokens
+        return 0
     
     def stream_generate(self, prompt: str, **kwargs) -> Any:
         """

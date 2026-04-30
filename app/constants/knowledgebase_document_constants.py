@@ -63,7 +63,6 @@ CHUNK_METHOD_LABELS: Dict[str, str] = {
     ChunkMethod.EMAIL: "Email", # 邮件
 }
 
-
 class ChunkConfigField:
     """
     切片配置字段定义
@@ -453,6 +452,15 @@ class RunningStatus:
     FAIL = "fail" # 失败
     SCHEDULE = "schedule" # 定时调度
 
+DOCUMENT_RUNNING_STATUS = {
+    RunningStatus.PENDING: "未开始",
+    RunningStatus.WAITING: "等待执行",
+    RunningStatus.RUNNING: "运行中",
+    RunningStatus.CANCEL: "已取消",
+    RunningStatus.DONE: "已完成",
+    RunningStatus.FAIL: "失败",
+    RunningStatus.SCHEDULE: "定时调度",
+}
 
 class SourceConfigField:
     """

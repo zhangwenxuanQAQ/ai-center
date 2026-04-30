@@ -24,7 +24,7 @@ from app.utils.response import ResponseUtil, ApiResponse
 from app.constants.knowledgebase_constants import FILE_NAME_LEN_LIMIT
 from app.constants.knowledgebase_document_constants import (
     CHUNK_METHOD_LABELS, CHUNK_METHOD_CONFIGS, SOURCE_TYPE_LABELS, SourceType, SourceConfigDefinition,
-    get_available_chunk_methods, get_default_chunk_method
+    get_available_chunk_methods, get_default_chunk_method, DOCUMENT_RUNNING_STATUS
 )
 
 logger = logging.getLogger(__name__)
@@ -65,6 +65,7 @@ def get_document_constants():
         "source_types": source_types,
         "chunk_configs": chunk_configs,
         "source_configs": source_configs,
+        "running_status": DOCUMENT_RUNNING_STATUS,
     })
 
 
@@ -835,7 +836,7 @@ def run_document_task(kb_id: str, document_id: str):
             data={
                 "task_id": task.task_id,
                 "doc_id": task.doc_id,
-                "status": task.status.value,
+                "status": task.status,
                 "progress": task.progress,
                 "progress_message": task.progress_message,
             },
@@ -961,7 +962,7 @@ def get_document_task_status(kb_id: str, document_id: str):
             data={
                 "task_id": task.task_id,
                 "doc_id": task.doc_id,
-                "status": task.status.value,
+                "status": task.status,
                 "progress": task.progress,
                 "progress_message": task.progress_message,
                 "error": task.error,

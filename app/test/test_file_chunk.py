@@ -191,16 +191,21 @@ def test_task_executor():
     print("=" * 60)
     
     try:
-        from app.core.knowledgebase.rag.svr.task_executor import (
+        from app.core.knowledgebase.server.task_executor import (
             TaskExecutor, task_executor,
-            TaskStatus, TaskPriority,
             DocumentTask
         )
+        from app.constants.knowledgebase_document_constants import RunningStatus
         
         print("✓ 成功导入TaskExecutor")
         print(f"\n  任务状态枚举:")
-        for status in TaskStatus:
-            print(f"    - {status.name}: {status.value}")
+        print(f"    - PENDING: {RunningStatus.PENDING}")
+        print(f"    - RUNNING: {RunningStatus.RUNNING}")
+        print(f"    - DONE: {RunningStatus.DONE}")
+        print(f"    - FAIL: {RunningStatus.FAIL}")
+        print(f"    - CANCEL: {RunningStatus.CANCEL}")
+        print(f"    - WAITING: {RunningStatus.WAITING}")
+        print(f"    - SCHEDULE: {RunningStatus.SCHEDULE}")
             
         print(f"\n  优先级枚举:")
         for priority in TaskPriority:
@@ -220,7 +225,7 @@ def test_task_executor():
         print(f"    ID: {test_task.task_id}")
         print(f"    文件: {test_task.filename}")
         print(f"    类型: {test_task.parse_type}")
-        print(f"    状态: {test_task.status.value}")
+        print(f"    状态: {test_task.status}")
         
         # 提交任务到执行器
         submitted = task_executor.submit_task(

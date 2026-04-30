@@ -18,8 +18,9 @@ def test_redis_scheduler():
     try:
         from app.database.redis_utils import redis_utils, REDIS_AVAILABLE
         from app.core.knowledgebase.server.task_executor import (
-            TaskExecutor, task_executor, TaskStatus, DocumentTask
+            TaskExecutor, task_executor, DocumentTask
         )
+        from app.constants.knowledgebase_document_constants import RunningStatus
         print("  成功导入Redis和任务调度器模块")
         print("  redis-py可用:", REDIS_AVAILABLE)
         results['import'] = True
@@ -86,14 +87,19 @@ def test_redis_scheduler():
     # 测试4: 任务状态枚举
     print("\n4  任务状态枚举测试")
     try:
-        from app.core.knowledgebase.server.task_executor import TaskStatus
+        from app.constants.knowledgebase_document_constants import RunningStatus
         
-        statuses = [TaskStatus.PENDING, TaskStatus.RUNNING, 
-                     TaskStatus.COMPLETED, TaskStatus.FAILED, 
-                     TaskStatus.CANCELLED]
+        statuses = [RunningStatus.PENDING, RunningStatus.RUNNING, 
+                     RunningStatus.DONE, RunningStatus.FAIL, 
+                     RunningStatus.CANCEL, RunningStatus.WAITING, RunningStatus.SCHEDULE]
         
-        for status in statuses:
-            print("  ", status.name, ":", status.value)
+        print("  PENDING:", RunningStatus.PENDING)
+        print("  RUNNING:", RunningStatus.RUNNING)
+        print("  DONE:", RunningStatus.DONE)
+        print("  FAIL:", RunningStatus.FAIL)
+        print("  CANCEL:", RunningStatus.CANCEL)
+        print("  WAITING:", RunningStatus.WAITING)
+        print("  SCHEDULE:", RunningStatus.SCHEDULE)
         
         results['status_enum'] = True
     except Exception as e:
@@ -115,7 +121,7 @@ def test_redis_scheduler():
         print("  任务ID:", task.task_id)
         print("  文件名:", task.filename)
         print("  解析类型:", task.parse_type)
-        print("  初始状态:", task.status.value)
+        print("  初始状态:", task.status)
         
         results['document_task'] = True
     except Exception as e:

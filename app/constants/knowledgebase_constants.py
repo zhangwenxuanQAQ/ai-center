@@ -4,32 +4,6 @@
 
 FILE_NAME_LEN_LIMIT = 255
 
-DOCUMENT_CHUNK_METHOD = {
-    "naive": "Naive",
-    "qa": "QA",
-    "resume": "Resume",
-    "manual": "Manual",
-    "table": "Table",
-    "paper": "Paper",
-    "book": "Book",
-    "laws": "Laws",
-    "presentation": "Presentation",
-    "picture": "Picture",
-    "one": "One",
-    "audio": "Audio",
-    "email": "Email",
-}
-
-DOCUMENT_RUNNING_STATUS = {
-    "pending": "未开始",
-    "waiting": "等待执行",
-    "running": "运行中",
-    "cancel": "已取消",
-    "done": "已完成",
-    "fail": "失败",
-    "schedule": "定时调度",
-}
-
 RETRIEVAL_CONFIGS = [{
             "key": "vector_similarity",
             "label": "文本相似度阈值",
