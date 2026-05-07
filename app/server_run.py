@@ -26,6 +26,10 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
+
+from fastapi import FastAPI, Request, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from app.database.models import create_tables
 from app.api import router
 from app.core.exceptions import (
