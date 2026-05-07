@@ -162,7 +162,8 @@
             "type": "dense_vector",
             "index": true,
             "similarity": "cosine",
-            "dims": 512
+            "dims": 512,
+            "store": true
           }
         }
       },
@@ -173,7 +174,8 @@
             "type": "dense_vector",
             "index": true,
             "similarity": "cosine",
-            "dims": 768
+            "dims": 768,
+            "store": true
           }
         }
       },
@@ -184,7 +186,8 @@
             "type": "dense_vector",
             "index": true,
             "similarity": "cosine",
-            "dims": 1024
+            "dims": 1024,
+            "store": true
           }
         }
       },
@@ -195,7 +198,21 @@
             "type": "dense_vector",
             "index": true,
             "similarity": "cosine",
-            "dims": 1536
+            "dims": 1536,
+            "store": true
+          }
+        }
+      },
+      {
+        "q_dense_vector": {
+          "match_pattern": "regex",
+          "match": "^q_\\d+_vec$",
+          "mapping": {
+            "type": "dense_vector",
+            "index": true,
+            "similarity": "cosine",
+            "dims": 1024,
+            "store": true
           }
         }
       },

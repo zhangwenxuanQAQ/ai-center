@@ -65,6 +65,7 @@ class DocumentTask:
         lang: str = "Chinese",
         parser_config: Optional[Dict[str, Any]] = None,
         embedding_model_id: Optional[str] = None,
+        text_model_id: Optional[str] = None,
     ):
         self.task_id = task_id
         self.doc_id = doc_id
@@ -75,6 +76,7 @@ class DocumentTask:
         self.lang = lang
         self.parser_config = parser_config or {}
         self.embedding_model_id = embedding_model_id
+        self.text_model_id = text_model_id
         self.status = RunningStatus.PENDING
         self.created_at = datetime.now()
         self.started_at: Optional[datetime] = None
@@ -227,6 +229,7 @@ class TaskExecutor:
         lang: str = "Chinese",
         parser_config: Optional[Dict[str, Any]] = None,
         embedding_model_id: Optional[str] = None,
+        text_model_id: Optional[str] = None,
     ) -> DocumentTask:
         """
         提交任务到队列
@@ -239,6 +242,7 @@ class TaskExecutor:
             lang: 语言
             parser_config: 解析配置
             embedding_model_id: Embedding模型ID
+            text_model_id: Text模型ID
 
         Returns:
             DocumentTask: 任务对象
@@ -254,6 +258,7 @@ class TaskExecutor:
             lang=lang,
             parser_config=parser_config,
             embedding_model_id=embedding_model_id,
+            text_model_id=text_model_id,
         )
 
         self._tasks[task_id] = task
@@ -268,6 +273,7 @@ class TaskExecutor:
             "lang": lang,
             "parser_config": parser_config,
             "embedding_model_id": embedding_model_id,
+            "text_model_id": text_model_id,
             "timestamp": datetime.now().isoformat(),
         }
 
@@ -292,6 +298,7 @@ class TaskExecutor:
             "lang": task.lang,
             "parser_config": task.parser_config,
             "embedding_model_id": task.embedding_model_id,
+            "text_model_id": task.text_model_id,
             "status": task.status,
             "progress": task.progress,
             "progress_message": task.progress_message,
@@ -325,6 +332,7 @@ class TaskExecutor:
             lang=task_data.get("lang", "Chinese"),
             parser_config=task_data.get("parser_config"),
             embedding_model_id=task_data.get("embedding_model_id"),
+            text_model_id=task_data.get("text_model_id"),
         )
         task.status = task_data["status"]
         task.progress = task_data.get("progress", 0)
@@ -374,12 +382,11 @@ class TaskExecutor:
 
             if task.status == RunningStatus.DONE and task.result:
                 doc.chunk_num = len(task.result)
-                token_count = sum(
-                    chunk.get("token_num", 0) for chunk in task.result
-                )
-                doc.token_num = token_count
-
-                self._update_kb_stats(task.kb_id, token_count, len(task.result))
+                # token_count = sum(
+                #     chunk.get("tk_nums", 0) for chunk in task.result
+                # )
+                doc.token_num = task.token_num
+                self._update_kb_stats(task.kb_id, task.token_num, len(task.result))
 
             doc.save()
             
@@ -479,6 +486,36 @@ class TaskExecutor:
             logger.error(f"获取Embedding模型失败: {e}")
             return None
 
+    def _get_text_model(self, text_model_id: str) -> Optional[Any]:
+        """获取Text模型实例（用于关键词提取等）"""
+        try:
+            llm_model = LLMModel.get(LLMModel.id == text_model_id)
+            if not llm_model or llm_model.deleted:
+                logger.error(f"Text模型不存在或已删除: {text_model_id}")
+                return None
+
+            model_config = {
+                "api_key": llm_model.api_key,
+                "endpoint": llm_model.endpoint,
+                "name": llm_model.name,
+                "provider": llm_model.provider,
+            }
+
+            if llm_model.config:
+                try:
+                    extra_config = json.loads(llm_model.config) if isinstance(llm_model.config, str) else llm_model.config
+                    model_config.update(extra_config)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            return LLMFactory.create_model("text", model_config)
+        except LLMModel.DoesNotExist:
+            logger.error(f"Text模型不存在: {text_model_id}")
+            return None
+        except Exception as e:
+            logger.error(f"获取Text模型失败: {e}")
+            return None
+
     def _get_vector_size(self, embedding_model_id: str, embedding_model: Any = None) -> int:
         """根据Embedding模型获取向量维度"""
         model_name = ""
@@ -529,7 +566,8 @@ class TaskExecutor:
         self._set_progress(task, 0.5, f"切片完成，共 {len(result)} 个切片")
 
         auto_keywords = task.parser_config.get("auto_keywords", 1)
-        if auto_keywords > 0 and task.text_model_id:
+        text_model_id = getattr(task, "text_model_id", None)
+        if auto_keywords > 0 and text_model_id:
             self._extract_keywords(task, result, auto_keywords)
 
         return result
@@ -542,9 +580,14 @@ class TaskExecutor:
 
         self._set_progress(task, 0.5, "开始提取关键词...")
 
-        text_model = self._get_text_model(task.text_model_id)
+        text_model_id = getattr(task, "text_model_id", None)
+        if not text_model_id:
+            logger.warning(f"没有配置文本模型，跳过关键词提取")
+            return
+
+        text_model = self._get_text_model(text_model_id)
         if not text_model:
-            logger.warning(f"文本模型获取失败，跳过关键词提取: {task.text_model_id}")
+            logger.warning(f"文本模型获取失败，跳过关键词提取: {text_model_id}")
             return
 
         model_name = text_model.model_name
@@ -651,13 +694,15 @@ class TaskExecutor:
         
         if all_content_embeddings:
             content_embeddings = np.concatenate(all_content_embeddings, axis=0)
+        else:
+            content_embeddings = None
         
+        # 确保至少有一个向量源可用
         if content_embeddings is not None and len(content_embeddings) > 0:
             vector_size = len(content_embeddings[0])
         elif title_embeddings is not None and len(title_embeddings) > 0:
             vector_size = len(title_embeddings[0])
-        
-        if vector_size == 0:
+        else:
             vector_size = self._get_vector_size(task.embedding_model_id, embedding_model) if task.embedding_model_id else 1024
         
         q_vec_field = f"q_{vector_size}_vec"
@@ -712,6 +757,13 @@ class TaskExecutor:
         for i, chunk in enumerate(chunks):
             doc = dict(chunk)
 
+            # 调试日志：检查chunk中的向量字段
+            vec_fields = [k for k in chunk.keys() if k.startswith("q_") and k.endswith("_vec")]
+            if i == 0:
+                logger.info(f"切片0中的向量字段: {vec_fields}")
+                if vec_fields:
+                    logger.info(f"向量字段 {vec_fields[0]} 的值长度: {len(chunk.get(vec_fields[0], []))}")
+
             doc["doc_id"] = task.doc_id
             doc["kb_id"] = task.kb_id
             doc["doc_name"] = task.filename
@@ -723,6 +775,11 @@ class TaskExecutor:
                 del doc["image"]
 
             doc.pop("embedding", None)
+
+            # 调试日志：检查doc中的向量字段
+            if i == 0:
+                doc_vec_fields = [k for k in doc.keys() if k.startswith("q_") and k.endswith("_vec")]
+                logger.info(f"准备写入ES的doc中的向量字段: {doc_vec_fields}")
 
             docs_to_insert.append(doc)
 
@@ -886,8 +943,16 @@ class TaskExecutor:
         if embedding_model:
             chunks = self._embedding_chunks(chunks, embedding_model, task)
         else:
-            logger.warning(f"未配置Embedding模型，跳过向量化: {task.kb_id}")
-            self._set_progress(task, 0.9, "未配置Embedding模型，跳过向量化")
+            logger.warning(f"未配置Embedding模型，使用默认零向量: {task.kb_id}")
+            self._set_progress(task, 0.6, "未配置Embedding模型，使用默认零向量")
+            vector_size = self._get_vector_size(task.embedding_model_id) if task.embedding_model_id else 1024
+            q_vec_field = f"q_{vector_size}_vec"
+            zero_vector = [0.0] * vector_size
+            for chunk in chunks:
+                chunk["embedding"] = zero_vector
+                chunk[q_vec_field] = zero_vector
+                chunk["tkn_cnt_int"] = len(chunk.get("content_with_weight", "").split()) if chunk.get("content_with_weight") else 0
+            self._set_progress(task, 0.9, "零向量准备完成")
 
         self._insert_es(chunks, task)
 
@@ -961,11 +1026,15 @@ class TaskExecutor:
 
     def cancel_task(self, task_id: str) -> bool:
         """取消任务"""
+        logger.info(f"尝试取消任务: {task_id}")
+        
         task = self._get_task(task_id)
         if not task:
-            return False
+            logger.info(f"任务不存在或已完成，视为已停止: {task_id}")
+            return True
 
         if task.status in (RunningStatus.DONE, RunningStatus.FAIL, RunningStatus.CANCEL):
+            logger.info(f"任务已处于终止状态，无需取消: {task_id}, 状态: {task.status}")
             return True
 
         redis_utils.set(f"{self.CANCEL_KEY_PREFIX}{task_id}", "1", exp=3600)
@@ -998,6 +1067,7 @@ class TaskExecutor:
                     pass
 
             embedding_model_id = kb.embedding_model_id if kb else None
+            text_model_id = kb.text_model_id if kb else None
 
             self._delete_es_chunks(doc.kb_id, doc_id)
 
@@ -1005,6 +1075,8 @@ class TaskExecutor:
             old_chunk_num = doc.chunk_num or 0
             if old_token_num > 0 or old_chunk_num > 0:
                 self._update_kb_stats(doc.kb_id, -old_token_num, -old_chunk_num)
+
+            redis_utils.delete(f"{self.CANCEL_KEY_PREFIX}{doc_id}")
 
             doc.running_status = RunningStatus.WAITING
             doc.task_progress = 0
@@ -1033,6 +1105,7 @@ class TaskExecutor:
                 lang="Chinese",
                 parser_config=parser_config,
                 embedding_model_id=embedding_model_id,
+                text_model_id=text_model_id,
             )
 
             return task
@@ -1083,9 +1156,14 @@ class TaskExecutor:
 
 def main():
     """主函数 - 独立运行时启动任务调度器"""
+    from app.configs.config import config
+    
+    log_level = config.logging.get('level', 'INFO').upper()
+    log_format = config.logging.get('format', '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    
     logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        level=getattr(logging, log_level, logging.INFO),
+        format=log_format
     )
 
     executor = TaskExecutor()

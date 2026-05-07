@@ -6,15 +6,26 @@ import asyncio
 import subprocess
 import sys
 import os
+import logging
 from contextlib import asynccontextmanager
 
 # 添加项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from fastapi import FastAPI, Request, status
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+# 先导入配置
 from app.configs.config import config
+
+# 从配置文件读取日志配置
+log_level = config.logging.get('level', 'INFO').upper()
+log_format = config.logging.get('format', '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+logging.basicConfig(
+    level=getattr(logging, log_level, logging.INFO),
+    format=log_format,
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
 from app.database.models import create_tables
 from app.api import router
 from app.core.exceptions import (

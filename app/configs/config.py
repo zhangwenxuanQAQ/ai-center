@@ -9,5 +9,6 @@ class Config:
         
         self.server = self.config.get('server', {})
         self.mysql = self.config.get('mysql', {})
+        self.logging = self.config.get('logging', {})
 
 config = Config()

@@ -26,6 +26,8 @@ class TextModel(BaseLLM):
             api_key=self.api_key,
             base_url=self.endpoint
         )
+        self.max_length = model_config.get("max_length", 8191)
+        self.model_name = model_config.get("name", "")
     
     def _handle_deep_thinking(self, params: dict, kwargs: dict) -> dict:
         """
@@ -343,3 +345,36 @@ class TextModel(BaseLLM):
                 'max_tokens': 4096
             }
         }
+    
+    async def async_chat(self, system: str, messages: list, gen_conf: dict = None) -> str:
+        """
+        异步聊天方法（用于关键词提取等）
+        
+        Args:
+            system: 系统提示词
+            messages: 消息列表
+            gen_conf: 生成配置
+            
+        Returns:
+            生成的文本
+        """
+        if gen_conf is None:
+            gen_conf = {}
+        
+        try:
+            all_messages = [{"role": "system", "content": system}]
+            for msg in messages:
+                all_messages.append(msg)
+            
+            params = {
+                'model': self.model_name,
+                'messages': all_messages,
+                'temperature': gen_conf.get('temperature', 0.7),
+                'max_tokens': gen_conf.get('max_tokens', 4096),
+            }
+            
+            response = self.client.chat.completions.create(**params)
+            
+            return response.choices[0].message.content
+        except Exception as e:
+            return f"**ERROR**{str(e)}"

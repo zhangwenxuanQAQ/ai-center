@@ -65,6 +65,6 @@ def set_llm_cache(llm_name: str, txt: str, value: str, history: str, gen_conf: d
         hasher = hashlib.md5()
         hasher.update((str(llm_name) + str(txt) + str(history) + str(gen_conf)).encode("utf-8"))
         k = hasher.hexdigest()
-        redis_utils.set(k, value, expire=24 * 3600)
+        redis_utils.set(k, value, exp=24 * 3600)
     except Exception as e:
         logger.warning(f"设置LLM缓存失败: {e}")

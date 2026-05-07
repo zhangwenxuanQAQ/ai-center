@@ -29,3 +29,6 @@ rustfs:
   password: 'rustfsadmin'
   host: '127.0.0.1'
   port: 9000
+logging:
+  level: 'INFO'
+  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
