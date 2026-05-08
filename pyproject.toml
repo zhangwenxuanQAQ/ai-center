@@ -54,6 +54,7 @@ dependencies = [
     "hanziconv",
     "nltk",
     "pygtrie",
+    "vscode-icons>=1.0.0",
 ]
 
 [tool.setuptools.packages.find]

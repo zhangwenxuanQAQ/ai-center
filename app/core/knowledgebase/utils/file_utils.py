@@ -43,10 +43,11 @@ except ImportError:
     PDFPLUMBER_AVAILABLE = False
 
 try:
-    from PIL import Image
+    from PIL import Image, ImageDraw
     PIL_AVAILABLE = True
 except ImportError:
     Image = None
+    ImageDraw = None
     PIL_AVAILABLE = False
 
 
@@ -121,11 +122,11 @@ def thumbnail_img(filename, blob):
     Returns:
         bytes or None: 缩略图二进制数据，不支持则返回None
     """
-    filename = filename.lower()
+    file_type = filename_type(filename)
 
-    if re.match(r".*\.pdf$", filename):
+    if file_type == FileType.PDF:
         if not PDFPLUMBER_AVAILABLE:
-            return None
+            return _get_vscode_icon(filename)
         try:
             with sys.modules[LOCK_KEY_pdfplumber]:
                 pdf = pdfplumber.open(BytesIO(blob))
@@ -145,11 +146,11 @@ def thumbnail_img(filename, blob):
                 pdf.close()
                 return img
         except Exception:
-            return None
+            return _get_vscode_icon(filename)
 
-    if re.match(r".*\.(jpg|jpeg|png|tif|gif|icon|ico|webp)$", filename):
+    if file_type == FileType.VISUAL:
         if not PIL_AVAILABLE:
-            return None
+            return _get_vscode_icon(filename)
         try:
             image = Image.open(BytesIO(blob))
             image.thumbnail((30, 30))
@@ -157,8 +158,62 @@ def thumbnail_img(filename, blob):
             image.save(buffered, format="png")
             return buffered.getvalue()
         except Exception:
-            return None
+            return _get_vscode_icon(filename)
 
+    return _get_vscode_icon(filename)
+
+
+def _get_vscode_icon(filename):
+    """
+    使用VSCodeIcons库获取文件图标
+
+    Args:
+        filename: 文件名
+
+    Returns:
+        bytes or None: 图标二进制数据，获取失败则返回None
+    """
+    try:
+        from vscode_icons.vscode import VSCodeIcons
+        import importlib.resources
+        
+        vsi = VSCodeIcons()
+        icon_path = vsi.findFileIcon(filename)
+        
+        if icon_path:
+            if 'default' in icon_path.lower():
+                extension = filename.split('.')[-1].lower() if '.' in filename else 'txt'
+                project_root = Path(__file__).resolve().parents[4]
+                custom_icon_path = project_root / 'web' / 'src' / 'assets' / 'svg' / 'file-icon' / f'{extension}.svg'
+                if custom_icon_path.exists():
+                    with open(custom_icon_path, 'rb') as f:
+                        return f.read()
+            
+            try:
+                if not icon_path.startswith('static/'):
+                    icon_path = f'static/{icon_path}'
+                with importlib.resources.path('vscode_icons', icon_path) as icon_full_path:
+                    if icon_full_path.exists():
+                        with open(icon_full_path, 'rb') as f:
+                            icon_data = f.read()
+                        
+                        if icon_path.lower().endswith('.svg'):
+                            return icon_data
+                        elif PIL_AVAILABLE:
+                            try:
+                                image = Image.open(BytesIO(icon_data))
+                                image.thumbnail((32, 32))
+                                buffered = BytesIO()
+                                image.save(buffered, format="png")
+                                return buffered.getvalue()
+                            except Exception:
+                                return None
+                        return None
+            except (FileNotFoundError, ModuleNotFoundError):
+                pass
+    except Exception as e:
+        pass
+    
     return None
 
 
@@ -175,7 +230,11 @@ def thumbnail(filename, blob):
     """
     img = thumbnail_img(filename, blob)
     if img is not None:
-        return IMG_BASE64_PREFIX + base64.b64encode(img).decode("utf-8")
+        encoded = base64.b64encode(img).decode("utf-8")
+        if img.startswith(b'<svg'):
+            return "data:image/svg+xml;base64," + encoded
+        else:
+            return IMG_BASE64_PREFIX + encoded
     return ""
 
 

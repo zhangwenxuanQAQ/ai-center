@@ -549,7 +549,15 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       render: (text: string, record: KnowledgebaseDocument) => (
         <Tooltip title={text || '未命名文档'}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
-            <FileTextOutlined />
+            {record.thumbnail ? (
+              <img 
+                src={record.thumbnail} 
+                alt={text}
+                style={{ width: 20, height: 20, objectFit: 'contain' }}
+              />
+            ) : (
+              <FileTextOutlined />
+            )}
             <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {text || '未命名文档'}
             </span>

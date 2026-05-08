@@ -175,12 +175,13 @@ class DocumentUploadHandler:
             status=status,
         )
 
-        try:
-            from app.core.knowledgebase.server.task_executor import task_executor as te
-            te.run_document_task(doc.id)
-            logger.info(f"文档上传后自动提交切片任务: {doc.id}")
-        except Exception as e:
-            logger.warning(f"文档上传后自动提交切片任务失败: {e}")
+        # 文档上传后不自动执行切片任务，用户需手动触发
+        # try:
+        #     from app.core.knowledgebase.server import task_executor
+        #     task_executor.run_document_task(doc.id)
+        #     logger.info(f"文档上传后自动提交切片任务: {doc.id}")
+        # except Exception as e:
+        #     logger.warning(f"文档上传后自动提交切片任务失败: {e}")
 
         return doc
 
@@ -226,7 +227,11 @@ class DocumentUploadHandler:
         img = thumbnail_img(filename, blob)
         if img is not None:
             import base64
-            return "data:image/png;base64," + base64.b64encode(img).decode("utf-8")
+            encoded = base64.b64encode(img).decode("utf-8")
+            if img.startswith(b'<svg'):
+                return "data:image/svg+xml;base64," + encoded
+            else:
+                return "data:image/png;base64," + encoded
         return ""
 
     @staticmethod
@@ -258,6 +263,13 @@ class DocumentUploadHandler:
         """
         default_chunk_method = getattr(kb, 'chunk_method', 'naive')
         document_chunk_method = chunk_method or get_chunk_method_by_file_type(file_type, filename, default_chunk_method)
+        
+        if chunk_method:
+            from app.constants.knowledgebase_document_constants import get_available_chunk_methods
+            available_methods = get_available_chunk_methods(file_type, filename)
+            if available_methods and chunk_method not in available_methods:
+                logger.info(f"切片方法 {chunk_method} 不适用于文件类型 {file_type}，使用默认方法 {document_chunk_method}")
+                document_chunk_method = get_chunk_method_by_file_type(file_type, filename, default_chunk_method)
 
         if not category_id:
             from app.services.knowledgebase.service import KnowledgebaseDocumentCategoryService

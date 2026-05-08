@@ -17,16 +17,19 @@
 from app.core.knowledgebase.rag.nlp import find_codec
 
 
-def get_text(fnm: str, binary=None) -> str:
+def get_text(fnm, binary=None) -> str:
     txt = ""
     if binary:
         encoding = find_codec(binary)
         txt = binary.decode(encoding, errors="ignore")
-    else:
+    elif isinstance(fnm, str):
         with open(fnm, "r") as f:
             while True:
                 line = f.readline()
                 if not line:
                     break
                 txt += line
+    elif isinstance(fnm, bytes):
+        encoding = find_codec(fnm)
+        txt = fnm.decode(encoding, errors="ignore")
     return txt

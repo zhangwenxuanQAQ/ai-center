@@ -772,8 +772,12 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
           {!isEdit ? (
             <Upload.Dragger
               multiple
-              accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif,.mp3,.wav,.ogg"
               beforeUpload={(file) => {
+                const isExe = file.name.toLowerCase().endsWith('.exe');
+                if (isExe) {
+                  message.error('不支持上传可执行文件（.exe）');
+                  return false;
+                }
                 fileMapRef.current.set(file.uid, file);
                 setFileList(prev => [...prev, { uid: file.uid, name: file.name, size: file.size }]);
                 return false;

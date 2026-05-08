@@ -164,7 +164,7 @@ def naive_merge(sections, chunk_token_num=128, delimiter="\n", overlapped_percen
     
     if custom_delimiters:
         delimiters_to_use = custom_delimiters
-    elif delimiter and delimiter != "\n":
+    elif delimiter:
         delimiters_to_use = list(delimiter)
     else:
         delimiters_to_use = None
@@ -245,7 +245,7 @@ def naive_merge_with_images(texts, images, chunk_token_num=128, delimiter="\n", 
     
     if custom_delimiters:
         delimiters_to_use = custom_delimiters
-    elif delimiter and delimiter != "\n":
+    elif delimiter:
         delimiters_to_use = list(delimiter)
     else:
         delimiters_to_use = None

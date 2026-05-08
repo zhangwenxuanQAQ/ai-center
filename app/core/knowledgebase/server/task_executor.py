@@ -801,8 +801,6 @@ class TaskExecutor:
             success_count = es_utils.batch_insert_documents(task.kb_id, docs_to_insert)
             logger.info(f"ES写入完成: {success_count}/{len(docs_to_insert)} 个切片")
 
-        self._set_progress(task, 1.0, f"完成！共生成 {len(chunks)} 个切片")
-
     def _delete_es_chunks(self, kb_id: str, doc_id: str):
         """删除ES中指定文档的切片"""
         if not es_utils.is_available:

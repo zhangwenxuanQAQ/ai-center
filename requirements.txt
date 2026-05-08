@@ -73,3 +73,6 @@ nest-asyncio>=1.6.0
 hanziconv
 nltk
 pygtrie
+
+# 文件图标
+vscode-icons>=1.0.0

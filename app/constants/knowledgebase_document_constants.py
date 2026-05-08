@@ -133,7 +133,7 @@ NAIVE_CHUNK_CONFIG: List[ChunkConfigField] = [
         key="delimiter",
         label="分隔符",
         field_type="input",
-        default="\\n",
+        default="",
         description="文本分块的分隔符集合",
     ),
     ChunkConfigField(
@@ -192,7 +192,7 @@ QA_CHUNK_CONFIG: List[ChunkConfigField] = [
         key="delimiter",
         label="分隔符",
         field_type="input",
-        default="\\n",
+        default="",
         description="文本分块的分隔符",
     ),
 ]
@@ -275,7 +275,7 @@ BOOK_CHUNK_CONFIG: List[ChunkConfigField] = [
         key="delimiter",
         label="分隔符",
         field_type="input",
-        default="\\n",
+        default="",
         description="文本分块的分隔符集合",
     ),
     ChunkConfigField(
@@ -306,7 +306,7 @@ LAWS_CHUNK_CONFIG: List[ChunkConfigField] = [
         key="delimiter",
         label="分隔符",
         field_type="input",
-        default="\\n",
+        default="",
         description="文本分块的分隔符集合",
     ),
 ]

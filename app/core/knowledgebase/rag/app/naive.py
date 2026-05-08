@@ -471,8 +471,9 @@ def _parse_txt(binary, filename, parser_config):
         txt_parser = TxtParser()
         sections = txt_parser(
             binary if binary else filename, 
-            parser_config.get("chunk_token_num", 128),
-            parser_config.get("delimiter", "\n")
+            binary=None,
+            chunk_token_num=parser_config.get("chunk_token_num", 128),
+            delimiter=parser_config.get("delimiter", "\n")
         )
         return sections
     except Exception as e:
@@ -599,7 +600,7 @@ def _build_cks(sections, delimiter):
     
     if custom_delimiters:
         delimiters_to_use = custom_delimiters
-    elif delimiter and delimiter != "\n":
+    elif delimiter:
         delimiters_to_use = list(delimiter)
     else:
         delimiters_to_use = None
