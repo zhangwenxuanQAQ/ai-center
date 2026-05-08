@@ -6,6 +6,7 @@
 
 import json
 import asyncio
+import nest_asyncio
 from typing import Dict, Any, List, Generator
 
 
@@ -21,6 +22,8 @@ def process_tool_calls(tool_calls: List[Dict], tool_map: Dict[str, str]) -> Gene
         Dict: 工具调用结果
     """
     from app.services.mcp.service import MCPToolService
+    
+    nest_asyncio.apply()
     
     for tool_call in tool_calls:
         function_name = tool_call.get('function', {}).get('name', '')
@@ -47,10 +50,8 @@ def process_tool_calls(tool_calls: List[Dict], tool_map: Dict[str, str]) -> Gene
             continue
         
         try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+            loop = asyncio.get_event_loop()
             result = loop.run_until_complete(MCPToolService.call_tool(tool_id, function_args))
-            loop.close()
             
             if result:
                 if result.get('isError'):
