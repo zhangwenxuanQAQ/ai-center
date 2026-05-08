@@ -596,11 +596,19 @@ def _build_cks(sections, delimiter):
     images = []
 
     custom_delimiters = [m.group(1) for m in re.finditer(r"`([^`]+)`", delimiter)]
-    has_custom = bool(custom_delimiters)
+    
+    if custom_delimiters:
+        delimiters_to_use = custom_delimiters
+    elif delimiter and delimiter != "\n":
+        delimiters_to_use = list(delimiter)
+    else:
+        delimiters_to_use = None
+
+    has_custom = bool(delimiters_to_use)
 
     if has_custom:
         custom_pattern = "|".join(
-            re.escape(t) for t in sorted(set(custom_delimiters), key=len, reverse=True)
+            re.escape(t) for t in sorted(set(delimiters_to_use), key=len, reverse=True)
         )
         pattern = r"(%s)" % custom_pattern
 

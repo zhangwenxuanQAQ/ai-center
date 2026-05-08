@@ -653,9 +653,9 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       dataIndex: 'tags',
       key: 'tags',
       width: 100,
-      render: (tags: string[]) => (
+      render: (tags: string[] | string | undefined) => (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-          {tags && tags.length > 0 ? tags.map((tag, index) => (
+          {Array.isArray(tags) && tags.length > 0 ? tags.map((tag, index) => (
             <Tag key={index} size="small">{tag}</Tag>
           )) : '-'}
         </div>
@@ -1159,10 +1159,14 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
             setChunkModalVisible(false);
             setChunkModalDocument(null);
           }}
-          onSuccess={() => {
+          onSuccess={(updatedDoc) => {
             setChunkModalVisible(false);
             setChunkModalDocument(null);
-            fetchDocuments();
+            if (updatedDoc) {
+              setDocuments(prev => prev.map(doc => 
+                doc.id === updatedDoc.id ? updatedDoc : doc
+              ));
+            }
           }}
           document={chunkModalDocument}
           knowledgebaseId={knowledgebase.id}

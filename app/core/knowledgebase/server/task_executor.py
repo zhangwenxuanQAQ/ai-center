@@ -434,7 +434,7 @@ class TaskExecutor:
             if prog is not None:
                 new_progress = min(max(prog, 0), 1.0)
                 if new_progress < task.progress:
-                    logger.warning(f"进度回退被阻止: 当前进度 {task.progress:.2%}, 新进度 {new_progress:.2%}")
+                    logger.debug(f"进度未更新: 当前进度 {task.progress:.2%}, 新进度 {new_progress:.2%}")
                 else:
                     task.progress = new_progress
             
@@ -542,10 +542,15 @@ class TaskExecutor:
         return 1024
 
     def _build_chunks(self, task: DocumentTask) -> List[Dict[str, Any]]:
-        """执行文档切片（含关键词提取）"""
+        """执行文档切片（含关键词提取）
+
+        进度范围: 0.05 ~ 0.60
+          - 切片: 0.05 ~ 0.50
+          - 关键词提取: 0.50 ~ 0.60
+        """
         from app.core.knowledgebase.rag.app import CHUNK_STRATEGIES
 
-        self._set_progress(task, 0.0, "开始切片...")
+        self._set_progress(task, 0.05, "开始切片...")
 
         chunk_func = CHUNK_STRATEGIES.get(task.parse_type)
         if not chunk_func:
@@ -558,12 +563,12 @@ class TaskExecutor:
             parser_config=task.parser_config,
             callback=lambda prog=None, msg="": self._set_progress(
                 task,
-                prog=0.5 * prog if prog else None,
+                prog=0.05 + 0.45 * prog if prog else None,
                 msg=msg
             )
         )
 
-        self._set_progress(task, 0.5, f"切片完成，共 {len(result)} 个切片")
+        self._set_progress(task, 0.50, f"切片完成，共 {len(result)} 个切片")
 
         auto_keywords = task.parser_config.get("auto_keywords", 1)
         text_model_id = getattr(task, "text_model_id", None)
@@ -573,12 +578,15 @@ class TaskExecutor:
         return result
 
     def _extract_keywords(self, task: DocumentTask, chunks: List[Dict[str, Any]], topn: int):
-        """提取切片关键词"""
+        """提取切片关键词
+
+        进度范围: 0.50 ~ 0.60
+        """
         import asyncio
         from app.core.knowledgebase.rag.prompts.generator import keyword_extraction
         from app.core.knowledgebase.rag.utils.common_utils import get_llm_cache, set_llm_cache
 
-        self._set_progress(task, 0.5, "开始提取关键词...")
+        self._set_progress(task, 0.50, "开始提取关键词...")
 
         text_model_id = getattr(task, "text_model_id", None)
         if not text_model_id:
@@ -626,12 +634,12 @@ class TaskExecutor:
                 processed += 1
 
                 if processed % 10 == 0 or processed == total:
-                    progress = 0.5 + 0.1 * (processed / total)
+                    progress = 0.50 + 0.10 * (processed / total)
                     self._set_progress(task, progress, f"关键词提取进度: {processed}/{total}")
 
         asyncio.run(process_all_chunks())
 
-        self._set_progress(task, 0.6, f"关键词提取完成，共处理 {total} 个切片")
+        self._set_progress(task, 0.60, f"关键词提取完成，共处理 {total} 个切片")
 
     def _embedding_chunks(
         self,
@@ -639,11 +647,14 @@ class TaskExecutor:
         embedding_model: Any,
         task: DocumentTask,
     ) -> List[Dict[str, Any]]:
-        """对切片进行Embedding向量化（参考RAGFLOW实现）"""
+        """对切片进行Embedding向量化（参考RAGFLOW实现）
+
+        进度范围: 0.60 ~ 0.85
+        """
         import re
         import numpy as np
         
-        self._set_progress(task, 0.6, "开始向量化...")
+        self._set_progress(task, 0.60, "开始向量化...")
         
         parser_config = task.parser_config or {}
         filename_embd_weight = parser_config.get("filename_embd_weight", 0.1) or 0.1
@@ -689,7 +700,7 @@ class TaskExecutor:
                 logger.warning(f"批次 {i//batch_size} 向量化失败: {e}")
                 continue
             
-            progress = 0.6 + 0.3 * ((i + batch_size) / len(contents))
+            progress = 0.60 + 0.25 * ((i + batch_size) / len(contents))
             self._set_progress(task, progress, f"向量化进度: {min(i + batch_size, len(contents))}/{len(contents)}")
         
         if all_content_embeddings:
@@ -732,8 +743,11 @@ class TaskExecutor:
         return chunks
 
     def _insert_es(self, chunks: List[Dict[str, Any]], task: DocumentTask):
-        """将切片插入Elasticsearch（使用chunk原始数据）"""
-        self._set_progress(task, 0.9, "开始写入ES...")
+        """将切片插入Elasticsearch（使用chunk原始数据）
+
+        进度范围: 0.85 ~ 1.00
+        """
+        self._set_progress(task, 0.85, "开始写入ES...")
 
         if not es_utils.is_available:
             raise RuntimeError("Elasticsearch不可用，无法存储切片数据")
@@ -912,7 +926,15 @@ class TaskExecutor:
             logger.exception(f"处理消息异常: {e}")
 
     def _execute_chunk(self, task: DocumentTask):
-        """执行文档切片完整流水线"""
+        """执行文档切片完整流水线
+
+        进度分配:
+          0.00 ~ 0.05: 文件读取
+          0.05 ~ 0.50: 切片 (_build_chunks)
+          0.50 ~ 0.60: 关键词提取 (_extract_keywords)
+          0.60 ~ 0.85: 向量化 (_embedding_chunks)
+          0.85 ~ 1.00: ES写入 (_insert_es)
+        """
         logger.info(f"开始执行切片流水线: {task.task_id}, 文档: {task.filename}")
 
         self._set_progress(task, 0.0, "开始读取文件...")
@@ -937,14 +959,13 @@ class TaskExecutor:
 
         embedding_model = None
         if task.embedding_model_id:
-            self._set_progress(task, 0.6, "初始化Embedding模型...")
             embedding_model = self._get_embedding_model(task.embedding_model_id)
 
         if embedding_model:
             chunks = self._embedding_chunks(chunks, embedding_model, task)
         else:
             logger.warning(f"未配置Embedding模型，使用默认零向量: {task.kb_id}")
-            self._set_progress(task, 0.6, "未配置Embedding模型，使用默认零向量")
+            self._set_progress(task, 0.60, "未配置Embedding模型，使用默认零向量")
             vector_size = self._get_vector_size(task.embedding_model_id) if task.embedding_model_id else 1024
             q_vec_field = f"q_{vector_size}_vec"
             zero_vector = [0.0] * vector_size
@@ -952,7 +973,7 @@ class TaskExecutor:
                 chunk["embedding"] = zero_vector
                 chunk[q_vec_field] = zero_vector
                 chunk["tkn_cnt_int"] = len(chunk.get("content_with_weight", "").split()) if chunk.get("content_with_weight") else 0
-            self._set_progress(task, 0.9, "零向量准备完成")
+            self._set_progress(task, 0.85, "零向量准备完成")
 
         self._insert_es(chunks, task)
 
@@ -962,6 +983,15 @@ class TaskExecutor:
         task.result = chunks
         task.status = RunningStatus.DONE
         task.completed_at = datetime.now()
+
+        if task.started_at:
+            duration = (task.completed_at - task.started_at).total_seconds()
+            minutes = int(duration // 60)
+            seconds = int(duration % 60)
+            duration_str = f"{minutes}分{seconds}秒" if minutes > 0 else f"{seconds}秒"
+            self._set_progress(task, 1.0, f"完成！共生成 {len(chunks)} 个切片\n开始时间: {task.started_at.strftime('%Y-%m-%d %H:%M:%S')}\n结束时间: {task.completed_at.strftime('%Y-%m-%d %H:%M:%S')}\n耗时: {duration_str}")
+        else:
+            self._set_progress(task, 1.0, f"完成！共生成 {len(chunks)} 个切片")
 
         logger.info(f"切片流水线完成: {task.task_id}, {len(chunks)} 个切片, token总数: {total_tokens}")
 

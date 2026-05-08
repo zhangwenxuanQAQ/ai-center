@@ -15,6 +15,7 @@ from app.services.knowledgebase.dto import (
 )
 from app.database.db_utils import handle_transaction
 from app.core.exceptions import ResourceNotFoundError, DuplicateResourceError
+from app.database.es_utils import es_utils
 
 logger = logging.getLogger(__name__)
 
@@ -430,7 +431,7 @@ class KnowledgebaseService:
     @handle_transaction
     def delete_knowledgebase(kb_id: str):
         """
-        删除知识库（逻辑删除）
+        删除知识库（逻辑删除），同时删除ES中的切片数据
 
         Args:
             kb_id: 知识库ID
@@ -451,6 +452,20 @@ class KnowledgebaseService:
         db_kb.deleted = True
         db_kb.deleted_at = datetime.now()
         db_kb.save()
+
+        try:
+            if es_utils.is_available:
+                index_name = kb_id
+                if es_utils.client.indices.exists(index=index_name):
+                    es_utils.client.indices.delete(index=index_name)
+                    logger.info(f"成功删除ES索引: {index_name}")
+                else:
+                    logger.info(f"ES索引不存在: {index_name}")
+            else:
+                logger.warning("ES不可用，跳过删除ES索引")
+        except Exception as e:
+            logger.error(f"删除ES索引失败 {kb_id}: {e}")
+
         return db_kb
 
 
@@ -906,8 +921,8 @@ class KnowledgebaseDocumentService:
 
         # 删除ES中的切片数据
         try:
-            from app.core.knowledgebase.server.task_executor import task_executor as te
-            te.delete_document_chunks(db_doc.kb_id, document_id)
+            from app.core.knowledgebase.server import task_executor
+            task_executor.delete_document_chunks(db_doc.kb_id, document_id)
         except Exception as e:
             logger.warning(f"删除ES切片数据失败: {e}")
 

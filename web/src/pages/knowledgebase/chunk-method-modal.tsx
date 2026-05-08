@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Select, Form, message, Spin } from 'antd';
+import { Modal, Select, Form, message, Spin, Slider, InputNumber, Switch, Input, Tooltip } from 'antd';
 import { knowledgebaseService, KnowledgebaseDocument } from '../../services/knowledgebase';
+
+const getTheme = () => {
+  return document.body.getAttribute('data-theme') || 'dark';
+};
 
 interface ChunkConfigFieldDef {
   key: string;
@@ -24,7 +28,7 @@ interface DocumentConstants {
 interface ChunkMethodModalProps {
   visible: boolean;
   onCancel: () => void;
-  onSuccess: () => void;
+  onSuccess: (updatedDoc?: KnowledgebaseDocument) => void;
   document: KnowledgebaseDocument;
   knowledgebaseId: string;
 }
@@ -45,18 +49,24 @@ const ChunkMethodModal: React.FC<ChunkMethodModalProps> = ({
   const [chunkConfig, setChunkConfig] = useState<Record<string, unknown>>(
     document.chunk_config || {}
   );
+  const [theme, setTheme] = useState<string>(getTheme());
 
   useEffect(() => {
     if (visible) {
       initModal();
+      setTheme(getTheme());
     }
   }, [visible]);
 
   useEffect(() => {
-    if (selectedMethod && constants) {
-      initDefaultChunkConfig(selectedMethod);
-    }
-  }, [selectedMethod, constants]);
+    if (!document.body) return;
+    
+    const observer = new MutationObserver(() => {
+      setTheme(getTheme());
+    });
+    observer.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => observer.disconnect();
+  }, []);
 
   const initModal = async () => {
     setInitLoading(true);
@@ -77,7 +87,6 @@ const ChunkMethodModal: React.FC<ChunkMethodModalProps> = ({
       form.resetFields();
       form.setFieldsValue({
         chunk_method: document.chunk_method,
-        ...(document.chunk_config || {}),
       });
     } catch (error) {
       console.error('Failed to init chunk method modal:', error);
@@ -88,38 +97,30 @@ const ChunkMethodModal: React.FC<ChunkMethodModalProps> = ({
   };
 
   const initDefaultChunkConfig = (method: string) => {
-    if (!constants) return;
+    if (!constants) return {};
     const fields = constants.chunk_configs[method] || [];
     const defaultConfig: Record<string, unknown> = {};
     fields.forEach(field => {
-      if (chunkConfig[field.key] !== undefined) {
-        defaultConfig[field.key] = chunkConfig[field.key];
-      } else {
-        defaultConfig[field.key] = field.default;
-      }
+      defaultConfig[field.key] = field.default;
       if (field.sub_configs) {
         Object.values(field.sub_configs).forEach(subFields => {
           subFields.forEach(subField => {
-            if (chunkConfig[subField.key] !== undefined) {
-              defaultConfig[subField.key] = chunkConfig[subField.key];
-            } else {
-              defaultConfig[subField.key] = subField.default;
-            }
+            defaultConfig[subField.key] = subField.default;
           });
         });
       }
     });
-    setChunkConfig(defaultConfig);
+    return defaultConfig;
   };
 
   const handleMethodChange = (value: string) => {
     setSelectedMethod(value);
-    form.setFieldValue('chunk_method', value);
+    const defaultConfig = initDefaultChunkConfig(value);
+    setChunkConfig(defaultConfig);
   };
 
   const handleConfigChange = (key: string, value: unknown) => {
     setChunkConfig(prev => ({ ...prev, [key]: value }));
-    form.setFieldValue(key, value);
   };
 
   const handleOk = async () => {
@@ -127,7 +128,7 @@ const ChunkMethodModal: React.FC<ChunkMethodModalProps> = ({
       await form.validateFields();
       setLoading(true);
 
-      await knowledgebaseService.updateDocument(
+      const updatedDoc = await knowledgebaseService.updateDocument(
         knowledgebaseId,
         document.id,
         {
@@ -137,12 +138,81 @@ const ChunkMethodModal: React.FC<ChunkMethodModalProps> = ({
       );
 
       message.success('修改成功');
-      onSuccess();
+      onSuccess(updatedDoc);
     } catch (error) {
       console.error('Failed to update chunk method:', error);
       message.error('修改失败');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const renderConfigField = (field: ChunkConfigFieldDef) => {
+    const value = chunkConfig[field.key] ?? field.default;
+
+    switch (field.field_type) {
+      case 'slider':
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <Slider
+              min={field.min_value}
+              max={field.max_value}
+              step={field.step || 1}
+              value={value as number}
+              onChange={v => handleConfigChange(field.key, v)}
+              style={{ flex: 1 }}
+            />
+            <InputNumber
+              min={field.min_value}
+              max={field.max_value}
+              step={field.step || 1}
+              value={value as number}
+              onChange={v => handleConfigChange(field.key, v)}
+              style={{ width: 80 }}
+            />
+          </div>
+        );
+      case 'number':
+        return (
+          <InputNumber
+            min={field.min_value}
+            max={field.max_value}
+            step={field.step || 1}
+            value={value as number}
+            onChange={v => handleConfigChange(field.key, v)}
+            style={{ width: '100%' }}
+          />
+        );
+      case 'select':
+        return (
+          <Select
+            value={value as string}
+            onChange={v => handleConfigChange(field.key, v)}
+            style={{ width: '100%' }}
+          >
+            {field.options?.map(opt => (
+              <Select.Option key={opt.value} value={opt.value}>{opt.label}</Select.Option>
+            ))}
+          </Select>
+        );
+      case 'switch':
+        return (
+          <Switch
+            checked={value as boolean}
+            onChange={v => handleConfigChange(field.key, v)}
+            checkedChildren="是"
+            unCheckedChildren="否"
+          />
+        );
+      case 'input':
+      default:
+        return (
+          <Input
+            value={value as string}
+            onChange={e => handleConfigChange(field.key, e.target.value)}
+            placeholder={field.description || `请输入${field.label}`}
+          />
+        );
     }
   };
 
@@ -153,52 +223,68 @@ const ChunkMethodModal: React.FC<ChunkMethodModalProps> = ({
       return null;
     }
 
-    return fields.map(field => {
-      const label = (
-        <span>
-          {field.label}
-          {field.required && <span style={{ color: '#ff4d4f' }}> *</span>}
-        </span>
-      );
-
-      switch (field.field_type) {
-        case 'string':
-          return (
-            <Form.Item key={field.key} label={label} name={field.key} rules={field.required ? [{ required: true, message: '请输入' }] : []}>
-              <Select
-                options={field.options}
-                placeholder={`请选择${field.label}`}
-                onChange={(value) => handleConfigChange(field.key, value)}
-                style={{ width: '100%' }}
-              />
-            </Form.Item>
-          );
-        case 'number':
-          return (
-            <Form.Item key={field.key} label={label} name={field.key} rules={field.required ? [{ required: true, message: '请输入' }] : []}>
-              <Select
-                options={field.options}
-                placeholder={`请选择${field.label}`}
-                onChange={(value) => handleConfigChange(field.key, value)}
-                style={{ width: '100%' }}
-              />
-            </Form.Item>
-          );
-        case 'boolean':
-          return (
-            <Form.Item key={field.key} label={label} name={field.key} valuePropName="checked" rules={field.required ? [{ required: true, message: '请选择' }] : []}>
-              <Select
-                options={field.options}
-                placeholder={`请选择${field.label}`}
-                onChange={(value) => handleConfigChange(field.key, value)}
-                style={{ width: '100%' }}
-              />
-            </Form.Item>
-          );
-        default:
-          return null;
-      }
-    });
+    return (
+      <div style={{ marginTop: 16 }}>
+        <div style={{ marginBottom: 12, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333' }}>
+          切片配置
+        </div>
+        <div style={{
+          padding: 16,
+          borderRadius: 8,
+          background: theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#fafafa',
+          border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}`,
+        }}>
+          {fields.map(field => (
+            <div key={field.key} style={{ marginBottom: 16 }}>
+              <div style={{
+                marginBottom: 4,
+                fontSize: 13,
+                color: theme === 'dark' ? '#ccc' : '#666',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+              }}>
+                {field.label}
+                {field.description && (
+                  <Tooltip title={field.description}>
+                    <span style={{ color: theme === 'dark' ? '#666' : '#999', fontSize: 12, cursor: 'help' }}>[?]</span>
+                  </Tooltip>
+                )}
+              </div>
+              <div style={{ width: '100%' }}>
+                {renderConfigField(field)}
+              </div>
+              {field.sub_configs && field.field_type === 'select' && (
+                <div style={{ marginTop: 12, marginLeft: 12, paddingLeft: 12, borderLeft: `2px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}` }}>
+                  {field.sub_configs[chunkConfig[field.key] as string]?.map(subField => (
+                    <div key={subField.key} style={{ marginBottom: 12 }}>
+                      <div style={{
+                        marginBottom: 4,
+                        fontSize: 13,
+                        color: theme === 'dark' ? '#ccc' : '#666',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}>
+                        {subField.label}
+                        {subField.description && (
+                          <Tooltip title={subField.description}>
+                            <span style={{ color: theme === 'dark' ? '#666' : '#999', fontSize: 12, cursor: 'help' }}>[?]</span>
+                          </Tooltip>
+                        )}
+                      </div>
+                      <div style={{ width: '100%' }}>
+                        {renderConfigField(subField)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -217,11 +303,12 @@ const ChunkMethodModal: React.FC<ChunkMethodModalProps> = ({
           <Spin size="large" />
         </div>
       ) : (
-        <Form form={form} layout="vertical" initialValues={{ chunk_method: document.chunk_method, ...(document.chunk_config || {}) }}>
+        <Form form={form} layout="vertical">
           <Form.Item
             label="切片方法"
             name="chunk_method"
             rules={[{ required: true, message: '请选择切片方法' }]}
+            initialValue={document.chunk_method}
           >
             <Select
               placeholder="请选择切片方法"

@@ -1503,7 +1503,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-            {tags.map((tag, index) => (
+            {Array.isArray(tags) && tags.length > 0 ? tags.map((tag, index) => (
               <Tag
                 key={index}
                 closable
@@ -1512,7 +1512,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
               >
                 {tag}
               </Tag>
-            ))}
+            )) : null}
             {showTagInput ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <Input

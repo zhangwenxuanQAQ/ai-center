@@ -2,7 +2,7 @@
 知识库文档常量
 """
 
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Tuple
 
 
 class FileType:
@@ -211,13 +211,6 @@ MANUAL_CHUNK_CONFIG: List[ChunkConfigField] = [
         step=1,
     ),
     ChunkConfigField(
-        key="delimiter",
-        label="分隔符",
-        field_type="input",
-        default="\\n",
-        description="文本分块的分隔符集合",
-    ),
-    ChunkConfigField(
         key="layout_recognize",
         label="布局识别",
         field_type="select",
@@ -418,7 +411,7 @@ def get_default_chunk_method(file_type: str, filename: str = None) -> str:
     return ChunkMethod.ONE
 
 
-def validate_chunk_method(chunk_method: str, file_type: str, filename: str = None) -> tuple[bool, str]:
+def validate_chunk_method(chunk_method: str, file_type: str, filename: str = None) -> Tuple[bool, str]:
     """
     验证切片方法是否有效
     

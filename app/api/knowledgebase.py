@@ -7,6 +7,7 @@ import logging
 from typing import List
 from fastapi import APIRouter, Body, Query, UploadFile, File, Form, Request
 from fastapi.responses import StreamingResponse
+from app.database.models import KnowledgebaseDocumentCategory
 from app.services.knowledgebase.service import (
     KnowledgebaseCategoryService,
     KnowledgebaseService,
@@ -596,6 +597,25 @@ def update_document(kb_id: str, document_id: str, document: KnowledgebaseDocumen
     """
     db_doc = KnowledgebaseDocumentService.update_document(document_id, document)
     data = db_doc.__data__
+    
+    if data.get('category_id'):
+        try:
+            category = KnowledgebaseDocumentCategory.get_by_id(data['category_id'])
+            data['category_name'] = category.name if not category.deleted else None
+        except KnowledgebaseDocumentCategory.DoesNotExist:
+            data['category_name'] = None
+    else:
+        data['category_name'] = None
+    
+    if data.get('tags'):
+        try:
+            parsed_tags = json.loads(data['tags'])
+            data['tags'] = parsed_tags if isinstance(parsed_tags, list) else []
+        except:
+            data['tags'] = []
+    else:
+        data['tags'] = []
+    
     if data.get('chunk_config'):
         try:
             data['chunk_config'] = json.loads(data['chunk_config'])

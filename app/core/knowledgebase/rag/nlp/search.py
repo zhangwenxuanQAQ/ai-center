@@ -161,10 +161,16 @@ def naive_merge(sections, chunk_token_num=128, delimiter="\n", overlapped_percen
             tk_nums[-1] += tnum
 
     custom_delimiters = [m.group(1) for m in re.finditer(r"`([^`]+)`", delimiter)]
-    has_custom = bool(custom_delimiters)
     
-    if has_custom:
-        custom_pattern = "|".join(re.escape(t) for t in sorted(set(custom_delimiters), key=len, reverse=True))
+    if custom_delimiters:
+        delimiters_to_use = custom_delimiters
+    elif delimiter and delimiter != "\n":
+        delimiters_to_use = list(delimiter)
+    else:
+        delimiters_to_use = None
+    
+    if delimiters_to_use:
+        custom_pattern = "|".join(re.escape(t) for t in sorted(set(delimiters_to_use), key=len, reverse=True))
         cks, tk_nums = [], []
         for sec, pos in sections:
             split_sec = re.split(r"(%s)" % custom_pattern, sec, flags=re.DOTALL)
@@ -236,10 +242,16 @@ def naive_merge_with_images(texts, images, chunk_token_num=128, delimiter="\n", 
             tk_nums[-1] += tnum
 
     custom_delimiters = [m.group(1) for m in re.finditer(r"`([^`]+)`", delimiter)]
-    has_custom = bool(custom_delimiters)
     
-    if has_custom:
-        custom_pattern = "|".join(re.escape(t) for t in sorted(set(custom_delimiters), key=len, reverse=True))
+    if custom_delimiters:
+        delimiters_to_use = custom_delimiters
+    elif delimiter and delimiter != "\n":
+        delimiters_to_use = list(delimiter)
+    else:
+        delimiters_to_use = None
+    
+    if delimiters_to_use:
+        custom_pattern = "|".join(re.escape(t) for t in sorted(set(delimiters_to_use), key=len, reverse=True))
         cks, result_images, tk_nums = [], [], []
         for text, image in zip(texts, images):
             text_str = text[0] if isinstance(text, tuple) else text
