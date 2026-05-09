@@ -550,6 +550,64 @@ async def batch_delete_documents(kb_id: str, request: Request):
         return ResponseUtil.error(message=f"批量删除失败: {str(e)}")
 
 
+@router.post("/{kb_id}/document/batch_run", response_model=ApiResponse)
+async def batch_run_documents(kb_id: str, request: Request):
+    """
+    批量执行文档切片任务
+
+    Args:
+        kb_id: 知识库ID
+        request: 请求对象，包含文档ID列表
+
+    Returns:
+        ApiResponse: 统一格式的响应对象，包含成功和失败的文档ID
+    """
+    try:
+        from app.core.knowledgebase.server import task_executor
+
+        doc_ids = await request.json()
+        if not isinstance(doc_ids, list):
+            return ResponseUtil.bad_request(message="请求体必须是文档ID列表")
+
+        results = task_executor.batch_run_documents(doc_ids)
+        return ResponseUtil.success(
+            data=results,
+            message=f"批量提交完成: 成功{len(results['success'])}个, 跳过{len(results['skipped'])}个, 失败{len(results['failed'])}个"
+        )
+    except Exception as e:
+        logger.error(f"批量执行文档切片任务失败: {e}")
+        return ResponseUtil.error(message=str(e))
+
+
+@router.post("/{kb_id}/document/batch_stop", response_model=ApiResponse)
+async def batch_stop_documents(kb_id: str, request: Request):
+    """
+    批量停止文档切片任务
+
+    Args:
+        kb_id: 知识库ID
+        request: 请求对象，包含文档ID列表
+
+    Returns:
+        ApiResponse: 统一格式的响应对象，包含成功和失败的文档ID
+    """
+    try:
+        from app.core.knowledgebase.server import task_executor
+
+        doc_ids = await request.json()
+        if not isinstance(doc_ids, list):
+            return ResponseUtil.bad_request(message="请求体必须是文档ID列表")
+
+        results = task_executor.batch_stop_documents(doc_ids)
+        return ResponseUtil.success(
+            data=results,
+            message=f"批量停止完成: 成功{len(results['success'])}个, 跳过{len(results['skipped'])}个, 失败{len(results['failed'])}个"
+        )
+    except Exception as e:
+        logger.error(f"批量停止文档切片任务失败: {e}")
+        return ResponseUtil.error(message=str(e))
+
+
 @router.get("/{kb_id}/document/{document_id}", response_model=ApiResponse)
 def get_document(kb_id: str, document_id: str):
     """
@@ -916,35 +974,6 @@ def delete_document_chunks(kb_id: str, document_id: str):
             return ResponseUtil.error(message="删除切片数据失败")
     except Exception as e:
         logger.error(f"删除文档切片数据失败: {e}")
-        return ResponseUtil.error(message=str(e))
-
-
-@router.post("/{kb_id}/document/batch_run", response_model=ApiResponse)
-async def batch_run_documents(kb_id: str, request: Request):
-    """
-    批量执行文档切片任务
-
-    Args:
-        kb_id: 知识库ID
-        request: 请求对象，包含文档ID列表
-
-    Returns:
-        ApiResponse: 统一格式的响应对象，包含成功和失败的文档ID
-    """
-    try:
-        from app.core.knowledgebase.server import task_executor
-
-        doc_ids = await request.json()
-        if not isinstance(doc_ids, list):
-            return ResponseUtil.bad_request(message="请求体必须是文档ID列表")
-
-        results = task_executor.batch_run_documents(doc_ids)
-        return ResponseUtil.success(
-            data=results,
-            message=f"批量提交完成: 成功{len(results['success'])}个, 失败{len(results['failed'])}个"
-        )
-    except Exception as e:
-        logger.error(f"批量执行文档切片任务失败: {e}")
         return ResponseUtil.error(message=str(e))
 
 

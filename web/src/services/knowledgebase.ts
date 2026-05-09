@@ -482,8 +482,15 @@ export const knowledgebaseService = {
   /**
    * 批量执行文档切片任务
    */
-  batchRunDocumentTasks: async (kbId: string, documentIds: string[]): Promise<void> => {
+  batchRunDocumentTasks: async (kbId: string, documentIds: string[]): Promise<{success: string[], failed: string[], skipped: string[]}> => {
     return http.post(`/aicenter/v1/knowledgebase/${kbId}/document/batch_run`, documentIds);
+  },
+
+  /**
+   * 批量停止文档切片任务
+   */
+  batchStopDocumentTasks: async (kbId: string, documentIds: string[]): Promise<{success: string[], failed: string[], skipped: string[]}> => {
+    return http.post(`/aicenter/v1/knowledgebase/${kbId}/document/batch_stop`, documentIds);
   },
 
   /**

@@ -115,7 +115,7 @@ def concat_img(img1, img2):
         return image
 
 
-def naive_merge(sections, chunk_token_num=128, delimiter="\n", overlapped_percent=0):
+def naive_merge(sections, chunk_token_num=128, delimiter="\n", overlapped_percent=0, callback=None):
     """
     简单文本合并，将切片按token数合并成chunk
     
@@ -124,6 +124,7 @@ def naive_merge(sections, chunk_token_num=128, delimiter="\n", overlapped_percen
         chunk_token_num: 每个chunk的最大token数
         delimiter: 分隔符
         overlapped_percent: 重叠百分比
+        callback: 进度回调函数，用于检查取消状态
         
     Returns:
         list: 合并后的chunk列表
@@ -134,9 +135,13 @@ def naive_merge(sections, chunk_token_num=128, delimiter="\n", overlapped_percen
         sections = [sections]
     if isinstance(sections[0], str):
         sections = [(s, "") for s in sections]
+    
+    if callback:
+        callback(0, "开始合并文本块...", append=True)
         
     cks = [""]
     tk_nums = [0]
+    total_sections = len(sections)
 
     def add_chunk(t, pos):
         nonlocal cks, tk_nums, delimiter
@@ -172,7 +177,9 @@ def naive_merge(sections, chunk_token_num=128, delimiter="\n", overlapped_percen
     if delimiters_to_use:
         custom_pattern = "|".join(re.escape(t) for t in sorted(set(delimiters_to_use), key=len, reverse=True))
         cks, tk_nums = [], []
-        for sec, pos in sections:
+        for idx, (sec, pos) in enumerate(sections):
+            if callback and idx % 100 == 0:
+                callback(idx / total_sections, f"合并文本块进度: {idx}/{total_sections}", append=False)
             split_sec = re.split(r"(%s)" % custom_pattern, sec, flags=re.DOTALL)
             for sub_sec in split_sec:
                 if re.fullmatch(custom_pattern, sub_sec or ""):
@@ -185,15 +192,24 @@ def naive_merge(sections, chunk_token_num=128, delimiter="\n", overlapped_percen
                     text += local_pos
                 cks.append(text)
                 tk_nums.append(num_tokens_from_string(text))
+        
+        if callback:
+            callback(1.0, f"合并文本块完成: {total_sections}个", append=False)
+        
         return cks
 
-    for sec, pos in sections:
+    for idx, (sec, pos) in enumerate(sections):
+        if callback and idx % 100 == 0:
+            callback(idx / total_sections, f"合并文本块进度: {idx}/{total_sections}", append=False)
         add_chunk("\n" + sec, pos)
+
+    if callback:
+        callback(1.0, f"合并文本块完成: {total_sections}个", append=False)
 
     return cks
 
 
-def naive_merge_with_images(texts, images, chunk_token_num=128, delimiter="\n", overlapped_percent=0):
+def naive_merge_with_images(texts, images, chunk_token_num=128, delimiter="\n", overlapped_percent=0, callback=None):
     """
     带图片的简单文本合并
     
@@ -203,16 +219,21 @@ def naive_merge_with_images(texts, images, chunk_token_num=128, delimiter="\n", 
         chunk_token_num: 每个chunk的最大token数
         delimiter: 分隔符
         overlapped_percent: 重叠百分比
+        callback: 进度回调函数，用于检查取消状态
         
     Returns:
         tuple: (chunks, result_images)
     """
     if not texts or len(texts) != len(images):
         return [], []
+    
+    if callback:
+        callback(0, "开始合并文本块...", append=True)
         
     cks = [""]
     result_images = [None]
     tk_nums = [0]
+    total_texts = len(texts)
 
     def add_chunk(t, image, pos=""):
         nonlocal cks, result_images, tk_nums, delimiter
@@ -253,7 +274,9 @@ def naive_merge_with_images(texts, images, chunk_token_num=128, delimiter="\n", 
     if delimiters_to_use:
         custom_pattern = "|".join(re.escape(t) for t in sorted(set(delimiters_to_use), key=len, reverse=True))
         cks, result_images, tk_nums = [], [], []
-        for text, image in zip(texts, images):
+        for idx, (text, image) in enumerate(zip(texts, images)):
+            if callback and idx % 100 == 0:
+                callback(idx / total_texts, f"合并文本块进度: {idx}/{total_texts}", append=False)
             text_str = text[0] if isinstance(text, tuple) else text
             if text_str is None:
                 text_str = ""
@@ -271,9 +294,15 @@ def naive_merge_with_images(texts, images, chunk_token_num=128, delimiter="\n", 
                 cks.append(text_seg)
                 result_images.append(image)
                 tk_nums.append(num_tokens_from_string(text_seg))
+        
+        if callback:
+            callback(1.0, f"合并文本块完成: {total_texts}个", append=False)
+        
         return cks, result_images
 
-    for text, image in zip(texts, images):
+    for idx, (text, image) in enumerate(zip(texts, images)):
+        if callback and idx % 100 == 0:
+            callback(idx / total_texts, f"合并文本块进度: {idx}/{total_texts}", append=False)
         if isinstance(text, tuple):
             text_str = text[0] if text[0] is not None else ""
             text_pos = text[1] if len(text) > 1 else ""
@@ -281,10 +310,13 @@ def naive_merge_with_images(texts, images, chunk_token_num=128, delimiter="\n", 
         else:
             add_chunk("\n" + (text or ""), image)
 
+    if callback:
+        callback(1.0, f"合并文本块完成: {total_texts}个", append=False)
+
     return cks, result_images
 
 
-def tokenize_chunks(chunks, doc, eng, pdf_parser=None, child_delimiters_pattern=None):
+def tokenize_chunks(chunks, doc, eng, pdf_parser=None, child_delimiters_pattern=None, callback=None):
     """
     对chunks进行tokenize处理
     
@@ -294,11 +326,13 @@ def tokenize_chunks(chunks, doc, eng, pdf_parser=None, child_delimiters_pattern=
         eng: 是否为英文
         pdf_parser: PDF解析器（可选）
         child_delimiters_pattern: 子分隔符模式（可选）
+        callback: 进度回调函数（可选）
         
     Returns:
         list: 处理后的文档列表
     """
     res = []
+    total = len(chunks)
     for ii, ck in enumerate(chunks):
         if len(str(ck).strip()) == 0:
             continue
@@ -321,14 +355,33 @@ def tokenize_chunks(chunks, doc, eng, pdf_parser=None, child_delimiters_pattern=
 
         tokenize_doc(d, ck, eng)
         res.append(d)
+        
+        if callback and total > 0 and ii % 100 == 0:
+            callback(ii / total, f"Tokenize进度: {ii}/{total}", append=False)
+    
+    if callback and total > 0:
+        callback(1.0, f"Tokenize完成: {total}个", append=False)
+    
     return res
 
 
-def tokenize_chunks_with_images(chunks, doc, eng, images, child_delimiters_pattern=None):
+def tokenize_chunks_with_images(chunks, doc, eng, images, child_delimiters_pattern=None, callback=None):
     """
     对带图片的chunks进行tokenize处理
+    
+    Args:
+        chunks: chunk列表
+        doc: 文档元信息
+        eng: 是否为英文
+        images: 图片列表
+        child_delimiters_pattern: 子分隔符模式（可选）
+        callback: 进度回调函数（可选）
+        
+    Returns:
+        list: 处理后的文档列表
     """
     res = []
+    total = len(chunks)
     for ii, (ck, image) in enumerate(zip(chunks, images)):
         if len(str(ck).strip()) == 0:
             continue
@@ -344,6 +397,13 @@ def tokenize_chunks_with_images(chunks, doc, eng, images, child_delimiters_patte
             
         tokenize_doc(d, ck, eng)
         res.append(d)
+        
+        if callback and total > 0 and ii % 100 == 0:
+            callback(ii / total, f"Tokenize进度: {ii}/{total}", append=False)
+    
+    if callback and total > 0:
+        callback(1.0, f"Tokenize完成: {total}个", append=False)
+    
     return res
 
 

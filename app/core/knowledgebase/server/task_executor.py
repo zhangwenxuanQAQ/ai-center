@@ -146,7 +146,108 @@ class TaskExecutor:
         )
         self._heartbeat_thread.start()
 
+        self._recover_pending_tasks()
+
         logger.info("任务调度器已启动")
+
+    def _recover_pending_tasks(self):
+        """服务重启时恢复未完成的任务"""
+        logger.info("开始恢复未完成的任务...")
+        try:
+            pending_docs = KnowledgebaseDocument.select().where(
+                (KnowledgebaseDocument.running_status == RunningStatus.RUNNING) |
+                (KnowledgebaseDocument.running_status == RunningStatus.WAITING)
+            )
+            
+            pending_count = pending_docs.count()
+            if pending_count == 0:
+                logger.info("没有需要恢复的任务")
+                return
+
+            logger.info(f"发现 {pending_count} 个未完成的任务，正在重新提交...")
+            
+            recovered_count = 0
+            failed_count = 0
+            
+            for doc in pending_docs:
+                try:
+                    logger.info(f"恢复任务: doc_id={doc.id}, filename={doc.file_name}")
+                    
+                    old_token_num = doc.token_num or 0
+                    old_chunk_num = doc.chunk_num or 0
+                    if old_token_num > 0 or old_chunk_num > 0:
+                        self._update_kb_stats(doc.kb_id, -old_token_num, -old_chunk_num)
+
+                    doc.running_status = RunningStatus.WAITING
+                    doc.task_progress = 0
+                    doc.task_progress_message = "任务恢复中..."
+                    doc.task_begin_at = None
+                    doc.task_end_at = None
+                    doc.task_duration = 0
+                    doc.token_num = 0
+                    doc.chunk_num = 0
+                    doc.save()
+                    
+                    self._publish_doc_event(doc.kb_id, {
+                        "doc_id": doc.id,
+                        "running_status": doc.running_status,
+                        "task_progress": 0,
+                        "task_progress_message": "任务恢复中...",
+                        "chunk_num": 0,
+                        "token_num": 0,
+                    })
+
+                    task = self.submit_task(
+                        doc_id=doc.id,
+                        kb_id=doc.kb_id,
+                        filename=doc.location or doc.file_name,
+                        parse_type=doc.chunk_method,
+                        lang="Chinese",
+                        parser_config=self._get_doc_parser_config(doc),
+                        embedding_model_id=self._get_kb_embedding_model_id(doc.kb_id),
+                        text_model_id=self._get_kb_text_model_id(doc.kb_id),
+                    )
+                    
+                    if task:
+                        recovered_count += 1
+                        logger.info(f"任务恢复成功: {doc.id}")
+                    else:
+                        failed_count += 1
+                        logger.error(f"任务恢复失败: {doc.id}")
+                        
+                except Exception as e:
+                    failed_count += 1
+                    logger.error(f"恢复任务 {doc.id} 时发生异常: {e}")
+            
+            logger.info(f"任务恢复完成: 成功 {recovered_count} 个, 失败 {failed_count} 个")
+            
+        except Exception as e:
+            logger.error(f"任务恢复过程发生异常: {e}")
+
+    def _get_doc_parser_config(self, doc):
+        """获取文档的解析配置"""
+        if doc.chunk_config:
+            try:
+                return json.loads(doc.chunk_config) if isinstance(doc.chunk_config, str) else doc.chunk_config
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return {}
+
+    def _get_kb_embedding_model_id(self, kb_id):
+        """获取知识库的嵌入模型ID"""
+        try:
+            kb = Knowledgebase.get(Knowledgebase.id == kb_id)
+            return kb.embedding_model_id
+        except Exception:
+            return None
+
+    def _get_kb_text_model_id(self, kb_id):
+        """获取知识库的文本模型ID"""
+        try:
+            kb = Knowledgebase.get(Knowledgebase.id == kb_id)
+            return kb.text_model_id
+        except Exception:
+            return None
 
     def stop(self):
         """停止任务调度器（优雅关闭）"""
@@ -421,8 +522,15 @@ class TaskExecutor:
         except Exception as e:
             logger.warning(f"推送文档事件失败: {e}")
 
-    def _set_progress(self, task: DocumentTask, prog: float = None, msg: str = "Processing..."):
-        """设置任务进度并更新数据库"""
+    def _set_progress(self, task: DocumentTask, prog: float = None, msg: str = "Processing...", append: bool = True):
+        """设置任务进度并更新数据库
+        
+        Args:
+            task: 任务对象
+            prog: 进度值 (0.0 ~ 1.0)
+            msg: 进度消息
+            append: 是否追加消息，默认为True；设为False则更新最后一条同类型消息
+        """
         try:
             if prog is not None and prog < 0:
                 msg = "[ERROR]" + msg
@@ -440,10 +548,28 @@ class TaskExecutor:
             
             timestamp = datetime.now().strftime("%H:%M:%S")
             new_msg = f"[{timestamp}] {msg}"
-            if task.progress_message:
-                task.progress_message = f"{task.progress_message}\n{new_msg}"
+            
+            if append:
+                if task.progress_message:
+                    task.progress_message = f"{task.progress_message}\n{new_msg}"
+                else:
+                    task.progress_message = new_msg
             else:
-                task.progress_message = new_msg
+                if task.progress_message:
+                    lines = task.progress_message.split('\n')
+                    new_lines = []
+                    replaced = False
+                    for line in lines:
+                        if '合并文本块进度:' in line and '合并文本块进度:' in new_msg:
+                            new_lines.append(new_msg)
+                            replaced = True
+                        else:
+                            new_lines.append(line)
+                    if not replaced:
+                        new_lines.append(new_msg)
+                    task.progress_message = '\n'.join(new_lines)
+                else:
+                    task.progress_message = new_msg
 
             self._save_task(task)
             self._update_document_status(task)
@@ -561,10 +687,11 @@ class TaskExecutor:
             binary=task.binary,
             lang=task.lang,
             parser_config=task.parser_config,
-            callback=lambda prog=None, msg="": self._set_progress(
+            callback=lambda prog=None, msg="", append=True: self._set_progress(
                 task,
                 prog=0.05 + 0.45 * prog if prog else None,
-                msg=msg
+                msg=msg,
+                append=append
             )
         )
 
@@ -574,6 +701,8 @@ class TaskExecutor:
         text_model_id = getattr(task, "text_model_id", None)
         if auto_keywords > 0 and text_model_id:
             self._extract_keywords(task, result, auto_keywords)
+        else:
+            self._set_progress(task, 0.60, "跳过关键词提取")
 
         return result
 
@@ -1067,6 +1196,14 @@ class TaskExecutor:
 
         redis_utils.set(f"{self.CANCEL_KEY_PREFIX}{task_id}", "1", exp=3600)
         logger.info(f"任务取消标记已设置: {task_id}")
+        
+        task.status = RunningStatus.CANCEL
+        task.completed_at = datetime.now()
+        self._save_task(task)
+        
+        self._update_document_status(task)
+        logger.info(f"任务状态已更新为取消: {task_id}")
+        
         return True
 
     def cleanup_task(self, task_id: str) -> bool:
@@ -1171,13 +1308,40 @@ class TaskExecutor:
         return True
 
     def batch_run_documents(self, doc_ids: List[str]) -> Dict[str, Any]:
-        """批量执行文档切片任务"""
-        results = {"success": [], "failed": []}
+        """批量执行文档切片任务，忽略正在执行的任务"""
+        results = {"success": [], "failed": [], "skipped": []}
         for doc_id in doc_ids:
-            task = self.run_document_task(doc_id)
-            if task:
-                results["success"].append(doc_id)
-            else:
+            try:
+                doc = KnowledgebaseDocument.get(KnowledgebaseDocument.id == doc_id)
+                if doc.running_status in (RunningStatus.RUNNING, RunningStatus.WAITING):
+                    results["skipped"].append(doc_id)
+                    continue
+                task = self.run_document_task(doc_id)
+                if task:
+                    results["success"].append(doc_id)
+                else:
+                    results["failed"].append(doc_id)
+            except Exception as e:
+                logger.error(f"批量执行任务异常 {doc_id}: {e}")
+                results["failed"].append(doc_id)
+        return results
+
+    def batch_stop_documents(self, doc_ids: List[str]) -> Dict[str, Any]:
+        """批量停止文档切片任务，忽略非正在执行的任务"""
+        results = {"success": [], "failed": [], "skipped": []}
+        for doc_id in doc_ids:
+            try:
+                doc = KnowledgebaseDocument.get(KnowledgebaseDocument.id == doc_id)
+                if doc.running_status not in (RunningStatus.RUNNING, RunningStatus.WAITING):
+                    results["skipped"].append(doc_id)
+                    continue
+                success = self.stop_document_task(doc_id)
+                if success:
+                    results["success"].append(doc_id)
+                else:
+                    results["failed"].append(doc_id)
+            except Exception as e:
+                logger.error(f"批量停止任务异常 {doc_id}: {e}")
                 results["failed"].append(doc_id)
         return results
 

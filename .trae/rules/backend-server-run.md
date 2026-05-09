@@ -5,3 +5,4 @@
 5.需要启动mcp server
 6.后端代码有更新时需要重启后端服务
 7.当有python依赖更新时需要同时更新requirements,pyproject.toml,uv.lock
+8.后端服务启动命令为.venv\Scripts\python.exe -m app.server_run。 不要随意修改

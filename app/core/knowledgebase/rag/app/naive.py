@@ -243,6 +243,18 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
     st = timer()
     overlapped_percent = normalize_overlapped_percent(parser_config.get("overlapped_percent", 0))
     
+    def merge_callback(prog=None, msg="", append=True):
+        if prog is not None:
+            callback(0.85 + 0.10 * prog, msg, append)
+        else:
+            callback(None, msg, append)
+    
+    def tokenize_callback(prog=None, msg="", append=True):
+        if prog is not None:
+            callback(0.95 + 0.05 * prog, msg, append)
+        else:
+            callback(None, msg, append)
+    
     if is_markdown:
         merged_chunks = []
         merged_images = []
@@ -286,9 +298,9 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
         has_images = merged_images and any(img is not None for img in merged_images)
 
         if has_images:
-            res.extend(tokenize_chunks_with_images(chunks, doc, is_eng, merged_images, child_delimiters_pattern=child_deli))
+            res.extend(tokenize_chunks_with_images(chunks, doc, is_eng, merged_images, child_delimiters_pattern=child_deli, callback=tokenize_callback))
         else:
-            res.extend(tokenize_chunks(chunks, doc, is_eng, pdf_parser, child_delimiters_pattern=child_deli))
+            res.extend(tokenize_chunks(chunks, doc, is_eng, pdf_parser, child_delimiters_pattern=child_deli, callback=tokenize_callback))
     else:
         if section_images:
             if all(image is None for image in section_images):
@@ -300,17 +312,19 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
                 section_images, 
                 int(parser_config.get("chunk_token_num", 128)), 
                 parser_config.get("delimiter", "\n"), 
-                overlapped_percent
+                overlapped_percent,
+                merge_callback
             )
-            res.extend(tokenize_chunks_with_images(chunks, doc, is_eng, images, child_delimiters_pattern=child_deli))
+            res.extend(tokenize_chunks_with_images(chunks, doc, is_eng, images, child_delimiters_pattern=child_deli, callback=tokenize_callback))
         else:
             chunks = naive_merge(
                 sections, 
                 int(parser_config.get("chunk_token_num", 128)), 
                 parser_config.get("delimiter", "\n"), 
-                overlapped_percent
+                overlapped_percent,
+                merge_callback
             )
-            res.extend(tokenize_chunks(chunks, doc, is_eng, pdf_parser, child_delimiters_pattern=child_deli))
+            res.extend(tokenize_chunks(chunks, doc, is_eng, pdf_parser, child_delimiters_pattern=child_deli, callback=tokenize_callback))
 
     # 处理超链接
     if urls and parser_config.get("analyze_hyperlink", False) and is_root:

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Layout, Tree, Table, Input, Select, Button, Tag, Spin, Pagination, Empty, Row, Col, Tooltip, Switch, message, Modal, Popconfirm, Form, TreeSelect, Popover, Descriptions } from 'antd';
+import { Layout, Tree, Table, Input, Select, Button, Tag, Spin, Pagination, Empty, Row, Col, Tooltip, Switch, message, Modal, Popconfirm, Form, TreeSelect, Popover, Descriptions, Dropdown } from 'antd';
 const { TextArea } = Input;
 import { SearchOutlined, PlusOutlined, FolderOutlined, FileTextOutlined, PlayCircleOutlined, PauseCircleOutlined, ReloadOutlined, UnorderedListOutlined, EditOutlined, DownloadOutlined, DeleteOutlined, UpOutlined, DownOutlined, CloseOutlined, SettingOutlined } from '@ant-design/icons';
 import type { TreeDataNode, TreeProps } from 'antd';
@@ -529,7 +529,6 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
           .then(() => {
             message.success('批量删除成功');
             setSelectedRowKeys([]);
-            // 重置表格到第一页
             setCurrentPage(1);
             fetchDocuments();
           })
@@ -539,6 +538,89 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       }
     });
   };
+
+  const handleBatchRun = () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning('请选择要执行的文档');
+      return;
+    }
+    Modal.confirm({
+      title: '批量执行',
+      content: `确定要执行选中的 ${selectedRowKeys.length} 个文档的切片任务吗？正在执行的任务将被忽略。`,
+      okText: '确定',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          const result = await knowledgebaseService.batchRunDocumentTasks(knowledgebase.id, selectedRowKeys.map(key => key as string));
+          const successCount = result.success?.length || 0;
+          const failedCount = result.failed?.length || 0;
+          if (failedCount > 0) {
+            message.warning(`批量执行完成: 成功${successCount}个, 失败${failedCount}个`);
+          } else {
+            message.success(`批量执行成功: ${successCount}个`);
+          }
+          setSelectedRowKeys([]);
+          fetchDocuments();
+        } catch (error: any) {
+          message.error(error.message || '批量执行失败');
+        }
+      }
+    });
+  };
+
+  const handleBatchStop = () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning('请选择要停止的文档');
+      return;
+    }
+    Modal.confirm({
+      title: '批量停止',
+      content: `确定要停止选中的 ${selectedRowKeys.length} 个文档的切片任务吗？非正在执行的任务将被忽略。`,
+      okText: '确定',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          const result = await knowledgebaseService.batchStopDocumentTasks(knowledgebase.id, selectedRowKeys.map(key => key as string));
+          const successCount = result.success?.length || 0;
+          const skippedCount = result.skipped?.length || 0;
+          if (skippedCount > 0) {
+            message.success(`批量停止完成: 成功${successCount}个, 跳过${skippedCount}个`);
+          } else {
+            message.success(`批量停止成功: ${successCount}个`);
+          }
+          setSelectedRowKeys([]);
+          fetchDocuments();
+        } catch (error: any) {
+          message.error(error.message || '批量停止失败');
+        }
+      }
+    });
+  };
+
+  const batchMenuItems = [
+    {
+      key: 'run',
+      label: '批量执行',
+      icon: <PlayCircleOutlined />,
+      onClick: handleBatchRun,
+    },
+    {
+      key: 'stop',
+      label: '批量停止',
+      icon: <PauseCircleOutlined />,
+      onClick: handleBatchStop,
+    },
+    {
+      type: 'divider' as const,
+    },
+    {
+      key: 'delete',
+      label: '批量删除',
+      icon: <DeleteOutlined />,
+      danger: true,
+      onClick: handleBatchDelete,
+    },
+  ];
 
   const columns = useMemo(() => [
     {
@@ -598,36 +680,38 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
         
         // 使用 Popover 显示详细信息
         const popoverContent = (
-          <Descriptions size="small" column={1} style={{ width: '400px' }}>
-            <Descriptions.Item label="当前状态">
-              <Tag color={getStatusColor(status)}>
-                {runningStatusMap[status] || status}
-              </Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="进度">{(record.task_progress * 100).toFixed(1)}%</Descriptions.Item>
-            {record.task_progress_message && (
-              <Descriptions.Item label="消息">
-                <div style={{ maxWidth: '360px', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
-                  {record.task_progress_message}
-                </div>
+          <div style={{ maxHeight: '450px', overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <Descriptions size="small" column={1} style={{ width: '400px' }}>
+              <Descriptions.Item label="当前状态">
+                <Tag color={getStatusColor(status)}>
+                  {runningStatusMap[status] || status}
+                </Tag>
               </Descriptions.Item>
-            )}
-            {record.task_begin_at && (
-              <Descriptions.Item label="开始时间">
-                {new Date(record.task_begin_at).toLocaleString()}
-              </Descriptions.Item>
-            )}
-            {record.task_end_at && (
-              <Descriptions.Item label="结束时间">
-                {new Date(record.task_end_at).toLocaleString()}
-              </Descriptions.Item>
-            )}
-            {record.task_duration > 0 && (
-              <Descriptions.Item label="耗时">
-                {formatDuration(record.task_duration)}
-              </Descriptions.Item>
-            )}
-          </Descriptions>
+              <Descriptions.Item label="进度">{(record.task_progress * 100).toFixed(1)}%</Descriptions.Item>
+              {record.task_progress_message && (
+                <Descriptions.Item label="消息">
+                  <div style={{ maxWidth: '360px', wordBreak: 'break-word', whiteSpace: 'pre-wrap', maxHeight: '250px', overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                    {record.task_progress_message}
+                  </div>
+                </Descriptions.Item>
+              )}
+              {record.task_begin_at && (
+                <Descriptions.Item label="开始时间">
+                  {new Date(record.task_begin_at).toLocaleString()}
+                </Descriptions.Item>
+              )}
+              {record.task_end_at && (
+                <Descriptions.Item label="结束时间">
+                  {new Date(record.task_end_at).toLocaleString()}
+                </Descriptions.Item>
+              )}
+              {record.task_duration > 0 && (
+                <Descriptions.Item label="耗时">
+                  {formatDuration(record.task_duration)}
+                </Descriptions.Item>
+              )}
+            </Descriptions>
+          </div>
         );
         
         return (
@@ -725,20 +809,22 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
             case 'fail':
             case 'cancel':
               return (
-                <Popconfirm
-                  title="确认重新执行"
-                  description="重新执行将删除原有切片数据，确定要继续吗？"
-                  okText="确定"
-                  cancelText="取消"
-                  onConfirm={() => handleRunTask(record.id)}
-                >
-                  <Button 
-                    type="text"
-                    size="small" 
-                    icon={<ReloadOutlined />}
-                    style={{ color: '#52c41a' }}
-                  />
-                </Popconfirm>
+                <Tooltip title="重新执行">
+                  <Popconfirm
+                    title="确认重新执行"
+                    description="重新执行将删除原有切片数据，确定要继续吗？"
+                    okText="确定"
+                    cancelText="取消"
+                    onConfirm={() => handleRunTask(record.id)}
+                  >
+                    <Button 
+                      type="text"
+                      size="small" 
+                      icon={<ReloadOutlined />}
+                      style={{ color: '#52c41a' }}
+                    />
+                  </Popconfirm>
+                </Tooltip>
               );
             default:
               return (
@@ -890,15 +976,11 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
           >
             新增数据集
           </Button>
-          <Button 
-            danger
-            icon={<DeleteOutlined />}
-            onClick={handleBatchDelete}
-            className="batch-delete-button"
-            disabled={selectedRowKeys.length === 0}
-          >
-            批量删除 ({selectedRowKeys.length})
-          </Button>
+          <Dropdown menu={{ items: batchMenuItems }} disabled={selectedRowKeys.length === 0}>
+            <Button>
+              批量操作 ({selectedRowKeys.length})
+            </Button>
+          </Dropdown>
           <Input
             placeholder="搜索文档名称"
             value={searchName}
