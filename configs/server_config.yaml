@@ -5,15 +5,15 @@ mysql:
   name: 'ai_center'
   user: 'root'
   password: '123456'
-  host: '127.0.0.1'
+  host: '10.9.44.5'
   port: 3306
   max_connections: 900
 mcp:
-  host: '127.0.0.1'
+  host: '10.9.44.5'
   port: 8082
   enabled: true
 es:
-  host: '127.0.0.1'
+  host: '10.9.44.5'
   port: 9200
   username: 'elastic'
   password: '123456'
@@ -22,12 +22,12 @@ redis:
   db: 1
   username: ''
   password: ''
-  host: '127.0.0.1'
+  host: '10.9.44.5'
   port: 6379
 rustfs:
   username: 'rustfsadmin'
   password: 'rustfsadmin'
-  host: '127.0.0.1'
+  host: '10.9.44.5'
   port: 9000
 logging:
   level: 'INFO'

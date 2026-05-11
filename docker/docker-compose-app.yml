@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  ai-center:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: ai-center:${VERSION:-aihub_v2_beta_0.1}
+    container_name: ai-center-app
+    restart: unless-stopped
+    ports:
+      - "${SERVER_PORT:-80}:80"
+      - "8081:8081"
+      - "8082:8082"
+    environment:
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8081
+      - MYSQL_HOST=${MYSQL_HOST:-host.docker.internal}
+      - MYSQL_PORT=${MYSQL_PORT:-3306}
+      - MYSQL_USER=${MYSQL_USER:-root}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-123456}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-ai_center}
+      - REDIS_HOST=${REDIS_HOST:-host.docker.internal}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_DB=${REDIS_DB:-1}
+      - ES_HOST=${ES_HOST:-host.docker.internal}
+      - ES_PORT=${ES_PORT:-9200}
+      - ES_USER=${ES_USER:-elastic}
+      - ES_PASSWORD=${ES_PASSWORD:-123456}
+      - ES_SCHEME=${ES_SCHEME:-http}
+      - RUSTFS_HOST=${RUSTFS_HOST:-host.docker.internal}
+      - RUSTFS_PORT=${RUSTFS_PORT:-9000}
+      - RUSTFS_USER=${RUSTFS_USER:-rustfsadmin}
+      - RUSTFS_PASSWORD=${RUSTFS_PASSWORD:-rustfsadmin}
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8082
+      - MCP_ENABLED=true
+    volumes:
+      - ../configs:/aicenter/configs:ro
+      - app_logs:/aicenter/logs
+      - app_data:/aicenter/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - ai-center-network
+
+volumes:
+  app_logs:
+    driver: local
+  app_data:
+    driver: local
+
+networks:
+  ai-center-network:
+    driver: bridge

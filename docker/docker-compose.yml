@@ -1,41 +1,157 @@
 version: '3.8'
 
 services:
-  db:
+  mysql:
     image: mysql:8.0
+    container_name: ai-center-mysql
+    restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-123456}
       MYSQL_DATABASE: ai_center
+      TZ: Asia/Shanghai
     ports:
-      - "3306:3306"
+      - "${MYSQL_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+      - ./init/mysql:/docker-entrypoint-initdb.d
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_PASSWORD:-123456}"]
       interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 5
+    networks:
+      - ai-center-network
 
-  backend:
+  redis:
+    image: redis:7-alpine
+    container_name: ai-center-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - ai-center-network
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: ai-center-elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+      - cluster.name=ai-center
+      - node.name=ai-center-node
+    ports:
+      - "${ES_PORT:-9200}:9200"
+      - "9300:9300"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - ai-center-network
+
+  rustfs:
+    image: rustfs/rustfs:latest
+    container_name: ai-center-rustfs
+    restart: unless-stopped
+    environment:
+      RUSTFS_ROOT_USER: ${RUSTFS_USER:-rustfsadmin}
+      RUSTFS_ROOT_PASSWORD: ${RUSTFS_PASSWORD:-rustfsadmin}
+    ports:
+      - "${RUSTFS_PORT:-9000}:9000"
+      - "9001:9001"
+    volumes:
+      - rustfs_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/rustfs/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - ai-center-network
+
+  ai-center:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+    image: ai-center:${VERSION:-aihub_v2_beta_0.1}
+    container_name: ai-center-app
+    restart: unless-stopped
     ports:
-      - "9380:9380"
-    depends_on:
-      db:
-        condition: service_healthy
+      - "${SERVER_PORT:-8000}:80"
+      - "8081:8081"
+      - "8082:8082"
     environment:
-      - DATABASE_URL=mysql+pymysql://root:123456@db:3306/ai_center
-
-  frontend:
-    build:
-      context: ../web
-      dockerfile: Dockerfile
-    ports:
-      - "3000:3000"
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8081
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-123456}
+      - MYSQL_DATABASE=ai_center
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=1
+      - ES_HOST=elasticsearch
+      - ES_PORT=9200
+      - ES_USER=elastic
+      - ES_PASSWORD=${ES_PASSWORD:-123456}
+      - ES_SCHEME=http
+      - RUSTFS_HOST=rustfs
+      - RUSTFS_PORT=9000
+      - RUSTFS_USER=${RUSTFS_USER:-rustfsadmin}
+      - RUSTFS_PASSWORD=${RUSTFS_PASSWORD:-rustfsadmin}
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8082
+      - MCP_ENABLED=true
+    volumes:
+      - ../configs:/aicenter/configs:ro
+      - app_logs:/aicenter/logs
+      - app_data:/aicenter/data
     depends_on:
-      - backend
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - ai-center-network
 
 volumes:
   mysql_data:
+    driver: local
+  redis_data:
+    driver: local
+  es_data:
+    driver: local
+  rustfs_data:
+    driver: local
+  app_logs:
+    driver: local
+  app_data:
+    driver: local
+
+networks:
+  ai-center-network:
+    driver: bridge

@@ -1,53 +1,74 @@
-# 后端基础镜像
-FROM python:3.8-slim as backend
+# 第一阶段：构建前端
+FROM node:18-alpine AS frontend-builder
 
-# 设置工作目录
-WORKDIR /app
+WORKDIR /aicenter/web
 
-# 安装依赖
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY web/package.json web/package-lock.json ./
 
-# 复制后端代码
-COPY backend/ .
-COPY configs/ ../configs/
-
-# 前端基础镜像
-FROM node:16-slim as frontend
-
-# 设置工作目录
-WORKDIR /app
-
-# 安装依赖
-COPY web/package.json .
-COPY web/package-lock.json .
 RUN npm install
 
-# 复制前端代码
-COPY web/ .
+COPY web/ ./
 
-# 构建前端
 RUN npm run build
 
-# 最终镜像
-FROM python:3.8-slim
+# 第二阶段：构建后端运行环境
+FROM ubuntu:24.04
 
-# 设置工作目录
-WORKDIR /app
+LABEL maintainer="AI Center Team"
+LABEL version="aihub_v2_beta_0.1"
+LABEL description="大模型AI服务中心 - 集成多种AI功能的管理系统"
 
-# 安装依赖
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Asia/Shanghai
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
 
-# 复制后端代码
-COPY backend/ .
-COPY configs/ ../configs/
+WORKDIR /aicenter
 
-# 复制前端构建结果
-COPY --from=frontend /app/dist ./web/dist
+RUN echo "deb http://mirrors.aliyun.com/ubuntu/ noble main restricted universe multiverse" > /etc/apt/sources.list && \
+    echo "deb http://mirrors.aliyun.com/ubuntu/ noble-security main restricted universe multiverse" >> /etc/apt/sources.list && \
+    echo "deb http://mirrors.aliyun.com/ubuntu/ noble-updates main restricted universe multiverse" >> /etc/apt/sources.list && \
+    echo "deb http://mirrors.aliyun.com/ubuntu/ noble-backports main restricted universe multiverse" >> /etc/apt/sources.list && \
+    apt-get update --allow-insecure-repositories && apt-get install -y --no-install-recommends \
+    python3.12 \
+    python3-pip \
+    python3.12-venv \
+    curl \
+    nginx \
+    ffmpeg \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
-# 暴露端口
-EXPOSE 9380
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# 启动命令
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "9380"]
+ENV PATH="/root/.local/bin:$PATH"
+
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+COPY pyproject.toml uv.lock ./
+
+RUN uv pip install py-spy
+
+RUN uv pip install -r pyproject.toml
+
+COPY app/ ./app/
+COPY configs/ ./configs/
+
+RUN rm -rf ./app/test
+
+COPY --from=frontend-builder /aicenter/web/dist /var/www/html
+
+COPY docker/nginx/nginx.conf /etc/nginx/nginx.conf
+COPY docker/nginx/aicenter.conf /etc/nginx/conf.d/aicenter.conf
+
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+EXPOSE 80 8081 8082
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8081/docs || exit 1
+
+ENTRYPOINT ["/entrypoint.sh"]
