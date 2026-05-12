@@ -287,7 +287,8 @@ RUSTFS_PASSWORD=rustfsadmin
    cd docker
    
    # 构建镜像（镜像名称来自PROJECT_VERSION文件）
-   docker build -t ai-center:$(cat ../PROJECT_VERSION) ..
+   # 在项目根目录执行
+   docker build -t ai-center:aihub_v2_beta_0.1 -f docker/Dockerfile ..
    
    # 或使用docker-compose构建（完整环境）
    docker-compose build
@@ -551,6 +552,22 @@ services:
 
 **注意**：挂载配置文件时，建议使用`:ro`只读模式以提高安全性。
 
+### 前端API配置
+
+前端应用通过Nginx反向代理访问后端API，配置如下：
+
+**Nginx反向代理规则**：
+```
+前端请求 /aicenter/v1/xxx → Nginx → http://0.0.0.0:8081/aicenter/v1/xxx
+前端请求 /apidocs/xxx → Nginx → http://0.0.0.0:8081/apidocs/xxx
+前端请求 /docs → Nginx → http://0.0.0.0:8081/apidocs
+```
+
+**访问地址**：
+- 前端界面：http://localhost:8000
+- 后端API：http://localhost:8000/aicenter/v1/（通过Nginx代理）
+- Swagger文档：http://localhost:8000/docs 或 http://localhost:8000/apidocs
+
 ### 数据持久化
 
 Docker Compose配置中已包含数据卷映射，确保数据持久化：
@@ -571,6 +588,88 @@ volumes:
 - **后端服务**: http://localhost:8081/docs (Swagger文档)
 - **MCP服务**: http://localhost:8082
 - **Elasticsearch**: http://localhost:9200/_cluster/health
+
+### 单独启动依赖服务
+
+如果选择仅应用部署模式，需要预先启动以下依赖服务。以下是各服务的Docker启动命令：
+
+#### 1. MySQL 8.0
+
+**资源建议**：CPU 1-2核，内存 1-2GB，存储至少10GB
+
+```bash
+docker run -d \
+  --name ai-center-mysql \
+  -p 3306:3306 \
+  -e MYSQL_ROOT_PASSWORD=your_mysql_root_password \
+  -e MYSQL_DATABASE=aicenter \
+  -e MYSQL_USER=aicenter \
+  -e MYSQL_PASSWORD=your_mysql_password \
+  -v /path/to/mysql/data:/var/lib/mysql \
+  --cpus="2" \
+  --memory="2g" \
+  --restart unless-stopped \
+  mysql:8.0 \
+  --character-set-server=utf8mb4 \
+  --collation-server=utf8mb4_unicode_ci
+```
+
+#### 2. Redis 7
+
+**资源建议**：CPU 1核，内存 512MB-2GB，存储至少2GB
+
+```bash
+docker run -d \
+  --name ai-center-redis \
+  -p 6379:6379 \
+  -e REDIS_PASSWORD=your_redis_password \
+  -v /path/to/redis/data:/data \
+  --cpus="1" \
+  --memory="1g" \
+  --restart unless-stopped \
+  redis:7 \
+  --requirepass your_redis_password \
+  --appendonly yes
+```
+
+#### 3. Elasticsearch 8.11.0
+
+**资源建议**：CPU 2-4核，内存 4-8GB，存储至少20GB（SSD更佳）
+
+```bash
+docker run -d \
+  --name ai-center-es \
+  -p 9200:9200 \
+  -p 9300:9300 \
+  -e discovery.type=single-node \
+  -e ES_JAVA_OPTS="-Xms2g -Xmx2g" \
+  -e xpack.security.enabled=true \
+  -e ELASTIC_PASSWORD=your_es_password \
+  -v /path/to/es/data:/usr/share/elasticsearch/data \
+  --cpus="4" \
+  --memory="4g" \
+  --restart unless-stopped \
+  elasticsearch:8.11.0
+```
+
+#### 4. RustFS (MinIO)
+
+**资源建议**：CPU 2-4核，内存 2-4GB，存储至少50GB（SSD更佳）
+
+```bash
+docker run -d \
+  --name ai-center-rustfs \
+  -p 9000:9000 \
+  -p 9001:9001 \
+  -e RUSTFS_ACCESS_KEY=rustfsadmin \
+  -e RUSTFS_SECRET_KEY=your_rustfs_password \
+  -v /path/to/rustfs/data:/data \
+  --cpus="2" \
+  --memory="4g" \
+  --restart unless-stopped \
+  rustfs/rustfs:latest \
+  server /data --console-address ":9001"
+```
 
 ### 常见问题
 
