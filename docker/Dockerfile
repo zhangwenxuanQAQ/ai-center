@@ -57,6 +57,7 @@ COPY app/ ./app/
 COPY configs/ ./configs/
 COPY app/core/knowledgebase/rag/res/nltk_data /root/nltk_data
 COPY 9b5ad71b2ce5302211f9c61530b329a4922fc6a4 9b5ad71b2ce5302211f9c61530b329a4922fc6a4
+COPY PROJECT_VERSION PROJECT_VERSION
 
 RUN rm -rf ./app/test
 
