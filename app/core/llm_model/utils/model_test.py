@@ -8,6 +8,7 @@ import os
 import json
 from typing import Dict, Any, Optional
 from app.core.llm_model.factory import LLMFactory
+from app.core.utils.resource_utils import get_test_image_path, get_test_audio_path
 
 
 class ModelTestUtils:
@@ -49,10 +50,10 @@ class ModelTestUtils:
                 }
             
             # 文本生成成功，现在测试图片支持能力
-            image_path = os.path.join(os.getcwd(), 'web', 'src', 'assets', 'llm', 'test', 'support_image_test.jpg')
+            image_path = get_test_image_path('support_image_test.jpg')
             support_image = False
             
-            if os.path.exists(image_path):
+            if image_path.exists():
                 # 测试图片识别
                 test_prompt = "请描述这张图片的内容"
                 try:
@@ -102,9 +103,9 @@ class ModelTestUtils:
             # 测试图像识别
             test_prompt = "请描述这张图片的内容"
             # 测试文件在前端的assets/llm/test目录下
-            image_path = os.path.join(os.getcwd(), 'web', 'src', 'assets', 'llm', 'test', 'vision_test.jpg')
+            image_path = get_test_image_path('vision_test.jpg')
             
-            if not os.path.exists(image_path):
+            if not image_path.exists():
                 return {
                     'success': False,
                     'message': "测试失败: vision_test.jpg文件不存在"
@@ -153,9 +154,9 @@ class ModelTestUtils:
             model = LLMFactory.create_model('audio', model_config)
             
             # 测试文件在前端的assets/llm/test目录下
-            audio_path = os.path.join(os.getcwd(), 'web', 'src', 'assets', 'llm', 'test', 'audio_test.m4a')
+            audio_path = get_test_audio_path('audio_test.m4a')
             
-            if not os.path.exists(audio_path):
+            if not audio_path.exists():
                 return {
                     'success': False,
                     'message': "测试失败: audio_test.m4a文件不存在"
@@ -245,9 +246,9 @@ class ModelTestUtils:
             model = LLMFactory.create_model('audio', model_config)
             
             # 测试文件在前端的assets/llm/test目录下
-            audio_path = os.path.join(os.getcwd(), 'web', 'src', 'assets', 'llm', 'test', 'audio_test.m4a')
+            audio_path = get_test_audio_path('audio_test.m4a')
             
-            if not os.path.exists(audio_path):
+            if not audio_path.exists():
                 return {
                     'success': False,
                     'message': "测试失败: audio_test.m4a文件不存在"

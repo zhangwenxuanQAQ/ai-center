@@ -8,6 +8,7 @@ import { llmModelService, LLMModel } from '../../services/llm_model';
 import { chatbotService, Chatbot } from '../../services/chatbot';
 import { chatService, Conversation, Message, QueryItem, FileInfo } from '../../services/chat';
 import { datasourceService, Datasource } from '../../services/datasource';
+import { getProviderAvatar, getDefaultAvatar } from '../../utils/avatar';
 
 const { TextArea } = Input;
 
@@ -935,19 +936,11 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     handleSendMessageWithMessages(updatedMessages, userMessage.content, userMessage.id, userMessage.extra_content);
   };
 
-  const getProviderAvatar = (provider: string): string => {
-    if (!provider) {
-      return '/src/assets/llm/default.svg';
-    }
-    const lowercaseProvider = provider.toLowerCase();
-    return `/src/assets/llm/${lowercaseProvider}.svg`;
-  };
-
   const getChatbotAvatar = (chatbot: Chatbot): string => {
     if (chatbot.avatar) {
       return chatbot.avatar;
     }
-    return '/src/assets/llm/default.svg';
+    return getDefaultAvatar();
   };
 
   // 根据文件类型获取图标
@@ -1145,7 +1138,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 alt={model.provider} 
                 className="dropdown-item-avatar"
                 onError={(e) => {
-                  (e.target as HTMLImageElement).src = '/src/assets/llm/default.svg';
+                  (e.target as HTMLImageElement).src = getDefaultAvatar();
                 }}
               />
               <div className="dropdown-item-content">
@@ -1190,7 +1183,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 alt={chatbot.name} 
                 className="dropdown-item-avatar"
                 onError={(e) => {
-                  (e.target as HTMLImageElement).src = '/src/assets/llm/default.svg';
+                  (e.target as HTMLImageElement).src = getDefaultAvatar();
                 }}
               />
               <div className="dropdown-item-content">
@@ -1260,11 +1253,11 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         <div className={`message-avatar ${theme === 'dark' ? 'dark' : 'light'}`}>
           {isUser ? '👤' : (
             <img 
-              src={currentSelection?.avatar || '/src/assets/llm/default.svg'} 
+              src={currentSelection?.avatar || getDefaultAvatar()} 
               alt="AI" 
               className="avatar-image"
               onError={(e) => {
-                (e.target as HTMLImageElement).src = '/src/assets/llm/default.svg';
+                (e.target as HTMLImageElement).src = getDefaultAvatar();
               }}
             />
           )}
@@ -1667,11 +1660,11 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             >
               <div className={`chat-selector ${theme === 'dark' ? 'dark' : 'light'}`}>
                 <img 
-                  src={currentSelection?.avatar || '/src/assets/llm/default.svg'} 
+                  src={currentSelection?.avatar || getDefaultAvatar()} 
                   alt={currentSelection?.name || 'default'} 
                   className="selector-avatar"
                   onError={(e) => {
-                    (e.target as HTMLImageElement).src = '/src/assets/llm/default.svg';
+                    (e.target as HTMLImageElement).src = getDefaultAvatar();
                   }}
                 />
                 <span className="selector-name">
@@ -1683,7 +1676,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           ) : (
             <div className={`chat-selector ${theme === 'dark' ? 'dark' : 'light'}`}>
               <img 
-                src="/src/assets/llm/default.svg" 
+                src={getDefaultAvatar()} 
                 alt="default" 
                 className="selector-avatar"
               />

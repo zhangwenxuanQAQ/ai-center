@@ -10,13 +10,10 @@ import KnowledgebaseDocument from './knowledgebase_document';
 import KnowledgebaseRetrieval from './knowledgebase_retrieval';
 import '../../styles/common.css';
 import './knowledgebase.less';
+import { getDefaultAvatar } from '../../utils/avatar';
 
 const getProviderAvatar = (provider: string): string => {
-  if (!provider) {
-    return '/src/assets/llm/default.svg';
-  }
-  const lowercaseProvider = provider.toLowerCase();
-  return `/src/assets/llm/${lowercaseProvider}.svg`;
+  return getDefaultAvatar();
 };
 
 const KnowledgebaseDetail: React.FC = () => {
@@ -200,7 +197,7 @@ const KnowledgebaseDetail: React.FC = () => {
                 }}
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
-                  target.src = '/src/assets/llm/default.svg';
+                  target.src = getDefaultAvatar();
                 }}
               />
               <div>

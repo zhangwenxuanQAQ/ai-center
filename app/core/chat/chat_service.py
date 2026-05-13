@@ -19,6 +19,7 @@ from app.core.llm_model.utils.tool_util import process_tool_calls
 from app.core.exceptions import ResourceNotFoundError
 from app.core.knowledgebase.utils.file_utils import filename_type
 from app.constants.knowledgebase_document_constants import FileType
+from app.core.utils.resource_utils import get_provider_avatar_url
 
 
 def _load_mcp_tool_util():
@@ -875,9 +876,9 @@ class ChatCoreService:
                     try:
                         model = LLMModel.get(LLMModel.id == model_id)
                         if model.provider:
-                            avatar = f"/src/assets/llm/{model.provider.lower()}.png"
+                            avatar = get_provider_avatar_url(model.provider)
                         else:
-                            avatar = f"/src/assets/llm/default.png"
+                            avatar = get_provider_avatar_url(None)
                     except LLMModel.DoesNotExist:
                         pass
                 
@@ -1193,9 +1194,9 @@ class ChatCoreService:
             try:
                 model = LLMModel.get(LLMModel.id == model_id)
                 if model.provider:
-                    avatar = f"/src/assets/llm/{model.provider.lower()}.png"
+                    avatar = get_provider_avatar_url(model.provider)
                 else:
-                    avatar = f"/src/assets/llm/default.png"
+                    avatar = get_provider_avatar_url(None)
             except LLMModel.DoesNotExist:
                 pass
         

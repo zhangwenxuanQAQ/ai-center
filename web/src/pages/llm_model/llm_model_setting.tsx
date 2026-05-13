@@ -8,6 +8,7 @@ import { request, post } from '../../utils/request';
 import PageHeader from '../../components/page-header';
 import '../../styles/common.css';
 import './llm_model_setting.less';
+import { getDefaultAvatar } from '../../utils/avatar';
 
 const { Option } = Select;
 
@@ -895,11 +896,7 @@ const LLMModelSetting: React.FC = () => {
   };
 
   const getProviderAvatar = (provider: string): string => {
-    if (!provider) {
-      return '/src/assets/llm/default.svg';
-    }
-    const lowercaseProvider = provider.toLowerCase();
-    return `/src/assets/llm/${lowercaseProvider}.svg`;
+    return getDefaultAvatar();
   };
 
   if (loading) {

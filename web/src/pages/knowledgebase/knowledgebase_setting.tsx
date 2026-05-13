@@ -8,13 +8,10 @@ import { llmModelService, LLMModel } from '../../services/llm_model';
 import { RETRIEVAL_CONFIGS } from '../../constants/knowledgebase';
 import '../../styles/common.css';
 import './knowledgebase.less';
+import { getDefaultAvatar } from '../../utils/avatar';
 
 const getProviderAvatar = (provider: string): string => {
-  if (!provider) {
-    return '/src/assets/llm/default.svg';
-  }
-  const lowercaseProvider = provider.toLowerCase();
-  return `/src/assets/llm/${lowercaseProvider}.svg`;
+  return getDefaultAvatar();
 };
 
 interface KnowledgebaseSettingProps {
@@ -647,7 +644,7 @@ const KnowledgebaseSetting: React.FC<KnowledgebaseSettingProps> = ({ knowledgeba
                             }}
                             onError={(e) => {
                               const target = e.target as HTMLImageElement;
-                              target.src = '/src/assets/llm/default.svg';
+                              target.src = getDefaultAvatar();
                             }}
                           />
                           <span style={{ fontSize: '13px', color: theme === 'dark' ? '#fff' : '#000' }}>
@@ -797,7 +794,7 @@ const KnowledgebaseSetting: React.FC<KnowledgebaseSettingProps> = ({ knowledgeba
                   }}
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;
-                    target.src = '/src/assets/llm/default.svg';
+                    target.src = getDefaultAvatar();
                   }}
                 />
                 <div style={{ flex: 1, minWidth: 0 }}>

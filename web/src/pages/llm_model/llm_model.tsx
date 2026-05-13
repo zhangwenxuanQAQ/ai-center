@@ -7,30 +7,24 @@ import { llmModelService, LLMModel, LLMCategory } from '../../services/llm_model
 import PageHeader from '../../components/page-header';
 import '../../styles/common.css';
 import './llm_model.less';
+import { getProviderAvatar } from '../../utils/avatar';
 
 const { Sider: LeftSider, Content } = Layout;
 const { Option } = Select;
 
-// 模型名称到提供商的映射
 const MODEL_NAME_TO_PROVIDER = {
-  // Qwen 模型
   "qwen": "Qwen",
   "Qwen": "Qwen",
-  // DeepSeek 模型
   "deepseek": "DeepSeek",
   "DeepSeek": "DeepSeek",
-  // Kimi 模型
   "kimi": "Kimi",
   "Kimi": "Kimi",
-  // MiniMax 模型
   "minimax": "MiniMax",
   "MiniMax": "MiniMax",
-  // GLM 模型
   "glm": "GLM",
   "GLM": "GLM"
 };
 
-// 根据模型名称解析提供商
 const getProviderFromModelName = (modelName: string): string => {
   const lowercaseName = modelName.toLowerCase();
   for (const [key, value] of Object.entries(MODEL_NAME_TO_PROVIDER)) {
@@ -39,16 +33,6 @@ const getProviderFromModelName = (modelName: string): string => {
     }
   }
   return "";
-};
-
-// 获取提供商头像
-const getProviderAvatar = (provider: string): string => {
-  if (!provider) {
-    return '/src/assets/llm/default.svg';
-  }
-  const lowercaseProvider = provider.toLowerCase();
-  // 动态构建头像路径，格式为 /src/assets/llm/{provider}.svg
-  return `/src/assets/llm/${lowercaseProvider}.svg`;
 };
 
 const LLMModelManagement: React.FC = () => {

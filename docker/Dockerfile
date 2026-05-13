@@ -60,7 +60,7 @@ COPY 9b5ad71b2ce5302211f9c61530b329a4922fc6a4 9b5ad71b2ce5302211f9c61530b329a492
 
 RUN rm -rf ./app/test
 
-COPY --from=frontend-builder /aicenter/web/dist /var/www/html
+COPY --from=frontend-builder /aicenter/web/dist /aicenter/web/dist
 
 COPY docker/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY docker/nginx/aicenter.conf /etc/nginx/conf.d/aicenter.conf

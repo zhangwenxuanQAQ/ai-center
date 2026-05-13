@@ -9,15 +9,12 @@ import { llmModelService, LLMModel } from '../../services/llm_model';
 import PageHeader from '../../components/page-header';
 import '../../styles/common.css';
 import './knowledgebase_create.less';
+import { getDefaultAvatar } from '../../utils/avatar';
 
 const { Option } = Select;
 
 const getProviderAvatar = (provider: string): string => {
-  if (!provider) {
-    return '/src/assets/llm/default.svg';
-  }
-  const lowercaseProvider = provider.toLowerCase();
-  return `/src/assets/llm/${lowercaseProvider}.svg`;
+  return getDefaultAvatar();
 };
 
 const KnowledgebaseCreate: React.FC = () => {
@@ -588,7 +585,7 @@ const KnowledgebaseCreate: React.FC = () => {
                               }}
                               onError={(e) => {
                                 const target = e.target as HTMLImageElement;
-                                target.src = '/src/assets/llm/default.svg';
+                                target.src = getDefaultAvatar();
                               }}
                             />
                             <span style={{ fontSize: '13px', color: theme === 'dark' ? '#fff' : '#000' }}>
@@ -734,7 +731,7 @@ const KnowledgebaseCreate: React.FC = () => {
                   }}
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;
-                    target.src = '/src/assets/llm/default.svg';
+                    target.src = getDefaultAvatar();
                   }}
                 />
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -782,7 +779,7 @@ const KnowledgebaseCreate: React.FC = () => {
                 }}
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
-                  target.src = '/src/assets/llm/default.svg';
+                  target.src = getDefaultAvatar();
                 }}
               />
               <div>

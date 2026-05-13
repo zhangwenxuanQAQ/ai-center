@@ -18,6 +18,7 @@ import { llmModelService, LLMModel } from '../../services/llm_model';
 import PageHeader from '../../components/page-header';
 import '../../styles/common.css';
 import './chatbot_setting.less';
+import { getDefaultAvatar } from '../../utils/avatar';
 
 interface CodeBlockProps {
   node: any;
@@ -77,11 +78,7 @@ const MODEL_TYPE_MAP: Record<string, string> = {
 };
 
 const getProviderAvatar = (provider: string): string => {
-  if (!provider) {
-    return '/src/assets/llm/default.svg';
-  }
-  const lowercaseProvider = provider.toLowerCase();
-  return `/src/assets/llm/${lowercaseProvider}.svg`;
+  return getDefaultAvatar();
 };
 
 const generateRandomString = (length: number): string => {
@@ -1081,7 +1078,7 @@ const ChatbotSetting: React.FC = () => {
                             }}
                             onError={(e) => {
                               const target = e.target as HTMLImageElement;
-                              target.src = '/src/assets/llm/default.svg';
+                              target.src = getDefaultAvatar();
                             }}
                           />
                           <div style={{ 
@@ -1751,7 +1748,7 @@ const ChatbotSetting: React.FC = () => {
                   }}
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;
-                    target.src = '/src/assets/llm/default.svg';
+                    target.src = getDefaultAvatar();
                   }}
                 />
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -1907,7 +1904,7 @@ const ChatbotSetting: React.FC = () => {
                 }}
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
-                  target.src = '/src/assets/llm/default.svg';
+                  target.src = getDefaultAvatar();
                 }}
               />
               <div>

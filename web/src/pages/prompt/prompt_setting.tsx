@@ -10,6 +10,7 @@ import { llmModelService, LLMModel } from '../../services/llm_model';
 import PageHeader from '../../components/page-header';
 import '../../styles/common.css';
 import './prompt_setting.less';
+import { getDefaultAvatar } from '../../utils/avatar';
 
 interface ConfigParam {
   key: string;
@@ -703,11 +704,7 @@ const PromptSetting: React.FC = () => {
   };
 
   const getProviderAvatar = (provider: string): string => {
-    if (!provider) {
-      return '/src/assets/llm/default.svg';
-    }
-    const lowercaseProvider = provider.toLowerCase();
-    return `/src/assets/llm/${lowercaseProvider}.svg`;
+    return getDefaultAvatar();
   };
 
   const getSelectedModelInfo = () => {

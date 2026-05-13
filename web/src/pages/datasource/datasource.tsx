@@ -8,6 +8,7 @@ import { datasourceService, Datasource, DatasourceCategory, DatasourceType } fro
 import PageHeader from '../../components/page-header';
 import '../../styles/common.css';
 import './datasource.less';
+import { getDatasourceIcon, getDefaultDatasourceIcon } from '../../utils/avatar';
 
 const { Sider: LeftSider, Content } = Layout;
 const { Option } = Select;
@@ -394,24 +395,10 @@ const DatasourceManagement: React.FC = () => {
   };
 
   const getDatasourceAvatar = (datasourceType?: string) => {
-    switch (datasourceType) {
-      case 'mysql':
-        return '/src/assets/datasource/mysql.svg';
-      case 'postgresql':
-        return '/src/assets/datasource/postgresql.svg';
-      case 'oracle':
-        return '/src/assets/datasource/oracle.svg';
-      case 'sql_server':
-        return '/src/assets/datasource/sql_server.svg';
-      case 's3':
-        return '/src/assets/datasource/amazon_s3.svg';
-      case 'minio':
-        return '/src/assets/datasource/minio.svg';
-      case 'rustfs':
-        return '/src/assets/datasource/rustfs.svg';
-      default:
-        return '/src/assets/datasource/datasource.svg';
+    if (datasourceType === 's3') {
+      return getDatasourceIcon('amazon_s3');
     }
+    return getDatasourceIcon(datasourceType || '');
   };
 
   const formatDate = (dateString: string): string => {
@@ -960,7 +947,7 @@ const DatasourceManagement: React.FC = () => {
                               }}
                               onError={(e) => {
                                 const target = e.target as HTMLImageElement;
-                                target.src = '/src/assets/datasource/datasource.svg';
+                                target.src = getDefaultDatasourceIcon();
                               }}
                             />
                           </div>

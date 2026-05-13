@@ -14,6 +14,7 @@ from io import BytesIO
 from pathlib import Path
 
 from app.constants.knowledgebase_document_constants import FileType
+from app.core.utils.resource_utils import get_file_icon_path
 
 logger = logging.getLogger(__name__)
 
@@ -183,8 +184,7 @@ def _get_vscode_icon(filename):
         if icon_path:
             if 'default' in icon_path.lower():
                 extension = filename.split('.')[-1].lower() if '.' in filename else 'txt'
-                project_root = Path(__file__).resolve().parents[4]
-                custom_icon_path = project_root / 'web' / 'src' / 'assets' / 'svg' / 'file-icon' / f'{extension}.svg'
+                custom_icon_path = get_file_icon_path(extension)
                 if custom_icon_path.exists():
                     with open(custom_icon_path, 'rb') as f:
                         return f.read()
