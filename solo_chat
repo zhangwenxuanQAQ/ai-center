@@ -900,3 +900,7 @@ self.total_token_count(res)就是模型返回的["usage"]["total_tokens"]字段�
 - 需要有分页查询数据集切片列表接口 （接口需要使用es的向量查询功能）, 需要向量查询文档内容过滤，停用启用过滤。
 - 需要有单个切片停用启用接口，修改向量库的available_int字段。
 - 更新es_utils.py, 支持上述功能
+
+
+
+PDFParser的_table_transformer_job方法中计算it[top]的逻辑有问题，请参考ragflow源码（源码路径在F:\project\ragflow-0.22.1\deepdoc\parser\pdf_parser.py）修改本项目方法

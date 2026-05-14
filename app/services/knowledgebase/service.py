@@ -1067,9 +1067,11 @@ class KnowledgebaseDocumentService:
         
         from_ = (page - 1) * page_size
         
-        sort = None
-        if keyword:
-            sort = [{"_score": {"order": "desc"}}]
+        sort = [
+            {"page_num_int": {"order": "asc"}},
+            {"top_int": {"order": "asc"}},
+            {"create_timestamp_flt": {"order": "desc"}}
+        ]
         
         chunks = es_utils.search_documents(
             index_name=kb_id,

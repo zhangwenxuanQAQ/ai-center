@@ -287,7 +287,7 @@ class PdfParser:
 
         return best_angle, best_img, results
 
-    def _table_transformer_job(self, ZM, auto_rotate=True):
+    def _table_transformer_job(self, ZM, auto_rotate=False):
         """
         Process table structure recognition.
 
@@ -383,9 +383,22 @@ class PdfParser:
                     it["top_rotated"] = it["top"]
                     it["bottom_rotated"] = it["bottom"]
 
-                    # For rotated tables, coordinate transformation to page space requires rotation
-                    # Since we already re-OCR'd on rotated image, keep simple processing here
-                    it["pn"] = poss[j][2]  # page number
+                    # Convert TSR coordinates to page coordinates
+                    # Step 1: Add crop position offset (poss[j][0] is left, poss[j][1] is top)
+                    it["x0"] = it["x0"] + poss[j][0]
+                    it["x1"] = it["x1"] + poss[j][0]
+                    it["top"] = it["top"] + poss[j][1]
+                    it["bottom"] = it["bottom"] + poss[j][1]
+
+                    # Step 2: Divide by zoom factor to get original PDF coordinates
+                    for n in ["x0", "x1", "top", "bottom"]:
+                        it[n] /= ZM
+
+                    # Step 3: Add cumulative page height for multi-page documents
+                    it["top"] += self.page_cum_height[i]
+                    it["bottom"] += self.page_cum_height[i]
+
+                    it["pn"] = i
                     it["layoutno"] = j
                     it["table_index"] = poss[j][3]  # table index
                     pg.append(it)

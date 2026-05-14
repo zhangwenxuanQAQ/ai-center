@@ -662,7 +662,7 @@ class TaskExecutor:
         
         if embedding_model:
             try:
-                vect, _ = embedding_model.encode(["test"])
+                vect, _, _ = embedding_model.encode(["test"])
                 return len(vect[0])
             except Exception as e:
                 logger.warning(f"通过encode方法获取向量维度失败: {e}")
@@ -808,10 +808,11 @@ class TaskExecutor:
         title_embeddings = None
         content_embeddings = None
         vector_size = 0
+        content_token_counts = []
         
         if len(titles) == len(contents) and len(titles) > 0:
             try:
-                title_embeddings, title_tokens = embedding_model.encode(titles[:1])
+                title_embeddings, title_tokens, _ = embedding_model.encode(titles[:1])
                 if len(titles) > 1:
                     title_embeddings = np.tile(title_embeddings[0], (len(titles), 1))
                 total_tokens += title_tokens
@@ -824,11 +825,13 @@ class TaskExecutor:
         for i in range(0, len(contents), batch_size):
             batch = contents[i:i + batch_size]
             try:
-                batch_embeddings, batch_tokens = embedding_model.encode(batch)
+                batch_embeddings, batch_tokens, batch_token_counts = embedding_model.encode(batch)
                 all_content_embeddings.append(batch_embeddings)
                 total_tokens += batch_tokens
+                content_token_counts.extend(batch_token_counts)
             except Exception as e:
                 logger.warning(f"批次 {i//batch_size} 向量化失败: {e}")
+                content_token_counts.extend([0] * len(batch))
                 continue
             
             progress = 0.60 + 0.25 * ((i + batch_size) / len(contents))
@@ -867,9 +870,9 @@ class TaskExecutor:
                 chunk["embedding"] = v
                 chunk[q_vec_field] = v
             
-            content = contents[i] if i < len(contents) else ""
-            chunk["tkn_cnt_int"] = len(content.split()) if content else 0
-            chunk["token_num_int"] = chunk["tkn_cnt_int"]
+            token_count = content_token_counts[i] if i < len(content_token_counts) else 0
+            chunk["tkn_cnt_int"] = token_count
+            chunk["token_num_int"] = token_count
         
         self._set_progress(task, 0.85, f"向量化完成，共处理 {len(chunks)} 个切片，token总数: {total_tokens}")
         return chunks

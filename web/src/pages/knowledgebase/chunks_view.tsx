@@ -73,7 +73,7 @@ const ChunksView: React.FC<ChunksViewProps> = ({ document, knowledgebaseId, onBa
     if (document && knowledgebaseId) {
       fetchChunks();
     }
-  }, [currentPage, pageSize, availableFilter]);
+  }, [currentPage, pageSize, availableFilter, keyword]);
 
   const fetchChunks = async () => {
     if (!document || !knowledgebaseId) return;
@@ -100,25 +100,23 @@ const ChunksView: React.FC<ChunksViewProps> = ({ document, knowledgebaseId, onBa
   };
 
   const handleSearch = () => {
-    setKeyword(searchInput);
-    setCurrentPage(1);
-    fetchChunks();
+    if (searchInput !== keyword) {
+      setKeyword(searchInput);
+      setCurrentPage(1);
+    }
   };
 
-  const handleToggleAvailable = async (chunkId: string, currentAvailable: number) => {
-    const newAvailable = currentAvailable === 1 ? 0 : 1;
+  const handleToggleAvailable = async (chunkId: string, newAvailable: number) => {
     try {
-      const success = await knowledgebaseService.toggleChunkAvailable(
+      await knowledgebaseService.toggleChunkAvailable(
         knowledgebaseId,
         chunkId,
         newAvailable
       );
-      if (success) {
-        message.success(newAvailable === 1 ? '已启用' : '已停用');
-        setChunks(chunks.map(chunk => 
-          chunk._id === chunkId ? { ...chunk, available_int: newAvailable } : chunk
-        ));
-      }
+      message.success(newAvailable === 1 ? '已启用' : '已停用');
+      setChunks(prevChunks => prevChunks.map(chunk => 
+        chunk._id === chunkId ? { ...chunk, available_int: newAvailable } : chunk
+      ));
     } catch (error) {
       console.error('切换可用状态失败:', error);
       message.error('操作失败');
@@ -147,7 +145,7 @@ const ChunksView: React.FC<ChunksViewProps> = ({ document, knowledgebaseId, onBa
         theme={theme}
         isExpanded={isExpanded}
         onToggleExpand={() => toggleExpand(chunk._id)}
-        onToggleAvailable={() => handleToggleAvailable(chunk._id, chunk.available_int)}
+        onToggleAvailable={(checked: boolean) => handleToggleAvailable(chunk._id, checked ? 1 : 0)}
       />
     );
   };
@@ -164,14 +162,27 @@ const ChunksView: React.FC<ChunksViewProps> = ({ document, knowledgebaseId, onBa
             返回
           </Button>
         )}
-        <span style={{ fontSize: 16, fontWeight: 500 }}>文档: {document?.name}</span>
+        <span style={{ fontSize: 16, fontWeight: 500, marginLeft: onBack ? 0 : 0 }}>{document?.file_name || document?.name}</span>
         <Input.Search
           placeholder="搜索切片内容"
           value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
+          onChange={(e) => {
+            const newValue = e.target.value;
+            setSearchInput(newValue);
+            if (newValue === '' && keyword !== '') {
+              setKeyword('');
+              setCurrentPage(1);
+            }
+          }}
           onSearch={handleSearch}
+          onBlur={() => {
+            if (searchInput !== keyword) {
+              handleSearch();
+            }
+          }}
           style={{ width: 280 }}
           enterButton={<SearchOutlined />}
+          allowClear
           size="middle"
         />
         <Select
@@ -233,7 +244,7 @@ interface ChunkCardProps {
   theme: 'light' | 'dark';
   isExpanded: boolean;
   onToggleExpand: () => void;
-  onToggleAvailable: () => void;
+  onToggleAvailable: (checked: boolean) => void;
 }
 
 const ChunkCard: React.FC<ChunkCardProps> = ({ chunk, theme, isExpanded, onToggleExpand, onToggleAvailable }) => {
@@ -255,9 +266,12 @@ const ChunkCard: React.FC<ChunkCardProps> = ({ chunk, theme, isExpanded, onToggl
         borderRadius: 8,
         boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
       }}
+      headStyle={{
+        textAlign: 'left'
+      }}
       title={
         chunk.token_num_int !== undefined ? (
-          <Tag color="blue">Token: {chunk.token_num_int}</Tag>
+          <span style={{ fontWeight: 500, fontSize: 13 }}>Token: {chunk.token_num_int}</span>
         ) : null
       }
       extra={
@@ -272,7 +286,7 @@ const ChunkCard: React.FC<ChunkCardProps> = ({ chunk, theme, isExpanded, onToggl
           </Button>
           <Switch
             checked={chunk.available_int === 1}
-            onChange={onToggleAvailable}
+            onChange={(checked) => onToggleAvailable(checked)}
             checkedChildren="启用"
             unCheckedChildren="停用"
           />
@@ -338,7 +352,9 @@ const ChunkCard: React.FC<ChunkCardProps> = ({ chunk, theme, isExpanded, onToggl
                   left: 0,
                   right: 0,
                   height: 40,
-                  background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.9))',
+                  background: theme === 'dark' 
+                    ? 'linear-gradient(to bottom, transparent, rgba(26,26,46,0.9))'
+                    : 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.9))',
                   pointerEvents: 'none'
                 }}
               />
