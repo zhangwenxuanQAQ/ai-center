@@ -709,3 +709,27 @@ body[data-theme="dark"] .ant-tooltip .ant-tooltip-arrow::before {
   background: rgba(30, 30, 30, 0.95) !important;
   border: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
+
+/* ==================== 夜间模式滚动条样式 ==================== */
+body[data-theme="dark"] ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+body[data-theme="dark"] ::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+body[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: rgba(102, 126, 234, 0.6);
+  border-radius: 4px;
+}
+
+body[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(102, 126, 234, 0.8);
+}
+
+body[data-theme="dark"] ::-webkit-scrollbar-corner {
+  background: rgba(255, 255, 255, 0.05);
+}

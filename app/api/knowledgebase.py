@@ -1106,3 +1106,76 @@ async def document_events(kb_id: str):
             "X-Accel-Buffering": "no",
         }
     )
+
+
+@router.get("/{kb_id}/chunks", response_model=ApiResponse)
+def get_chunks(
+    kb_id: str,
+    doc_id: str = Query(None, description="文档ID，可选，用于过滤特定文档的切片"),
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(10, ge=1, le=100, description="每页数量"),
+    available: int = Query(None, description="可用状态过滤，0=停用，1=启用，不传则不过滤"),
+    keyword: str = Query(None, description="关键词搜索，可选"),
+):
+    """
+    分页查询知识库切片列表
+    
+    Args:
+        kb_id: 知识库ID
+        doc_id: 文档ID（可选）
+        page: 页码
+        page_size: 每页数量
+        available: 可用状态过滤
+        keyword: 关键词搜索
+        
+    Returns:
+        ApiResponse: 包含切片列表和分页信息
+    """
+    try:
+        result = KnowledgebaseDocumentService.get_chunks(
+            kb_id=kb_id,
+            doc_id=doc_id,
+            page=page,
+            page_size=page_size,
+            available=available,
+            keyword=keyword
+        )
+        return ResponseUtil.success(data=result)
+    except Exception as e:
+        logger.error(f"查询切片列表失败: {e}")
+        return ResponseUtil.error(message=str(e))
+
+
+@router.post("/{kb_id}/chunk/{chunk_id}/toggle_available", response_model=ApiResponse)
+def toggle_chunk_available(
+    kb_id: str,
+    chunk_id: str,
+    available: int = Body(..., embed=True, description="可用状态，0=停用，1=启用"),
+):
+    """
+    切换切片的可用状态
+    
+    Args:
+        kb_id: 知识库ID
+        chunk_id: 切片ID（ES文档ID）
+        available: 可用状态
+        
+    Returns:
+        ApiResponse: 操作结果
+    """
+    try:
+        if available not in [0, 1]:
+            return ResponseUtil.error(message="available参数必须为0或1")
+            
+        success = KnowledgebaseDocumentService.toggle_chunk_available(
+            kb_id=kb_id,
+            chunk_id=chunk_id,
+            available=available
+        )
+        if success:
+            return ResponseUtil.success(message="更新成功")
+        else:
+            return ResponseUtil.error(message="更新失败")
+    except Exception as e:
+        logger.error(f"切换切片可用状态失败: {e}")
+        return ResponseUtil.error(message=str(e))

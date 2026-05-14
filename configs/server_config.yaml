@@ -6,7 +6,7 @@ mcp:
   port: 8082
   enabled: true
 mysql:
-  name: 'ai_center2'
+  name: 'ai_center'
   user: 'root'
   password: '123456'
   host: '10.9.44.5'

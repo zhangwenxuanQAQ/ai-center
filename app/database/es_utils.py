@@ -391,6 +391,8 @@ class ESUtils:
         query: Dict[str, Any],
         size: int = 10,
         from_: int = 0,
+        include_id: bool = False,
+        sort: List[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         """
         搜索文档（带重试机制）
@@ -400,18 +402,31 @@ class ESUtils:
             query: 查询条件
             size: 返回数量
             from_: 起始位置
+            include_id: 是否在结果中包含文档ID
+            sort: 排序条件
 
         Returns:
             List[Dict]: 文档列表
         """
         es_query = query.get("query", query) if isinstance(query, dict) else query
-        res = self._es_client.search(
-            index=index_name,
-            query=es_query,
-            size=size,
-            from_=from_,
-        )
+        search_params = {
+            "index": index_name,
+            "query": es_query,
+            "size": size,
+            "from_": from_,
+        }
+        if sort:
+            search_params["sort"] = sort
+        res = self._es_client.search(**search_params)
         hits = res.get('hits', {}).get('hits', [])
+        if include_id:
+            results = []
+            for hit in hits:
+                doc = hit.get('_source', {})
+                doc['_id'] = hit.get('_id')
+                doc['_score'] = hit.get('_score')
+                results.append(doc)
+            return results
         return [hit.get('_source', {}) for hit in hits]
 
     @retry_on_failure
@@ -509,6 +524,56 @@ class ESUtils:
         deleted_count = res.get('deleted', 0)
         logger.info(f"根据条件删除文档, 数量: {deleted_count}")
         return deleted_count
+
+    @retry_on_failure
+    def update_document(
+        self,
+        index_name: str,
+        doc_id: str,
+        doc: Dict[str, Any],
+        upsert: bool = False
+    ) -> bool:
+        """
+        更新文档（带重试机制）
+
+        Args:
+            index_name: 索引名称
+            doc_id: 文档ID
+            doc: 要更新的字段
+            upsert: 如果文档不存在是否创建
+
+        Returns:
+            bool: 是否更新成功
+        """
+        self._es_client.update(
+            index=index_name,
+            id=doc_id,
+            doc=doc,
+            doc_as_upsert=upsert
+        )
+        logger.info(f"更新文档成功: {doc_id}")
+        return True
+
+    @retry_on_failure
+    def get_document(self, index_name: str, doc_id: str) -> Optional[Dict[str, Any]]:
+        """
+        获取单个文档（带重试机制）
+
+        Args:
+            index_name: 索引名称
+            doc_id: 文档ID
+
+        Returns:
+            Optional[Dict]: 文档内容，不存在返回None
+        """
+        try:
+            res = self._es_client.get(index=index_name, id=doc_id)
+            return res.get('_source', {})
+        except Exception as e:
+            if "not_found" in str(e).lower():
+                logger.warning(f"文档不存在: {doc_id}")
+                return None
+            raise
 
     @retry_on_failure
     def count_documents(self, index_name: str, query: Dict[str, Any] = None) -> int:

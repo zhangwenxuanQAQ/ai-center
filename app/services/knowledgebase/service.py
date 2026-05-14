@@ -1009,6 +1009,125 @@ class KnowledgebaseDocumentService:
         
         return updated
 
+    @staticmethod
+    def get_chunks(
+        kb_id: str,
+        doc_id: str = None,
+        page: int = 1,
+        page_size: int = 10,
+        available: int = None,
+        keyword: str = None
+    ) -> Dict[str, Any]:
+        """
+        分页查询知识库切片列表
+        
+        Args:
+            kb_id: 知识库ID
+            doc_id: 文档ID（可选）
+            page: 页码
+            page_size: 每页数量
+            available: 可用状态过滤
+            keyword: 关键词搜索
+            
+        Returns:
+            Dict: 包含切片列表和分页信息
+        """
+        if not es_utils.is_available:
+            return {
+                "items": [],
+                "total": 0,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": 0
+            }
+        
+        must_conditions = []
+        
+        if doc_id:
+            must_conditions.append({"term": {"doc_id": doc_id}})
+        
+        if available is not None:
+            must_conditions.append({"term": {"available_int": available}})
+        
+        if keyword:
+            must_conditions.append({
+                "match": {
+                    "content_with_weight": {
+                        "query": keyword,
+                        "minimum_should_match": "75%"
+                    }
+                }
+            })
+        
+        query = {
+            "bool": {
+                "must": must_conditions if must_conditions else [{"match_all": {}}]
+            }
+        }
+        
+        from_ = (page - 1) * page_size
+        
+        sort = None
+        if keyword:
+            sort = [{"_score": {"order": "desc"}}]
+        
+        chunks = es_utils.search_documents(
+            index_name=kb_id,
+            query=query,
+            size=page_size,
+            from_=from_,
+            include_id=True,
+            sort=sort
+        )
+        
+        for chunk in chunks:
+            if 'tkn_cnt_int' in chunk:
+                chunk['token_num_int'] = chunk['tkn_cnt_int']
+        
+        total = es_utils.count_documents(index_name=kb_id, query=query)
+        
+        total_pages = (total + page_size - 1) // page_size if total > 0 else 0
+        
+        return {
+            "items": chunks,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages
+        }
+
+    @staticmethod
+    def toggle_chunk_available(
+        kb_id: str,
+        chunk_id: str,
+        available: int
+    ) -> bool:
+        """
+        切换切片的可用状态
+        
+        Args:
+            kb_id: 知识库ID
+            chunk_id: 切片ID（ES文档ID）
+            available: 可用状态
+            
+        Returns:
+            bool: 是否更新成功
+        """
+        if not es_utils.is_available:
+            logger.warning("ES不可用，无法更新切片状态")
+            return False
+        
+        try:
+            success = es_utils.update_document(
+                index_name=kb_id,
+                doc_id=chunk_id,
+                doc={"available_int": available}
+            )
+            return success
+        except Exception as e:
+            logger.error(f"更新切片可用状态失败: {e}")
+            return False
+
 
 class KnowledgebaseDocumentCategoryService:
     """

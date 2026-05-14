@@ -514,4 +514,49 @@ export const knowledgebaseService = {
     const queryString = params.length > 0 ? `?${params.join('&')}` : '';
     return http.get(`/aicenter/v1/knowledgebase/chunk_methods/available${queryString}`);
   },
+
+  getChunks: async (
+    kbId: string,
+    page: number = 1,
+    pageSize: number = 10,
+    docId?: string,
+    available?: number,
+    keyword?: string
+  ): Promise<{
+    items: any[];
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+  }> => {
+    const params = [`page=${page}`, `page_size=${pageSize}`];
+    if (docId) {
+      params.push(`doc_id=${docId}`);
+    }
+    if (available !== undefined && available !== null) {
+      params.push(`available=${available}`);
+    }
+    if (keyword) {
+      params.push(`keyword=${encodeURIComponent(keyword)}`);
+    }
+    const queryString = params.length > 0 ? `?${params.join('&')}` : '';
+    return http.get(`/aicenter/v1/knowledgebase/${kbId}/chunks${queryString}`) || {
+      items: [],
+      total: 0,
+      page: 1,
+      page_size: 10,
+      total_pages: 0
+    };
+  },
+
+  toggleChunkAvailable: async (
+    kbId: string,
+    chunkId: string,
+    available: number
+  ): Promise<boolean> => {
+    return http.post(
+      `/aicenter/v1/knowledgebase/${kbId}/chunk/${chunkId}/toggle_available`,
+      { available }
+    );
+  },
 };

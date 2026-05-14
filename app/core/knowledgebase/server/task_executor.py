@@ -20,6 +20,8 @@ import signal
 import threading
 import time
 import uuid
+import base64
+import io
 from datetime import datetime
 from enum import Enum
 from typing import Optional, Dict, Any, List
@@ -867,6 +869,7 @@ class TaskExecutor:
             
             content = contents[i] if i < len(contents) else ""
             chunk["tkn_cnt_int"] = len(content.split()) if content else 0
+            chunk["token_num_int"] = chunk["tkn_cnt_int"]
         
         self._set_progress(task, 0.85, f"向量化完成，共处理 {len(chunks)} 个切片，token总数: {total_tokens}")
         return chunks
@@ -913,8 +916,19 @@ class TaskExecutor:
             doc["chunk_id"] = f"{task.doc_id}_{i}"
             doc["create_time"] = str(datetime.now()).replace("T", " ")[:19]
             doc["create_timestamp_flt"] = datetime.now().timestamp()
+            doc["available_int"] = 1
 
             if "image" in doc:
+                img = doc["image"]
+                try:
+                    if img is not None:
+                        if hasattr(img, 'save'):
+                            buffer = io.BytesIO()
+                            img.save(buffer, format='PNG')
+                            img_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+                            doc["image_base64"] = img_base64
+                except Exception as e:
+                    logger.warning(f"图片转base64失败: {e}")
                 del doc["image"]
 
             doc.pop("embedding", None)
@@ -1100,6 +1114,7 @@ class TaskExecutor:
                 chunk["embedding"] = zero_vector
                 chunk[q_vec_field] = zero_vector
                 chunk["tkn_cnt_int"] = len(chunk.get("content_with_weight", "").split()) if chunk.get("content_with_weight") else 0
+                chunk["token_num_int"] = chunk["tkn_cnt_int"]
             self._set_progress(task, 0.85, "零向量准备完成")
 
         self._insert_es(chunks, task)

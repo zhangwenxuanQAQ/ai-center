@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Tabs } from 'antd';
 import { Layout, Tree, Table, Input, Select, Button, Tag, Spin, Pagination, Empty, Row, Col, Tooltip, Switch, message, Modal, Popconfirm, Form, TreeSelect, Popover, Descriptions, Dropdown } from 'antd';
 const { TextArea } = Input;
 import { SearchOutlined, PlusOutlined, FolderOutlined, FileTextOutlined, PlayCircleOutlined, PauseCircleOutlined, ReloadOutlined, UnorderedListOutlined, EditOutlined, DownloadOutlined, DeleteOutlined, UpOutlined, DownOutlined, CloseOutlined, SettingOutlined } from '@ant-design/icons';
@@ -7,6 +8,7 @@ import { knowledgebaseService, Knowledgebase, KnowledgebaseDocument, Knowledgeba
 import { DOCUMENT_CHUNK_METHOD } from '../../constants/knowledgebase';
 import KnowledgebaseDocumentSetting from './knowledgebase_document_setting';
 import ChunkMethodModal from './chunk-method-modal';
+import ChunksView from './chunks_view';
 import '../../styles/common.css';
 import './knowledgebase.less';
 
@@ -38,6 +40,10 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
   const [documentConstants, setDocumentConstants] = useState<any>(null);
   const [chunkModalVisible, setChunkModalVisible] = useState(false);
   const [chunkModalDocument, setChunkModalDocument] = useState<KnowledgebaseDocument | null>(null);
+  
+  // 查看切片相关状态
+  const [viewingChunks, setViewingChunks] = useState(false);
+  const [selectedDocumentForChunks, setSelectedDocumentForChunks] = useState<KnowledgebaseDocument | null>(null);
   
   // 分类管理相关状态
   const [isCategoryModalVisible, setIsCategoryModalVisible] = useState(false);
@@ -849,6 +855,10 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
                 type="text"
                 size="small" 
                 icon={<UnorderedListOutlined />}
+                onClick={() => {
+                  setSelectedDocumentForChunks(record);
+                  setViewingChunks(true);
+                }}
               />
             </Tooltip>
             <Tooltip title="修改切片方法">
@@ -909,7 +919,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
 
   return (
     <Layout className="knowledgebase-layout" style={{ height: '100%' }}>
-      {!showSetting && (
+      {!showSetting && !viewingChunks && (
         <LeftSider
           width={260}
           className={`category-sider ${theme === 'dark' ? 'dark' : 'light'}`}
@@ -955,6 +965,14 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
             onBack={() => { setShowSetting(false); setEditingDocument(undefined); fetchCategories(); }}
             onSave={() => { setShowSetting(false); setEditingDocument(undefined); fetchDocuments(); fetchCategories(); }}
           />
+        ) : viewingChunks ? (
+          <div style={{ height: '100%', padding: 12 }}>
+            <ChunksView 
+              document={selectedDocumentForChunks!} 
+              knowledgebaseId={knowledgebase.id}
+              onBack={() => setViewingChunks(false)}
+            />
+          </div>
         ) : (
         <div style={{
           height: '100%',

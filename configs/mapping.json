@@ -223,6 +223,16 @@
             "type": "binary"
           }
         }
+      },
+      {
+        "base64": {
+          "match": "*_base64",
+          "mapping": {
+            "type": "text",
+            "index": false,
+            "store": true
+          }
+        }
       }
     ]
   }

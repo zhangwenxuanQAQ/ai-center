@@ -1097,6 +1097,166 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
   }
 }
 
+.md-editor-container {
+  &.dark {
+    .wmde-markdown {
+      background: transparent;
+      color: #fff;
+      text-align: left;
+      font-size: 14px;
+      
+      strong,
+      b {
+        color: #ffffff !important;
+        font-weight: 600 !important;
+      }
+      
+      em,
+      i {
+        color: #ffffff !important;
+      }
+      
+      code {
+        background: rgba(255, 255, 255, 0.1) !important;
+        color: #ffffff !important;
+      }
+      
+      pre {
+        background: rgba(255, 255, 255, 0.05) !important;
+        color: #ffffff !important;
+      }
+      
+      h1, h2, h3, h4, h5, h6 {
+        color: #fff !important;
+        border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+      }
+      
+      a {
+        color: #667eea !important;
+      }
+      
+      .anchor {
+        display: none !important;
+      }
+      
+      blockquote {
+        border-left-color: #667eea !important;
+        color: rgba(255, 255, 255, 0.85) !important;
+      }
+      
+      table {
+        th, td {
+          border-color: rgba(255, 255, 255, 0.1) !important;
+        }
+        
+        th {
+          background: rgba(255, 255, 255, 0.05) !important;
+          color: #fff !important;
+        }
+        
+        tr {
+          background: transparent;
+        }
+      }
+      
+      hr {
+        border-color: rgba(255, 255, 255, 0.1) !important;
+      }
+      
+      img {
+        border-radius: 8px;
+      }
+      
+      ul, ol {
+        li {
+          color: #fff !important;
+        }
+      }
+    }
+  }
+  
+  &.light {
+    .wmde-markdown {
+      background: transparent;
+      color: #000;
+      text-align: left;
+      font-size: 14px;
+      
+      strong,
+      b {
+        color: #000 !important;
+        font-weight: 600 !important;
+      }
+      
+      em,
+      i {
+        color: #000 !important;
+      }
+      
+      code {
+        background: rgba(0, 0, 0, 0.06) !important;
+        color: #000 !important;
+      }
+      
+      pre {
+        background: rgba(0, 0, 0, 0.04) !important;
+        color: #000 !important;
+      }
+      
+      h1, h2, h3, h4, h5, h6 {
+        color: #000 !important;
+        border-bottom-color: rgba(0, 0, 0, 0.1) !important;
+      }
+      
+      a {
+        color: #667eea !important;
+      }
+      
+      blockquote {
+        border-left-color: #667eea !important;
+        color: rgba(0, 0, 0, 0.65) !important;
+      }
+      
+      table {
+        border-color: rgba(0, 0, 0, 0.2) !important;
+        
+        th, td {
+          border-color: rgba(0, 0, 0, 0.2) !important;
+          color: #000 !important;
+        }
+        
+        th {
+          background: rgba(0, 0, 0, 0.08) !important;
+          color: #000 !important;
+          font-weight: 600 !important;
+        }
+        
+        td {
+          background: rgba(0, 0, 0, 0.02) !important;
+        }
+        
+        tr {
+          background: transparent;
+        }
+        
+        tr:nth-child(even) td {
+          background: rgba(0, 0, 0, 0.04) !important;
+        }
+      }
+      
+      hr {
+        border-color: rgba(0, 0, 0, 0.1) !important;
+      }
+      
+      ul, ol {
+        li {
+          color: #000 !important;
+        }
+      }
+    }
+  }
+}
+
 .knowledgebase-detail-tabs {
   display: flex;
   flex-direction: column;
