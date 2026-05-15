@@ -270,9 +270,7 @@ const ChunkCard: React.FC<ChunkCardProps> = ({ chunk, theme, isExpanded, onToggl
         textAlign: 'left'
       }}
       title={
-        chunk.token_num_int !== undefined ? (
-          <span style={{ fontWeight: 500, fontSize: 13 }}>Token: {chunk.token_num_int}</span>
-        ) : null
+        <span style={{ fontWeight: 500, fontSize: 13 }}>字符数: {chunk.content_with_weight?.length || 0}</span>
       }
       extra={
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

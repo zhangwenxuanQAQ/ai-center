@@ -63,22 +63,22 @@ class EmbeddingModel(BaseLLM):
         except Exception as e:
             return {'error': str(e)}
     
-    def encode(self, texts: List[str]) -> Tuple[np.ndarray, int, List[int]]:
+    def encode(self, texts: List[str]) -> Tuple[np.ndarray, List[int]]:
         """
-        批量编码文本，返回向量数组、总token数和每个文本的token数列表
+        批量编码文本，返回向量数组和每个输入的token数列表
         
         Args:
             texts: 文本列表
             
         Returns:
-            Tuple[np.ndarray, int, List[int]]: 向量数组、总token数、每个文本的token数列表
+            Tuple[np.ndarray, List[int]]: 向量数组和每个输入的token数列表
         """
         from app.core.knowledgebase.rag.settings import EMBEDDING_BATCH_SIZE
+        from app.utils.token_utils import num_tokens_from_string
         
         texts = [truncate(t, self.max_length) for t in texts]
         embeddings = []
-        total_tokens = 0
-        token_counts = []
+        token_counts = [num_tokens_from_string(t) for t in texts]
         
         for i in range(0, len(texts), EMBEDDING_BATCH_SIZE):
             batch = texts[i:i + EMBEDDING_BATCH_SIZE]
@@ -89,14 +89,10 @@ class EmbeddingModel(BaseLLM):
                     encoding_format="float"
                 )
                 embeddings.extend([d.embedding for d in response.data])
-                batch_tokens = self._total_token_count(response)
-                total_tokens += batch_tokens
-                per_text_tokens = batch_tokens // len(batch) if len(batch) > 0 else 0
-                token_counts.extend([per_text_tokens] * len(batch))
             except Exception as e:
                 raise e
         
-        return np.array(embeddings), total_tokens, token_counts
+        return np.array(embeddings), token_counts
     
     def encode_queries(self, text: str) -> Tuple[np.ndarray, int]:
         """

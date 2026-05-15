@@ -662,7 +662,7 @@ class TaskExecutor:
         
         if embedding_model:
             try:
-                vect, _, _ = embedding_model.encode(["test"])
+                vect, _ = embedding_model.encode(["test"])
                 return len(vect[0])
             except Exception as e:
                 logger.warning(f"通过encode方法获取向量维度失败: {e}")
@@ -808,42 +808,39 @@ class TaskExecutor:
         title_embeddings = None
         content_embeddings = None
         vector_size = 0
-        content_token_counts = []
         
         if len(titles) == len(contents) and len(titles) > 0:
             try:
-                title_embeddings, title_tokens, _ = embedding_model.encode(titles[:1])
+                title_embeddings, title_token_counts = embedding_model.encode(titles[:1])
                 if len(titles) > 1:
                     title_embeddings = np.tile(title_embeddings[0], (len(titles), 1))
-                total_tokens += title_tokens
+                total_tokens += sum(title_token_counts)
             except Exception as e:
                 logger.warning(f"标题向量化失败: {e}")
                 title_embeddings = None
         
-        batch_size = 16
-        all_content_embeddings = []
-        for i in range(0, len(contents), batch_size):
-            batch = contents[i:i + batch_size]
+        from app.core.knowledgebase.rag.settings import EMBEDDING_BATCH_SIZE
+        content_embeddings = np.array([])
+        all_token_counts = []
+        for i in range(0, len(contents), EMBEDDING_BATCH_SIZE):
+            batch = contents[i:i+EMBEDDING_BATCH_SIZE]
             try:
-                batch_embeddings, batch_tokens, batch_token_counts = embedding_model.encode(batch)
-                all_content_embeddings.append(batch_embeddings)
-                total_tokens += batch_tokens
-                content_token_counts.extend(batch_token_counts)
+                batch_embeddings, batch_token_counts = embedding_model.encode(batch)
+                if len(content_embeddings) == 0:
+                    content_embeddings = batch_embeddings
+                else:
+                    content_embeddings = np.concatenate((content_embeddings, batch_embeddings), axis=0)
+                all_token_counts.extend(batch_token_counts)
+                total_tokens += sum(batch_token_counts)
             except Exception as e:
-                logger.warning(f"批次 {i//batch_size} 向量化失败: {e}")
-                content_token_counts.extend([0] * len(batch))
-                continue
+                logger.warning(f"批次向量化失败: {e}")
+                raise
             
-            progress = 0.60 + 0.25 * ((i + batch_size) / len(contents))
-            self._set_progress(task, progress, f"向量化进度: {min(i + batch_size, len(contents))}/{len(contents)}")
-        
-        if all_content_embeddings:
-            content_embeddings = np.concatenate(all_content_embeddings, axis=0)
-        else:
-            content_embeddings = None
+            progress = 0.60 + 0.25 * ((i+EMBEDDING_BATCH_SIZE) / len(contents))
+            self._set_progress(task, progress, f"向量化进度: {min(i+EMBEDDING_BATCH_SIZE, len(contents))}/{len(contents)}")
         
         # 确保至少有一个向量源可用
-        if content_embeddings is not None and len(content_embeddings) > 0:
+        if len(content_embeddings) > 0:
             vector_size = len(content_embeddings[0])
         elif title_embeddings is not None and len(title_embeddings) > 0:
             vector_size = len(title_embeddings[0])
@@ -853,26 +850,27 @@ class TaskExecutor:
         q_vec_field = f"q_{vector_size}_vec"
         
         title_w = float(filename_embd_weight)
-        if (title_embeddings is not None and content_embeddings is not None and 
+        if (title_embeddings is not None and len(content_embeddings) > 0 and 
             title_embeddings.ndim == 2 and content_embeddings.ndim == 2 and 
             title_embeddings.shape == content_embeddings.shape):
             final_embeddings = title_w * title_embeddings + (1 - title_w) * content_embeddings
-        elif content_embeddings is not None:
+        elif len(content_embeddings) > 0:
             final_embeddings = content_embeddings
         elif title_embeddings is not None:
             final_embeddings = np.tile(title_embeddings[0] if len(title_embeddings) > 0 else np.zeros(vector_size), (len(chunks), 1))
         else:
             final_embeddings = np.zeros((len(chunks), vector_size))
         
+        assert len(final_embeddings) == len(chunks), f"向量数量({len(final_embeddings)})与切片数量({len(chunks)})不一致"
+        assert len(all_token_counts) == len(chunks), f"token数量({len(all_token_counts)})与切片数量({len(chunks)})不一致"
+        
         for i, chunk in enumerate(chunks):
-            if i < len(final_embeddings):
-                v = final_embeddings[i].tolist()
-                chunk["embedding"] = v
-                chunk[q_vec_field] = v
-            
-            token_count = content_token_counts[i] if i < len(content_token_counts) else 0
-            chunk["tkn_cnt_int"] = token_count
-            chunk["token_num_int"] = token_count
+            v = final_embeddings[i].tolist()
+            chunk["embedding"] = v
+            chunk[q_vec_field] = v
+            chunk["tkn_cnt_int"] = all_token_counts[i]
+            chunk["token_num_int"] = chunk["tkn_cnt_int"]
+            chunk["char_count_int"] = len(contents[i]) if i < len(contents) else 0
         
         self._set_progress(task, 0.85, f"向量化完成，共处理 {len(chunks)} 个切片，token总数: {total_tokens}")
         return chunks
@@ -1079,6 +1077,7 @@ class TaskExecutor:
           0.60 ~ 0.85: 向量化 (_embedding_chunks)
           0.85 ~ 1.00: ES写入 (_insert_es)
         """
+        from app.utils.token_utils import num_tokens_from_string
         logger.info(f"开始执行切片流水线: {task.task_id}, 文档: {task.filename}")
 
         self._set_progress(task, 0.0, "开始读取文件...")
@@ -1116,7 +1115,7 @@ class TaskExecutor:
             for chunk in chunks:
                 chunk["embedding"] = zero_vector
                 chunk[q_vec_field] = zero_vector
-                chunk["tkn_cnt_int"] = len(chunk.get("content_with_weight", "").split()) if chunk.get("content_with_weight") else 0
+                chunk["tkn_cnt_int"] = num_tokens_from_string(chunk.get("content_with_weight", ""))
                 chunk["token_num_int"] = chunk["tkn_cnt_int"]
             self._set_progress(task, 0.85, "零向量准备完成")
 
