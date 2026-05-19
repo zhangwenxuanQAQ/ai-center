@@ -4,9 +4,13 @@ Rerank模型实现
 使用OpenAI SDK结构实现文本重排序接口
 """
 
-from typing import Dict, Any, List
+import logging
+from typing import Dict, Any, List, Tuple
+import numpy as np
 from openai import OpenAI
 from app.core.llm_model.base import BaseLLM
+
+logger = logging.getLogger(__name__)
 
 
 class RerankModel(BaseLLM):
@@ -22,11 +26,90 @@ class RerankModel(BaseLLM):
             model_config: 模型配置，包含api_key、endpoint等信息
         """
         super().__init__(model_config)
-        # 初始化OpenAI客户端
         self.client = OpenAI(
             api_key=self.api_key,
             base_url=self.endpoint
         )
+    
+    def similarity(self, query: str, texts: List[str]) -> Tuple[np.ndarray, int]:
+        """
+        计算查询与文本列表的相似度
+        
+        参考ragflow的OpenAI_APIRerank.similarity实现，通过Rerank API计算相似度，
+        并对结果进行归一化处理
+        
+        Args:
+            query: 查询文本
+            texts: 文本列表
+            
+        Returns:
+            Tuple[np.ndarray, int]: (相似度数组, token计数)
+        """
+        if not texts:
+            return np.array([]), 0
+        
+        if not self._validate_config():
+            return np.zeros(len(texts)), 0
+        
+        try:
+            import httpx
+            
+            headers = {
+                'Content-Type': 'application/json',
+                'Authorization': f'Bearer {self.api_key}'
+            }
+            
+            endpoint = self.endpoint.rstrip('/')
+            if 'rerank' not in endpoint:
+                if 'compatible-api' in endpoint:
+                    request_url = f'{endpoint}/reranks/rerank'
+                else:
+                    request_url = f'{endpoint}/rerank'
+            else:
+                request_url = endpoint
+            
+            truncated_texts = [t[:500] if len(t) > 500 else t for t in texts]
+            
+            token_count = sum(len(t.split()) for t in truncated_texts)
+            
+            with httpx.Client(timeout=30) as client:
+                response = client.post(
+                    request_url,
+                    headers=headers,
+                    json={
+                        'model': self.model_name,
+                        'query': query,
+                        'documents': truncated_texts,
+                        'top_n': len(truncated_texts),
+                        'return_documents': False
+                    }
+                )
+                response.raise_for_status()
+                result = response.json()
+                
+                rank = np.zeros(len(texts), dtype=float)
+                results = result.get('results', [])
+                for d in results:
+                    idx = d.get('index', -1)
+                    score = d.get('relevance_score', 0.0)
+                    if score is None:
+                        score = 0.0
+                    if 0 <= idx < len(rank):
+                        rank[idx] = float(score)
+                
+                min_rank = np.min(rank)
+                max_rank = np.max(rank)
+                
+                if not np.isclose(min_rank, max_rank, atol=1e-3):
+                    rank = (rank - min_rank) / (max_rank - min_rank)
+                else:
+                    rank = np.zeros_like(rank)
+                
+                return rank, token_count
+                
+        except Exception as e:
+            logger.warning(f"Rerank similarity计算失败: {e}")
+            return np.zeros(len(texts)), 0
     
     def generate(self, prompt: str, **kwargs) -> Dict[str, Any]:
         """

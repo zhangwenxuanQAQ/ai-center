@@ -8,6 +8,7 @@ from typing import List
 from fastapi import APIRouter, Body, Query, UploadFile, File, Form, Request
 from fastapi.responses import StreamingResponse
 from app.database.models import KnowledgebaseDocumentCategory
+from app.services.exceptions import ResourceNotFoundError
 from app.services.knowledgebase.service import (
     KnowledgebaseCategoryService,
     KnowledgebaseService,
@@ -15,6 +16,7 @@ from app.services.knowledgebase.service import (
     KnowledgebaseDocumentCategoryService
 )
 from app.services.knowledgebase.document.service import DocumentService
+from app.core.knowledgebase.retrieval_service import RetrievalService
 from app.services.knowledgebase.dto import (
     KnowledgebaseCategoryCreate, KnowledgebaseCategoryUpdate, KnowledgebaseCategory as CategorySchema,
     KnowledgebaseCreate, KnowledgebaseUpdate, Knowledgebase as KbSchema,
@@ -22,7 +24,7 @@ from app.services.knowledgebase.dto import (
     KnowledgebaseDocumentCategoryCreate, KnowledgebaseDocumentCategoryUpdate, KnowledgebaseDocumentCategory as DocCategorySchema
 )
 from app.utils.response import ResponseUtil, ApiResponse
-from app.constants.knowledgebase_constants import FILE_NAME_LEN_LIMIT
+from app.constants.knowledgebase_constants import FILE_NAME_LEN_LIMIT, RETRIEVAL_CONFIGS
 from app.constants.knowledgebase_document_constants import (
     CHUNK_METHOD_LABELS, CHUNK_METHOD_CONFIGS, SOURCE_TYPE_LABELS, SourceType, SourceConfigDefinition,
     get_available_chunk_methods, get_default_chunk_method, DOCUMENT_RUNNING_STATUS
@@ -68,6 +70,17 @@ def get_document_constants():
         "source_configs": source_configs,
         "running_status": DOCUMENT_RUNNING_STATUS,
     })
+
+
+@router.get("/retrieval_configs", response_model=ApiResponse)
+def get_retrieval_configs():
+    """
+    获取检索配置常量
+
+    Returns:
+        ApiResponse: 包含检索配置项的响应，每个配置项包含key、label、type、min、max、step、default、options等字段
+    """
+    return ResponseUtil.success(data=RETRIEVAL_CONFIGS)
 
 
 @router.get("/chunk_methods/available", response_model=ApiResponse)
@@ -271,6 +284,89 @@ def get_knowledgebases(
                 pass
         kbs_data.append(kb_dict)
     return ResponseUtil.success(data={"data": kbs_data, "total": total}, message="获取知识库列表成功")
+
+
+@router.post("/retrieval", response_model=ApiResponse)
+def retrieval(
+    kb_ids: List[str] = Body(..., description="知识库ID列表"),
+    question: str = Body(..., description="查询文本"),
+    doc_ids: List[str] = Body(None, description="文档ID列表，可选，用于限定检索范围"),
+    page: int = Body(1, ge=1, description="页码，从1开始"),
+    page_size: int = Body(10, ge=1, le=100, description="每页数量"),
+    top_k: int = Body(1024, ge=1, description="召回数量，从ES中检索的候选数量"),
+    vector_similarity_threshold: float = Body(None, ge=0, le=1, description="文本相似度阈值，为空则使用知识库配置或默认0.2"),
+    keyword_similarity_threshold: float = Body(None, ge=0, le=1, description="关键词相似度阈值，为空则使用知识库配置或默认0.0"),
+    vector_similarity_weight: float = Body(None, ge=0, le=1, description="向量相似度权重(0~1)，为空则使用知识库配置或默认0.7"),
+    sort_by: str = Body(None, description="排序方式：sim=混合相似度，vsim=向量相似度，tsim=关键词相似度"),
+    embedding_model_id: str = Body(None, description="Embedding模型ID，为空则使用知识库配置"),
+    rerank_model_id: str = Body(None, description="Rerank模型ID，为空则使用知识库配置"),
+):
+    """
+    知识库检索
+
+    基于向量+关键词的混合检索，支持Rerank模型重排序。
+    如果知识库配置了Rerank模型，则使用模型重排序；否则使用本地混合相似度排序。
+
+    检索结果包含每个切片的混合相似度、向量相似度和关键词相似度。
+
+    Args:
+        kb_ids: 知识库ID列表
+        question: 查询文本（必填）
+        doc_ids: 文档ID列表（可选）
+        page: 页码
+        page_size: 每页数量
+        top_k: 召回数量
+        vector_similarity_threshold: 文本相似度阈值
+        keyword_similarity_threshold: 关键词相似度阈值
+        vector_similarity_weight: 向量相似度权重
+        sort_by: 排序方式
+        embedding_model_id: Embedding模型ID
+        rerank_model_id: Rerank模型ID
+
+    Returns:
+        ApiResponse: {
+            "total": 符合条件的总数,
+            "chunks": [
+                {
+                    "chunk_id": 切片ID,
+                    "content_with_weight": 切片内容,
+                    "doc_id": 文档ID,
+                    "docnm_kwd": 文档名称,
+                    "kb_id": 知识库ID,
+                    "similarity": 混合相似度,
+                    "vector_similarity": 向量相似度,
+                    "term_similarity": 关键词相似度,
+                }
+            ]
+        }
+    """
+    try:
+        if not question or not question.strip():
+            return ResponseUtil.error(message="查询文本不能为空")
+
+        if sort_by and sort_by not in ("sim", "vsim", "tsim"):
+            return ResponseUtil.error(message="sort_by参数必须为sim、vsim或tsim")
+
+        result = RetrievalService.retrieval(
+            kb_ids=kb_ids,
+            question=question.strip(),
+            doc_ids=doc_ids,
+            page=page,
+            page_size=page_size,
+            top_k=top_k,
+            vector_similarity_threshold=vector_similarity_threshold,
+            keyword_similarity_threshold=keyword_similarity_threshold,
+            vector_similarity_weight=vector_similarity_weight,
+            sort_by=sort_by,
+            embedding_model_id=embedding_model_id,
+            rerank_model_id=rerank_model_id,
+        )
+        return ResponseUtil.success(data=result)
+    except ResourceNotFoundError as e:
+        return ResponseUtil.error(message=str(e))
+    except Exception as e:
+        logger.error(f"知识库检索失败: {e}")
+        return ResponseUtil.error(message=str(e))
 
 
 @router.get("/{kb_id}", response_model=ApiResponse)
@@ -1179,3 +1275,5 @@ def toggle_chunk_available(
     except Exception as e:
         logger.error(f"切换切片可用状态失败: {e}")
         return ResponseUtil.error(message=str(e))
+
+

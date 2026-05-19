@@ -559,4 +559,53 @@ export const knowledgebaseService = {
       { available }
     );
   },
+
+  retrieve: async (
+    kbIds: string[],
+    question: string,
+    config: Record<string, any> = {}
+  ): Promise<{
+    total: number;
+    chunks: Array<{
+      chunk_id: string;
+      content_with_weight: string;
+      content_ltks: string;
+      doc_id: string;
+      docnm_kwd: string;
+      kb_id: string;
+      important_kwd: string[];
+      image_id: string;
+      similarity: number;
+      vector_similarity: number;
+      term_similarity: number;
+    }>;
+  }> => {
+    return http.post(
+      `/aicenter/v1/knowledgebase/retrieval`,
+      {
+        kb_ids: kbIds,
+        question,
+        page: config.page || 1,
+        page_size: config.page_size || 10,
+        top_k: config.top_k || 1024,
+        vector_similarity_threshold: config.vector_similarity,
+        keyword_similarity_threshold: config.keyword_similarity,
+        vector_similarity_weight: config.vector_similarity_weight,
+        sort_by: config.sort_by,
+      }
+    ) || { total: 0, chunks: [] };
+  },
+
+  getRetrievalConfigs: async (): Promise<Array<{
+    key: string;
+    label: string;
+    type: string;
+    min?: number;
+    max?: number;
+    step?: number;
+    default: any;
+    options?: Array<{ value: string; label: string }>;
+  }>> => {
+    return http.get('/aicenter/v1/knowledgebase/retrieval_configs') || [];
+  },
 };

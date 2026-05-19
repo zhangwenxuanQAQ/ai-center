@@ -902,5 +902,13 @@ self.total_token_count(res)就是模型返回的["usage"]["total_tokens"]字段�
 - 更新es_utils.py, 支持上述功能
 
 
+## 现在开始实现向量检索后端接口
+- 修改es_utils.py的vector_search方法，需要支持传入向量模型，rerank模型，分页，排序条件，topk，文本相似度阈值，关键词相似度阈值
+- 向量检索需要重排序，如果有rerank模型则需要rerank模型对检索结果进行重排序，没有则本地排序。
+- 检索除了返回切片数据外还需要返回每个切片的混合相似度，文本相似度，关键词相似度。
 
-PDFParser的_table_transformer_job方法中计算it[top]的逻辑有问题，请参考ragflow源码（源码路径在F:\project\ragflow-0.22.1\deepdoc\parser\pdf_parser.py）修改本项目方法
+请参考ragflow源码（源码路径在F:\project\ragflow-0.22.1\rag\nlp\search.py）中的方法实现本项目方法，
+ragflow源码主要阅读一下方法：
+- retrieval
+- search
+- rerank

@@ -18,6 +18,7 @@ from .search import (
     add_positions,
     tokenize_doc,
 )
+from .term_weight import Dealer as TermWeightDealer
 from app.utils.token_utils import num_tokens_from_string
 
 __all__ = [
@@ -38,4 +39,5 @@ __all__ = [
     "tokenize_table",
     "add_positions",
     "tokenize_doc",
+    "TermWeightDealer",
 ]

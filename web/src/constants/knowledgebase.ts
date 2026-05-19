@@ -20,6 +20,16 @@ export const RETRIEVAL_CONFIGS = [
     description: "关键词相似度阈值，用于筛选检索结果"
   },
   {
+    key: "vector_similarity_weight",
+    label: "向量相似度权重",
+    type: "slider",
+    min: 0,
+    max: 1,
+    step: 0.01,
+    default: 0.7,
+    description: "向量相似度权重，关键词相似度权重=1-此值"
+  },
+  {
     key: "top_k",
     label: "召回数量",
     type: "slider",

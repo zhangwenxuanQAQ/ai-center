@@ -1,14 +1,25 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Form, Input, Select, TreeSelect, Button, Switch, message, Row, Col, Upload, Slider, InputNumber, Tooltip, Modal, Tag } from 'antd';
+import { Form, Input, Select, TreeSelect, Button, Switch, message, Row, Col, Upload, Slider, InputNumber, Tooltip, Modal, Tag, Spin } from 'antd';
 const { TextArea } = Input;
 const { Option } = Select;
 import { SaveOutlined, UndoOutlined, UploadOutlined, InfoCircleOutlined, ApiOutlined, DatabaseOutlined, QuestionCircleOutlined, EyeOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { knowledgebaseService, Knowledgebase, KnowledgebaseCategory } from '../../services/knowledgebase';
 import { llmModelService, LLMModel } from '../../services/llm_model';
-import { RETRIEVAL_CONFIGS } from '../../constants/knowledgebase';
 import '../../styles/common.css';
 import './knowledgebase.less';
 import { getDefaultAvatar } from '../../utils/avatar';
+
+interface RetrievalConfigItem {
+  key: string;
+  label: string;
+  type: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  default: any;
+  description?: string;
+  options?: Array<{ value: string; label: string }>;
+}
 
 const getProviderAvatar = (provider: string): string => {
   return getDefaultAvatar();
@@ -24,6 +35,7 @@ const KnowledgebaseSetting: React.FC<KnowledgebaseSettingProps> = ({ knowledgeba
   const [form] = Form.useForm();
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [loading, setLoading] = useState(false);
+  const [configLoading, setConfigLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [categories, setCategories] = useState<KnowledgebaseCategory[]>([]);
   const [embeddingModels, setEmbeddingModels] = useState<LLMModel[]>([]);
@@ -32,6 +44,7 @@ const KnowledgebaseSetting: React.FC<KnowledgebaseSettingProps> = ({ knowledgeba
   const [originalData, setOriginalData] = useState<Partial<Knowledgebase>>({});
   const [hasChanges, setHasChanges] = useState(false);
   const [retrievalConfig, setRetrievalConfig] = useState<Record<string, any>>({});
+  const [retrievalConfigs, setRetrievalConfigs] = useState<RetrievalConfigItem[]>([]);
   const [avatarPreview, setAvatarPreview] = useState<string>('');
   const [modelTypes, setModelTypes] = useState<Record<string, string>>({});
   const isInitialized = useRef(false);
@@ -61,13 +74,14 @@ const KnowledgebaseSetting: React.FC<KnowledgebaseSettingProps> = ({ knowledgeba
     fetchCategories();
     fetchModels();
     fetchModelTypes();
+    fetchRetrievalConfigs();
   }, [knowledgebase]);
 
   useEffect(() => {
     if (embeddingModels.length > 0 || rerankModels.length > 0 || textModels.length > 0) {
       initializeForm();
     }
-  }, [embeddingModels, rerankModels, textModels]);
+  }, [embeddingModels, rerankModels, textModels, retrievalConfigs]);
 
   const fetchCategories = async () => {
     try {
@@ -99,6 +113,15 @@ const KnowledgebaseSetting: React.FC<KnowledgebaseSettingProps> = ({ knowledgeba
     }
   };
 
+  const fetchRetrievalConfigs = async () => {
+    try {
+      const configs = await knowledgebaseService.getRetrievalConfigs();
+      setRetrievalConfigs(configs);
+    } catch (error) {
+      console.error('Failed to fetch retrieval configs:', error);
+    }
+  };
+
   const getModelTypeName = (modelType: string): string => {
     return modelTypes[modelType] || modelType;
   };
@@ -111,11 +134,13 @@ const KnowledgebaseSetting: React.FC<KnowledgebaseSettingProps> = ({ knowledgeba
     let configToSet: Record<string, any> = {};
     if (knowledgebase.retrieval_config) {
       configToSet = knowledgebase.retrieval_config;
-    } else {
-      RETRIEVAL_CONFIGS.forEach(config => {
-        configToSet[config.key] = config.default;
-      });
     }
+    // 使用后端配置的默认值填充缺失的配置项
+    retrievalConfigs.forEach(config => {
+      if (!(config.key in configToSet)) {
+        configToSet[config.key] = config.default;
+      }
+    });
 
     const statusValue = knowledgebase.status !== undefined ? knowledgebase.status : true;
 
@@ -710,7 +735,13 @@ const KnowledgebaseSetting: React.FC<KnowledgebaseSettingProps> = ({ knowledgeba
             </div>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1 }}>
-              {RETRIEVAL_CONFIGS.map(param => renderRetrievalConfig(param))}
+              {configLoading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
+                  <Spin size="small" />
+                </div>
+              ) : (
+                retrievalConfigs.map(param => renderRetrievalConfig(param))
+              )}
             </div>
           </div>
         </div>

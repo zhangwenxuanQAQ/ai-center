@@ -4,6 +4,33 @@
 
 FILE_NAME_LEN_LIMIT = 255
 
+CHUNK_FIELDS = [
+    "chunk_id",
+    "doc_id",
+    "kb_id",
+    "docnm_kwd",
+    "doc_name",
+    "create_time",
+    "create_timestamp_flt",
+    "available_int",
+    "content_with_weight",
+    "content_ltks",
+    "content_sm_ltks",
+    "title_tks",
+    "title_sm_tks",
+    "important_kwd",
+    "important_tks",
+    "question_tks",
+    "page_num_int",
+    "position_int",
+    "top_int",
+    "tkn_cnt_int",
+    "token_num_int",
+    "char_count_int",
+    "doc_type_kwd",
+    "image_base64",
+]
+
 RETRIEVAL_CONFIGS = [{
             "key": "vector_similarity",
             "label": "文本相似度阈值",
