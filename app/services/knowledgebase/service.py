@@ -980,6 +980,14 @@ class KnowledgebaseDocumentService:
                     except Exception as e:
                         logger.warning(f"删除RustFS文件失败 {doc.kb_id}/{doc.location}: {e}")
         
+        # 删除ES中的切片数据
+        try:
+            from app.core.knowledgebase.server import task_executor
+            for doc in existing_docs:
+                task_executor.delete_document_chunks(doc.kb_id, doc.id)
+        except Exception as e:
+            logger.warning(f"删除ES切片数据失败: {e}")
+        
         # 按知识库分组统计删除的文档数量和token数
         kb_stats = {}
         for doc in existing_docs:

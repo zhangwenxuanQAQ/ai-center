@@ -22,6 +22,7 @@ interface RetrievalChunk {
   kb_id: string;
   important_kwd: string[];
   image_id: string;
+  image_base64?: string;
   similarity: number;
   vector_similarity: number;
   term_similarity: number;
@@ -41,12 +42,6 @@ interface RetrievalConfigItem {
   default: any;
   options?: Array<{ value: string; label: string }>;
 }
-
-const getScoreColor = (score: number) => {
-  if (score >= 0.8) return 'success';
-  if (score >= 0.5) return 'warning';
-  return 'error';
-};
 
 const ChunkCard: React.FC<{
   chunk: RetrievalChunk;
@@ -69,9 +64,8 @@ const ChunkCard: React.FC<{
       className={`knowledgebase-document-card ${theme === 'dark' ? 'dark' : 'light'}`}
       style={{
         borderRadius: 8,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
         background: theme === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#ffffff',
-        border: 'none',
+        border: theme === 'dark' ? '1px solid rgba(255,255,255,0.1)' : '1px solid #e8e8e8',
         marginBottom: 12,
       }}
       headStyle={{
@@ -91,13 +85,13 @@ const ChunkCard: React.FC<{
       }
       extra={
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Tag color={getScoreColor(chunk.similarity)}>
+          <Tag>
             混合: {(chunk.similarity * 100).toFixed(1)}%
           </Tag>
-          <Tag color={getScoreColor(chunk.vector_similarity)}>
+          <Tag>
             向量: {(chunk.vector_similarity * 100).toFixed(1)}%
           </Tag>
-          <Tag color={getScoreColor(chunk.term_similarity)}>
+          <Tag>
             关键词: {(chunk.term_similarity * 100).toFixed(1)}%
           </Tag>
           <Button
@@ -112,12 +106,12 @@ const ChunkCard: React.FC<{
       }
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-        {chunk.image_id && (
-          <div style={{ minWidth: 80 }}>
+        {chunk.image_base64 && (
+          <div style={{ minWidth: 100 }}>
             <Popover
               content={
                 <Image
-                  src={`/aicenter/v1/knowledgebase/${chunk.kb_id}/document/${chunk.doc_id}/chunk_image/${chunk.image_id}`}
+                  src={`data:image/png;base64,${chunk.image_base64}`}
                   style={{ maxWidth: 500, maxHeight: 500 }}
                   preview={true}
                 />
@@ -139,7 +133,7 @@ const ChunkCard: React.FC<{
                 background: '#f5f5f5'
               }}>
                 <img
-                  src={`/aicenter/v1/knowledgebase/${chunk.kb_id}/document/${chunk.doc_id}/chunk_image/${chunk.image_id}`}
+                  src={`data:image/png;base64,${chunk.image_base64}`}
                   style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
                   alt="切片缩略图"
                 />
@@ -194,7 +188,7 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
   const [results, setResults] = useState<RetrievalChunk[]>([]);
   const [total, setTotal] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(5);
   const [expandedChunks, setExpandedChunks] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -247,6 +241,7 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
         query,
         {
           ...retrievalConfig,
+          top_k: pageSize,
           page,
           page_size: pageSize,
         }
@@ -301,7 +296,7 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
               <Spin size="small" />
             </div>
           ) : (
-            retrievalConfigs.map(config => (
+            retrievalConfigs.filter(config => config.key !== 'top_k').map(config => (
               <div key={config.key} style={{ marginBottom: '24px' }}>
                 <div className={`config-label ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   {config.label}
@@ -365,7 +360,6 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
                 handleRetrieval(1);
               }
             }}
-            onBlur={handleQueryBlur}
             prefix={<SearchOutlined />}
             style={{
               flex: 1,
@@ -430,23 +424,30 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
           )}
         </div>
 
-        {total > 0 && (
-          <div style={{ marginTop: 12, display: 'flex', justifyContent: 'center', paddingBottom: 8 }}>
-            <Pagination
-              current={currentPage}
-              pageSize={pageSize}
-              total={total}
-              onChange={handlePageChange}
-              showQuickJumper
-              showTotal={(t) => `共 ${t} 条`}
-              locale={{
-                jump_to: '前往',
-                jump_to_confirm: '确定',
-                page: '页',
-              }}
-            />
-          </div>
-        )}
+        <div style={{ marginTop: 12, display: 'flex', justifyContent: 'center', paddingBottom: 8 }}>
+          <Pagination
+            current={currentPage}
+            pageSize={pageSize}
+            total={total}
+            onChange={(page, size) => {
+              setCurrentPage(page);
+              if (size !== pageSize) {
+                setPageSize(size);
+              }
+              handleRetrieval(page);
+            }}
+            showSizeChanger
+            showQuickJumper
+            showTotal={(total) => `共 ${total} 条`}
+            pageSizeOptions={['5', '10', '20', '50']}
+            locale={{
+              items_per_page: '条/页',
+              jump_to: '前往',
+              jump_to_confirm: '确定',
+              page: '页',
+            }}
+          />
+        </div>
       </Content>
     </Layout>
   );

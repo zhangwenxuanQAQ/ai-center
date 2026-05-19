@@ -239,10 +239,7 @@ class FulltextQueryer:
             d = defaultdict(int)
             wts = self.tw.weights(tks, preprocess=False)
             for i, (t, c) in enumerate(wts):
-                d[t] += c * 0.4
-                if i+1 < len(wts):
-                    _t, _c = wts[i+1]
-                    d[t+_t] += max(c, _c) * 0.6
+                d[t] += c
             return d
         
         atks = to_dict(atks)

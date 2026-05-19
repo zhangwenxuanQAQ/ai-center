@@ -45,85 +45,6 @@ class SearchResult:
     field: Dict[str, Dict[str, Any]]
     keywords: List[str]
 
-
-def _token_similarity(query_tokens: List[str], doc_tokens_list: List[List[str]]) -> List[float]:
-    """
-    计算查询关键词与文档关键词之间的token相似度
-
-    参考ragflow的FulltextQueryer.token_similarity实现，使用term_weight计算权重
-
-    Args:
-        query_tokens: 查询关键词列表
-        doc_tokens_list: 每个文档的关键词列表
-
-    Returns:
-        List[float]: 每个文档的关键词相似度分数
-    """
-    if not query_tokens or not doc_tokens_list:
-        return [0.0] * len(doc_tokens_list)
-
-    try:
-        from app.core.knowledgebase.rag.nlp.term_weight import Dealer
-        from collections import defaultdict
-        tw = Dealer()
-
-        def to_dict(tks):
-            if isinstance(tks, str):
-                tks = tks.split()
-            d = defaultdict(int)
-            wts = tw.weights(tks, preprocess=False)
-            for i, (t, c) in enumerate(wts):
-                d[t] += c * 0.4
-                if i+1 < len(wts):
-                    _t, _c = wts[i+1]
-                    d[t+_t] += max(c, _c) * 0.6
-            return d
-
-        qtwt = to_dict(query_tokens)
-        dtwts = [to_dict(tks) for tks in doc_tokens_list]
-
-        scores = []
-        for dtwt in dtwts:
-            s = 1e-9
-            for k, v in qtwt.items():
-                if k in dtwt:
-                    s += v
-            q = 1e-9
-            for k, v in qtwt.items():
-                q += v
-            scores.append(s / q)
-
-        return scores
-    except Exception as e:
-        logger.warning(f"token_similarity计算失败: {e}，使用简化版计算")
-        query_token_set = set(query_tokens)
-        query_token_freq = {}
-        for t in query_tokens:
-            query_token_freq[t] = query_token_freq.get(t, 0) + 1
-        query_norm = math.sqrt(sum(v * v for v in query_token_freq.values()))
-        if query_norm == 0:
-            return [0.0] * len(doc_tokens_list)
-
-        scores = []
-        for doc_tokens in doc_tokens_list:
-            doc_token_freq = {}
-            for t in doc_tokens:
-                doc_token_freq[t] = doc_token_freq.get(t, 0) + 1
-
-            dot_product = 0.0
-            for t in query_token_set:
-                if t in doc_token_freq:
-                    dot_product += query_token_freq[t] * doc_token_freq[t]
-
-            doc_norm = math.sqrt(sum(v * v for v in doc_token_freq.values()))
-            if doc_norm == 0:
-                scores.append(0.0)
-            else:
-                scores.append(dot_product / (query_norm * doc_norm))
-
-        return scores
-
-
 def _hybrid_similarity(
     query_vector: List[float],
     doc_vectors: List[List[float]],
@@ -148,7 +69,34 @@ def _hybrid_similarity(
     Returns:
         Tuple[List[float], List[float], List[float]]: (混合相似度, 关键词相似度, 向量相似度)
     """
-    tksim = _token_similarity(query_tokens, doc_tokens_list)
+    tksim = []
+    try:
+        from app.core.knowledgebase.rag.nlp.query import FulltextQueryer
+        qryr = FulltextQueryer()
+        tksim = qryr.token_similarity(query_tokens, doc_tokens_list)
+    except Exception as e:
+        logger.warning(f"token_similarity计算失败: {e}，使用简化版计算")
+        query_token_set = set(query_tokens)
+        query_token_freq = {}
+        for t in query_tokens:
+            query_token_freq[t] = query_token_freq.get(t, 0) + 1
+        query_norm = math.sqrt(sum(v * v for v in query_token_freq.values()))
+        if query_norm == 0:
+            tksim = [0.0] * len(doc_tokens_list)
+        else:
+            for doc_tokens in doc_tokens_list:
+                doc_token_freq = {}
+                for t in doc_tokens:
+                    doc_token_freq[t] = doc_token_freq.get(t, 0) + 1
+                dot_product = 0.0
+                for t in query_token_set:
+                    if t in doc_token_freq:
+                        dot_product += query_token_freq[t] * doc_token_freq[t]
+                doc_norm = math.sqrt(sum(v * v for v in doc_token_freq.values()))
+                if doc_norm == 0:
+                    tksim.append(0.0)
+                else:
+                    tksim.append(dot_product / (query_norm * doc_norm))
 
     if not query_vector or not doc_vectors:
         vtsim = [0.0] * len(doc_vectors)
@@ -974,6 +922,7 @@ class ESUtils:
                 "kb_id": chunk.get("kb_id", ""),
                 "important_kwd": chunk.get("important_kwd", []),
                 "image_id": chunk.get("img_id", ""),
+                "image_base64": chunk.get("image_base64", ""),
                 "similarity": float(sim[i]),
                 "vector_similarity": float(vsim[i]),
                 "term_similarity": float(tsim[i]),
@@ -1107,7 +1056,34 @@ class ESUtils:
             ins_tw.append(tks)
             doc_contents.append(" ".join(tks))
 
-        tksim = _token_similarity(keywords, ins_tw)
+        tksim = []
+        try:
+            from app.core.knowledgebase.rag.nlp.query import FulltextQueryer
+            qryr = FulltextQueryer()
+            tksim = qryr.token_similarity(keywords, ins_tw)
+        except Exception as e:
+            logger.warning(f"token_similarity计算失败: {e}，使用简化版计算")
+            query_token_set = set(keywords)
+            query_token_freq = {}
+            for t in keywords:
+                query_token_freq[t] = query_token_freq.get(t, 0) + 1
+            query_norm = math.sqrt(sum(v * v for v in query_token_freq.values()))
+            if query_norm == 0:
+                tksim = [0.0] * len(ins_tw)
+            else:
+                for doc_tokens in ins_tw:
+                    doc_token_freq = {}
+                    for t in doc_tokens:
+                        doc_token_freq[t] = doc_token_freq.get(t, 0) + 1
+                    dot_product = 0.0
+                    for t in query_token_set:
+                        if t in doc_token_freq:
+                            dot_product += query_token_freq[t] * doc_token_freq[t]
+                    doc_norm = math.sqrt(sum(v * v for v in doc_token_freq.values()))
+                    if doc_norm == 0:
+                        tksim.append(0.0)
+                    else:
+                        tksim.append(dot_product / (query_norm * doc_norm))
 
         try:
             from app.utils.string_utils import remove_redundant_spaces
