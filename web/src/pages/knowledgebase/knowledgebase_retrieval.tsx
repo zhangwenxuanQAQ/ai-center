@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Slider, Select, Input, Button, Card, Tag, Spin, Empty, Pagination, Image, Popover, InputNumber, Tooltip } from 'antd';
+import { Layout, Slider, Select, Input, Button, Card, Tag, Spin, Empty, Pagination, Image, Popover, InputNumber, Tooltip, message } from 'antd';
 import { SearchOutlined, FileTextOutlined, DownOutlined, UpOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import MDEditor from '@uiw/react-md-editor';
 import { knowledgebaseService, Knowledgebase } from '../../services/knowledgebase';
@@ -182,6 +182,7 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [loading, setLoading] = useState(false);
   const [configLoading, setConfigLoading] = useState(false);
+  const [savingConfig, setSavingConfig] = useState(false);
   const [query, setQuery] = useState('');
   const [retrievalConfig, setRetrievalConfig] = useState<RetrievalConfig>({});
   const [retrievalConfigs, setRetrievalConfigs] = useState<RetrievalConfigItem[]>([]);
@@ -281,6 +282,29 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
     });
   };
 
+  const handleSaveConfig = async () => {
+    setSavingConfig(true);
+    try {
+      await knowledgebaseService.updateKnowledgebase(knowledgebase.id, {
+        retrieval_config: retrievalConfig
+      });
+      message.success('检索配置已保存到知识库');
+      
+      const event = new CustomEvent('knowledgebaseConfigUpdated', {
+        detail: {
+          kbId: knowledgebase.id,
+          retrievalConfig: retrievalConfig
+        }
+      });
+      window.dispatchEvent(event);
+    } catch (error) {
+      console.error('Failed to save retrieval config:', error);
+      message.error('保存失败');
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
   return (
     <Layout className="knowledgebase-layout" style={{ height: '100%' }}>
       <LeftSider
@@ -290,7 +314,7 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
         <div className={`sider-header ${theme === 'dark' ? 'dark' : 'light'}`}>
           检索配置
         </div>
-        <div style={{ padding: '20px 16px', overflowY: 'auto' }}>
+        <div style={{ padding: '20px 16px', overflowY: 'auto', position: 'relative', paddingBottom: '80px' }}>
           {configLoading ? (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
               <Spin size="small" />
@@ -346,6 +370,25 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
               </div>
             ))
           )}
+          <div style={{ position: 'absolute', bottom: '16px', left: '16px', right: '16px', paddingTop: '16px', borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8', background: theme === 'dark' ? '#1a1a2e' : '#fff', padding: '16px' }}>
+            <Button
+              type="primary"
+              size="small"
+              onClick={handleSaveConfig}
+              loading={savingConfig}
+              style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                border: 'none',
+                boxShadow: 'none',
+                borderRadius: '4px',
+                width: '180px',
+                margin: '0 auto',
+                display: 'block'
+              }}
+            >
+              设置到知识库配置
+            </Button>
+          </div>
         </div>
       </LeftSider>
 

@@ -45,76 +45,6 @@ class SearchResult:
     field: Dict[str, Dict[str, Any]]
     keywords: List[str]
 
-def _hybrid_similarity(
-    query_vector: List[float],
-    doc_vectors: List[List[float]],
-    query_tokens: List[str],
-    doc_tokens_list: List[List[str]],
-    tkweight: float = 0.3,
-    vtweight: float = 0.7,
-) -> Tuple[List[float], List[float], List[float]]:
-    """
-    计算混合相似度（向量相似度 + 关键词相似度）
-
-    参考ragflow的hybrid_similarity实现
-
-    Args:
-        query_vector: 查询向量
-        doc_vectors: 文档向量列表
-        query_tokens: 查询关键词列表
-        doc_tokens_list: 每个文档的关键词列表
-        tkweight: 关键词相似度权重（默认0.3）
-        vtweight: 向量相似度权重（默认0.7）
-
-    Returns:
-        Tuple[List[float], List[float], List[float]]: (混合相似度, 关键词相似度, 向量相似度)
-    """
-    tksim = []
-    try:
-        from app.core.knowledgebase.rag.nlp.query import FulltextQueryer
-        qryr = FulltextQueryer()
-        tksim = qryr.token_similarity(query_tokens, doc_tokens_list)
-    except Exception as e:
-        logger.warning(f"token_similarity计算失败: {e}，使用简化版计算")
-        query_token_set = set(query_tokens)
-        query_token_freq = {}
-        for t in query_tokens:
-            query_token_freq[t] = query_token_freq.get(t, 0) + 1
-        query_norm = math.sqrt(sum(v * v for v in query_token_freq.values()))
-        if query_norm == 0:
-            tksim = [0.0] * len(doc_tokens_list)
-        else:
-            for doc_tokens in doc_tokens_list:
-                doc_token_freq = {}
-                for t in doc_tokens:
-                    doc_token_freq[t] = doc_token_freq.get(t, 0) + 1
-                dot_product = 0.0
-                for t in query_token_set:
-                    if t in doc_token_freq:
-                        dot_product += query_token_freq[t] * doc_token_freq[t]
-                doc_norm = math.sqrt(sum(v * v for v in doc_token_freq.values()))
-                if doc_norm == 0:
-                    tksim.append(0.0)
-                else:
-                    tksim.append(dot_product / (query_norm * doc_norm))
-
-    if not query_vector or not doc_vectors:
-        vtsim = [0.0] * len(doc_vectors)
-    else:
-        qv = np.array(query_vector)
-        dv = np.array(doc_vectors)
-        norms = np.linalg.norm(dv, axis=1)
-        q_norm = np.linalg.norm(qv)
-        if q_norm == 0:
-            vtsim = [0.0] * len(doc_vectors)
-        else:
-            cosine_scores = np.dot(dv, qv) / (norms * q_norm + 1e-10)
-            vtsim = cosine_scores.tolist()
-
-    sim = [tkweight * t + vtweight * v for t, v in zip(tksim, vtsim)]
-    return sim, tksim, vtsim
-
-
 def retry_on_failure(func: Callable) -> Callable:
     """
     重试装饰器
@@ -525,6 +455,7 @@ class ESUtils:
         min_score: float = 0.0,
         vector_field: str = "content_vector",
         question: str = None,
+        vector_similarity_weight: float = 0.7,
     ) -> List[Dict[str, Any]]:
         """
         向量相似度搜索（使用ES knn retriever，带重试机制）
@@ -575,6 +506,7 @@ class ESUtils:
                     "fields": match_expr.fields,
                     "type": "best_fields",
                     "query": match_expr.matching_text,
+                    "boost": 1 - vector_similarity_weight,
                 }
             }
             if match_expr.extra_options:
@@ -605,6 +537,7 @@ class ESUtils:
                     "fields": match_expr.fields,
                     "type": "best_fields",
                     "query": match_expr.matching_text,
+                    "boost": 1 - vector_similarity_weight,
                 }
             }
             if match_expr.extra_options:
@@ -749,6 +682,7 @@ class ESUtils:
                         "fields": match_expr.fields,
                         "type": "best_fields",
                         "query": match_expr.matching_text,
+                        "boost": 1 - vector_similarity_weight,
                     }
                 }
                 if match_expr.extra_options:
@@ -769,6 +703,7 @@ class ESUtils:
                     "fields": match_expr.fields,
                     "type": "best_fields",
                     "query": match_expr.matching_text,
+                    "boost": 1 - vector_similarity_weight,
                 }
             }
             if match_expr.extra_options:
@@ -821,6 +756,7 @@ class ESUtils:
                                     "type": "best_fields",
                                     "query": question,
                                     "minimum_should_match": "10%",
+                                    "boost": 1 - vector_similarity_weight,
                                 }
                             }
                         ],
@@ -891,7 +827,7 @@ class ESUtils:
 
         filtered_count = 0
         for i in idx:
-            if float(sim[i]) < vector_similarity_threshold:
+            if float(vsim[i]) < vector_similarity_threshold:
                 continue
             if float(tsim[i]) < keyword_similarity_threshold:
                 continue
@@ -900,8 +836,8 @@ class ESUtils:
         ranks["total"] = filtered_count
 
         for i in idx:
-            if float(sim[i]) < vector_similarity_threshold:
-                break
+            if float(vsim[i]) < vector_similarity_threshold:
+                continue
             if float(tsim[i]) < keyword_similarity_threshold:
                 continue
 
@@ -1002,7 +938,7 @@ class ESUtils:
             else:
                 ins_embd.append(zero_vector)
 
-        sim, tksim, vtsim = _hybrid_similarity(
+        sim, tksim, vtsim = qryr.hybrid_similarity(
             sres.query_vector, ins_embd, keywords, ins_tw, tkweight, vtweight
         )
         return sim, tksim, vtsim
