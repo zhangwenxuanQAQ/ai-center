@@ -1018,6 +1018,108 @@ class KnowledgebaseDocumentService:
         return updated
 
     @staticmethod
+    @handle_transaction
+    def update_document_metadata(document_id: str, kb_id: str, metadatas: dict):
+        """
+        更新数据集元数据，同步更新数据库和ES索引
+        支持增量更新：只有当元数据发生变化时才更新ES
+
+        Args:
+            document_id: 文档ID
+            kb_id: 知识库ID
+            metadatas: 元数据字典
+
+        Returns:
+            dict: 更新结果
+        """
+        try:
+            db_doc = KnowledgebaseDocument.get(KnowledgebaseDocument.id == document_id)
+        except KnowledgebaseDocument.DoesNotExist:
+            raise ResourceNotFoundError(message=f"文档 {document_id} 不存在")
+
+        old_metadatas = {}
+        if db_doc.metadatas:
+            try:
+                old_metadatas = json.loads(db_doc.metadatas)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        db_doc.metadatas = json.dumps(metadatas, ensure_ascii=False)
+        db_doc.save()
+
+        def dict_equal(d1: dict, d2: dict) -> bool:
+            if set(d1.keys()) != set(d2.keys()):
+                return False
+            for key in d1:
+                if isinstance(d1[key], dict) and isinstance(d2[key], dict):
+                    if not dict_equal(d1[key], d2[key]):
+                        return False
+                elif isinstance(d1[key], list) and isinstance(d2[key], list):
+                    if len(d1[key]) != len(d2[key]):
+                        return False
+                    for i, item in enumerate(d1[key]):
+                        if isinstance(item, dict) and isinstance(d2[key][i], dict):
+                            if not dict_equal(item, d2[key][i]):
+                                return False
+                        elif item != d2[key][i]:
+                            return False
+                elif d1[key] != d2[key]:
+                    return False
+            return True
+
+        if dict_equal(old_metadatas, metadatas):
+            logger.info(f"元数据未变化，跳过ES更新: {document_id}")
+            return {"success": True, "message": "元数据未变化"}
+
+        try:
+            from app.database.es_utils import es_utils
+            if es_utils.is_available:
+                index_name = kb_id
+                if es_utils.client.indices.exists(index=index_name):
+                    changed_keys = []
+                    for key in metadatas:
+                        if key not in old_metadatas or not dict_equal(
+                            {key: metadatas[key]}, {key: old_metadatas[key]}
+                        ):
+                            changed_keys.append(key)
+
+                    deleted_keys = [key for key in old_metadatas if key not in metadatas]
+
+                    updates = {k: v for k, v in metadatas.items() if k in changed_keys}
+
+                    if updates:
+                        es_utils.client.update_by_query(
+                            index=index_name,
+                            body={
+                                "query": {"term": {"doc_id": document_id}},
+                                "script": {
+                                    "source": "ctx._source.putAll(params.updates)",
+                                    "params": {"updates": updates}
+                                }
+                            }
+                        )
+
+                    if deleted_keys:
+                        delete_script = "; ".join(
+                            [f"ctx._source.remove('{key}')" for key in deleted_keys]
+                        )
+                        es_utils.client.update_by_query(
+                            index=index_name,
+                            body={
+                                "query": {"term": {"doc_id": document_id}},
+                                "script": {
+                                    "source": delete_script
+                                }
+                            }
+                        )
+
+                    logger.info(f"成功增量更新ES元数据: {document_id}, 更新: {changed_keys}, 删除: {deleted_keys}")
+        except Exception as e:
+            logger.warning(f"更新ES元数据失败: {e}")
+
+        return {"document_id": document_id, "metadatas": metadatas}
+
+    @staticmethod
     def get_chunks(
         kb_id: str,
         doc_id: str = None,

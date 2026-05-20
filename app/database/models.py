@@ -184,6 +184,7 @@ class KnowledgebaseDocument(SoftDeleteModel):
     task_begin_at = DateTimeField(null=True, verbose_name="文档解析开始时间")
     task_end_at = DateTimeField(null=True, verbose_name="文档解析结束时间")
     task_duration = IntegerField(default=0, verbose_name="文档解析耗时(毫秒)")
+    metadatas = TextField(null=True, verbose_name="文档元数据JSON")
 
     class Meta:
         table_name = 'knowledgebase_document'

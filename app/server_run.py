@@ -974,6 +974,18 @@ try:
     except Exception as e:
         logger.error(f"[MIGRATION]   修改messages字段类型失败: {e}")
 
+    # 为knowledgebase_document表添加metadatas字段
+    logger.info("\n[MIGRATION] 为knowledgebase_document表添加metadatas字段...")
+    try:
+        cursor = db.execute_sql("SHOW COLUMNS FROM knowledgebase_document LIKE 'metadatas'")
+        if not cursor.fetchone():
+            db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN metadatas LONGTEXT DEFAULT NULL")
+            logger.info("[MIGRATION]   成功添加metadatas字段")
+        else:
+            logger.info("[MIGRATION]   metadatas字段已存在，跳过")
+    except Exception as e:
+        logger.error(f"[MIGRATION]   添加metadatas字段失败: {e}")
+
         logger.info("\n[MIGRATION] ✅ 数据库迁移完成")
 except Exception as e:
     logger.error(f"\n[MIGRATION] ❌ 数据库迁移失败: {e}")

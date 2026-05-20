@@ -456,6 +456,7 @@ class ESUtils:
         vector_field: str = "content_vector",
         question: str = None,
         vector_similarity_weight: float = 0.7,
+        metadatas: Dict[str, Any] = None,
     ) -> List[Dict[str, Any]]:
         """
         向量相似度搜索（使用ES knn retriever，带重试机制）
@@ -478,6 +479,10 @@ class ESUtils:
                 filter_conditions.append({"term": {"kb_id": kb_ids[0]}})
             else:
                 filter_conditions.append({"terms": {"kb_id": kb_ids}})
+        
+        if metadatas:
+            metadata_filters = self._build_metadata_filter(metadatas)
+            filter_conditions.extend(metadata_filters)
 
         match_expr = None
         if question:
@@ -584,6 +589,7 @@ class ESUtils:
         rerank_mdl=None,
         sort_by: str = "sim",
         available_only: bool = True,
+        metadatas: Dict[str, Any] = None,
     ) -> Dict[str, Any]:
         """
         混合检索（向量+关键词），使用ES knn retriever，支持Rerank重排序
@@ -653,6 +659,10 @@ class ESUtils:
             filter_conditions.append({"terms": {"doc_id": doc_ids}})
         if available_only:
             filter_conditions.append({"term": {"available_int": 1}})
+        
+        if metadatas:
+            metadata_filters = self._build_metadata_filter(metadatas)
+            filter_conditions.extend(metadata_filters)
 
         knn_query = None
         match_expr = None
@@ -1033,6 +1043,117 @@ class ESUtils:
         sim = [tkweight * t + vtweight * v for t, v in zip(tksim, vtsim)]
         return sim, tksim, vtsim
 
+    def _build_metadata_filter(self, metadatas: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        构建元数据过滤条件
+        
+        Args:
+            metadatas: 元数据过滤条件，格式为{字段名: {value: 值, fuzzy: 是否模糊查询, relation: 范围关系}}
+        
+        Returns:
+            List[Dict]: ES过滤条件列表
+        """
+        if not metadatas:
+            return []
+        
+        filter_conditions = []
+        for field_name, field_config in metadatas.items():
+            if not field_config or not isinstance(field_config, dict):
+                continue
+            
+            value = field_config.get('value')
+            if value is None or value == '':
+                continue
+            
+            fuzzy = field_config.get('fuzzy', False)
+            relation = field_config.get('relation', 'INTERSECTS')
+            
+            if field_name.endswith('_range'):
+                range_filter = self._build_range_filter(field_name, value, relation)
+                if range_filter:
+                    filter_conditions.append(range_filter)
+            elif fuzzy and isinstance(value, str):
+                filter_conditions.append({
+                    "match": {field_name: value}
+                })
+            elif isinstance(value, list):
+                if len(value) == 1:
+                    filter_conditions.append({"term": {field_name: value[0]}})
+                else:
+                    filter_conditions.append({"terms": {field_name: value}})
+            else:
+                filter_conditions.append({"term": {field_name: value}})
+        
+        return filter_conditions
+    
+    def _build_range_filter(self, field_name: str, value: Any, relation: str) -> Optional[Dict[str, Any]]:
+        """
+        构建范围类型字段的过滤条件
+        
+        Args:
+            field_name: 字段名
+            value: 字段值（可以是单个值或范围对象）
+            relation: 范围关系（INTERSECTS、CONTAINS、WITHIN）
+        
+        Returns:
+            Optional[Dict]: ES范围过滤条件
+        """
+        if not value:
+            return None
+        
+        if isinstance(value, dict):
+            gte = value.get('gte') or value.get('from')
+            lte = value.get('lte') or value.get('to')
+            if gte is not None and lte is not None:
+                range_value = {"gte": gte, "lte": lte}
+            elif gte is not None:
+                range_value = {"gte": gte}
+            elif lte is not None:
+                range_value = {"lte": lte}
+            else:
+                return None
+        elif isinstance(value, (list, tuple)) and len(value) == 2:
+            range_value = {"gte": value[0], "lte": value[1]}
+        else:
+            return None
+        
+        if relation == 'INTERSECTS':
+            return {
+                "range": {
+                    field_name: {
+                        "gte": range_value.get('gte'),
+                        "lte": range_value.get('lte'),
+                        "relation": "intersects"
+                    }
+                }
+            }
+        elif relation == 'CONTAINS':
+            return {
+                "range": {
+                    field_name: {
+                        "gte": range_value.get('gte'),
+                        "lte": range_value.get('lte'),
+                        "relation": "contains"
+                    }
+                }
+            }
+        elif relation == 'WITHIN':
+            return {
+                "range": {
+                    field_name: {
+                        "gte": range_value.get('gte'),
+                        "lte": range_value.get('lte'),
+                        "relation": "within"
+                    }
+                }
+            }
+        else:
+            return {
+                "range": {
+                    field_name: range_value
+                }
+            }
+    
     @retry_on_failure
     def delete_document(self, index_name: str, doc_id: str) -> bool:
         """

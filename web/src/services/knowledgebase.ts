@@ -71,6 +71,7 @@ export interface KnowledgebaseDocument {
   task_end_at?: string;
   task_duration: number;
   task_progress_message?: string;
+  metadatas?: string | Record<string, any>;
   created_at: string;
   updated_at?: string;
 }
@@ -292,6 +293,16 @@ export const knowledgebaseService = {
     return http.post<KnowledgebaseDocument>(
       `/aicenter/v1/knowledgebase/${kbId}/document/${documentId}`,
       data
+    );
+  },
+
+  /**
+   * 更新文档元数据
+   */
+  updateDocumentMetadata: async (kbId: string, documentId: string, metadatas: Record<string, any>): Promise<any> => {
+    return http.post<any>(
+      `/aicenter/v1/knowledgebase/${kbId}/document/${documentId}/update_metadata`,
+      { metadatas }
     );
   },
 
@@ -592,6 +603,7 @@ export const knowledgebaseService = {
         keyword_similarity_threshold: config.keyword_similarity,
         vector_similarity_weight: config.vector_similarity_weight,
         sort_by: config.sort_by,
+        metadatas: config.metadatas,
       }
     ) || { total: 0, chunks: [] };
   },

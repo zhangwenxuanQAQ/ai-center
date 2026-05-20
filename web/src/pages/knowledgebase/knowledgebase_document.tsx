@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Tabs } from 'antd';
 import { Layout, Tree, Table, Input, Select, Button, Tag, Spin, Pagination, Empty, Row, Col, Tooltip, Switch, message, Modal, Popconfirm, Form, TreeSelect, Popover, Descriptions, Dropdown } from 'antd';
 const { TextArea } = Input;
-import { SearchOutlined, PlusOutlined, FolderOutlined, FileTextOutlined, PlayCircleOutlined, PauseCircleOutlined, ReloadOutlined, UnorderedListOutlined, EditOutlined, DownloadOutlined, DeleteOutlined, UpOutlined, DownOutlined, CloseOutlined, SettingOutlined } from '@ant-design/icons';
+import { SearchOutlined, PlusOutlined, FolderOutlined, FileTextOutlined, PlayCircleOutlined, PauseCircleOutlined, ReloadOutlined, BarChartOutlined, EditOutlined, DownloadOutlined, DeleteOutlined, UpOutlined, DownOutlined, CloseOutlined, SettingOutlined, TagsOutlined } from '@ant-design/icons';
 import type { TreeDataNode, TreeProps } from 'antd';
 import { knowledgebaseService, Knowledgebase, KnowledgebaseDocument, KnowledgebaseDocumentCategory } from '../../services/knowledgebase';
 import { DOCUMENT_CHUNK_METHOD } from '../../constants/knowledgebase';
 import KnowledgebaseDocumentSetting from './knowledgebase_document_setting';
 import ChunkMethodModal from './chunk-method-modal';
 import ChunksView from './chunks_view';
+import MetadataModal from './knowledgebase_document_metadata';
 import '../../styles/common.css';
 import './knowledgebase.less';
 
@@ -20,6 +22,8 @@ interface KnowledgebaseDocumentProps {
 }
 
 const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowledgebase }) => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState<KnowledgebaseDocumentCategory[]>([]);
@@ -44,6 +48,10 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
   // 查看切片相关状态
   const [viewingChunks, setViewingChunks] = useState(false);
   const [selectedDocumentForChunks, setSelectedDocumentForChunks] = useState<KnowledgebaseDocument | null>(null);
+  
+  // 元数据设置相关状态
+  const [metadataModalVisible, setMetadataModalVisible] = useState(false);
+  const [metadataDocument, setMetadataDocument] = useState<KnowledgebaseDocument | null>(null);
   
   // 分类管理相关状态
   const [isCategoryModalVisible, setIsCategoryModalVisible] = useState(false);
@@ -70,6 +78,30 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
     fetchDocuments();
     fetchDocumentConstants();
   }, [knowledgebase.id]);
+
+  useEffect(() => {
+    const docId = searchParams.get('documentId');
+    const view = searchParams.get('view');
+    
+    if (view) {
+      if (docId) {
+        const doc = documents.find(d => d.id === docId);
+        if (doc) {
+          if (view === 'chunks' && !viewingChunks) {
+            setSelectedDocumentForChunks(doc);
+            setViewingChunks(true);
+          } else if (view === 'edit' && !showSetting) {
+            setEditingDocument(doc);
+            setShowSetting(true);
+          }
+        }
+      } else if (view === 'edit' && !showSetting && !viewingChunks) {
+        // 新增模式
+        setEditingDocument(undefined);
+        setShowSetting(true);
+      }
+    }
+  }, [searchParams, knowledgebase.id, documents]);
 
   useEffect(() => {
     fetchDocuments();
@@ -854,10 +886,11 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
               <Button 
                 type="text"
                 size="small" 
-                icon={<UnorderedListOutlined />}
+                icon={<BarChartOutlined />}
                 onClick={() => {
                   setSelectedDocumentForChunks(record);
                   setViewingChunks(true);
+                  setSearchParams({ view: 'chunks', documentId: record.id });
                 }}
               />
             </Tooltip>
@@ -872,12 +905,27 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
                 }}
               />
             </Tooltip>
+            <Tooltip title="设置元数据">
+              <Button
+                type="text"
+                size="small"
+                icon={<TagsOutlined />}
+                onClick={() => {
+                  setMetadataDocument(record);
+                  setMetadataModalVisible(true);
+                }}
+              />
+            </Tooltip>
             <Tooltip title="编辑">
               <Button
                 type="text"
                 size="small"
                 icon={<EditOutlined />}
-                onClick={() => { setEditingDocument(record); setShowSetting(true); }}
+                onClick={() => { 
+                  setEditingDocument(record); 
+                  setShowSetting(true); 
+                  setSearchParams({ view: 'edit', documentId: record.id });
+                }}
               />
             </Tooltip>
             {(record.source_type === 'local_document' || record.source_type === 'datasource') && (
@@ -962,15 +1010,29 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
           <KnowledgebaseDocumentSetting
             knowledgebase={knowledgebase}
             document={editingDocument}
-            onBack={() => { setShowSetting(false); setEditingDocument(undefined); fetchCategories(); }}
-            onSave={() => { setShowSetting(false); setEditingDocument(undefined); fetchDocuments(); fetchCategories(); }}
+            onBack={() => { 
+              setShowSetting(false); 
+              setEditingDocument(undefined); 
+              fetchCategories(); 
+              setSearchParams();
+            }}
+            onSave={() => { 
+              setShowSetting(false); 
+              setEditingDocument(undefined); 
+              fetchDocuments(); 
+              fetchCategories(); 
+              setSearchParams();
+            }}
           />
         ) : viewingChunks ? (
           <div style={{ height: '100%', padding: 12 }}>
             <ChunksView 
               document={selectedDocumentForChunks!} 
               knowledgebaseId={knowledgebase.id}
-              onBack={() => setViewingChunks(false)}
+              onBack={() => {
+                setViewingChunks(false);
+                setSearchParams();
+              }}
             />
           </div>
         ) : (
@@ -984,7 +1046,11 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
           <Button
             type="primary"
             icon={<PlusOutlined />}
-            onClick={() => { setEditingDocument(undefined); setShowSetting(true); }}
+            onClick={() => { 
+              setEditingDocument(undefined); 
+              setShowSetting(true); 
+              setSearchParams({ view: 'edit' });
+            }}
             style={{
               background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
               border: 'none',
@@ -1280,6 +1346,20 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
           knowledgebaseId={knowledgebase.id}
         />
       )}
+      <MetadataModal
+        visible={metadataModalVisible}
+        document={metadataDocument}
+        knowledgebaseId={knowledgebase.id}
+        onCancel={() => {
+          setMetadataModalVisible(false);
+          setMetadataDocument(null);
+        }}
+        onSuccess={() => {
+          setMetadataModalVisible(false);
+          setMetadataDocument(null);
+          fetchDocuments();
+        }}
+      />
     </Layout>
   );
 };

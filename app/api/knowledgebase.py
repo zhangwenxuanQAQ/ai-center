@@ -27,7 +27,7 @@ from app.utils.response import ResponseUtil, ApiResponse
 from app.constants.knowledgebase_constants import FILE_NAME_LEN_LIMIT, RETRIEVAL_CONFIGS
 from app.constants.knowledgebase_document_constants import (
     CHUNK_METHOD_LABELS, CHUNK_METHOD_CONFIGS, SOURCE_TYPE_LABELS, SourceType, SourceConfigDefinition,
-    get_available_chunk_methods, get_default_chunk_method, DOCUMENT_RUNNING_STATUS
+    get_available_chunk_methods, get_default_chunk_method, DOCUMENT_RUNNING_STATUS, METADATA_FIELD_TYPES
 )
 
 logger = logging.getLogger(__name__)
@@ -69,6 +69,7 @@ def get_document_constants():
         "chunk_configs": chunk_configs,
         "source_configs": source_configs,
         "running_status": DOCUMENT_RUNNING_STATUS,
+        "metadata_field_types": METADATA_FIELD_TYPES,
     })
 
 
@@ -300,6 +301,7 @@ def retrieval(
     sort_by: str = Body(None, description="排序方式：sim=混合相似度，vsim=向量相似度，tsim=关键词相似度"),
     embedding_model_id: str = Body(None, description="Embedding模型ID，为空则使用知识库配置"),
     rerank_model_id: str = Body(None, description="Rerank模型ID，为空则使用知识库配置"),
+    metadatas: dict = Body(None, description="元数据过滤条件，格式为{字段名: {value: 值, fuzzy: 是否模糊查询, relation: 范围关系}}"),
 ):
     """
     知识库检索
@@ -360,6 +362,7 @@ def retrieval(
             sort_by=sort_by,
             embedding_model_id=embedding_model_id,
             rerank_model_id=rerank_model_id,
+            metadatas=metadatas,
         )
         return ResponseUtil.success(data=result)
     except ResourceNotFoundError as e:
@@ -776,6 +779,33 @@ def update_document(kb_id: str, document_id: str, document: KnowledgebaseDocumen
         except (json.JSONDecodeError, TypeError):
             pass
     return ResponseUtil.success(data=data, message="知识库文档更新成功")
+
+
+@router.post("/{kb_id}/document/{document_id}/update_metadata", response_model=ApiResponse)
+async def update_document_metadata(kb_id: str, document_id: str, request: Request):
+    """
+    更新数据集元数据，同步更新数据库和ES索引
+
+    Args:
+        kb_id: 知识库ID
+        document_id: 文档ID
+        request: 请求对象，包含metadatas字段
+
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    try:
+        body = await request.json()
+        metadatas = body.get("metadatas", {})
+        
+        if not isinstance(metadatas, dict):
+            return ResponseUtil.error(message="metadatas必须是字典类型")
+        
+        result = KnowledgebaseDocumentService.update_document_metadata(document_id, kb_id, metadatas)
+        return ResponseUtil.success(data=result, message="元数据更新成功")
+    except Exception as e:
+        logger.error(f"更新元数据失败: {e}")
+        return ResponseUtil.error(message=f"更新元数据失败: {str(e)}")
 
 
 @router.post("/{kb_id}/document/{document_id}/delete", response_model=ApiResponse)

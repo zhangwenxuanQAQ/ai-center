@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Slider, Select, Input, Button, Card, Tag, Spin, Empty, Pagination, Image, Popover, InputNumber, Tooltip, message } from 'antd';
-import { SearchOutlined, FileTextOutlined, DownOutlined, UpOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import { Layout, Slider, Select, Input, Button, Card, Tag, Spin, Empty, Pagination, Image, Popover, InputNumber, Tooltip, message, Switch, DatePicker, Space } from 'antd';
+import { SearchOutlined, FileTextOutlined, DownOutlined, UpOutlined, QuestionCircleOutlined, FilterOutlined } from '@ant-design/icons';
 import MDEditor from '@uiw/react-md-editor';
 import { knowledgebaseService, Knowledgebase } from '../../services/knowledgebase';
+import dayjs from 'dayjs';
+import zhCN from 'antd/es/date-picker/locale/zh_CN';
 import '../../styles/common.css';
 import './knowledgebase.less';
 
 const { Sider: LeftSider, Content } = Layout;
 const { Option } = Select;
+const { RangePicker } = DatePicker;
 
 interface KnowledgebaseRetrievalProps {
   knowledgebase: Knowledgebase;
@@ -41,6 +44,22 @@ interface RetrievalConfigItem {
   step?: number;
   default: any;
   options?: Array<{ value: string; label: string }>;
+}
+
+interface MetadataField {
+  field_name: string;
+  field_label: string;
+  field_type: string;
+}
+
+interface MetadataFilter {
+  field_name: string;
+  field_label: string;
+  field_type: string;
+  control_type: string;
+  value: any;
+  fuzzy?: boolean;
+  relation?: string;
 }
 
 const ChunkCard: React.FC<{
@@ -191,6 +210,11 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
   const [expandedChunks, setExpandedChunks] = useState<Set<string>>(new Set());
+  
+  // 元数据过滤相关状态
+  const [metadataFields, setMetadataFields] = useState<MetadataField[]>([]);
+  const [metadataFilters, setMetadataFilters] = useState<MetadataFilter[]>([]);
+  const [metadataPopoverVisible, setMetadataPopoverVisible] = useState(false);
 
   useEffect(() => {
     const currentTheme = document.body.getAttribute('data-theme') || 'dark';
@@ -231,12 +255,72 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
     fetchRetrievalConfigs();
   }, [knowledgebase.retrieval_config]);
 
+  useEffect(() => {
+    const fetchMetadataFields = async () => {
+      try {
+        const documents = await knowledgebaseService.getDocuments(knowledgebase.id);
+        const fieldMap = new Map<string, MetadataField>();
+        
+        for (const doc of documents.data || []) {
+          if (doc.metadatas) {
+            try {
+              const metadatasObj = typeof doc.metadatas === 'string' ? JSON.parse(doc.metadatas) : doc.metadatas;
+              const schema = metadatasObj._schema || {};
+              
+              for (const [key, value] of Object.entries(metadatasObj)) {
+                if (key === '_schema') continue;
+                if (!fieldMap.has(key)) {
+                  const fieldSchema = schema[key] || {};
+                  fieldMap.set(key, {
+                    field_name: key,
+                    field_label: fieldSchema.label || key,
+                    field_type: fieldSchema.type || 'text',
+                  });
+                }
+              }
+            } catch (e) {
+              console.error('Failed to parse metadatas:', e);
+            }
+          }
+        }
+        
+        const fields = Array.from(fieldMap.values());
+        setMetadataFields(fields);
+        setMetadataFilters(fields.map(field => ({
+          ...field,
+          value: undefined,
+          fuzzy: field.field_type === 'text' ? false : undefined,
+          relation: field.field_type.includes('_range') ? 'INTERSECTS' : undefined,
+        })));
+      } catch (error) {
+        console.error('Failed to fetch metadata fields:', error);
+      }
+    };
+    
+    fetchMetadataFields();
+  }, [knowledgebase.id]);
+
+  const buildMetadataQuery = () => {
+    const result: Record<string, any> = {};
+    for (const filter of metadataFilters) {
+      if (filter.value !== undefined && filter.value !== null && filter.value !== '') {
+        result[filter.field_name] = {
+          value: filter.value,
+          fuzzy: filter.fuzzy,
+          relation: filter.relation,
+        };
+      }
+    }
+    return Object.keys(result).length > 0 ? result : undefined;
+  };
+
   const handleRetrieval = async (page: number = 1) => {
     if (!query.trim()) {
       return;
     }
     setLoading(true);
     try {
+      const metadataQuery = buildMetadataQuery();
       const data = await knowledgebaseService.retrieve(
         [knowledgebase.id],
         query,
@@ -245,6 +329,7 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
           top_k: pageSize,
           page,
           page_size: pageSize,
+          metadatas: metadataQuery,
         }
       );
       setResults(data?.chunks || []);
@@ -303,6 +388,232 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
     } finally {
       setSavingConfig(false);
     }
+  };
+
+  const handleMetadataFilterChange = (index: number, field: string, value: any) => {
+    const newFilters = [...metadataFilters];
+    newFilters[index] = { ...newFilters[index], [field]: value };
+    setMetadataFilters(newFilters);
+  };
+
+  const handleAddMetadataFilter = (field: MetadataField) => {
+    if (metadataFilters.some(f => f.field_name === field.field_name)) {
+      return;
+    }
+    const isRangeType = field.field_type.includes('_range');
+    const isTextType = ['text', 'keyword'].includes(field.field_type);
+    setMetadataFilters([...metadataFilters, {
+      ...field,
+      value: isRangeType ? [null, null] : '',
+      fuzzy: isTextType ? false : undefined,
+      relation: isRangeType ? 'INTERSECTS' : undefined,
+    }]);
+  };
+
+  const handleRemoveMetadataFilter = (index: number) => {
+    setMetadataFilters(metadataFilters.filter((_, i) => i !== index));
+  };
+
+  const renderMetadataValueInput = (filter: MetadataFilter, index: number) => {
+    const inputStyle = {
+      background: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff',
+      color: theme === 'dark' ? '#fff' : '#000',
+    };
+
+    switch (filter.field_type) {
+      case 'boolean':
+        return (
+          <Select
+            value={filter.value}
+            onChange={(v) => handleMetadataFilterChange(index, 'value', v)}
+            style={{ width: '100%' }}
+            size="small"
+            allowClear
+          >
+            <Option value={true}>true</Option>
+            <Option value={false}>false</Option>
+          </Select>
+        );
+      case 'long':
+      case 'integer':
+        return (
+          <InputNumber
+            value={filter.value}
+            onChange={(v) => handleMetadataFilterChange(index, 'value', v)}
+            style={{ width: '100%' }}
+            precision={0}
+            size="small"
+          />
+        );
+      case 'float':
+      case 'double':
+        return (
+          <InputNumber
+            value={filter.value}
+            onChange={(v) => handleMetadataFilterChange(index, 'value', v)}
+            style={{ width: '100%' }}
+            step={0.01}
+            size="small"
+          />
+        );
+      case 'date':
+        return (
+          <DatePicker
+            value={filter.value ? dayjs(filter.value) : null}
+            onChange={(_, ds) => handleMetadataFilterChange(index, 'value', ds)}
+            style={{ width: '100%' }}
+            showTime
+            size="small"
+            locale={zhCN}
+          />
+        );
+      case 'integer_range':
+      case 'long_range':
+        return (
+          <Space>
+            <InputNumber
+              value={Array.isArray(filter.value) ? filter.value[0] : null}
+              onChange={(v) => handleMetadataFilterChange(index, 'value', [v, Array.isArray(filter.value) ? filter.value[1] : null])}
+              precision={0}
+              placeholder="最小值"
+              size="small"
+              style={{ width: 80 }}
+            />
+            <span style={{ color: theme === 'dark' ? '#aaa' : '#999' }}>~</span>
+            <InputNumber
+              value={Array.isArray(filter.value) ? filter.value[1] : null}
+              onChange={(v) => handleMetadataFilterChange(index, 'value', [Array.isArray(filter.value) ? filter.value[0] : null, v])}
+              precision={0}
+              placeholder="最大值"
+              size="small"
+              style={{ width: 80 }}
+            />
+          </Space>
+        );
+      case 'float_range':
+        return (
+          <Space>
+            <InputNumber
+              value={Array.isArray(filter.value) ? filter.value[0] : null}
+              onChange={(v) => handleMetadataFilterChange(index, 'value', [v, Array.isArray(filter.value) ? filter.value[1] : null])}
+              step={0.01}
+              placeholder="最小值"
+              size="small"
+              style={{ width: 80 }}
+            />
+            <span style={{ color: theme === 'dark' ? '#aaa' : '#999' }}>~</span>
+            <InputNumber
+              value={Array.isArray(filter.value) ? filter.value[1] : null}
+              onChange={(v) => handleMetadataFilterChange(index, 'value', [Array.isArray(filter.value) ? filter.value[0] : null, v])}
+              step={0.01}
+              placeholder="最大值"
+              size="small"
+              style={{ width: 80 }}
+            />
+          </Space>
+        );
+      case 'date_range':
+        return (
+          <RangePicker
+            value={filter.value && filter.value[0] && filter.value[1] ? [dayjs(filter.value[0]), dayjs(filter.value[1])] : null}
+            onChange={(_, ds) => handleMetadataFilterChange(index, 'value', ds)}
+            style={{ width: '100%' }}
+            showTime
+            size="small"
+            locale={zhCN}
+          />
+        );
+      default:
+        return (
+          <Input
+            value={filter.value}
+            onChange={(e) => handleMetadataFilterChange(index, 'value', e.target.value)}
+            placeholder="输入查询值"
+            style={inputStyle}
+            size="small"
+          />
+        );
+    }
+  };
+
+  const handleClearAllMetadataFilters = () => {
+    setMetadataFilters(metadataFields.map(field => ({
+      ...field,
+      value: undefined,
+      fuzzy: field.field_type === 'text' ? false : undefined,
+      relation: field.field_type.includes('_range') ? 'INTERSECTS' : undefined,
+    })));
+  };
+
+  const renderMetadataFilterPopover = () => {
+    return (
+      <div style={{ width: 450, maxHeight: 400, overflowY: 'auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div style={{ fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333' }}>
+            元数据过滤条件
+          </div>
+          <Button
+            type="text"
+            size="small"
+            onClick={handleClearAllMetadataFilters}
+            style={{ color: theme === 'dark' ? '#aaa' : '#999' }}
+          >
+            清空
+          </Button>
+        </div>
+        
+        {metadataFilters.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            {metadataFilters.map((filter, index) => (
+              <div key={filter.field_name} style={{ 
+                display: 'flex', 
+                gap: 8, 
+                marginBottom: 8, 
+                alignItems: 'center',
+                padding: '8px',
+                background: theme === 'dark' ? 'rgba(255,255,255,0.03)' : '#fafafa',
+                borderRadius: 4,
+              }}>
+                <div style={{ width: 100, fontSize: 12 }}>
+                  <div style={{ fontWeight: 500 }}>{filter.field_name}</div>
+                  <div style={{ color: theme === 'dark' ? '#aaa' : '#999', fontSize: 11 }}>{filter.field_label}</div>
+                </div>
+                <div style={{ flex: 1 }}>
+                  {renderMetadataValueInput(filter, index)}
+                </div>
+                {filter.field_type === 'text' && (
+                  <Tooltip title="模糊查询">
+                    <Switch
+                      checked={filter.fuzzy || false}
+                      onChange={(v) => handleMetadataFilterChange(index, 'fuzzy', v)}
+                      size="small"
+                    />
+                  </Tooltip>
+                )}
+                {filter.field_type.includes('_range') && (
+                  <Select
+                    value={filter.relation || 'INTERSECTS'}
+                    onChange={(v) => handleMetadataFilterChange(index, 'relation', v)}
+                    style={{ width: 100 }}
+                    size="small"
+                  >
+                    <Option value="INTERSECTS">相交</Option>
+                    <Option value="CONTAINS">包含</Option>
+                    <Option value="WITHIN">被包含</Option>
+                  </Select>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {metadataFields.length === 0 && (
+          <div style={{ textAlign: 'center', color: theme === 'dark' ? '#aaa' : '#999', padding: 20 }}>
+            暂无元数据字段
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -370,7 +681,7 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
               </div>
             ))
           )}
-          <div style={{ position: 'absolute', bottom: '16px', left: '16px', right: '16px', paddingTop: '16px', borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8', background: theme === 'dark' ? '#1a1a2e' : '#fff', padding: '16px' }}>
+          <div style={{ position: 'absolute', bottom: '16px', left: '16px', right: '16px', paddingTop: '16px', borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8', padding: '16px' }}>
             <Button
               type="primary"
               size="small"
@@ -416,6 +727,33 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
             }}
             className="no-border-input"
           />
+          <Popover
+            content={renderMetadataFilterPopover()}
+            trigger="click"
+            placement="bottomLeft"
+            open={metadataPopoverVisible}
+            onOpenChange={setMetadataPopoverVisible}
+          >
+            <Button
+              style={{
+                height: '44px',
+                borderRadius: '22px',
+                background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
+                border: 'none',
+                boxShadow: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              <FilterOutlined />
+              {metadataFilters.length > 0 && (
+                <Tag style={{ margin: 0, padding: '0 4px', fontSize: 10 }}>
+                  {metadataFilters.length}
+                </Tag>
+              )}
+            </Button>
+          </Popover>
           <Button
             type="primary"
             onClick={() => handleRetrieval(1)}
@@ -431,6 +769,25 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
             }}
           >
             开始检索
+          </Button>
+          <Button
+            type="default"
+            onClick={() => {
+              setQuery('');
+              handleClearAllMetadataFilters();
+            }}
+            style={{
+              height: '44px',
+              padding: '0 24px',
+              borderRadius: '22px',
+              border: '1px solid',
+              borderColor: theme === 'dark' ? 'rgba(255,255,255,0.2)' : '#d9d9d9',
+              background: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff',
+              color: theme === 'dark' ? '#fff' : '#666',
+              fontSize: '14px'
+            }}
+          >
+            清空
           </Button>
         </div>
 

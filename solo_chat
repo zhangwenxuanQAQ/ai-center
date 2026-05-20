@@ -912,3 +912,19 @@ ragflow源码主要阅读一下方法：
 - retrieval
 - search
 - rerank
+
+
+
+## 实现数据集元数据设置功能，可以对单个数据集设置元数据，设置的字段会更新到向量库对应的索引数据中。
+- 在数据集表中增加metadatas字段，字段类型为longtext,存储元数据json字符串
+- 在knowledgebase_document_constants.py中定义字段类型，即elasticsearch数据库支持的数据类型，以及前端控件（参考RETRIEVAL_CONFIGS），不用定义的特别细，大致分为字符串，long，integer，float，date，boolean，object，array，integer_range，long_range，float_range，date_range 这些
+- 后端添加更新元数据接口，需要更新数据集库以及向量库对应数据集所有数据。 es需要更新对应字段值
+- 前端新增knowledgebase_document_metadata.tsx页面实现元数据设置页面，数据集列表操作栏添加“设置元数据”按钮，点击以弹窗形式打开元数据设置页面
+- 元数据设置弹窗有一个添加元数据按钮，点击新增一行元数据配置。配置分页3部分：字段名称，字段类型，字段值。 需要根据字段类型使用不同控件设置字段值（比如long为数组输入框，boolean为是否下拉框，date为日期时间，date_range为日期时间区域）
+- 在编辑数据集页面的标签下方也需要添加”元数据“配置项
+
+
+1. 设置元数据时，数据集metadatas还需要存储字段对应的控件信息，字段类型。 元数据设置添加配置项“字段中文名”2. 在检索测试界面检索问题输入框右边添加一个元数据过滤按钮，点击展开元数据条件设置popover组件。默认展示知识库中所有的元数据字段，展示方式为： 字段名，字段中文名，查询值（需要根据字段类型用不同控件），如果是字符类型再添加个模糊查询开关（默认否），如果是*_range字段类型则需要添加一个下拉框设置3种关系参数（INTERSECTS、CONTAINS、WITHIN，默认INTERSECTS）。
+3. 后端es的混合检索，向量检索，文档搜索需要支持metadatas参数，里面非空的字段作为过滤条件
+ 
+保存到数据集库的metadatas字段应该如下：
