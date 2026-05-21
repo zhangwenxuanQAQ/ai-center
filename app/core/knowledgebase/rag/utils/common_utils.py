@@ -44,12 +44,12 @@ def get_llm_cache(llm_name: str, txt: str, history: str, gen_conf: dict) -> str:
         return None
 
 
-def set_llm_cache(llm_name: str, txt: str, value: str, history: str, gen_conf: dict):
+def set_llm_cache(llm_name: str, txt: str, value: str, history: str, gen_conf: dict, exp: int = 24 * 3600):
     """
     设置LLM缓存
 
     基于模型名称、文本内容、历史记录和生成配置计算哈希值作为缓存key，
-    将结果写入Redis，过期时间为24小时
+    将结果写入Redis
 
     Args:
         llm_name: 模型名称
@@ -57,6 +57,7 @@ def set_llm_cache(llm_name: str, txt: str, value: str, history: str, gen_conf: d
         value: 缓存值
         history: 历史记录
         gen_conf: 生成配置
+        exp: 过期时间（秒），默认24小时
     """
     if not redis_utils.is_available:
         return
@@ -65,6 +66,6 @@ def set_llm_cache(llm_name: str, txt: str, value: str, history: str, gen_conf: d
         hasher = hashlib.md5()
         hasher.update((str(llm_name) + str(txt) + str(history) + str(gen_conf)).encode("utf-8"))
         k = hasher.hexdigest()
-        redis_utils.set(k, value, exp=24 * 3600)
+        redis_utils.set(k, value, exp=exp)
     except Exception as e:
         logger.warning(f"设置LLM缓存失败: {e}")

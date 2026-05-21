@@ -1161,11 +1161,23 @@ class KnowledgebaseDocumentService:
         
         if keyword:
             must_conditions.append({
-                "match": {
-                    "content_with_weight": {
-                        "query": keyword,
-                        "minimum_should_match": "75%"
-                    }
+                "bool": {
+                    "should": [
+                        {
+                            "match": {
+                                "content_with_weight": {
+                                    "query": keyword,
+                                    "operator": "and"
+                                }
+                            }
+                        },
+                        {
+                            "match": {
+                                "important_kwd": keyword
+                            }
+                        }
+                    ],
+                    "minimum_should_match": 1
                 }
             })
         
@@ -1238,6 +1250,489 @@ class KnowledgebaseDocumentService:
             return success
         except Exception as e:
             logger.error(f"更新切片可用状态失败: {e}")
+            return False
+
+    @staticmethod
+    def _prepare_chunk_fields(
+        content: str,
+        doc_name: str = "",
+        keywords: List[str] = None,
+        available: int = 1
+    ) -> Dict[str, Any]:
+        """
+        准备切片字段数据
+        
+        Args:
+            content: 切片内容
+            doc_name: 文档名称
+            keywords: 关键词列表
+            available: 是否可用
+            
+        Returns:
+            Dict: 切片字段字典
+        """
+        from app.core.knowledgebase.rag.nlp import rag_tokenizer
+        
+        fields = {}
+        
+        fields["content_with_weight"] = content
+        fields["content_ltks"] = rag_tokenizer.tokenize(content)
+        fields["content_sm_ltks"] = rag_tokenizer.fine_grained_tokenize(fields["content_ltks"])
+        fields["available_int"] = available
+        
+        if doc_name:
+            fields["doc_name"] = doc_name
+            fields["docnm_kwd"] = doc_name
+            fields["title_tks"] = rag_tokenizer.tokenize(doc_name)
+        
+        if keywords:
+            fields["important_kwd"] = keywords
+            fields["important_tks"] = rag_tokenizer.tokenize(" ".join(keywords))
+        
+        return fields
+
+    @staticmethod
+    def _extract_keywords_from_content(content: str, text_model_id: str = None, topn: int = 5) -> List[str]:
+        """
+        从内容中提取关键词
+        
+        Args:
+            content: 切片内容
+            text_model_id: 文本模型ID
+            topn: 提取关键词数量
+            
+        Returns:
+            List[str]: 关键词列表
+        """
+        import asyncio
+        import json
+        from app.core.knowledgebase.rag.prompts.generator import keyword_extraction
+        from app.core.knowledgebase.rag.utils.common_utils import get_llm_cache, set_llm_cache
+        from app.core.llm_model.factory import LLMFactory
+        from app.database.models import LLMModel
+        
+        if not content or not content.strip():
+            return []
+        
+        if not text_model_id:
+            return []
+        
+        try:
+            llm_model = LLMModel.get(LLMModel.id == text_model_id)
+            if not llm_model or llm_model.deleted:
+                logger.warning(f"Text模型不存在或已删除: {text_model_id}")
+                return []
+            
+            model_config = {
+                "api_key": llm_model.api_key,
+                "endpoint": llm_model.endpoint,
+                "name": llm_model.name,
+                "provider": llm_model.provider,
+            }
+            
+            if llm_model.config:
+                try:
+                    extra_config = json.loads(llm_model.config) if isinstance(llm_model.config, str) else llm_model.config
+                    model_config.update(extra_config)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            
+            text_model = LLMFactory.create_model("text", model_config)
+            if not text_model:
+                return []
+            
+            model_name = llm_model.name
+            gen_conf = {"topn": topn}
+            
+            cached = get_llm_cache(model_name, content, "keywords", gen_conf)
+            if cached:
+                return [k.strip() for k in cached.split(",") if k.strip()]
+            
+            async def extract_async():
+                try:
+                    kwd = await keyword_extraction(text_model, content, topn)
+                    if kwd and kwd.find("**ERROR**") < 0:
+                        set_llm_cache(model_name, content, kwd, "keywords", gen_conf, exp=60)
+                        return kwd
+                    return None
+                except Exception as e:
+                    logger.warning(f"关键词提取异常: {e}")
+                    return None
+            
+            kwd = asyncio.run(extract_async())
+            if kwd:
+                return [k.strip() for k in kwd.split(",") if k.strip()]
+            
+            return []
+        except Exception as e:
+            logger.warning(f"关键词提取失败: {e}")
+            return []
+
+    @staticmethod
+    def _embedding_chunk(
+        content: str,
+        doc_name: str = "",
+        embedding_model_id: str = None
+    ) -> Dict[str, Any]:
+        """
+        对切片内容进行向量化
+        
+        Args:
+            content: 切片内容
+            doc_name: 文档名称
+            embedding_model_id: Embedding模型ID
+            
+        Returns:
+            Dict: 包含向量相关字段的字典
+        """
+        if not embedding_model_id:
+            return {}
+        
+        try:
+            import json
+            import numpy as np
+            import re
+            from app.core.llm_model.factory import LLMFactory
+            from app.database.models import LLMModel
+            
+            llm_model = LLMModel.get(LLMModel.id == embedding_model_id)
+            if not llm_model or llm_model.deleted:
+                logger.warning(f"Embedding模型不存在或已删除: {embedding_model_id}")
+                return {}
+            
+            model_config = {
+                "api_key": llm_model.api_key,
+                "endpoint": llm_model.endpoint,
+                "name": llm_model.name,
+                "provider": llm_model.provider,
+            }
+            
+            if llm_model.config:
+                try:
+                    extra_config = json.loads(llm_model.config) if isinstance(llm_model.config, str) else llm_model.config
+                    model_config.update(extra_config)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            
+            embedding_model = LLMFactory.create_model("embedding", model_config)
+            if not embedding_model:
+                return {}
+            
+            title = doc_name or "Title"
+            title = re.sub(r"</?(table|td|caption|tr|th)( [^<>]{0,12})?>", " ", title)
+            
+            vector_content = re.sub(r"</?(table|td|caption|tr|th)( [^<>]{0,12})?>", " ", content)
+            if not vector_content:
+                vector_content = "None"
+            
+            title_embeddings = None
+            content_embeddings = None
+            vector_size = 0
+            token_counts = []
+            
+            try:
+                title_embeddings, _ = embedding_model.encode([title])
+                title_embeddings = np.array(title_embeddings)
+            except Exception as e:
+                logger.warning(f"标题向量化失败: {e}")
+            
+            try:
+                content_embeddings, token_counts = embedding_model.encode([vector_content])
+                content_embeddings = np.array(content_embeddings)
+            except Exception as e:
+                logger.warning(f"正文向量化失败: {e}")
+            
+            if content_embeddings is not None and len(content_embeddings) > 0:
+                vector_size = len(content_embeddings[0])
+            elif title_embeddings is not None and len(title_embeddings) > 0:
+                vector_size = len(title_embeddings[0])
+            
+            if vector_size == 0:
+                return {}
+            
+            filename_embd_weight = 0.1
+            
+            if (title_embeddings is not None and content_embeddings is not None and
+                title_embeddings.shape == content_embeddings.shape):
+                final_embedding = filename_embd_weight * title_embeddings[0] + (1 - filename_embd_weight) * content_embeddings[0]
+            elif content_embeddings is not None and len(content_embeddings) > 0:
+                final_embedding = content_embeddings[0]
+            elif title_embeddings is not None and len(title_embeddings) > 0:
+                final_embedding = title_embeddings[0]
+            else:
+                final_embedding = np.zeros(vector_size)
+            
+            fields = {}
+            q_vec_field = f"q_{vector_size}_vec"
+            fields[q_vec_field] = final_embedding.tolist()
+            fields["embedding"] = final_embedding.tolist()
+            
+            if token_counts:
+                fields["tkn_cnt_int"] = token_counts[0]
+                fields["token_num_int"] = token_counts[0]
+            fields["char_count_int"] = len(vector_content)
+            
+            return fields
+        except Exception as e:
+            logger.warning(f"向量化失败: {e}")
+            return {}
+
+    @staticmethod
+    def create_chunk(
+        kb_id: str,
+        doc_id: str,
+        content: str,
+        keywords: List[str] = None,
+        available: int = 1
+    ) -> Dict[str, Any]:
+        """
+        新增切片
+        
+        Args:
+            kb_id: 知识库ID
+            doc_id: 文档ID
+            content: 切片内容
+            keywords: 关键词列表
+            available: 是否可用
+            
+        Returns:
+            Dict: 包含chunk_id的字典
+        """
+        if not es_utils.is_available:
+            raise RuntimeError("Elasticsearch不可用，无法创建切片")
+        
+        from datetime import datetime
+        from app.database.models import KnowledgebaseDocument, Knowledgebase
+        
+        doc = KnowledgebaseDocument.get_by_id(doc_id)
+        if not doc:
+            raise ValueError(f"文档不存在: {doc_id}")
+        
+        kb = Knowledgebase.get_by_id(kb_id)
+        if not kb:
+            raise ValueError(f"知识库不存在: {kb_id}")
+        
+        doc_name = doc.file_name or ""
+        
+        extracted_keywords = []
+        text_model_id = kb.text_model_id
+        if text_model_id:
+            extracted_keywords = KnowledgebaseDocumentService._extract_keywords_from_content(
+                content, text_model_id, topn=5
+            )
+        
+        if keywords is not None:
+            all_keywords = list(set(keywords + extracted_keywords))
+        else:
+            all_keywords = extracted_keywords
+        
+        fields = KnowledgebaseDocumentService._prepare_chunk_fields(
+            content=content,
+            doc_name=doc_name,
+            keywords=all_keywords,
+            available=available
+        )
+        
+        embedding_fields = KnowledgebaseDocumentService._embedding_chunk(
+            content=content,
+            doc_name=doc_name,
+            embedding_model_id=kb.embedding_model_id
+        )
+        fields.update(embedding_fields)
+        
+        fields["doc_id"] = doc_id
+        fields["kb_id"] = kb_id
+        
+        # 添加文档元数据
+        if doc.metadatas:
+            try:
+                import json
+                metadatas_dict = json.loads(doc.metadatas) if isinstance(doc.metadatas, str) else doc.metadatas
+                if metadatas_dict and isinstance(metadatas_dict, dict):
+                    fields["metadatas"] = metadatas_dict
+            except Exception as e:
+                logger.warning(f"解析文档元数据失败: {e}")
+        
+        now = datetime.now()
+        chunk_id = f"{doc_id}_{now.strftime('%Y%m%d%H%M%S%f')}"
+        fields["chunk_id"] = chunk_id
+        fields["create_time"] = str(now).replace("T", " ")[:19]
+        fields["create_timestamp_flt"] = now.timestamp()
+        
+        success = es_utils.insert_document(
+            index_name=kb_id,
+            doc=fields,
+            doc_id=chunk_id
+        )
+        
+        if not success:
+            raise RuntimeError("切片创建失败")
+        
+        # 返回完整的切片数据
+        created_chunk = es_utils.get_document(index_name=kb_id, doc_id=chunk_id)
+        return created_chunk
+
+    @staticmethod
+    def update_chunk(
+        kb_id: str,
+        chunk_id: str,
+        content: str = None,
+        keywords: List[str] = None,
+        available: int = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        更新切片
+        
+        Args:
+            kb_id: 知识库ID
+            chunk_id: 切片ID
+            content: 切片内容
+            keywords: 关键词列表
+            available: 是否可用
+            
+        Returns:
+            Optional[Dict]: 更新后的切片数据，失败返回None
+        """
+        if not es_utils.is_available:
+            logger.warning("ES不可用，无法更新切片")
+            return None
+        
+        from app.database.models import KnowledgebaseDocument, Knowledgebase
+        
+        existing_chunk = es_utils.get_document(index_name=kb_id, doc_id=chunk_id)
+        if not existing_chunk:
+            logger.warning(f"切片不存在: {chunk_id}")
+            return None
+        
+        update_fields = {}
+        
+        if content is not None:
+            doc_id = existing_chunk.get("doc_id", "")
+            doc = KnowledgebaseDocument.get_by_id(doc_id) if doc_id else None
+            doc_name = doc.file_name if doc else existing_chunk.get("doc_name", "")
+            
+            extracted_keywords = []
+            kb = Knowledgebase.get_by_id(kb_id)
+            text_model_id = kb.text_model_id if kb else None
+            if text_model_id:
+                extracted_keywords = KnowledgebaseDocumentService._extract_keywords_from_content(
+                    content, text_model_id, topn=5
+                )
+            
+            if keywords is not None:
+                all_keywords = list(set(keywords + extracted_keywords))
+            else:
+                all_keywords = extracted_keywords
+            
+            fields = KnowledgebaseDocumentService._prepare_chunk_fields(
+                content=content,
+                doc_name=doc_name,
+                keywords=all_keywords,
+                available=available if available is not None else existing_chunk.get("available_int", 1)
+            )
+            
+            embedding_fields = KnowledgebaseDocumentService._embedding_chunk(
+                content=content,
+                doc_name=doc_name,
+                embedding_model_id=kb.embedding_model_id if kb else None
+            )
+            fields.update(embedding_fields)
+            
+            # 添加文档元数据
+            if doc and doc.metadatas:
+                try:
+                    import json
+                    metadatas_dict = json.loads(doc.metadatas) if isinstance(doc.metadatas, str) else doc.metadatas
+                    if metadatas_dict and isinstance(metadatas_dict, dict):
+                        fields["metadatas"] = metadatas_dict
+                except Exception as e:
+                    logger.warning(f"解析文档元数据失败: {e}")
+            
+            update_fields.update(fields)
+        else:
+            if keywords is not None:
+                from app.core.knowledgebase.rag.nlp import rag_tokenizer
+                update_fields["important_kwd"] = keywords
+                update_fields["important_tks"] = rag_tokenizer.tokenize(" ".join(keywords))
+            
+            if available is not None:
+                update_fields["available_int"] = available
+            
+            # 添加文档元数据
+            doc_id = existing_chunk.get("doc_id", "")
+            if doc_id:
+                doc = KnowledgebaseDocument.get_by_id(doc_id)
+                if doc and doc.metadatas:
+                    try:
+                        import json
+                        metadatas_dict = json.loads(doc.metadatas) if isinstance(doc.metadatas, str) else doc.metadatas
+                        if metadatas_dict and isinstance(metadatas_dict, dict):
+                            update_fields["metadatas"] = metadatas_dict
+                    except Exception as e:
+                        logger.warning(f"解析文档元数据失败: {e}")
+        
+        # 如果没有更新字段，检查是否需要更新元数据
+        if not update_fields:
+            doc_id = existing_chunk.get("doc_id", "")
+            if doc_id:
+                doc = KnowledgebaseDocument.get_by_id(doc_id)
+                if doc and doc.metadatas:
+                    try:
+                        import json
+                        metadatas_dict = json.loads(doc.metadatas) if isinstance(doc.metadatas, str) else doc.metadatas
+                        if metadatas_dict and isinstance(metadatas_dict, dict):
+                            # 检查元数据是否有变化
+                            existing_metadatas = existing_chunk.get("metadatas", {})
+                            if metadatas_dict != existing_metadatas:
+                                update_fields["metadatas"] = metadatas_dict
+                    except Exception as e:
+                        logger.warning(f"解析文档元数据失败: {e}")
+        
+        if not update_fields:
+            return existing_chunk
+        
+        try:
+            success = es_utils.update_document(
+                index_name=kb_id,
+                doc_id=chunk_id,
+                doc=update_fields
+            )
+            if success:
+                # 获取更新后的切片数据
+                updated_chunk = es_utils.get_document(index_name=kb_id, doc_id=chunk_id)
+                return updated_chunk
+            return None
+        except Exception as e:
+            logger.error(f"更新切片失败: {e}")
+            return None
+
+    @staticmethod
+    def delete_chunk(
+        kb_id: str,
+        chunk_id: str
+    ) -> bool:
+        """
+        删除切片
+        
+        Args:
+            kb_id: 知识库ID
+            chunk_id: 切片ID
+            
+        Returns:
+            bool: 是否删除成功
+        """
+        if not es_utils.is_available:
+            logger.warning("ES不可用，无法删除切片")
+            return False
+        
+        try:
+            success = es_utils.delete_document(
+                index_name=kb_id,
+                doc_id=chunk_id
+            )
+            return success
+        except Exception as e:
+            logger.error(f"删除切片失败: {e}")
             return False
 
 

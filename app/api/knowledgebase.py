@@ -1276,7 +1276,7 @@ def get_chunks(
 def toggle_chunk_available(
     kb_id: str,
     chunk_id: str,
-    available: int = Body(..., embed=True, description="可用状态，0=停用，1=启用"),
+    available_int: int = Body(..., embed=True, description="可用状态，0=停用，1=启用"),
 ):
     """
     切换切片的可用状态
@@ -1284,19 +1284,19 @@ def toggle_chunk_available(
     Args:
         kb_id: 知识库ID
         chunk_id: 切片ID（ES文档ID）
-        available: 可用状态
+        available_int: 可用状态
         
     Returns:
         ApiResponse: 操作结果
     """
     try:
-        if available not in [0, 1]:
-            return ResponseUtil.error(message="available参数必须为0或1")
-            
+        if available_int not in [0, 1]:
+            return ResponseUtil.error(message="available_int参数必须为0或1")
+        
         success = KnowledgebaseDocumentService.toggle_chunk_available(
             kb_id=kb_id,
             chunk_id=chunk_id,
-            available=available
+            available=available_int
         )
         if success:
             return ResponseUtil.success(message="更新成功")
@@ -1304,6 +1304,120 @@ def toggle_chunk_available(
             return ResponseUtil.error(message="更新失败")
     except Exception as e:
         logger.error(f"切换切片可用状态失败: {e}")
+        return ResponseUtil.error(message=str(e))
+
+
+@router.post("/{kb_id}/chunk", response_model=ApiResponse)
+def create_chunk(
+    kb_id: str,
+    doc_id: str = Body(..., description="文档ID"),
+    content: str = Body(..., description="切片内容"),
+    keywords: List[str] = Body(None, description="关键词数组"),
+    available_int: int = Body(1, description="是否可用，0=停用，1=启用"),
+):
+    """
+    新增切片
+    
+    Args:
+        kb_id: 知识库ID
+        doc_id: 文档ID
+        content: 切片内容
+        keywords: 关键词数组（可选）
+        available_int: 是否可用
+        
+    Returns:
+        ApiResponse: 包含新增切片完整数据
+    """
+    try:
+        if available_int not in [0, 1]:
+            return ResponseUtil.error(message="available_int参数必须为0或1")
+        
+        if not content or not content.strip():
+            return ResponseUtil.error(message="切片内容不能为空")
+        
+        result = KnowledgebaseDocumentService.create_chunk(
+            kb_id=kb_id,
+            doc_id=doc_id,
+            content=content,
+            keywords=keywords,
+            available=available_int
+        )
+        return ResponseUtil.success(data=result, message="切片创建成功")
+    except Exception as e:
+        logger.error(f"新增切片失败: {e}")
+        return ResponseUtil.error(message=str(e))
+
+
+@router.post("/{kb_id}/chunk/{chunk_id}/update", response_model=ApiResponse)
+def update_chunk(
+    kb_id: str,
+    chunk_id: str,
+    content: str = Body(None, description="切片内容"),
+    keywords: List[str] = Body(None, description="关键词数组"),
+    available_int: int = Body(None, description="是否可用，0=停用，1=启用"),
+):
+    """
+    更新切片
+    
+    Args:
+        kb_id: 知识库ID
+        chunk_id: 切片ID
+        content: 切片内容（可选）
+        keywords: 关键词数组（可选）
+        available_int: 是否可用（可选）
+        
+    Returns:
+        ApiResponse: 更新后的切片数据
+    """
+    try:
+        if available_int is not None and available_int not in [0, 1]:
+            return ResponseUtil.error(message="available_int参数必须为0或1")
+        
+        if content is not None and not content.strip():
+            return ResponseUtil.error(message="切片内容不能为空")
+        
+        result = KnowledgebaseDocumentService.update_chunk(
+            kb_id=kb_id,
+            chunk_id=chunk_id,
+            content=content,
+            keywords=keywords,
+            available=available_int
+        )
+        if result:
+            return ResponseUtil.success(data=result, message="切片更新成功")
+        else:
+            return ResponseUtil.error(message="切片更新失败")
+    except Exception as e:
+        logger.error(f"更新切片失败: {e}")
+        return ResponseUtil.error(message=str(e))
+
+
+@router.post("/{kb_id}/chunk/{chunk_id}/delete", response_model=ApiResponse)
+def delete_chunk(
+    kb_id: str,
+    chunk_id: str,
+):
+    """
+    删除切片
+    
+    Args:
+        kb_id: 知识库ID
+        chunk_id: 切片ID
+        
+    Returns:
+        ApiResponse: 操作结果
+    """
+    try:
+        success = KnowledgebaseDocumentService.delete_chunk(
+            kb_id=kb_id,
+            chunk_id=chunk_id
+        )
+        if success:
+            return ResponseUtil.success(message="切片删除成功")
+        else:
+            return ResponseUtil.error(message="切片删除失败")
+    except Exception as e:
+        logger.error(f"删除切片失败: {e}")
         return ResponseUtil.error(message=str(e))
 
 

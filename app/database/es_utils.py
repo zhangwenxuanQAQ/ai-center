@@ -338,6 +338,11 @@ class ESUtils:
             index_mappings = mappings or {
                 "properties": {
                     "content": {"type": "text", "analyzer": "ik_max_word"},
+                    "content_with_weight": {"type": "text", "analyzer": "ik_max_word"},
+                    "content_ltks": {"type": "text", "analyzer": "ik_max_word"},
+                    "content_sm_ltks": {"type": "text", "analyzer": "ik_max_word"},
+                    "important_kwd": {"type": "keyword"},
+                    "important_tks": {"type": "text", "analyzer": "ik_max_word"},
                     "content_vector": {
                         "type": "dense_vector",
                         "dims": 1024,
@@ -347,6 +352,11 @@ class ESUtils:
                     "doc_name": {"type": "keyword"},
                     "doc_type": {"type": "keyword"},
                     "kb_id": {"type": "keyword"},
+                    "doc_id": {"type": "keyword"},
+                    "available_int": {"type": "integer"},
+                    "page_num_int": {"type": "integer"},
+                    "top_int": {"type": "integer"},
+                    "create_timestamp_flt": {"type": "float"},
                     "created_at": {"type": "date"},
                 }
             }
@@ -362,18 +372,22 @@ class ESUtils:
             return True
 
     @retry_on_failure
-    def insert_document(self, index_name: str, doc: Dict[str, Any]) -> bool:
+    def insert_document(self, index_name: str, doc: Dict[str, Any], doc_id: str = None) -> bool:
         """
         插入单个文档（带重试机制）
 
         Args:
             index_name: 索引名称
             doc: 文档数据
+            doc_id: 文档ID（可选，不指定则由ES自动生成）
 
         Returns:
             bool: 是否插入成功
         """
-        res = self._es_client.index(index=index_name, document=doc)
+        if doc_id:
+            res = self._es_client.index(index=index_name, id=doc_id, document=doc, refresh=True)
+        else:
+            res = self._es_client.index(index=index_name, document=doc, refresh=True)
         logger.debug(f"插入文档成功, _id: {res.get('_id')}")
         return True
 
@@ -396,7 +410,7 @@ class ESUtils:
             }
             for doc in docs
         ]
-        success, failed = bulk(self._es_client, actions)
+        success, failed = bulk(self._es_client, actions, refresh=True)
         logger.info(f"批量插入完成, 成功: {success}, 失败: {len(failed)}")
         return success
 
@@ -1166,7 +1180,7 @@ class ESUtils:
         Returns:
             bool: 是否删除成功
         """
-        self._es_client.delete(index=index_name, id=doc_id)
+        self._es_client.delete(index=index_name, id=doc_id, refresh=True)
         logger.info(f"删除文档成功: {doc_id}")
         return True
 
@@ -1187,6 +1201,7 @@ class ESUtils:
             index=index_name,
             query=es_query,
             wait_for_completion=True,
+            refresh=True
         )
         deleted_count = res.get('deleted', 0)
         logger.info(f"根据条件删除文档, 数量: {deleted_count}")
@@ -1216,7 +1231,8 @@ class ESUtils:
             index=index_name,
             id=doc_id,
             doc=doc,
-            doc_as_upsert=upsert
+            doc_as_upsert=upsert,
+            refresh=True
         )
         logger.info(f"更新文档成功: {doc_id}")
         return True

@@ -32,6 +32,7 @@ from app.database.models import KnowledgebaseDocument, Knowledgebase, LLMModel
 from app.database.storage.rustfs_utils import rustfs_utils
 from app.core.llm_model.factory import LLMFactory
 from app.constants.knowledgebase_document_constants import RunningStatus
+from app.core.knowledgebase.rag.nlp import rag_tokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -352,6 +353,10 @@ class TaskExecutor:
         """
         task_id = doc_id
 
+        # 清除旧的任务缓存，避免重新执行时读到旧数据
+        self._tasks.pop(task_id, None)
+        redis_utils.delete(f"{self.TASK_KEY_PREFIX}{task_id}")
+
         task = DocumentTask(
             task_id=task_id,
             doc_id=doc_id,
@@ -366,6 +371,15 @@ class TaskExecutor:
 
         self._tasks[task_id] = task
         self._save_task(task)
+
+        # 清空数据库中的进度和进度消息
+        try:
+            doc = KnowledgebaseDocument.get(KnowledgebaseDocument.id == doc_id)
+            doc.task_progress = 0
+            doc.task_progress_message = ""
+            doc.save()
+        except Exception as e:
+            logger.warning(f"清空文档进度失败: {e}")
 
         message = {
             "task_id": task_id,
@@ -534,12 +548,12 @@ class TaskExecutor:
             append: 是否追加消息，默认为True；设为False则更新最后一条同类型消息
         """
         try:
+            # 先检查是否已取消，如果取消则立即抛出异常
+            if self._has_canceled(task.task_id):
+                raise TaskCanceledException(msg)
+            
             if prog is not None and prog < 0:
                 msg = "[ERROR]" + msg
-
-            if self._has_canceled(task.task_id):
-                msg += " [Canceled]"
-                prog = -1
 
             if prog is not None:
                 new_progress = min(max(prog, 0), 1.0)
@@ -575,9 +589,6 @@ class TaskExecutor:
 
             self._save_task(task)
             self._update_document_status(task)
-
-            if self._has_canceled(task.task_id):
-                raise TaskCanceledException(msg)
 
         except TaskCanceledException:
             raise
@@ -747,7 +758,7 @@ class TaskExecutor:
             try:
                 kwd = await keyword_extraction(text_model, content, topn)
                 if kwd and kwd.find("**ERROR**") < 0:
-                    set_llm_cache(model_name, content, kwd, "keywords", gen_conf)
+                    set_llm_cache(model_name, content, kwd, "keywords", gen_conf, exp=60)
                     return i, chunk, kwd
                 return i, chunk, None
             except Exception as e:
@@ -762,6 +773,7 @@ class TaskExecutor:
                 i, chunk, keywords = await future
                 if keywords:
                     chunk["important_kwd"] = [k.strip() for k in keywords.split(",") if k.strip()]
+                    chunk["important_tks"] = rag_tokenizer.tokenize(" ".join(chunk["important_kwd"]))
                 processed += 1
 
                 if processed % 10 == 0 or processed == total:
@@ -951,6 +963,11 @@ class TaskExecutor:
             return
 
         try:
+            # 先判断索引是否存在
+            if not es_utils.client.indices.exists(index=kb_id):
+                logger.info(f"索引不存在，跳过删除: kb={kb_id}")
+                return
+
             query = {
                 "query": {
                     "term": {"doc_id": doc_id}
@@ -1039,7 +1056,9 @@ class TaskExecutor:
             try:
                 task.status = RunningStatus.RUNNING
                 task.started_at = datetime.now()
-                self._set_progress(task, 0.0, "开始处理...")
+                task.progress = 0.0
+                task.progress_message = ""
+                self._set_progress(task, 0.0, "开始处理...", append=False)
 
                 try:
                     self._execute_chunk(task)
@@ -1063,6 +1082,9 @@ class TaskExecutor:
             finally:
                 self._remove_active_task(task_id)
                 redis_utils.delete(f"{self.CANCEL_KEY_PREFIX}{task_id}")
+                # 任务完成后删除Redis中的任务信息，避免重新执行时读到旧数据
+                redis_utils.delete(f"{self.TASK_KEY_PREFIX}{task_id}")
+                self._tasks.pop(task_id, None)
 
         except Exception as e:
             logger.exception(f"处理消息异常: {e}")
