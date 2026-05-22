@@ -97,13 +97,14 @@ class RerankModel(BaseLLM):
                     if 0 <= idx < len(rank):
                         rank[idx] = float(score)
                 
-                min_rank = np.min(rank)
-                max_rank = np.max(rank)
-                
-                if not np.isclose(min_rank, max_rank, atol=1e-3):
-                    rank = (rank - min_rank) / (max_rank - min_rank)
-                else:
-                    rank = np.zeros_like(rank)
+                # 直接返回模型的rank结果，不进行二次处理
+                # min_rank = np.min(rank)
+                # max_rank = np.max(rank)
+                # 
+                # if not np.isclose(min_rank, max_rank, atol=1e-3):
+                #     rank = (rank - min_rank) / (max_rank - min_rank)
+                # else:
+                #     rank = np.zeros_like(rank)
                 
                 return rank, token_count
                 

@@ -7,6 +7,35 @@
 
 ## [Unreleased]
 
+## [aihub_v2_beta_0.1] - 2026-05-21
+
+### 新增
+- 知识库数据集表添加metadatas字段，支持设置元数据以及元数据查询知识
+- 向量库增加availabel_int、image_base64字段
+- 支持单个切片增改删操作
+
+### 变更
+- 切片关键词提取提示词修改
+- es索引mapping文件更新
+- rerank模型的相似度查询方法更新
+- 知识向量检索的相似度计算更新
+- 切片向量化逻辑代码更新
+- 切片查询前后端代码更新
+- 知识检索前后端代码更新
+- 检索测试界面更新
+- 切片列表页面更新
+- Dockerfile更新
+
+### 修复
+- 任务进度bug修复
+- 测试连接数据源前端代码bug修复
+- 批量删除未删除es数据bug修复
+- embedding数据错误问题修复
+- PDF表格解析bug修复
+- 前端assets资源文件获取路径bug修复
+
+## [Unreleased]
+
 ### 新增
 - 添加Docker部署支持，支持容器化部署
 - 添加完整的Dockerfile和docker-compose.yml配置

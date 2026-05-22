@@ -37,7 +37,7 @@ def _needs_text_extraction(mime_type: Optional[str], file_name: Optional[str]) -
     return True
 
 
-def extract_text_from_file(file_name: str, base64_content: str, chunk_method: str = "naive") -> str:
+def _extract_text_from_file(file_name: str, base64_content: str, chunk_method: str = "naive") -> str:
     """
     从文件中提取文本内容，使用RAG切片方法
 
@@ -97,7 +97,7 @@ def extract_text_from_file(file_name: str, base64_content: str, chunk_method: st
     return result
 
 
-def get_chunk_method_for_file(file_name: str) -> str:
+def _get_chunk_method_for_file(file_name: str) -> str:
     """
     根据文件类型获取切片方法
 
@@ -111,7 +111,7 @@ def get_chunk_method_for_file(file_name: str) -> str:
     return get_chunk_method_by_file_type(file_type, file_name)
 
 
-def build_file_content_text(file_name: str, file_size: Optional[int], extracted_text: str, index: int = 1) -> str:
+def _build_file_content_text(file_name: str, file_size: Optional[int], extracted_text: str, index: int = 1) -> str:
     """
     构建文件内容文本，按照指定格式
 
@@ -171,11 +171,11 @@ def build_user_prompt_with_documents(query: List[QueryItem], original_text: str)
             if not base64_content:
                 continue
 
-            chunk_method = get_chunk_method_for_file(file_name)
-            extracted_text = extract_text_from_file(file_name, base64_content, chunk_method)
+            chunk_method = _get_chunk_method_for_file(file_name)
+            extracted_text = _extract_text_from_file(file_name, base64_content, chunk_method)
 
             if extracted_text:
-                file_text = build_file_content_text(file_name, file_size, extracted_text, file_index)
+                file_text = _get_chunk_method_for_file(file_name, file_size, extracted_text, file_index)
                 # 每个文件内容用 ``` 包裹
                 document_texts.append(f"```\n{file_text}\n```")
                 file_index += 1
@@ -206,11 +206,11 @@ def build_user_prompt_with_documents(query: List[QueryItem], original_text: str)
             if not base64_content:
                 continue
 
-            chunk_method = get_chunk_method_for_file(file_name)
-            extracted_text = extract_text_from_file(file_name, base64_content, chunk_method)
+            chunk_method = _get_chunk_method_for_file(file_name)
+            extracted_text = _extract_text_from_file(file_name, base64_content, chunk_method)
 
             if extracted_text:
-                file_text = build_file_content_text(file_name, file_size, extracted_text, file_index)
+                file_text = _build_file_content_text(file_name, file_size, extracted_text, file_index)
                 # 每个文件内容用 ``` 包裹
                 document_texts.append(f"```\n{file_text}\n```")
                 file_index += 1

@@ -442,15 +442,12 @@ const DatasourceManagement: React.FC = () => {
 
   const handleTestConnection = async (datasource: Datasource) => {
     try {
-      const result = await datasourceService.testConnection(datasource.id);
-      if (result.success) {
-        message.success('连接测试成功！');
-      } else {
-        message.error(`连接测试失败：${result.message || '未知错误'}`);
-      }
-    } catch (error) {
+      await datasourceService.testConnection(datasource.id);
+      // http.post 成功时返回 result.data，如果没抛异常说明连接成功
+      message.success('连接测试成功！');
+    } catch (error: any) {
       console.error('测试连接失败:', error);
-      message.error('连接测试失败');
+      message.error(error.message || '连接测试失败');
     }
   };
 
@@ -604,23 +601,21 @@ const DatasourceManagement: React.FC = () => {
       
       const result = await datasourceService.testConnection('test', testData);
       
+      // http.post 成功时返回 result.data，如果没抛异常说明连接成功
+      // result 可能是 null（当 data 为 null 时），但这不代表失败
       setConnectionTestResult({
-        success: result.success || false,
-        message: result.message || '连接测试失败'
+        success: true,
+        message: '连接测试成功'
       });
-      
-      if (result.success) {
-        message.success('连接测试成功！');
-      } else {
-        message.error(result.message || '连接测试失败');
-      }
+      message.success('连接测试成功！');
     } catch (error: any) {
       console.error('测试连接失败:', error);
+      const errorMsg = error.message || '连接测试失败';
       setConnectionTestResult({
         success: false,
-        message: error.message || '连接测试失败'
+        message: errorMsg
       });
-      message.error('连接测试失败');
+      message.error(errorMsg);
     } finally {
       setTestingConnection(false);
     }

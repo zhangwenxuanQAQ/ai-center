@@ -131,10 +131,21 @@
       {
         "string": {
           "match_pattern": "regex",
-          "match": "^.*_(with_weight|list)$",
+          "match": "^.*_list$",
           "mapping": {
             "type": "text",
             "index": "false",
+            "store": true
+          }
+        }
+      },
+      {
+        "with_weight": {
+          "match_pattern": "regex",
+          "match": "^.*_with_weight$",
+          "match_mapping_type": "string",
+          "mapping": {
+            "type": "text",
             "store": true
           }
         }
@@ -156,50 +167,46 @@
         }
       },
       {
-        "dense_vector": {
+        "dense_vector_512": {
           "match": "*_512_vec",
           "mapping": {
             "type": "dense_vector",
             "index": true,
             "similarity": "cosine",
-            "dims": 512,
-            "store": true
+            "dims": 512
           }
         }
       },
       {
-        "dense_vector": {
+        "dense_vector_768": {
           "match": "*_768_vec",
           "mapping": {
             "type": "dense_vector",
             "index": true,
             "similarity": "cosine",
-            "dims": 768,
-            "store": true
+            "dims": 768
           }
         }
       },
       {
-        "dense_vector": {
+        "dense_vector_1024": {
           "match": "*_1024_vec",
           "mapping": {
             "type": "dense_vector",
             "index": true,
             "similarity": "cosine",
-            "dims": 1024,
-            "store": true
+            "dims": 1024
           }
         }
       },
       {
-        "dense_vector": {
+        "dense_vector_1536": {
           "match": "*_1536_vec",
           "mapping": {
             "type": "dense_vector",
             "index": true,
             "similarity": "cosine",
-            "dims": 1536,
-            "store": true
+            "dims": 1536
           }
         }
       },
@@ -211,8 +218,7 @@
             "type": "dense_vector",
             "index": true,
             "similarity": "cosine",
-            "dims": 1024,
-            "store": true
+            "dims": 1024
           }
         }
       },

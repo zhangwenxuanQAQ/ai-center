@@ -71,6 +71,24 @@ const KnowledgebaseSetting: React.FC<KnowledgebaseSettingProps> = ({ knowledgeba
   }, []);
 
   useEffect(() => {
+    const handleConfigUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent<{ kbId: string; retrievalConfig: Record<string, any> }>;
+      if (customEvent.detail && customEvent.detail.kbId === knowledgebase.id) {
+        setRetrievalConfig(customEvent.detail.retrievalConfig);
+        setOriginalData(prev => ({
+          ...prev,
+          retrieval_config: customEvent.detail.retrievalConfig
+        }));
+      }
+    };
+
+    window.addEventListener('knowledgebaseConfigUpdated', handleConfigUpdated);
+    return () => {
+      window.removeEventListener('knowledgebaseConfigUpdated', handleConfigUpdated);
+    };
+  }, [knowledgebase.id]);
+
+  useEffect(() => {
     fetchCategories();
     fetchModels();
     fetchModelTypes();

@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Button, Input, Select, Tag, Upload, message, Slider, InputNumber, Tooltip, Form, Switch, TreeSelect, Spin, Empty, Row, Col, List } from 'antd';
+import { Button, Input, Select, Tag, Upload, message, Slider, InputNumber, Tooltip, Form, Switch, TreeSelect, Spin, Empty, Row, Col, List, DatePicker, Space } from 'antd';
+const { RangePicker } = DatePicker;
+import type { RangePickerProps } from 'antd/es/date-picker';
+import dayjs from 'dayjs';
+import zhCN from 'antd/es/date-picker/locale/zh_CN';
 import PageHeader from '../../components/page-header';
 import {
   UploadOutlined,
@@ -80,6 +84,8 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
   const [chunkMethod, setChunkMethod] = useState<string>('naive');
   const [chunkConfig, setChunkConfig] = useState<Record<string, unknown>>({});
   const [tags, setTags] = useState<string[]>([]);
+  const [metadatas, setMetadatas] = useState<Array<{ field_name: string; field_label: string; field_type: string; field_value: any }>>([]);
+  const [metadataFieldTypes, setMetadataFieldTypes] = useState<Array<{ key: string; label: string; es_type: string; type: string }>>([]);
   const [fileList, setFileList] = useState<Array<{ uid: string; name: string; size: number }>>([]);
   const [status, setStatus] = useState<boolean>(true);
   const [categoryId, setCategoryId] = useState<string>('');
@@ -208,6 +214,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     status: true,
     fileList: [] as Array<{ uid: string; name: string; size: number }>,
     categoryId: '',
+    metadatas: [] as Array<{ field_name: string; field_label: string; field_type: string; field_value: any }>,
   });
 
   useEffect(() => {
@@ -395,12 +402,36 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       const docStatus = typeof doc.status === 'string' ? doc.status === 'active' : !!doc.status;
       const docCategoryId = doc.category_id || '';
 
+      // 解析元数据
+      const initMetadatas: Array<{ field_name: string; field_label: string; field_type: string; field_value: any }> = [];
+      if (doc.metadatas) {
+        try {
+          const metadatasObj = typeof doc.metadatas === 'string' ? JSON.parse(doc.metadatas) : doc.metadatas;
+          if (typeof metadatasObj === 'object' && metadatasObj !== null) {
+            const schema = metadatasObj._schema || {};
+            for (const [key, value] of Object.entries(metadatasObj)) {
+              if (key === '_schema') continue;
+              const fieldSchema = schema[key] || {};
+              initMetadatas.push({ 
+                field_name: key, 
+                field_label: fieldSchema.label || '', 
+                field_type: fieldSchema.type || 'text', 
+                field_value: value 
+              });
+            }
+          }
+        } catch (e) {
+          console.error('Failed to parse metadatas:', e);
+        }
+      }
+
       setSourceType(docSourceType);
       setChunkMethod(docChunkMethod);
       setChunkConfig(docChunkConfig as Record<string, unknown>);
       setTags(docTags);
       setStatus(docStatus);
       setCategoryId(docCategoryId);
+      setMetadatas([...initMetadatas]);
 
       // 从 source_config 中提取数据源ID和桶名（如果是数据源类型）
       if (docSourceType === 'datasource' && doc.source_config) {
@@ -425,6 +456,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         status: docStatus,
         fileList: [], // 文件列表在编辑模式下不会重新初始化，因为文件已上传
         categoryId: docCategoryId,
+        metadatas: initMetadatas,
       };
       setOriginalData(initData);
     } else if (constants) {
@@ -442,6 +474,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       status,
       fileList: [...fileList],
       categoryId,
+      metadatas: [...metadatas],
     };
     const changed =
       current.sourceType !== originalData.sourceType ||
@@ -450,9 +483,10 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       JSON.stringify(current.tags) !== JSON.stringify(originalData.tags) ||
       current.status !== originalData.status ||
       JSON.stringify(current.fileList) !== JSON.stringify(originalData.fileList) ||
-      current.categoryId !== originalData.categoryId;
+      current.categoryId !== originalData.categoryId ||
+      JSON.stringify(current.metadatas) !== JSON.stringify(originalData.metadatas);
     setHasChanges(changed);
-  }, [sourceType, chunkMethod, chunkConfig, tags, status, fileList, categoryId, originalData, constants]);
+  }, [sourceType, chunkMethod, chunkConfig, tags, status, fileList, categoryId, metadatas, originalData, constants]);
 
   // 当数据源列表和选中的数据源ID都有值时，设置selectedDatasource
   useEffect(() => {
@@ -468,6 +502,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     try {
       const data = await knowledgebaseService.getDocumentConstants();
       setConstants(data);
+      setMetadataFieldTypes(data.metadata_field_types || []);
     } catch (error) {
       console.error('Failed to fetch document constants:', error);
     }
@@ -540,6 +575,27 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     setSaving(true);
     try {
       if (isEdit && doc) {
+          // 保存元数据
+          if (metadatas.length > 0) {
+            const metadatasObj: Record<string, any> = {};
+            const schema: Record<string, { type: string; label: string }> = {};
+            for (const item of metadatas) {
+              if (item.field_name) {
+                metadatasObj[item.field_name] = item.field_value;
+                schema[item.field_name] = {
+                  type: item.field_type,
+                  label: item.field_label,
+                };
+              }
+            }
+            metadatasObj._schema = schema;
+            try {
+              await knowledgebaseService.updateDocumentMetadata(knowledgebase.id, doc.id, metadatasObj);
+            } catch (e) {
+              console.error('Failed to save metadatas:', e);
+            }
+          }
+
           await knowledgebaseService.updateDocument(knowledgebase.id, doc.id, {
             chunk_method: chunkMethod,
             chunk_config: chunkConfig,
@@ -706,6 +762,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     setStatus(originalData.status);
     setCategoryId(originalData.categoryId);
     setFileList([]);
+    setMetadatas([...originalData.metadatas]);
   };
 
   const renderSourceTypes = () => {
@@ -1552,6 +1609,115 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     );
   };
 
+  const renderMetadatas = () => {
+    const handleAddMetadata = () => {
+      setMetadatas([...metadatas, { field_name: '', field_label: '', field_type: 'text', field_value: '' }]);
+    };
+
+    const handleRemoveMetadata = (index: number) => {
+      setMetadatas(metadatas.filter((_, i) => i !== index));
+    };
+
+    const handleMetadataChange = (index: number, field: string, value: any) => {
+      const newMetadatas = [...metadatas];
+      newMetadatas[index] = { ...newMetadatas[index], [field]: value };
+      if (field === 'field_type') {
+        const defaults: Record<string, any> = {
+          boolean: false, long: 0, integer: 0, float: 0.0, double: 0.0,
+          date: null, object: '{}', array: '[]',
+          integer_range: [0, 0], long_range: [0, 0], float_range: [0.0, 0.0], date_range: null,
+        };
+        newMetadatas[index].field_value = defaults[value] !== undefined ? defaults[value] : '';
+      }
+      setMetadatas(newMetadatas);
+    };
+
+    const getControlType = (fieldType: string): string => {
+      const ft = metadataFieldTypes.find(f => f.key === fieldType);
+      return ft?.type || 'input';
+    };
+
+    const renderValueInput = (item: typeof metadatas[0], index: number) => {
+      const inputStyle = { background: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff', color: theme === 'dark' ? '#fff' : '#000' };
+      switch (item.field_type) {
+        case 'boolean':
+          return <Select value={item.field_value} onChange={(v) => handleMetadataChange(index, 'field_value', v)} style={{ width: '100%' }} size="small"><Option value={true}>true</Option><Option value={false}>false</Option></Select>;
+        case 'long': case 'integer':
+          return <InputNumber value={item.field_value} onChange={(v) => handleMetadataChange(index, 'field_value', v)} style={{ width: '100%' }} precision={0} size="small" />;
+        case 'float': case 'double':
+          return <InputNumber value={item.field_value} onChange={(v) => handleMetadataChange(index, 'field_value', v)} style={{ width: '100%' }} step={0.01} size="small" />;
+        case 'date':
+          return <DatePicker value={item.field_value ? dayjs(item.field_value) : null} onChange={(_, ds) => handleMetadataChange(index, 'field_value', ds)} style={{ width: '100%' }} showTime size="small" locale={zhCN} />;
+        case 'integer_range': case 'long_range':
+          return <Space><InputNumber value={Array.isArray(item.field_value) ? item.field_value[0] : 0} onChange={(v) => handleMetadataChange(index, 'field_value', [v || 0, Array.isArray(item.field_value) ? item.field_value[1] : 0])} precision={0} size="small" style={{ width: 90 }} /><span style={{ color: theme === 'dark' ? '#aaa' : '#999' }}>~</span><InputNumber value={Array.isArray(item.field_value) ? item.field_value[1] : 0} onChange={(v) => handleMetadataChange(index, 'field_value', [Array.isArray(item.field_value) ? item.field_value[0] : 0, v || 0])} precision={0} size="small" style={{ width: 90 }} /></Space>;
+        case 'float_range':
+          return <Space><InputNumber value={Array.isArray(item.field_value) ? item.field_value[0] : 0} onChange={(v) => handleMetadataChange(index, 'field_value', [v || 0, Array.isArray(item.field_value) ? item.field_value[1] : 0])} step={0.01} size="small" style={{ width: 90 }} /><span style={{ color: theme === 'dark' ? '#aaa' : '#999' }}>~</span><InputNumber value={Array.isArray(item.field_value) ? item.field_value[1] : 0} onChange={(v) => handleMetadataChange(index, 'field_value', [Array.isArray(item.field_value) ? item.field_value[0] : 0, v || 0])} step={0.01} size="small" style={{ width: 90 }} /></Space>;
+        case 'date_range':
+          return <RangePicker value={item.field_value ? [dayjs(item.field_value[0]), dayjs(item.field_value[1])] : null} onChange={(_, ds) => handleMetadataChange(index, 'field_value', ds)} style={{ width: '100%' }} showTime size="small" locale={zhCN} />;
+        case 'object':
+          return <Input value={typeof item.field_value === 'string' ? item.field_value : JSON.stringify(item.field_value)} onChange={(e) => handleMetadataChange(index, 'field_value', e.target.value)} placeholder='{"key":"value"}' style={inputStyle} size="small" />;
+        case 'array':
+          return <Input value={typeof item.field_value === 'string' ? item.field_value : JSON.stringify(item.field_value)} onChange={(e) => handleMetadataChange(index, 'field_value', e.target.value)} placeholder='["item1","item2"]' style={inputStyle} size="small" />;
+        default:
+          return <Input value={item.field_value} onChange={(e) => handleMetadataChange(index, 'field_value', e.target.value)} style={inputStyle} size="small" />;
+      }
+    };
+
+    return (
+      <div style={{ width: '100%' }}>
+        <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
+          元数据
+        </div>
+        <div style={{ width: '70%' }}>
+          {metadatas.length > 0 && (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#aaa' : '#666', fontSize: 12 }}>
+              <div style={{ width: 120 }}>字段名称</div>
+              <div style={{ width: 120 }}>字段中文名</div>
+              <div style={{ width: 140 }}>字段类型</div>
+              <div style={{ flex: 1 }}>字段值</div>
+              <div style={{ width: 32 }}></div>
+            </div>
+          )}
+          {metadatas.map((item, index) => (
+            <div key={index} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+              <Input
+                value={item.field_name}
+                onChange={(e) => handleMetadataChange(index, 'field_name', e.target.value)}
+                placeholder="字段名称"
+                style={{ width: 120, background: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff', color: theme === 'dark' ? '#fff' : '#000' }}
+                size="small"
+              />
+              <Input
+                value={item.field_label}
+                onChange={(e) => handleMetadataChange(index, 'field_label', e.target.value)}
+                placeholder="字段中文名"
+                style={{ width: 120, background: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff', color: theme === 'dark' ? '#fff' : '#000' }}
+                size="small"
+              />
+              <Select
+                value={item.field_type}
+                onChange={(v) => handleMetadataChange(index, 'field_type', v)}
+                style={{ width: 140 }}
+                size="small"
+              >
+                {metadataFieldTypes.map(ft => (
+                  <Option key={ft.key} value={ft.key}>{ft.label}</Option>
+                ))}
+              </Select>
+              <div style={{ flex: 1 }}>
+                {renderValueInput(item, index)}
+              </div>
+              <Button type="text" danger icon={<DeleteOutlined />} size="small" onClick={() => handleRemoveMetadata(index)} />
+            </div>
+          ))}
+          <Button type="dashed" icon={<PlusOutlined />} onClick={handleAddMetadata} size="small" style={{ width: '100%' }}>
+            添加元数据
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
   const renderStatus = () => {
     return (
       <div style={{ width: '100%' }}>
@@ -1656,6 +1822,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
           {renderChunkMethodSelect()}
           {renderChunkConfigFields()}
           {renderTags()}
+          {renderMetadatas()}
           {renderStatus()}
         </Form>
       </div>

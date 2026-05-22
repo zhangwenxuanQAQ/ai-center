@@ -71,6 +71,7 @@ export interface KnowledgebaseDocument {
   task_end_at?: string;
   task_duration: number;
   task_progress_message?: string;
+  metadatas?: string | Record<string, any>;
   created_at: string;
   updated_at?: string;
 }
@@ -292,6 +293,16 @@ export const knowledgebaseService = {
     return http.post<KnowledgebaseDocument>(
       `/aicenter/v1/knowledgebase/${kbId}/document/${documentId}`,
       data
+    );
+  },
+
+  /**
+   * 更新文档元数据
+   */
+  updateDocumentMetadata: async (kbId: string, documentId: string, metadatas: Record<string, any>): Promise<any> => {
+    return http.post<any>(
+      `/aicenter/v1/knowledgebase/${kbId}/document/${documentId}/update_metadata`,
+      { metadatas }
     );
   },
 
@@ -552,11 +563,56 @@ export const knowledgebaseService = {
   toggleChunkAvailable: async (
     kbId: string,
     chunkId: string,
-    available: number
+    available_int: number
   ): Promise<boolean> => {
     return http.post(
       `/aicenter/v1/knowledgebase/${kbId}/chunk/${chunkId}/toggle_available`,
-      { available }
+      { available_int }
+    );
+  },
+
+  createChunk: async (
+    kbId: string,
+    docId: string,
+    content: string,
+    keywords?: string[],
+    available_int: number = 1
+  ): Promise<any> => {
+    return http.post(
+      `/aicenter/v1/knowledgebase/${kbId}/chunk`,
+      {
+        doc_id: docId,
+        content,
+        keywords,
+        available_int,
+      }
+    );
+  },
+
+  updateChunk: async (
+    kbId: string,
+    chunkId: string,
+    content?: string,
+    keywords?: string[],
+    available_int?: number
+  ): Promise<any> => {
+    const data: any = {};
+    if (content !== undefined) data.content = content;
+    if (keywords !== undefined) data.keywords = keywords;
+    if (available_int !== undefined) data.available_int = available_int;
+    
+    return http.post(
+      `/aicenter/v1/knowledgebase/${kbId}/chunk/${chunkId}/update`,
+      data
+    );
+  },
+
+  deleteChunk: async (
+    kbId: string,
+    chunkId: string
+  ): Promise<boolean> => {
+    return http.post(
+      `/aicenter/v1/knowledgebase/${kbId}/chunk/${chunkId}/delete`
     );
   },
 
@@ -592,6 +648,7 @@ export const knowledgebaseService = {
         keyword_similarity_threshold: config.keyword_similarity,
         vector_similarity_weight: config.vector_similarity_weight,
         sort_by: config.sort_by,
+        metadatas: config.metadatas,
       }
     ) || { total: 0, chunks: [] };
   },

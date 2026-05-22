@@ -22,6 +22,7 @@ import time
 import uuid
 import base64
 import io
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from enum import Enum
 from typing import Optional, Dict, Any, List
@@ -32,6 +33,7 @@ from app.database.models import KnowledgebaseDocument, Knowledgebase, LLMModel
 from app.database.storage.rustfs_utils import rustfs_utils
 from app.core.llm_model.factory import LLMFactory
 from app.constants.knowledgebase_document_constants import RunningStatus
+from app.core.knowledgebase.rag.nlp import rag_tokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +70,7 @@ class DocumentTask:
         parser_config: Optional[Dict[str, Any]] = None,
         embedding_model_id: Optional[str] = None,
         text_model_id: Optional[str] = None,
+        metadatas: Optional[Dict[str, Any]] = None,
     ):
         self.task_id = task_id
         self.doc_id = doc_id
@@ -79,6 +82,7 @@ class DocumentTask:
         self.parser_config = parser_config or {}
         self.embedding_model_id = embedding_model_id
         self.text_model_id = text_model_id
+        self.metadatas = metadatas or {}
         self.status = RunningStatus.PENDING
         self.created_at = datetime.now()
         self.started_at: Optional[datetime] = None
@@ -110,6 +114,8 @@ class TaskExecutor:
         self._active_tasks: set = set()
         self._active_tasks_lock = threading.Lock()
         self._mapping_config: Optional[Dict[str, Any]] = None
+        # 创建线程池，大小为最大并发任务数
+        self._thread_pool = ThreadPoolExecutor(max_workers=self.MAX_CONCURRENT_TASKS, thread_name_prefix="task_worker")
 
     def start(self):
         """启动任务调度器"""
@@ -136,6 +142,9 @@ class TaskExecutor:
 
         self._register_signals()
 
+        # 先清空队列和创建消费者组，再启动工作线程
+        self._clear_queue_on_startup()
+
         self._worker_thread = threading.Thread(
             target=self._worker_loop,
             daemon=True
@@ -151,6 +160,35 @@ class TaskExecutor:
         self._recover_pending_tasks()
 
         logger.info("任务调度器已启动")
+
+    def _clear_queue_on_startup(self):
+        """启动时清空Redis队列，包括pending消息和消费者组信息"""
+        logger.info("启动时清空Redis队列...")
+        if not redis_utils.is_available:
+            return
+
+        try:
+            client = redis_utils.client
+            queue_name = self.QUEUE_NAME
+            group_name = self.GROUP_NAME
+
+            try:
+                client.delete(queue_name)
+                logger.info(f"已删除队列: {queue_name}")
+            except Exception as e:
+                logger.warning(f"删除队列失败: {e}")
+
+            try:
+                client.xgroup_create(queue_name, group_name, id="0", mkstream=True)
+                logger.info(f"已创建消费者组: {group_name}")
+            except Exception as e:
+                if "BUSYGROUP" in str(e):
+                    logger.info(f"消费者组已存在: {group_name}")
+                else:
+                    logger.warning(f"创建消费者组失败: {e}")
+
+        except Exception as e:
+            logger.error(f"清空队列时发生异常: {e}")
 
     def _recover_pending_tasks(self):
         """服务重启时恢复未完成的任务"""
@@ -199,6 +237,13 @@ class TaskExecutor:
                         "token_num": 0,
                     })
 
+                    metadatas = {}
+                    if doc.metadatas:
+                        try:
+                            metadatas = json.loads(doc.metadatas) if isinstance(doc.metadatas, str) else doc.metadatas
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+
                     task = self.submit_task(
                         doc_id=doc.id,
                         kb_id=doc.kb_id,
@@ -208,6 +253,7 @@ class TaskExecutor:
                         parser_config=self._get_doc_parser_config(doc),
                         embedding_model_id=self._get_kb_embedding_model_id(doc.kb_id),
                         text_model_id=self._get_kb_text_model_id(doc.kb_id),
+                        metadatas=metadatas,
                     )
                     
                     if task:
@@ -265,6 +311,12 @@ class TaskExecutor:
 
         if self._heartbeat_thread and self._heartbeat_thread.is_alive():
             self._heartbeat_thread.join(timeout=5)
+
+        # 关闭线程池
+        if self._thread_pool:
+            logger.info("正在关闭线程池...")
+            self._thread_pool.shutdown(wait=True, cancel_futures=False)
+            logger.info("线程池已关闭")
 
         logger.info("任务调度器已停止")
 
@@ -333,6 +385,7 @@ class TaskExecutor:
         parser_config: Optional[Dict[str, Any]] = None,
         embedding_model_id: Optional[str] = None,
         text_model_id: Optional[str] = None,
+        metadatas: Optional[Dict[str, Any]] = None,
     ) -> DocumentTask:
         """
         提交任务到队列
@@ -346,11 +399,15 @@ class TaskExecutor:
             parser_config: 解析配置
             embedding_model_id: Embedding模型ID
             text_model_id: Text模型ID
+            metadatas: 文档元数据
 
         Returns:
             DocumentTask: 任务对象
         """
         task_id = doc_id
+
+        self._tasks.pop(task_id, None)
+        # self._clear_pending_messages(task_id)
 
         task = DocumentTask(
             task_id=task_id,
@@ -362,10 +419,24 @@ class TaskExecutor:
             parser_config=parser_config,
             embedding_model_id=embedding_model_id,
             text_model_id=text_model_id,
+            metadatas=metadatas,
         )
 
         self._tasks[task_id] = task
-        self._save_task(task)
+        task.status = RunningStatus.WAITING
+        logger.info(f"新任务已创建: task_id={task_id}, status={task.status}")
+
+        try:
+            doc = KnowledgebaseDocument.get(KnowledgebaseDocument.id == doc_id)
+            doc.running_status = RunningStatus.WAITING
+            doc.task_progress = 0
+            doc.task_progress_message = "等待执行中..."
+            doc.task_begin_at = None
+            doc.task_end_at = None
+            doc.save()
+            
+        except Exception as e:
+            logger.warning(f"清空文档进度失败: {e}")
 
         message = {
             "task_id": task_id,
@@ -377,6 +448,7 @@ class TaskExecutor:
             "parser_config": parser_config,
             "embedding_model_id": embedding_model_id,
             "text_model_id": text_model_id,
+            "metadatas": metadatas,
             "timestamp": datetime.now().isoformat(),
         }
 
@@ -390,60 +462,120 @@ class TaskExecutor:
 
         return task
 
-    def _save_task(self, task: DocumentTask):
-        """保存任务状态到Redis"""
-        task_data = {
-            "task_id": task.task_id,
-            "doc_id": task.doc_id,
-            "kb_id": task.kb_id,
-            "filename": task.filename,
-            "parse_type": task.parse_type,
-            "lang": task.lang,
-            "parser_config": task.parser_config,
-            "embedding_model_id": task.embedding_model_id,
-            "text_model_id": task.text_model_id,
-            "status": task.status,
-            "progress": task.progress,
-            "progress_message": task.progress_message,
-            "created_at": task.created_at.isoformat(),
-            "started_at": task.started_at.isoformat() if task.started_at else None,
-            "completed_at": task.completed_at.isoformat() if task.completed_at else None,
-            "error": task.error,
-        }
+    def _clear_pending_messages(self, task_id: str):
+        """清理Redis Stream中指定任务的所有消息（包括pending和未认领的）"""
+        if not redis_utils.is_available:
+            return
 
-        redis_utils.set_obj(
-            f"{self.TASK_KEY_PREFIX}{task.task_id}",
-            task_data,
-            exp=3600 * 24
-        )
+        try:
+            client = redis_utils.client
+            queue_name = self.QUEUE_NAME
+            group_name = self.GROUP_NAME
+
+            # 1. 清理 pending 消息
+            try:
+                pending = client.xpending_range(queue_name, group_name, "-", "+", 100)
+            except Exception:
+                pending = []
+
+            for msg in pending:
+                msg_id = msg.get("message_id")
+                if not msg_id:
+                    continue
+
+                try:
+                    msg_data = client.xrange(queue_name, msg_id, msg_id)
+                    if msg_data:
+                        _, payload = msg_data[0]
+                        msg_str = payload.get("message", "{}")
+                        try:
+                            msg_json = json.loads(msg_str)
+                            if msg_json.get("task_id") == task_id:
+                                client.xack(queue_name, group_name, msg_id)
+                                client.xdel(queue_name, msg_id)
+                                logger.info(f"已清理pending消息: task_id={task_id}, msg_id={msg_id}")
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+                except Exception as e:
+                    logger.warning(f"清理pending消息失败: {e}")
+
+            # 2. 清理队列中所有未认领的旧消息（包括已ack但还没delete的）
+            try:
+                all_messages = client.xrange(queue_name, "-", "+", count=100)
+                for msg_id, payload in all_messages:
+                    msg_str = payload.get("message", "{}")
+                    try:
+                        msg_json = json.loads(msg_str)
+                        if msg_json.get("task_id") == task_id:
+                            client.xdel(queue_name, msg_id)
+                            logger.info(f"已删除旧消息: task_id={task_id}, msg_id={msg_id}")
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+            except Exception as e:
+                logger.warning(f"清理旧消息失败: {e}")
+
+        except Exception as e:
+            logger.warning(f"清理消息异常: {e}")
 
     def _get_task(self, task_id: str) -> Optional[DocumentTask]:
-        """从Redis获取任务"""
-        if task_id in self._tasks:
-            return self._tasks[task_id]
+        """从数据库获取任务信息"""
+        # 不使用缓存，每次都从数据库获取最新状态
+        # if task_id in self._tasks:
+        #     return self._tasks[task_id]
 
-        task_data = redis_utils.get_obj(f"{self.TASK_KEY_PREFIX}{task_id}")
-        if not task_data:
+        try:
+            doc = KnowledgebaseDocument.get(KnowledgebaseDocument.id == task_id)
+            if doc.deleted:
+                return None
+
+            kb = Knowledgebase.get(Knowledgebase.id == doc.kb_id)
+
+            parser_config = {}
+            if doc.chunk_config:
+                try:
+                    parser_config = json.loads(doc.chunk_config) if isinstance(doc.chunk_config, str) else doc.chunk_config
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            metadatas = {}
+            if doc.metadatas:
+                try:
+                    metadatas = json.loads(doc.metadatas) if isinstance(doc.metadatas, str) else doc.metadatas
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            task = DocumentTask(
+                task_id=task_id,
+                doc_id=doc.id,
+                kb_id=doc.kb_id,
+                filename=doc.location or doc.file_name,
+                parse_type=doc.chunk_method,
+                lang="Chinese",
+                parser_config=parser_config,
+                embedding_model_id=kb.embedding_model_id if kb else None,
+                text_model_id=kb.text_model_id if kb else None,
+                metadatas=metadatas,
+            )
+
+            if doc.running_status in (RunningStatus.WAITING, RunningStatus.RUNNING):
+                task.status = doc.running_status
+                task.progress = doc.task_progress or 0
+                task.progress_message = doc.task_progress_message or ""
+                task.started_at = doc.task_begin_at
+                task.completed_at = doc.task_end_at
+                logger.debug(f"从数据库恢复任务状态: task_id={task_id}, status={task.status}, progress={task.progress}")
+            else:
+                logger.debug(f"任务不在执行状态，使用默认状态: task_id={task_id}, db_status={doc.running_status}")
+
+            self._tasks[task_id] = task
+            return task
+
+        except KnowledgebaseDocument.DoesNotExist:
+            logger.warning(f"文档不存在: {task_id}")
             return None
-
-        task = DocumentTask(
-            task_id=task_data["task_id"],
-            doc_id=task_data["doc_id"],
-            kb_id=task_data["kb_id"],
-            filename=task_data.get("filename", ""),
-            parse_type=task_data["parse_type"],
-            lang=task_data.get("lang", "Chinese"),
-            parser_config=task_data.get("parser_config"),
-            embedding_model_id=task_data.get("embedding_model_id"),
-            text_model_id=task_data.get("text_model_id"),
-        )
-        task.status = task_data["status"]
-        task.progress = task_data.get("progress", 0)
-        task.progress_message = task_data.get("progress_message", "")
-        task.error = task_data.get("error")
-
-        self._tasks[task_id] = task
-        return task
+        except Exception as e:
+            logger.error(f"从数据库获取任务失败: {e}")
+            return None
 
     def _has_canceled(self, task_id: str) -> bool:
         """检查任务是否被取消"""
@@ -534,12 +666,12 @@ class TaskExecutor:
             append: 是否追加消息，默认为True；设为False则更新最后一条同类型消息
         """
         try:
+            # 先检查是否已取消，避免更新已取消任务的进度
+            if self._has_canceled(task.task_id):
+                raise TaskCanceledException(msg or "任务已取消")
+                
             if prog is not None and prog < 0:
                 msg = "[ERROR]" + msg
-
-            if self._has_canceled(task.task_id):
-                msg += " [Canceled]"
-                prog = -1
 
             if prog is not None:
                 new_progress = min(max(prog, 0), 1.0)
@@ -573,12 +705,12 @@ class TaskExecutor:
                 else:
                     task.progress_message = new_msg
 
-            self._save_task(task)
-            self._update_document_status(task)
-
+            # 再次检查是否取消，然后才更新数据库
             if self._has_canceled(task.task_id):
                 raise TaskCanceledException(msg)
-
+                
+            self._update_document_status(task)
+                
         except TaskCanceledException:
             raise
         except Exception as e:
@@ -747,7 +879,7 @@ class TaskExecutor:
             try:
                 kwd = await keyword_extraction(text_model, content, topn)
                 if kwd and kwd.find("**ERROR**") < 0:
-                    set_llm_cache(model_name, content, kwd, "keywords", gen_conf)
+                    set_llm_cache(model_name, content, kwd, "keywords", gen_conf, exp=60)
                     return i, chunk, kwd
                 return i, chunk, None
             except Exception as e:
@@ -762,6 +894,7 @@ class TaskExecutor:
                 i, chunk, keywords = await future
                 if keywords:
                     chunk["important_kwd"] = [k.strip() for k in keywords.split(",") if k.strip()]
+                    chunk["important_tks"] = rag_tokenizer.tokenize(" ".join(chunk["important_kwd"]))
                 processed += 1
 
                 if processed % 10 == 0 or processed == total:
@@ -919,6 +1052,9 @@ class TaskExecutor:
             doc["create_timestamp_flt"] = datetime.now().timestamp()
             doc["available_int"] = 1
 
+            if task.metadatas:
+                doc["metadatas"] = task.metadatas
+
             if "image" in doc:
                 img = doc["image"]
                 try:
@@ -951,6 +1087,11 @@ class TaskExecutor:
             return
 
         try:
+            # 先判断索引是否存在
+            if not es_utils.client.indices.exists(index=kb_id):
+                logger.info(f"索引不存在，跳过删除: kb={kb_id}")
+                return
+
             query = {
                 "query": {
                     "term": {"doc_id": doc_id}
@@ -964,47 +1105,75 @@ class TaskExecutor:
     def _worker_loop(self):
         """工作线程主循环"""
         logger.info("工作线程已启动")
+        loop_count = 0
 
         while self._running and not self._shutdown_event.is_set():
             try:
+                loop_count += 1
+                
+                # 每10次循环打印一次监控日志
+                if loop_count % 10 == 0:
+                    logger.info(f"工作线程运行中: loop_count={loop_count}, active_tasks={len(self._active_tasks)}, _running={self._running}, _shutdown_event={self._shutdown_event.is_set()}")
+                
+                # 先尝试读取新消息
                 msg = redis_utils.queue_consumer(
                     self.QUEUE_NAME,
                     self.GROUP_NAME,
                     self.CONSUMER_NAME
                 )
 
+                # 没有新消息时，尝试读取pending消息（之前已投递但未确认的消息）
+                if not msg:
+                    msg = redis_utils.queue_consumer(
+                        self.QUEUE_NAME,
+                        self.GROUP_NAME,
+                        self.CONSUMER_NAME,
+                        msg_id="0"
+                    )
+                    if msg:
+                        logger.info(f"读取到pending消息: msg_id={msg.get_msg_id()}")
+                        # 检查pending消息对应的任务是否正在执行中
+                        pending_task_id = msg.get_message().get("task_id")
+                        with self._active_tasks_lock:
+                            is_active = pending_task_id in self._active_tasks
+                        if is_active:
+                            logger.info(f"Pending任务正在执行中，跳过: {pending_task_id}")
+                            msg.ack()  # 确认消息，避免重复消费
+                            msg = None
+                            continue
+
                 if not msg:
                     time.sleep(1)
                     continue
 
-                threading.Thread(
-                    target=self._process_task_with_limit,
-                    args=(msg,),
-                    daemon=True
-                ).start()
+                logger.info(f"工作线程收到消息，准备处理: loop_count={loop_count}, msg_id={msg.get_msg_id()}")
+                
+                # 先获取限流器，确保不会超过最大并发数（阻塞等待，不超时）
+                acquired = self._task_limiter.acquire()
+                if not acquired:
+                    logger.warning(f"获取限流器失败，跳过任务: loop_count={loop_count}")
+                    continue
+                
+                # 使用线程池提交任务
+                self._thread_pool.submit(self._process_task_with_limit, msg)
 
             except Exception as e:
-                logger.exception(f"工作线程异常: {e}")
+                logger.exception(f"工作线程异常: {e}, loop_count={loop_count}")
                 time.sleep(2)
 
-        logger.info("工作线程已退出")
+        logger.info(f"工作线程已退出，总计循环次数: {loop_count}")
 
     def _process_task_with_limit(self, msg):
-        """使用限流器处理任务"""
+        """处理任务并释放限流器"""
         task_id = None
         try:
             message = msg.get_message()
             task_id = message.get("task_id")
-
-            acquired = self._task_limiter.acquire(timeout=30)
-
-            if not acquired:
-                logger.warning(f"获取限流器超时: {task_id}")
-                return
-
+            
             try:
                 self._process_message(msg)
             finally:
+                # 释放限流器，允许下一个任务执行
                 self._task_limiter.release()
 
         except Exception as e:
@@ -1019,17 +1188,37 @@ class TaskExecutor:
 
             logger.info(f"收到任务: {task_id}")
 
+            # 先检查任务是否已被取消
+            if self._has_canceled(task_id):
+                logger.info(f"任务已被取消，直接跳过: {task_id}")
+                msg.ack()
+                return
+
             task = self._get_task(task_id)
             if not task:
                 logger.warning(f"任务不存在: {task_id}")
                 msg.ack()
                 return
 
+            # 检查任务是否正在被其他线程处理
+            with self._active_tasks_lock:
+                is_active = task_id in self._active_tasks
+            if is_active:
+                logger.warning(f"任务正在被其他线程处理，跳过: {task_id}")
+                msg.ack()
+                return
+
+            # 检查任务状态，如果已经是终止状态，直接ack
+            if task.status in (RunningStatus.DONE, RunningStatus.FAIL, RunningStatus.CANCEL):
+                logger.warning(f"任务已处于终止状态，跳过执行: task_id={task_id}, status={task.status}")
+                msg.ack()
+                return
+
+            # 再次检查取消标记
             if self._has_canceled(task.task_id):
                 logger.info(f"任务已被取消: {task_id}")
                 task.status = RunningStatus.CANCEL
                 task.completed_at = datetime.now()
-                self._save_task(task)
                 self._update_document_status(task)
                 msg.ack()
                 return
@@ -1039,30 +1228,50 @@ class TaskExecutor:
             try:
                 task.status = RunningStatus.RUNNING
                 task.started_at = datetime.now()
-                self._set_progress(task, 0.0, "开始处理...")
+                task.progress = 0.0
+                task.progress_message = ""
+                self._set_progress(task, 0.0, "开始处理...", append=False)
 
                 try:
                     self._execute_chunk(task)
                 except TaskCanceledException:
+                    # 任务被取消，直接设置状态，不调用_set_progress避免再次抛出异常
                     task.status = RunningStatus.CANCEL
-                    self._set_progress(task, 1.0, "任务已取消")
+                    task.progress = 1.0
+                    timestamp = datetime.now().strftime("%H:%M:%S")
+                    task.progress_message = f"{task.progress_message}\n[{timestamp}] 任务已取消" if task.progress_message else f"[{timestamp}] 任务已取消"
                     task.completed_at = datetime.now()
                 except Exception as e:
                     logger.exception(f"任务执行异常 {task_id}: {e}")
+                    # 任务失败，直接设置状态，不调用_set_progress避免再次抛出异常
                     task.status = RunningStatus.FAIL
                     task.error = str(e)
-                    self._set_progress(task, -1, f"任务失败: {str(e)[:200]}")
+                    task.progress = -1
+                    timestamp = datetime.now().strftime("%H:%M:%S")
+                    error_msg = f"任务失败: {str(e)[:200]}"
+                    task.progress_message = f"{task.progress_message}\n[{timestamp}] [ERROR]{error_msg}" if task.progress_message else f"[{timestamp}] [ERROR]{error_msg}"
                     task.completed_at = datetime.now()
 
-                self._save_task(task)
+                msg.ack()
                 self._update_document_status(task)
 
-                msg.ack()
                 logger.info(f"任务处理完成: {task_id}, 状态: {task.status}")
+
+            except TaskCanceledException:
+                # 任务在开始处理时被取消（_set_progress抛出异常）
+                logger.info(f"任务在开始时被取消: {task_id}")
+                task.status = RunningStatus.CANCEL
+                task.progress = 1.0
+                timestamp = datetime.now().strftime("%H:%M:%S")
+                task.progress_message = f"{task.progress_message}\n[{timestamp}] 任务已取消" if task.progress_message else f"[{timestamp}] 任务已取消"
+                task.completed_at = datetime.now()
+                msg.ack()
+                self._update_document_status(task)
 
             finally:
                 self._remove_active_task(task_id)
                 redis_utils.delete(f"{self.CANCEL_KEY_PREFIX}{task_id}")
+                self._tasks.pop(task_id, None)
 
         except Exception as e:
             logger.exception(f"处理消息异常: {e}")
@@ -1214,10 +1423,20 @@ class TaskExecutor:
         redis_utils.set(f"{self.CANCEL_KEY_PREFIX}{task_id}", "1", exp=3600)
         logger.info(f"任务取消标记已设置: {task_id}")
         
+        old_status = task.status
         task.status = RunningStatus.CANCEL
+        task.progress = 1.0
         task.completed_at = datetime.now()
-        self._save_task(task)
+        timestamp = datetime.now().strftime('%H:%M:%S')
         
+        if old_status == RunningStatus.WAITING:
+            task.progress_message = f"[{timestamp}] 任务已取消"
+        else:
+            if task.progress_message:
+                task.progress_message = f"{task.progress_message}\n[{timestamp}] 任务已取消"
+            else:
+                task.progress_message = f"[{timestamp}] 任务已取消"
+
         self._update_document_status(task)
         logger.info(f"任务状态已更新为取消: {task_id}")
         
@@ -1227,7 +1446,6 @@ class TaskExecutor:
         """清理任务"""
         if task_id in self._tasks:
             del self._tasks[task_id]
-        redis_utils.delete(f"{self.TASK_KEY_PREFIX}{task_id}")
         redis_utils.delete(f"{self.CANCEL_KEY_PREFIX}{task_id}")
         return True
 
@@ -1245,6 +1463,13 @@ class TaskExecutor:
             if doc.chunk_config:
                 try:
                     parser_config = json.loads(doc.chunk_config) if isinstance(doc.chunk_config, str) else doc.chunk_config
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            metadatas = {}
+            if doc.metadatas:
+                try:
+                    metadatas = json.loads(doc.metadatas) if isinstance(doc.metadatas, str) else doc.metadatas
                 except (json.JSONDecodeError, TypeError):
                     pass
 
@@ -1288,6 +1513,7 @@ class TaskExecutor:
                 parser_config=parser_config,
                 embedding_model_id=embedding_model_id,
                 text_model_id=text_model_id,
+                metadatas=metadatas,
             )
 
             return task

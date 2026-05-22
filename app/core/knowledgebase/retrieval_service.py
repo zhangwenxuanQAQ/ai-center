@@ -114,6 +114,7 @@ class RetrievalService:
         sort_by: str = None,
         embedding_model_id: str = None,
         rerank_model_id: str = None,
+        metadatas: dict = None,
     ) -> Dict[str, Any]:
         """
         知识库检索入口方法
@@ -213,6 +214,7 @@ class RetrievalService:
                 rerank_mdl=rerank_model,
                 sort_by=sort,
                 available_only=True,
+                metadatas=metadatas,
             )
             return result
         except Exception as e:

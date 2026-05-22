@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Card, Pagination, Input, Select, Switch, Spin, Empty, Tag, Tooltip, message, Image, Popover, Button } from 'antd';
-import { SearchOutlined, ArrowLeftOutlined, DownOutlined, UpOutlined } from '@ant-design/icons';
+import { Card, Pagination, Input, Select, Switch, Spin, Empty, Tag, Tooltip, message, Image, Popover, Button, Popconfirm } from 'antd';
+import { SearchOutlined, ArrowLeftOutlined, DownOutlined, UpOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import MDEditor from '@uiw/react-md-editor';
 import { knowledgebaseService, KnowledgebaseDocument } from '../../services/knowledgebase';
+import ChunkSetting from './chunk_setting';
 import '../../styles/common.css';
 import './knowledgebase.less';
 
@@ -44,6 +45,9 @@ const ChunksView: React.FC<ChunksViewProps> = ({ document, knowledgebaseId, onBa
   const [availableFilter, setAvailableFilter] = useState<number | undefined>(undefined);
   const [searchInput, setSearchInput] = useState('');
   const [expandedChunks, setExpandedChunks] = useState<Set<string>>(new Set());
+  const [chunkSettingVisible, setChunkSettingVisible] = useState(false);
+  const [editingChunk, setEditingChunk] = useState<any>(null);
+  const [chunkSettingMode, setChunkSettingMode] = useState<'create' | 'edit'>('create');
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.document.body) return;
@@ -65,7 +69,6 @@ const ChunksView: React.FC<ChunksViewProps> = ({ document, knowledgebaseId, onBa
   useEffect(() => {
     if (document && knowledgebaseId) {
       setCurrentPage(1);
-      fetchChunks();
     }
   }, [document, knowledgebaseId]);
 
@@ -73,7 +76,7 @@ const ChunksView: React.FC<ChunksViewProps> = ({ document, knowledgebaseId, onBa
     if (document && knowledgebaseId) {
       fetchChunks();
     }
-  }, [currentPage, pageSize, availableFilter, keyword]);
+  }, [document, knowledgebaseId, currentPage, pageSize, availableFilter, keyword]);
 
   const fetchChunks = async () => {
     if (!document || !knowledgebaseId) return;
@@ -135,6 +138,51 @@ const ChunksView: React.FC<ChunksViewProps> = ({ document, knowledgebaseId, onBa
     });
   };
 
+  const handleCreateChunk = () => {
+    setEditingChunk(null);
+    setChunkSettingMode('create');
+    setChunkSettingVisible(true);
+  };
+
+  const handleEditChunk = (chunk: any) => {
+    setEditingChunk(chunk);
+    setChunkSettingMode('edit');
+    setChunkSettingVisible(true);
+  };
+
+  const handleDeleteChunk = async (chunkId: string) => {
+    try {
+      await knowledgebaseService.deleteChunk(knowledgebaseId, chunkId);
+      message.success('切片删除成功');
+      // 删除后刷新列表
+      fetchChunks();
+    } catch (error) {
+      console.error('删除切片失败:', error);
+      message.error('删除失败');
+    }
+  };
+
+  const handleChunkSettingSuccess = (chunk?: any) => {
+    if (chunk) {
+      // 检查是否为新增（判断是否已存在）
+      const isNew = !chunks.some(c => c._id === chunk._id);
+      if (isNew) {
+        // 新增切片，刷新列表
+        fetchChunks();
+      } else {
+        // 更新单个切片，不刷新整个列表
+        setChunks(prevChunks => 
+          prevChunks.map(c => 
+            c._id === chunk._id ? chunk : c
+          )
+        );
+      }
+    } else {
+      // 无数据时刷新
+      fetchChunks();
+    }
+  };
+
   const renderChunkCard = (chunk: ChunkItem) => {
     const isExpanded = expandedChunks.has(chunk._id);
     
@@ -146,58 +194,76 @@ const ChunksView: React.FC<ChunksViewProps> = ({ document, knowledgebaseId, onBa
         isExpanded={isExpanded}
         onToggleExpand={() => toggleExpand(chunk._id)}
         onToggleAvailable={(checked: boolean) => handleToggleAvailable(chunk._id, checked ? 1 : 0)}
+        onEdit={() => handleEditChunk(chunk)}
+        onDelete={() => handleDeleteChunk(chunk._id)}
       />
     );
   };
 
   return (
     <div className="chunks-view" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ marginBottom: 16, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-        {onBack && (
-          <Button
-            type="text"
-            icon={<ArrowLeftOutlined />}
-            onClick={onBack}
-          >
-            返回
-          </Button>
-        )}
-        <span style={{ fontSize: 16, fontWeight: 500, marginLeft: onBack ? 0 : 0 }}>{document?.file_name || document?.name}</span>
-        <Input.Search
-          placeholder="搜索切片内容"
-          value={searchInput}
-          onChange={(e) => {
-            const newValue = e.target.value;
-            setSearchInput(newValue);
-            if (newValue === '' && keyword !== '') {
-              setKeyword('');
-              setCurrentPage(1);
-            }
-          }}
-          onSearch={handleSearch}
-          onBlur={() => {
-            if (searchInput !== keyword) {
+      <div style={{ marginBottom: 16, display: 'flex', gap: 16, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+          {onBack && (
+            <Button
+              type="text"
+              icon={<ArrowLeftOutlined />}
+              onClick={onBack}
+            >
+              返回
+            </Button>
+          )}
+          <span style={{ fontSize: 16, fontWeight: 500, marginLeft: onBack ? 0 : 0 }}>{document?.file_name || document?.name}</span>
+          <Input
+            placeholder="搜索切片内容"
+            value={searchInput}
+            onChange={(e) => {
+              setSearchInput(e.target.value);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleSearch();
+              }
+            }}
+            onBlur={() => {
               handleSearch();
-            }
-          }}
-          style={{ width: 280 }}
-          enterButton={<SearchOutlined />}
-          allowClear
-          size="middle"
-        />
-        <Select
-          placeholder="可用状态"
-          value={availableFilter}
-          onChange={(value) => {
-            setAvailableFilter(value);
-            setCurrentPage(1);
-          }}
-          style={{ width: 120 }}
-          allowClear
+            }}
+            prefix={<SearchOutlined />}
+            allowClear
+            style={{
+              width: '200px',
+              height: '36px',
+              borderRadius: '18px',
+              background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
+              border: 'none',
+              boxShadow: 'none',
+              outline: 'none',
+              color: theme === 'dark' ? '#ffffff' : '#000000'
+            }}
+            className="no-border-input"
+          />
+          <Select
+            placeholder="可用状态"
+            value={availableFilter}
+            onChange={(value) => {
+              setAvailableFilter(value);
+              setCurrentPage(1);
+            }}
+            style={{ width: 120, height: '36px' }}
+            allowClear
+          >
+            <Option value={1}>启用</Option>
+            <Option value={0}>停用</Option>
+          </Select>
+        </div>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={handleCreateChunk}
+          style={{ marginRight: 32 }}
         >
-          <Option value={1}>启用</Option>
-          <Option value={0}>停用</Option>
-        </Select>
+          新增
+        </Button>
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', paddingRight: 8 }}>
@@ -235,6 +301,16 @@ const ChunksView: React.FC<ChunksViewProps> = ({ document, knowledgebaseId, onBa
           />
         </div>
       )}
+
+      <ChunkSetting
+        visible={chunkSettingVisible}
+        onCancel={() => setChunkSettingVisible(false)}
+        onSuccess={handleChunkSettingSuccess}
+        knowledgebaseId={knowledgebaseId}
+        documentId={document.id}
+        chunk={editingChunk}
+        mode={chunkSettingMode}
+      />
     </div>
   );
 };
@@ -245,9 +321,11 @@ interface ChunkCardProps {
   isExpanded: boolean;
   onToggleExpand: () => void;
   onToggleAvailable: (checked: boolean) => void;
+  onEdit: () => void;
+  onDelete: () => void;
 }
 
-const ChunkCard: React.FC<ChunkCardProps> = ({ chunk, theme, isExpanded, onToggleExpand, onToggleAvailable }) => {
+const ChunkCard: React.FC<ChunkCardProps> = ({ chunk, theme, isExpanded, onToggleExpand, onToggleAvailable, onEdit, onDelete }) => {
   const contentRef = useRef<HTMLDivElement>(null);
   const [needsGradient, setNeedsGradient] = useState(false);
 
@@ -288,6 +366,31 @@ const ChunkCard: React.FC<ChunkCardProps> = ({ chunk, theme, isExpanded, onToggl
             checkedChildren="启用"
             unCheckedChildren="停用"
           />
+          <Tooltip title="编辑">
+            <Button
+              type="text"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={onEdit}
+              style={{ color: theme === 'dark' ? 'rgba(255, 255, 255, 0.65)' : 'rgba(0, 0, 0, 0.45)' }}
+            />
+          </Tooltip>
+          <Popconfirm
+            title="确定删除此切片吗？"
+            onConfirm={onDelete}
+            okText="确定"
+            cancelText="取消"
+          >
+            <Tooltip title="删除">
+              <Button
+                type="text"
+                size="small"
+                icon={<DeleteOutlined />}
+                danger
+                style={{ color: '#ff4d4f' }}
+              />
+            </Tooltip>
+          </Popconfirm>
         </div>
       }
     >

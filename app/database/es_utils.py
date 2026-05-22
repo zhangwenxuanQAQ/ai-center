@@ -45,128 +45,6 @@ class SearchResult:
     field: Dict[str, Dict[str, Any]]
     keywords: List[str]
 
-
-def _token_similarity(query_tokens: List[str], doc_tokens_list: List[List[str]]) -> List[float]:
-    """
-    计算查询关键词与文档关键词之间的token相似度
-
-    参考ragflow的FulltextQueryer.token_similarity实现，使用term_weight计算权重
-
-    Args:
-        query_tokens: 查询关键词列表
-        doc_tokens_list: 每个文档的关键词列表
-
-    Returns:
-        List[float]: 每个文档的关键词相似度分数
-    """
-    if not query_tokens or not doc_tokens_list:
-        return [0.0] * len(doc_tokens_list)
-
-    try:
-        from app.core.knowledgebase.rag.nlp.term_weight import Dealer
-        from collections import defaultdict
-        tw = Dealer()
-
-        def to_dict(tks):
-            if isinstance(tks, str):
-                tks = tks.split()
-            d = defaultdict(int)
-            wts = tw.weights(tks, preprocess=False)
-            for i, (t, c) in enumerate(wts):
-                d[t] += c * 0.4
-                if i+1 < len(wts):
-                    _t, _c = wts[i+1]
-                    d[t+_t] += max(c, _c) * 0.6
-            return d
-
-        qtwt = to_dict(query_tokens)
-        dtwts = [to_dict(tks) for tks in doc_tokens_list]
-
-        scores = []
-        for dtwt in dtwts:
-            s = 1e-9
-            for k, v in qtwt.items():
-                if k in dtwt:
-                    s += v
-            q = 1e-9
-            for k, v in qtwt.items():
-                q += v
-            scores.append(s / q)
-
-        return scores
-    except Exception as e:
-        logger.warning(f"token_similarity计算失败: {e}，使用简化版计算")
-        query_token_set = set(query_tokens)
-        query_token_freq = {}
-        for t in query_tokens:
-            query_token_freq[t] = query_token_freq.get(t, 0) + 1
-        query_norm = math.sqrt(sum(v * v for v in query_token_freq.values()))
-        if query_norm == 0:
-            return [0.0] * len(doc_tokens_list)
-
-        scores = []
-        for doc_tokens in doc_tokens_list:
-            doc_token_freq = {}
-            for t in doc_tokens:
-                doc_token_freq[t] = doc_token_freq.get(t, 0) + 1
-
-            dot_product = 0.0
-            for t in query_token_set:
-                if t in doc_token_freq:
-                    dot_product += query_token_freq[t] * doc_token_freq[t]
-
-            doc_norm = math.sqrt(sum(v * v for v in doc_token_freq.values()))
-            if doc_norm == 0:
-                scores.append(0.0)
-            else:
-                scores.append(dot_product / (query_norm * doc_norm))
-
-        return scores
-
-
-def _hybrid_similarity(
-    query_vector: List[float],
-    doc_vectors: List[List[float]],
-    query_tokens: List[str],
-    doc_tokens_list: List[List[str]],
-    tkweight: float = 0.3,
-    vtweight: float = 0.7,
-) -> Tuple[List[float], List[float], List[float]]:
-    """
-    计算混合相似度（向量相似度 + 关键词相似度）
-
-    参考ragflow的hybrid_similarity实现
-
-    Args:
-        query_vector: 查询向量
-        doc_vectors: 文档向量列表
-        query_tokens: 查询关键词列表
-        doc_tokens_list: 每个文档的关键词列表
-        tkweight: 关键词相似度权重（默认0.3）
-        vtweight: 向量相似度权重（默认0.7）
-
-    Returns:
-        Tuple[List[float], List[float], List[float]]: (混合相似度, 关键词相似度, 向量相似度)
-    """
-    tksim = _token_similarity(query_tokens, doc_tokens_list)
-
-    if not query_vector or not doc_vectors:
-        vtsim = [0.0] * len(doc_vectors)
-    else:
-        qv = np.array(query_vector)
-        dv = np.array(doc_vectors)
-        norms = np.linalg.norm(dv, axis=1)
-        q_norm = np.linalg.norm(qv)
-        if q_norm == 0:
-            vtsim = [0.0] * len(doc_vectors)
-        else:
-            cosine_scores = np.dot(dv, qv) / (norms * q_norm + 1e-10)
-            vtsim = cosine_scores.tolist()
-
-    sim = [tkweight * t + vtweight * v for t, v in zip(tksim, vtsim)]
-    return sim, tksim, vtsim
-
-
 def retry_on_failure(func: Callable) -> Callable:
     """
     重试装饰器
@@ -460,6 +338,11 @@ class ESUtils:
             index_mappings = mappings or {
                 "properties": {
                     "content": {"type": "text", "analyzer": "ik_max_word"},
+                    "content_with_weight": {"type": "text", "analyzer": "ik_max_word"},
+                    "content_ltks": {"type": "text", "analyzer": "ik_max_word"},
+                    "content_sm_ltks": {"type": "text", "analyzer": "ik_max_word"},
+                    "important_kwd": {"type": "keyword"},
+                    "important_tks": {"type": "text", "analyzer": "ik_max_word"},
                     "content_vector": {
                         "type": "dense_vector",
                         "dims": 1024,
@@ -469,6 +352,11 @@ class ESUtils:
                     "doc_name": {"type": "keyword"},
                     "doc_type": {"type": "keyword"},
                     "kb_id": {"type": "keyword"},
+                    "doc_id": {"type": "keyword"},
+                    "available_int": {"type": "integer"},
+                    "page_num_int": {"type": "integer"},
+                    "top_int": {"type": "integer"},
+                    "create_timestamp_flt": {"type": "float"},
                     "created_at": {"type": "date"},
                 }
             }
@@ -484,18 +372,22 @@ class ESUtils:
             return True
 
     @retry_on_failure
-    def insert_document(self, index_name: str, doc: Dict[str, Any]) -> bool:
+    def insert_document(self, index_name: str, doc: Dict[str, Any], doc_id: str = None) -> bool:
         """
         插入单个文档（带重试机制）
 
         Args:
             index_name: 索引名称
             doc: 文档数据
+            doc_id: 文档ID（可选，不指定则由ES自动生成）
 
         Returns:
             bool: 是否插入成功
         """
-        res = self._es_client.index(index=index_name, document=doc)
+        if doc_id:
+            res = self._es_client.index(index=index_name, id=doc_id, document=doc, refresh=True)
+        else:
+            res = self._es_client.index(index=index_name, document=doc, refresh=True)
         logger.debug(f"插入文档成功, _id: {res.get('_id')}")
         return True
 
@@ -518,7 +410,7 @@ class ESUtils:
             }
             for doc in docs
         ]
-        success, failed = bulk(self._es_client, actions)
+        success, failed = bulk(self._es_client, actions, refresh=True)
         logger.info(f"批量插入完成, 成功: {success}, 失败: {len(failed)}")
         return success
 
@@ -577,6 +469,8 @@ class ESUtils:
         min_score: float = 0.0,
         vector_field: str = "content_vector",
         question: str = None,
+        vector_similarity_weight: float = 0.7,
+        metadatas: Dict[str, Any] = None,
     ) -> List[Dict[str, Any]]:
         """
         向量相似度搜索（使用ES knn retriever，带重试机制）
@@ -599,6 +493,10 @@ class ESUtils:
                 filter_conditions.append({"term": {"kb_id": kb_ids[0]}})
             else:
                 filter_conditions.append({"terms": {"kb_id": kb_ids}})
+        
+        if metadatas:
+            metadata_filters = self._build_metadata_filter(metadatas)
+            filter_conditions.extend(metadata_filters)
 
         match_expr = None
         if question:
@@ -627,6 +525,7 @@ class ESUtils:
                     "fields": match_expr.fields,
                     "type": "best_fields",
                     "query": match_expr.matching_text,
+                    "boost": 1 - vector_similarity_weight,
                 }
             }
             if match_expr.extra_options:
@@ -657,6 +556,7 @@ class ESUtils:
                     "fields": match_expr.fields,
                     "type": "best_fields",
                     "query": match_expr.matching_text,
+                    "boost": 1 - vector_similarity_weight,
                 }
             }
             if match_expr.extra_options:
@@ -703,6 +603,7 @@ class ESUtils:
         rerank_mdl=None,
         sort_by: str = "sim",
         available_only: bool = True,
+        metadatas: Dict[str, Any] = None,
     ) -> Dict[str, Any]:
         """
         混合检索（向量+关键词），使用ES knn retriever，支持Rerank重排序
@@ -772,6 +673,10 @@ class ESUtils:
             filter_conditions.append({"terms": {"doc_id": doc_ids}})
         if available_only:
             filter_conditions.append({"term": {"available_int": 1}})
+        
+        if metadatas:
+            metadata_filters = self._build_metadata_filter(metadatas)
+            filter_conditions.extend(metadata_filters)
 
         knn_query = None
         match_expr = None
@@ -801,6 +706,7 @@ class ESUtils:
                         "fields": match_expr.fields,
                         "type": "best_fields",
                         "query": match_expr.matching_text,
+                        "boost": 1 - vector_similarity_weight,
                     }
                 }
                 if match_expr.extra_options:
@@ -821,6 +727,7 @@ class ESUtils:
                     "fields": match_expr.fields,
                     "type": "best_fields",
                     "query": match_expr.matching_text,
+                    "boost": 1 - vector_similarity_weight,
                 }
             }
             if match_expr.extra_options:
@@ -873,6 +780,7 @@ class ESUtils:
                                     "type": "best_fields",
                                     "query": question,
                                     "minimum_should_match": "10%",
+                                    "boost": 1 - vector_similarity_weight,
                                 }
                             }
                         ],
@@ -943,7 +851,7 @@ class ESUtils:
 
         filtered_count = 0
         for i in idx:
-            if float(sim[i]) < vector_similarity_threshold:
+            if float(vsim[i]) < vector_similarity_threshold:
                 continue
             if float(tsim[i]) < keyword_similarity_threshold:
                 continue
@@ -952,8 +860,8 @@ class ESUtils:
         ranks["total"] = filtered_count
 
         for i in idx:
-            if float(sim[i]) < vector_similarity_threshold:
-                break
+            if float(vsim[i]) < vector_similarity_threshold:
+                continue
             if float(tsim[i]) < keyword_similarity_threshold:
                 continue
 
@@ -974,6 +882,7 @@ class ESUtils:
                 "kb_id": chunk.get("kb_id", ""),
                 "important_kwd": chunk.get("important_kwd", []),
                 "image_id": chunk.get("img_id", ""),
+                "image_base64": chunk.get("image_base64", ""),
                 "similarity": float(sim[i]),
                 "vector_similarity": float(vsim[i]),
                 "term_similarity": float(tsim[i]),
@@ -1053,7 +962,7 @@ class ESUtils:
             else:
                 ins_embd.append(zero_vector)
 
-        sim, tksim, vtsim = _hybrid_similarity(
+        sim, tksim, vtsim = qryr.hybrid_similarity(
             sres.query_vector, ins_embd, keywords, ins_tw, tkweight, vtweight
         )
         return sim, tksim, vtsim
@@ -1107,7 +1016,34 @@ class ESUtils:
             ins_tw.append(tks)
             doc_contents.append(" ".join(tks))
 
-        tksim = _token_similarity(keywords, ins_tw)
+        tksim = []
+        try:
+            from app.core.knowledgebase.rag.nlp.query import FulltextQueryer
+            qryr = FulltextQueryer()
+            tksim = qryr.token_similarity(keywords, ins_tw)
+        except Exception as e:
+            logger.warning(f"token_similarity计算失败: {e}，使用简化版计算")
+            query_token_set = set(keywords)
+            query_token_freq = {}
+            for t in keywords:
+                query_token_freq[t] = query_token_freq.get(t, 0) + 1
+            query_norm = math.sqrt(sum(v * v for v in query_token_freq.values()))
+            if query_norm == 0:
+                tksim = [0.0] * len(ins_tw)
+            else:
+                for doc_tokens in ins_tw:
+                    doc_token_freq = {}
+                    for t in doc_tokens:
+                        doc_token_freq[t] = doc_token_freq.get(t, 0) + 1
+                    dot_product = 0.0
+                    for t in query_token_set:
+                        if t in doc_token_freq:
+                            dot_product += query_token_freq[t] * doc_token_freq[t]
+                    doc_norm = math.sqrt(sum(v * v for v in doc_token_freq.values()))
+                    if doc_norm == 0:
+                        tksim.append(0.0)
+                    else:
+                        tksim.append(dot_product / (query_norm * doc_norm))
 
         try:
             from app.utils.string_utils import remove_redundant_spaces
@@ -1121,6 +1057,117 @@ class ESUtils:
         sim = [tkweight * t + vtweight * v for t, v in zip(tksim, vtsim)]
         return sim, tksim, vtsim
 
+    def _build_metadata_filter(self, metadatas: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        构建元数据过滤条件
+        
+        Args:
+            metadatas: 元数据过滤条件，格式为{字段名: {value: 值, fuzzy: 是否模糊查询, relation: 范围关系}}
+        
+        Returns:
+            List[Dict]: ES过滤条件列表
+        """
+        if not metadatas:
+            return []
+        
+        filter_conditions = []
+        for field_name, field_config in metadatas.items():
+            if not field_config or not isinstance(field_config, dict):
+                continue
+            
+            value = field_config.get('value')
+            if value is None or value == '':
+                continue
+            
+            fuzzy = field_config.get('fuzzy', False)
+            relation = field_config.get('relation', 'INTERSECTS')
+            
+            if field_name.endswith('_range'):
+                range_filter = self._build_range_filter(field_name, value, relation)
+                if range_filter:
+                    filter_conditions.append(range_filter)
+            elif fuzzy and isinstance(value, str):
+                filter_conditions.append({
+                    "match": {field_name: value}
+                })
+            elif isinstance(value, list):
+                if len(value) == 1:
+                    filter_conditions.append({"term": {field_name: value[0]}})
+                else:
+                    filter_conditions.append({"terms": {field_name: value}})
+            else:
+                filter_conditions.append({"term": {field_name: value}})
+        
+        return filter_conditions
+    
+    def _build_range_filter(self, field_name: str, value: Any, relation: str) -> Optional[Dict[str, Any]]:
+        """
+        构建范围类型字段的过滤条件
+        
+        Args:
+            field_name: 字段名
+            value: 字段值（可以是单个值或范围对象）
+            relation: 范围关系（INTERSECTS、CONTAINS、WITHIN）
+        
+        Returns:
+            Optional[Dict]: ES范围过滤条件
+        """
+        if not value:
+            return None
+        
+        if isinstance(value, dict):
+            gte = value.get('gte') or value.get('from')
+            lte = value.get('lte') or value.get('to')
+            if gte is not None and lte is not None:
+                range_value = {"gte": gte, "lte": lte}
+            elif gte is not None:
+                range_value = {"gte": gte}
+            elif lte is not None:
+                range_value = {"lte": lte}
+            else:
+                return None
+        elif isinstance(value, (list, tuple)) and len(value) == 2:
+            range_value = {"gte": value[0], "lte": value[1]}
+        else:
+            return None
+        
+        if relation == 'INTERSECTS':
+            return {
+                "range": {
+                    field_name: {
+                        "gte": range_value.get('gte'),
+                        "lte": range_value.get('lte'),
+                        "relation": "intersects"
+                    }
+                }
+            }
+        elif relation == 'CONTAINS':
+            return {
+                "range": {
+                    field_name: {
+                        "gte": range_value.get('gte'),
+                        "lte": range_value.get('lte'),
+                        "relation": "contains"
+                    }
+                }
+            }
+        elif relation == 'WITHIN':
+            return {
+                "range": {
+                    field_name: {
+                        "gte": range_value.get('gte'),
+                        "lte": range_value.get('lte'),
+                        "relation": "within"
+                    }
+                }
+            }
+        else:
+            return {
+                "range": {
+                    field_name: range_value
+                }
+            }
+    
     @retry_on_failure
     def delete_document(self, index_name: str, doc_id: str) -> bool:
         """
@@ -1133,7 +1180,7 @@ class ESUtils:
         Returns:
             bool: 是否删除成功
         """
-        self._es_client.delete(index=index_name, id=doc_id)
+        self._es_client.delete(index=index_name, id=doc_id, refresh=True)
         logger.info(f"删除文档成功: {doc_id}")
         return True
 
@@ -1154,6 +1201,7 @@ class ESUtils:
             index=index_name,
             query=es_query,
             wait_for_completion=True,
+            refresh=True
         )
         deleted_count = res.get('deleted', 0)
         logger.info(f"根据条件删除文档, 数量: {deleted_count}")
@@ -1183,7 +1231,8 @@ class ESUtils:
             index=index_name,
             id=doc_id,
             doc=doc,
-            doc_as_upsert=upsert
+            doc_as_upsert=upsert,
+            refresh=True
         )
         logger.info(f"更新文档成功: {doc_id}")
         return True

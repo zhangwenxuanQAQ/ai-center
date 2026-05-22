@@ -687,8 +687,8 @@ try:
     except Exception as e:
         logger.info(f"  处理 knowledgebase_document 表失败: {e}")
 
-    # 创建 knowledgebase_document_category 表
-    logger.info("\n创建 knowledgebase_document_category 表...")
+    # 创建/更新 knowledgebase_document_category 表
+    logger.info("\n处理 knowledgebase_document_category 表...")
     try:
         cursor = db.execute_sql("SHOW TABLES;")
         tables = cursor.fetchall()
@@ -697,11 +697,15 @@ try:
             db.execute_sql("""
                 CREATE TABLE knowledgebase_document_category (
                     id CHAR(36) NOT NULL PRIMARY KEY,
-                    knowledgebase_id VARCHAR(40) NOT NULL,
+                    kb_id VARCHAR(40) NOT NULL,
                     name VARCHAR(255) NOT NULL,
                     description TEXT,
                     parent_id CHAR(36),
                     sort_order INT DEFAULT 0,
+                    is_default TINYINT DEFAULT 0,
+                    document_config TEXT DEFAULT NULL,
+                    chunk_method VARCHAR(50) DEFAULT NULL,
+                    chunk_config TEXT DEFAULT NULL,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                     create_user_id VARCHAR(40) DEFAULT NULL,
@@ -709,7 +713,7 @@ try:
                     deleted TINYINT DEFAULT 0,
                     deleted_at DATETIME DEFAULT NULL,
                     deleted_user_id VARCHAR(36) DEFAULT NULL,
-                    INDEX idx_knowledgebase_id (knowledgebase_id),
+                    INDEX idx_kb_id (kb_id),
                     INDEX idx_parent_id (parent_id),
                     INDEX idx_sort_order (sort_order),
                     INDEX idx_deleted (deleted)
@@ -717,9 +721,44 @@ try:
             """)
             logger.info("  成功创建 knowledgebase_document_category 表")
         else:
-            logger.info("  knowledgebase_document_category 表已存在，跳过")
+            logger.info("  knowledgebase_document_category 表已存在，检查字段...")
+            cursor = db.execute_sql("DESCRIBE knowledgebase_document_category;")
+            columns = [column[0] for column in cursor.fetchall()]
+            
+            # 更新字段名：knowledgebase_id -> kb_id
+            if 'knowledgebase_id' in columns and 'kb_id' not in columns:
+                db.execute_sql("ALTER TABLE knowledgebase_document_category CHANGE COLUMN knowledgebase_id kb_id VARCHAR(40) NOT NULL")
+                logger.info("  成功将 knowledgebase_id 字段重命名为 kb_id")
+            
+            if 'is_default' not in columns:
+                db.execute_sql("ALTER TABLE knowledgebase_document_category ADD COLUMN is_default TINYINT DEFAULT 0")
+                logger.info("  成功添加 is_default 字段")
+            else:
+                logger.info("  is_default 字段已存在，跳过")
+            
+            if 'document_config' not in columns:
+                db.execute_sql("ALTER TABLE knowledgebase_document_category ADD COLUMN document_config TEXT DEFAULT NULL")
+                logger.info("  成功添加 document_config 字段")
+            else:
+                logger.info("  document_config 字段已存在，跳过")
+            
+            if 'chunk_method' not in columns:
+                db.execute_sql("ALTER TABLE knowledgebase_document_category ADD COLUMN chunk_method VARCHAR(50) DEFAULT NULL")
+                logger.info("  成功添加 chunk_method 字段")
+            else:
+                logger.info("  chunk_method 字段已存在，跳过")
+            
+            if 'chunk_config' not in columns:
+                db.execute_sql("ALTER TABLE knowledgebase_document_category ADD COLUMN chunk_config TEXT DEFAULT NULL")
+                logger.info("  成功添加 chunk_config 字段")
+            else:
+                logger.info("  chunk_config 字段已存在，跳过")
+            
+            if 'kb_id' not in columns:
+                db.execute_sql("ALTER TABLE knowledgebase_document_category ADD COLUMN kb_id VARCHAR(40) NOT NULL")
+                logger.info("  成功添加 kb_id 字段")
     except Exception as e:
-        logger.info(f"  创建 knowledgebase_document_category 表失败: {e}")
+        logger.info(f"  处理 knowledgebase_document_category 表失败: {e}")
     
     # 为 knowledgebase_document 表添加 category_id 和 tags 字段
     logger.info("\n为 knowledgebase_document 表添加 category_id 和 tags 字段...")
@@ -973,6 +1012,18 @@ try:
 
     except Exception as e:
         logger.error(f"[MIGRATION]   修改messages字段类型失败: {e}")
+
+    # 为knowledgebase_document表添加metadatas字段
+    logger.info("\n[MIGRATION] 为knowledgebase_document表添加metadatas字段...")
+    try:
+        cursor = db.execute_sql("SHOW COLUMNS FROM knowledgebase_document LIKE 'metadatas'")
+        if not cursor.fetchone():
+            db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN metadatas LONGTEXT DEFAULT NULL")
+            logger.info("[MIGRATION]   成功添加metadatas字段")
+        else:
+            logger.info("[MIGRATION]   metadatas字段已存在，跳过")
+    except Exception as e:
+        logger.error(f"[MIGRATION]   添加metadatas字段失败: {e}")
 
         logger.info("\n[MIGRATION] ✅ 数据库迁移完成")
 except Exception as e:
