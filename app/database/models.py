@@ -148,6 +148,9 @@ class KnowledgebaseDocumentCategory(SoftDeleteModel):
     parent_id = CharField(max_length=40, null=True, index=True, verbose_name="父分类ID")
     sort_order = IntegerField(default=0, verbose_name="排序序号")
     is_default = BooleanField(default=False, verbose_name="是否默认分类")
+    document_config = TextField(null=True, verbose_name="知识配置JSON")
+    chunk_method = CharField(max_length=50, null=True, verbose_name="切片方法")
+    chunk_config = TextField(null=True, verbose_name="切片配置JSON")
 
     class Meta:
         table_name = 'knowledgebase_document_category'

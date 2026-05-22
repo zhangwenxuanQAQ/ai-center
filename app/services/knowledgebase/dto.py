@@ -151,12 +151,18 @@ class KnowledgebaseDocumentCategoryBase(BaseModel):
         description: 分类描述
         parent_id: 父分类ID
         sort_order: 排序顺序
+        document_config: 知识配置JSON
+        chunk_method: 切片方法
+        chunk_config: 切片配置JSON
     """
     kb_id: Optional[str] = Field(None, description="知识库ID，UUID格式")
     name: str = Field(..., min_length=1, max_length=100, description="分类名称，长度1-100个字符")
     description: Optional[str] = Field(None, max_length=500, description="分类描述，最大长度500个字符")
     parent_id: Optional[str] = Field(None, description="父分类ID，UUID格式")
     sort_order: int = Field(default=0, description="排序顺序")
+    document_config: Optional[dict] = Field(None, description="知识配置JSON对象")
+    chunk_method: Optional[str] = Field(None, max_length=50, description="切片方法")
+    chunk_config: Optional[dict] = Field(None, description="切片配置JSON对象")
 
 
 class KnowledgebaseDocumentCategoryCreate(KnowledgebaseDocumentCategoryBase):
@@ -174,11 +180,17 @@ class KnowledgebaseDocumentCategoryUpdate(BaseModel):
         description: 分类描述
         parent_id: 父分类ID
         sort_order: 排序顺序
+        document_config: 知识配置JSON
+        chunk_method: 切片方法
+        chunk_config: 切片配置JSON
     """
     name: Optional[str] = Field(None, min_length=1, max_length=100, description="分类名称，长度1-100个字符")
     description: Optional[str] = Field(None, max_length=500, description="分类描述，最大长度500个字符")
     parent_id: Optional[str] = Field(None, description="父分类ID，UUID格式")
     sort_order: Optional[int] = Field(None, description="排序顺序")
+    document_config: Optional[dict] = Field(None, description="知识配置JSON对象")
+    chunk_method: Optional[str] = Field(None, max_length=50, description="切片方法")
+    chunk_config: Optional[dict] = Field(None, description="切片配置JSON对象")
 
 
 class KnowledgebaseDocumentCategory(KnowledgebaseDocumentCategoryBase, BaseDTO):

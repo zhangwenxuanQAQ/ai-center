@@ -916,7 +916,22 @@ def create_document_category(kb_id: str, category: KnowledgebaseDocumentCategory
     """
     category.kb_id = kb_id
     db_category = KnowledgebaseDocumentCategoryService.create_category(category)
-    return ResponseUtil.created(data=db_category.__data__, message="知识库文档分类创建成功")
+    category_data = db_category.__data__
+    if category_data.get('document_config'):
+        try:
+            category_data['document_config'] = json.loads(category_data['document_config'])
+        except:
+            category_data['document_config'] = {}
+    else:
+        category_data['document_config'] = {}
+    if category_data.get('chunk_config'):
+        try:
+            category_data['chunk_config'] = json.loads(category_data['chunk_config'])
+        except:
+            category_data['chunk_config'] = {}
+    else:
+        category_data['chunk_config'] = {}
+    return ResponseUtil.created(data=category_data, message="知识库文档分类创建成功")
 
 
 @router.get("/{kb_id}/document_category", response_model=ApiResponse)
@@ -933,7 +948,24 @@ def get_document_categories(kb_id: str, skip: int = 0, limit: int = 100):
         ApiResponse: 统一格式的响应对象
     """
     categories = KnowledgebaseDocumentCategoryService.get_categories(kb_id, skip, limit)
-    categories_data = [category.__data__ for category in categories]
+    categories_data = []
+    for category in categories:
+        category_dict = category.__data__
+        if category_dict.get('document_config'):
+            try:
+                category_dict['document_config'] = json.loads(category_dict['document_config'])
+            except:
+                category_dict['document_config'] = {}
+        else:
+            category_dict['document_config'] = {}
+        if category_dict.get('chunk_config'):
+            try:
+                category_dict['chunk_config'] = json.loads(category_dict['chunk_config'])
+            except:
+                category_dict['chunk_config'] = {}
+        else:
+            category_dict['chunk_config'] = {}
+        categories_data.append(category_dict)
     return ResponseUtil.success(data=categories_data, message="获取知识库文档分类列表成功")
 
 
@@ -967,7 +999,22 @@ def get_document_category(kb_id: str, category_id: str):
     category = KnowledgebaseDocumentCategoryService.get_category(category_id)
     if category is None:
         return ResponseUtil.not_found(message=f"知识库文档分类 {category_id} 不存在")
-    return ResponseUtil.success(data=category.__data__, message="获取知识库文档分类成功")
+    category_data = category.__data__
+    if category_data.get('document_config'):
+        try:
+            category_data['document_config'] = json.loads(category_data['document_config'])
+        except:
+            category_data['document_config'] = {}
+    else:
+        category_data['document_config'] = {}
+    if category_data.get('chunk_config'):
+        try:
+            category_data['chunk_config'] = json.loads(category_data['chunk_config'])
+        except:
+            category_data['chunk_config'] = {}
+    else:
+        category_data['chunk_config'] = {}
+    return ResponseUtil.success(data=category_data, message="获取知识库文档分类成功")
 
 
 @router.post("/{kb_id}/document_category/{category_id}", response_model=ApiResponse)
@@ -984,7 +1031,22 @@ def update_document_category(kb_id: str, category_id: str, category: Knowledgeba
         ApiResponse: 统一格式的响应对象
     """
     db_category = KnowledgebaseDocumentCategoryService.update_category(category_id, category)
-    return ResponseUtil.success(data=db_category.__data__, message="知识库文档分类更新成功")
+    category_data = db_category.__data__
+    if category_data.get('document_config'):
+        try:
+            category_data['document_config'] = json.loads(category_data['document_config'])
+        except:
+            category_data['document_config'] = {}
+    else:
+        category_data['document_config'] = {}
+    if category_data.get('chunk_config'):
+        try:
+            category_data['chunk_config'] = json.loads(category_data['chunk_config'])
+        except:
+            category_data['chunk_config'] = {}
+    else:
+        category_data['chunk_config'] = {}
+    return ResponseUtil.success(data=category_data, message="知识库文档分类更新成功")
 
 
 @router.post("/{kb_id}/document_category/{category_id}/delete", response_model=ApiResponse)

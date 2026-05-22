@@ -1833,7 +1833,15 @@ class KnowledgebaseDocumentCategoryService:
         if existing:
             raise DuplicateResourceError(f"分类名称 '{category.name}' 已存在")
 
-        db_category = KnowledgebaseDocumentCategory(**category.model_dump())
+        category_data = category.model_dump()
+        
+        if category_data.get('document_config') and isinstance(category_data['document_config'], dict):
+            category_data['document_config'] = json.dumps(category_data['document_config'], ensure_ascii=False)
+        
+        if category_data.get('chunk_config') and isinstance(category_data['chunk_config'], dict):
+            category_data['chunk_config'] = json.dumps(category_data['chunk_config'], ensure_ascii=False)
+
+        db_category = KnowledgebaseDocumentCategory(**category_data)
         db_category.save(force_insert=True)
         return db_category
 
@@ -1883,6 +1891,9 @@ class KnowledgebaseDocumentCategoryService:
                         "parent_id": str(cat.parent_id) if cat.parent_id else None,
                         "sort_order": cat.sort_order,
                         "is_default": cat.is_default,
+                        "document_config": json.loads(cat.document_config) if cat.document_config else {},
+                        "chunk_method": cat.chunk_method,
+                        "chunk_config": json.loads(cat.chunk_config) if cat.chunk_config else {},
                         "children": build_tree(cat.id)
                     }
                     tree.append(node)
@@ -1947,6 +1958,12 @@ class KnowledgebaseDocumentCategoryService:
 
             if existing:
                 raise DuplicateResourceError(f"分类名称 '{update_data['name']}' 已存在")
+
+        if update_data.get('document_config') and isinstance(update_data['document_config'], dict):
+            update_data['document_config'] = json.dumps(update_data['document_config'], ensure_ascii=False)
+        
+        if update_data.get('chunk_config') and isinstance(update_data['chunk_config'], dict):
+            update_data['chunk_config'] = json.dumps(update_data['chunk_config'], ensure_ascii=False)
 
         for field, value in update_data.items():
             setattr(db_category, field, value)

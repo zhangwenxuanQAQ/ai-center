@@ -956,3 +956,14 @@ ragflow源码主要阅读一下方法：
 
 - 参考collect方法实现从redis队列获取任务方法
 - 修改redis的queue_consumer方法，需要和ragflow源码一样
+
+
+## 数据集分类功能更新
+- 在数据集分类表新增字段: 
+  - document_config: 知识配置 longtext 存储json字符串
+  - chunk_method: 切片方法 varchar(50) 切片方法
+  - chunk_config: 切片配置 text 切片配置
+
+- 修改后端数据集分类相关模型和接口，需要返回以上3个字段
+
+- 重启后端并且更新数据库结构
