@@ -737,10 +737,16 @@ try:
                 logger.info("  is_default 字段已存在，跳过")
             
             if 'document_config' not in columns:
-                db.execute_sql("ALTER TABLE knowledgebase_document_category ADD COLUMN document_config TEXT DEFAULT NULL")
+                db.execute_sql("ALTER TABLE knowledgebase_document_category ADD COLUMN document_config LONGTEXT DEFAULT NULL")
                 logger.info("  成功添加 document_config 字段")
             else:
-                logger.info("  document_config 字段已存在，跳过")
+                cursor = db.execute_sql("DESCRIBE knowledgebase_document_category document_config;")
+                result = cursor.fetchone()
+                if result and 'text' in result[1].lower() and 'longtext' not in result[1].lower():
+                    db.execute_sql("ALTER TABLE knowledgebase_document_category MODIFY COLUMN document_config LONGTEXT DEFAULT NULL")
+                    logger.info("  成功将 document_config 字段类型修改为 LONGTEXT")
+                else:
+                    logger.info("  document_config 字段已存在且类型正确，跳过")
             
             if 'chunk_method' not in columns:
                 db.execute_sql("ALTER TABLE knowledgebase_document_category ADD COLUMN chunk_method VARCHAR(50) DEFAULT NULL")
@@ -760,8 +766,8 @@ try:
     except Exception as e:
         logger.info(f"  处理 knowledgebase_document_category 表失败: {e}")
     
-    # 为 knowledgebase_document 表添加 category_id 和 tags 字段
-    logger.info("\n为 knowledgebase_document 表添加 category_id 和 tags 字段...")
+    # 为 knowledgebase_document 表添加 category_id、tags 和 document_config 字段
+    logger.info("\n为 knowledgebase_document 表添加 category_id、tags 和 document_config 字段...")
     try:
         cursor = db.execute_sql("DESCRIBE knowledgebase_document;")
         columns = [column[0] for column in cursor.fetchall()]
@@ -777,6 +783,18 @@ try:
             logger.info("  tags 字段已添加")
         else:
             logger.info("  tags 字段已存在，跳过")
+        
+        if 'document_config' not in columns:
+            db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN document_config LONGTEXT DEFAULT NULL")
+            logger.info("  document_config 字段已添加")
+        else:
+            cursor_type = db.execute_sql("DESCRIBE knowledgebase_document document_config;")
+            result = cursor_type.fetchone()
+            if result and 'text' in result[1].lower() and 'longtext' not in result[1].lower():
+                db.execute_sql("ALTER TABLE knowledgebase_document MODIFY COLUMN document_config LONGTEXT DEFAULT NULL")
+                logger.info("  成功将 document_config 字段类型修改为 LONGTEXT")
+            else:
+                logger.info("  document_config 字段已存在且类型正确，跳过")
     except Exception as e:
         logger.info(f"  为 knowledgebase_document 表添加字段失败: {e}")
 

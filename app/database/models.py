@@ -168,6 +168,7 @@ class KnowledgebaseDocument(SoftDeleteModel):
     kb_id = CharField(max_length=40, index=True, verbose_name="知识库ID")
     category_id = CharField(max_length=40, null=True, index=True, verbose_name="文档分类ID")
     tags = TextField(null=True, verbose_name="文档标签JSON数组")
+    document_config = TextField(null=True, verbose_name="知识配置JSON")
     chunk_method = CharField(max_length=50, verbose_name="文档Chunk方法")
     chunk_config = TextField(null=True, verbose_name="文档Chunk配置JSON")
     token_num = IntegerField(default=0, verbose_name="文档Token数")
@@ -517,6 +518,64 @@ class Datasource(SoftDeleteModel):
         table_name = 'datasource'
 
 
+class AgentCategory(SoftDeleteModel):
+    """
+    智能体分类模型
+    
+    存储智能体分类信息，支持树形结构
+    """
+    name = CharField(max_length=255, index=True, verbose_name="分类名称")
+    description = TextField(null=True, verbose_name="分类描述")
+    parent_id = CharField(max_length=40, null=True, index=True, verbose_name="父分类ID")
+    sort_order = IntegerField(default=0, verbose_name="排序序号")
+    is_default = BooleanField(default=False, verbose_name="是否默认分类")
+    
+    class Meta:
+        table_name = 'agent_category'
+        indexes = (
+            (('parent_id', 'sort_order'), False),
+        )
+
+
+class AgentComponent(SoftDeleteModel):
+    """
+    智能体组件模型
+    
+    存储智能体组件信息
+    """
+    name = CharField(max_length=255, index=True, verbose_name="组件名称")
+    code = CharField(max_length=100, index=True, verbose_name="组件编码")
+    description = TextField(null=True, verbose_name="组件描述")
+    component_type = CharField(max_length=50, index=True, verbose_name="组件类型")
+    category = CharField(max_length=100, null=True, index=True, verbose_name="组件分类")
+    icon = TextField(null=True, verbose_name="组件图标")
+    config = TextField(null=True, verbose_name="组件配置JSON")
+    status = BooleanField(default=True, verbose_name="状态：True启用，False停用")
+    
+    class Meta:
+        table_name = 'agent_component'
+
+
+class AgentInstance(SoftDeleteModel):
+    """
+    智能体实例模型
+    
+    存储智能体实例信息及工作流配置
+    """
+    name = CharField(max_length=255, index=True, verbose_name="智能体名称")
+    code = CharField(max_length=100, index=True, verbose_name="智能体编码")
+    description = TextField(null=True, verbose_name="智能体描述")
+    category_id = CharField(max_length=40, null=True, index=True, verbose_name="分类ID")
+    avatar = TextField(null=True, verbose_name="智能体头像")
+    dsl = TextField(null=True, verbose_name="工作流DSL配置JSON")
+    version = IntegerField(default=1, verbose_name="版本号")
+    status = BooleanField(default=True, verbose_name="状态：True启用，False停用")
+    is_template = BooleanField(default=False, verbose_name="是否为模板")
+    
+    class Meta:
+        table_name = 'agent_instance'
+
+
 def create_tables():
     """
     创建所有数据表
@@ -545,6 +604,9 @@ def create_tables():
         ChatbotTool,
         DatasourceCategory,
         Datasource,
+        AgentCategory,
+        AgentComponent,
+        AgentInstance,
     ]
     
     for table in tables:
