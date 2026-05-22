@@ -19,7 +19,7 @@ es:
   password: '123456'
   scheme: 'https'
 redis:
-  db: 1
+  db: 3
   username: ''
   password: ''
   host: '10.9.44.5'

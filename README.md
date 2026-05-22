@@ -641,9 +641,11 @@ docker run -d \
   --name ai-center-es \
   -p 9200:9200 \
   -p 9300:9300 \
-  -e discovery.type=single-node \
   -e ES_JAVA_OPTS="-Xms2g -Xmx2g" \
-  -e xpack.security.enabled=true \
+  -e bootstrap.memory_lock=false \
+  -e cluster.routing.allocation.disk.watermark.low=5gb \
+  -e cluster.routing.allocation.disk.watermark.high=3gb \
+  -e cluster.routing.allocation.disk.watermark.flood_stage=2gb \
   -e ELASTIC_PASSWORD=your_es_password \
   -v /path/to/es/data:/usr/share/elasticsearch/data \
   --cpus="4" \
@@ -651,6 +653,15 @@ docker run -d \
   --restart unless-stopped \
   elasticsearch:8.11.0
 ```
+
+**环境变量说明**：
+
+| 参数 | 说明 |
+|------|------|
+| `bootstrap.memory_lock=false` | 是否锁定内存（生产环境建议启用） |
+| `cluster.routing.allocation.disk.watermark.low=5gb` | 磁盘水位低阈值，低于此值时停止分片分配 |
+| `cluster.routing.allocation.disk.watermark.high=3gb` | 磁盘水位高阈值，低于此值时迁移分片 |
+| `cluster.routing.allocation.disk.watermark.flood_stage=2gb` | 磁盘洪水阶段阈值，低于此值时只读保护 |
 
 #### 4. RustFS (MinIO)
 

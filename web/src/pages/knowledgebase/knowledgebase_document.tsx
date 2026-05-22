@@ -832,6 +832,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
         const getStatusButton = () => {
           switch (record.running_status) {
             case 'running':
+            case 'waiting':
               return (
                 <Tooltip title="停止">
                   <Button 

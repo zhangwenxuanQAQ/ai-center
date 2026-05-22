@@ -302,23 +302,42 @@ class RedisUtils:
             try:
                 # 尝试创建消费者组
                 try:
-                    group_info = self._redis_client.xinfo_groups(queue_name)
-                    if not any(gi["name"] == group_name for gi in group_info):
+                    # 先检查队列是否存在
+                    try:
+                        self._redis_client.xlen(queue_name)
+                    except Exception:
+                        # 队列不存在，创建队列和消费者组
                         self._redis_client.xgroup_create(queue_name, group_name, id="0", mkstream=True)
+                    else:
+                        # 队列存在，检查消费者组是否存在
+                        try:
+                            group_info = self._redis_client.xinfo_groups(queue_name)
+                            if not any(gi["name"] == group_name for gi in group_info):
+                                self._redis_client.xgroup_create(queue_name, group_name, id="0", mkstream=True)
+                        except Exception as e:
+                            if "no such key" in str(e).lower():
+                                self._redis_client.xgroup_create(queue_name, group_name, id="0", mkstream=True)
+                            elif "busygroup" not in str(e).lower():
+                                pass
+                            else:
+                                raise   
+                            
                 except redis.exceptions.ResponseError as e:
                     if "no such key" in str(e).lower():
                         self._redis_client.xgroup_create(queue_name, group_name, id="0", mkstream=True)
                     elif "busygroup" in str(e).lower():
-                        logger.warning("Group already exists, continue.")
+                        pass  # 消费者组已存在，继续
                     else:
                         raise
 
                 # 读取消息
+                # 读取pending消息(msg_id="0")时不阻塞，读取新消息(msg_id=">")时阻塞5秒
+                block_ms = 0 if msg_id != ">" else 5000
                 args = {
                     "groupname": group_name,
                     "consumername": consumer_name,
                     "count": 1,
-                    "block": 5000,  # 5秒超时
+                    "block": block_ms,
                     "streams": {queue_name: msg_id},
                 }
                 
