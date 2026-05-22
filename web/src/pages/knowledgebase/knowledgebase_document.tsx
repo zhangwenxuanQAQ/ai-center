@@ -9,6 +9,8 @@ import { DOCUMENT_CHUNK_METHOD } from '../../constants/knowledgebase';
 import KnowledgebaseDocumentSetting from './knowledgebase_document_setting';
 import ChunkMethodModal from './chunk-method-modal';
 import ChunksView from './chunks_view';
+import KnowledgebaseDocumentFolderModal from './knowledgebase_document_folder_modal';
+import AddDatasetModal from './folder_modal/AddDatasetModal';
 import '../../styles/common.css';
 import './knowledgebase.less';
 
@@ -48,6 +50,8 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
   // 分类管理相关状态
   const [isCategoryModalVisible, setIsCategoryModalVisible] = useState(false);
   const [isCategoryEditModalVisible, setIsCategoryEditModalVisible] = useState(false);
+  const [isFolderModalVisible, setIsFolderModalVisible] = useState(false);
+  const [isDatasetModalVisible, setIsDatasetModalVisible] = useState(false);
   const [categoryForm] = Form.useForm();
   const [categoryEditForm] = Form.useForm();
   const [editingCategory, setEditingCategory] = useState<any>(null);
@@ -931,7 +935,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
               type="primary"
               icon={<PlusOutlined />}
               size="small"
-              onClick={handleOpenCategoryModal}
+              onClick={() => setIsFolderModalVisible(true)}
               style={{
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 border: 'none',
@@ -941,7 +945,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
                 fontSize: '12px'
               }}
             >
-              新增分类
+              新增
             </Button>
           </div>
           <Tree
@@ -984,7 +988,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
           <Button
             type="primary"
             icon={<PlusOutlined />}
-            onClick={() => { setEditingDocument(undefined); setShowSetting(true); }}
+            onClick={() => setIsDatasetModalVisible(true)}
             style={{
               background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
               border: 'none',
@@ -1280,6 +1284,22 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
           knowledgebaseId={knowledgebase.id}
         />
       )}
+
+      {/* 新增目录弹窗 */}
+      <KnowledgebaseDocumentFolderModal
+        visible={isFolderModalVisible}
+        knowledgebaseId={knowledgebase.id}
+        categories={categories}
+        onCancel={() => setIsFolderModalVisible(false)}
+        onSuccess={fetchCategories}
+      />
+
+      {/* 新增数据集弹窗 */}
+      <AddDatasetModal
+        visible={isDatasetModalVisible}
+        onCancel={() => setIsDatasetModalVisible(false)}
+        onSuccess={() => setIsDatasetModalVisible(false)}
+      />
     </Layout>
   );
 };
