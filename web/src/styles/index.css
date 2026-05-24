@@ -135,3 +135,58 @@
   background: #667eea;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
+
+/* ==================== 分页栏样式修复 ==================== */
+.ant-pagination {
+  display: flex;
+  align-items: center;
+}
+
+.ant-pagination-item {
+  min-width: 32px;
+  height: 32px;
+  line-height: 32px;
+}
+
+.ant-pagination-item-link {
+  display: block !important;
+  min-width: 32px !important;
+  height: 32px !important;
+  padding: 0 !important;
+  border-radius: 4px;
+  line-height: 32px !important;
+  text-align: center;
+  border: none !important;
+  background: transparent !important;
+}
+
+.ant-pagination-item-link .anticon,
+.ant-pagination-item-link svg {
+  font-size: 12px;
+}
+
+.ant-pagination-item-ellipsis {
+  display: block !important;
+  line-height: 32px !important;
+  text-align: center;
+}
+
+.ant-pagination-prev,
+.ant-pagination-next {
+  min-width: 32px;
+  height: 32px;
+  line-height: 32px;
+}
+
+.ant-pagination-options {
+  margin-left: 12px;
+}
+
+.ant-pagination-options-size-changer {
+  min-width: 100px;
+}
+
+.ant-pagination-total-text {
+  height: 32px;
+  line-height: 32px;
+}

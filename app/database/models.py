@@ -529,6 +529,7 @@ class AgentCategory(SoftDeleteModel):
     parent_id = CharField(max_length=40, null=True, index=True, verbose_name="父分类ID")
     sort_order = IntegerField(default=0, verbose_name="排序序号")
     is_default = BooleanField(default=False, verbose_name="是否默认分类")
+    is_default_select = BooleanField(default=False, verbose_name="是否默认选中")
     
     class Meta:
         table_name = 'agent_category'
@@ -568,7 +569,7 @@ class AgentInstance(SoftDeleteModel):
     category_id = CharField(max_length=40, null=True, index=True, verbose_name="分类ID")
     avatar = TextField(null=True, verbose_name="智能体头像")
     dsl = TextField(null=True, verbose_name="工作流DSL配置JSON")
-    version = IntegerField(default=1, verbose_name="版本号")
+    tags = TextField(null=True, verbose_name="智能体标签JSON")
     status = BooleanField(default=True, verbose_name="状态：True启用，False停用")
     is_template = BooleanField(default=False, verbose_name="是否为模板")
     

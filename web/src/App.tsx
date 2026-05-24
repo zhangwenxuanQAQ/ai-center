@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { Layout, Menu, Button, Card, ConfigProvider, theme as antTheme } from 'antd';
-import { HomeOutlined, MessageOutlined, SettingOutlined, LogoutOutlined, RobotOutlined, BookOutlined, DatabaseOutlined, CommentOutlined, MoonOutlined, SunOutlined, MenuFoldOutlined, MenuUnfoldOutlined, HistoryOutlined, TeamOutlined, ToolOutlined, FileTextOutlined, CloudServerOutlined, DashboardOutlined, DesktopOutlined } from '@ant-design/icons';
+import { HomeOutlined, MessageOutlined, SettingOutlined, LogoutOutlined, RobotOutlined, BookOutlined, DatabaseOutlined, CommentOutlined, MoonOutlined, SunOutlined, MenuFoldOutlined, MenuUnfoldOutlined, HistoryOutlined, TeamOutlined, ToolOutlined, FileTextOutlined, CloudServerOutlined, DashboardOutlined, DesktopOutlined, ApartmentOutlined } from '@ant-design/icons';
 import { useState, useEffect } from 'react';
 import './styles/index.css';
 import './styles/common.css';
@@ -22,6 +22,8 @@ import User from './pages/user/user.tsx';
 import Chat from './pages/chat/chat.tsx';
 import Datasource from './pages/datasource/datasource.tsx';
 import SystemMonitor from './pages/system/monitor/monitor.tsx';
+import Agent from './pages/agent/agent.tsx';
+import AgentSetting from './pages/agent/agent_setting.tsx';
 
 const { Header, Content, Sider } = Layout;
 
@@ -106,6 +108,9 @@ function App() {
                 <Menu.Item key="4" icon={<BookOutlined />}>
                   <Link to="/knowledgebases">知识库</Link>
                 </Menu.Item>
+                <Menu.Item key="agent" icon={<ApartmentOutlined />}>
+                  <Link to="/agents">智能体</Link>
+                </Menu.Item>
                 <Menu.Item key="5" icon={<DatabaseOutlined />}>
                   <Link to="/mcps">MCP</Link>
                 </Menu.Item>
@@ -189,6 +194,8 @@ function App() {
                   <Route path="/chats" element={<Chat />} />
                   <Route path="/datasources" element={<Datasource />} />
                   <Route path="/system/monitor" element={<SystemMonitor />} />
+                  <Route path="/agents" element={<Agent />} />
+                  <Route path="/agent/setting/:id" element={<AgentSetting />} />
                 </Routes>
               </Card>
             </Content>

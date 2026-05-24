@@ -703,7 +703,7 @@ try:
                     parent_id CHAR(36),
                     sort_order INT DEFAULT 0,
                     is_default TINYINT DEFAULT 0,
-                    document_config TEXT DEFAULT NULL,
+                    document_config LONGTEXT DEFAULT NULL,
                     chunk_method VARCHAR(50) DEFAULT NULL,
                     chunk_config TEXT DEFAULT NULL,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -1043,7 +1043,355 @@ try:
     except Exception as e:
         logger.error(f"[MIGRATION]   添加metadatas字段失败: {e}")
 
-        logger.info("\n[MIGRATION] ✅ 数据库迁移完成")
+    # 更新 agent_category 表结构，与 knowledgebase_category 保持一致
+    logger.info("\n[MIGRATION] 更新 agent_category 表结构...")
+    try:
+        cursor = db.execute_sql("SHOW TABLES;")
+        tables = cursor.fetchall()
+        table_names = [table[0] for table in tables]
+        
+        if 'agent_category' in table_names:
+            cursor = db.execute_sql("DESCRIBE agent_category;")
+            columns = [column[0] for column in cursor.fetchall()]
+            
+            # 修改字段名: create_date -> created_at
+            if 'create_date' in columns and 'created_at' not in columns:
+                db.execute_sql("ALTER TABLE agent_category CHANGE COLUMN create_date created_at DATETIME DEFAULT CURRENT_TIMESTAMP")
+                logger.info("[MIGRATION]   成功将 create_date 字段重命名为 created_at")
+            
+            # 修改字段名: sort -> sort_order
+            if 'sort' in columns and 'sort_order' not in columns:
+                db.execute_sql("ALTER TABLE agent_category CHANGE COLUMN sort sort_order INT DEFAULT 0")
+                logger.info("[MIGRATION]   成功将 sort 字段重命名为 sort_order")
+            
+            # 修改 id 字段长度从 varchar(32) -> varchar(40)
+            if 'id' in columns:
+                cursor = db.execute_sql("DESCRIBE agent_category id;")
+                result = cursor.fetchone()
+                if result and '32' in result[1]:
+                    db.execute_sql("ALTER TABLE agent_category MODIFY COLUMN id VARCHAR(40) NOT NULL")
+                    logger.info("[MIGRATION]   成功修改 id 字段长度为 VARCHAR(40)")
+            
+            # 修改 name 字段长度从 varchar(200) -> varchar(255)
+            if 'name' in columns:
+                cursor = db.execute_sql("DESCRIBE agent_category name;")
+                result = cursor.fetchone()
+                if result and '200' in result[1]:
+                    db.execute_sql("ALTER TABLE agent_category MODIFY COLUMN name VARCHAR(255) NOT NULL")
+                    logger.info("[MIGRATION]   成功修改 name 字段长度为 VARCHAR(255)")
+            
+            # 修改 description 字段类型从 varchar(2000) -> text
+            if 'description' in columns:
+                cursor = db.execute_sql("DESCRIBE agent_category description;")
+                result = cursor.fetchone()
+                if result and 'varchar' in result[1].lower():
+                    db.execute_sql("ALTER TABLE agent_category MODIFY COLUMN description TEXT")
+                    logger.info("[MIGRATION]   成功修改 description 字段类型为 TEXT")
+            
+            # 修改 sort_order 字段为 NOT NULL
+            if 'sort_order' in columns:
+                cursor = db.execute_sql("DESCRIBE agent_category sort_order;")
+                result = cursor.fetchone()
+                if result and result[2].upper() == 'YES':
+                    db.execute_sql("ALTER TABLE agent_category MODIFY COLUMN sort_order INT NOT NULL DEFAULT 0")
+                    logger.info("[MIGRATION]   成功修改 sort_order 字段为 NOT NULL")
+            
+            # 修改 is_default 字段为 NOT NULL
+            if 'is_default' in columns:
+                cursor = db.execute_sql("DESCRIBE agent_category is_default;")
+                result = cursor.fetchone()
+                if result and result[2].upper() == 'YES':
+                    db.execute_sql("ALTER TABLE agent_category MODIFY COLUMN is_default TINYINT(1) NOT NULL DEFAULT 0")
+                    logger.info("[MIGRATION]   成功修改 is_default 字段为 NOT NULL")
+            
+            # 修改 deleted 字段为 NOT NULL
+            if 'deleted' in columns:
+                cursor = db.execute_sql("DESCRIBE agent_category deleted;")
+                result = cursor.fetchone()
+                if result and result[2].upper() == 'YES':
+                    db.execute_sql("ALTER TABLE agent_category MODIFY COLUMN deleted TINYINT(1) NOT NULL DEFAULT 0")
+                    logger.info("[MIGRATION]   成功修改 deleted 字段为 NOT NULL")
+            
+            # 修改 deleted_user_id 字段长度从 varchar(36) -> varchar(40)
+            if 'deleted_user_id' in columns:
+                cursor = db.execute_sql("DESCRIBE agent_category deleted_user_id;")
+                result = cursor.fetchone()
+                if result and '36' in result[1]:
+                    db.execute_sql("ALTER TABLE agent_category MODIFY COLUMN deleted_user_id VARCHAR(40) DEFAULT NULL")
+                    logger.info("[MIGRATION]   成功修改 deleted_user_id 字段长度为 VARCHAR(40)")
+            
+            # 新增 parent_id 字段
+            if 'parent_id' not in columns:
+                db.execute_sql("ALTER TABLE agent_category ADD COLUMN parent_id VARCHAR(40) DEFAULT NULL")
+                db.execute_sql("ALTER TABLE agent_category ADD INDEX idx_agent_category_parent_id (parent_id)")
+                logger.info("[MIGRATION]   成功添加 parent_id 字段")
+            else:
+                logger.info("[MIGRATION]   parent_id 字段已存在，跳过")
+            
+            # 新增 is_default 字段
+            if 'is_default' not in columns:
+                db.execute_sql("ALTER TABLE agent_category ADD COLUMN is_default TINYINT(1) NOT NULL DEFAULT 0")
+                logger.info("[MIGRATION]   成功添加 is_default 字段")
+            else:
+                logger.info("[MIGRATION]   is_default 字段已存在，跳过")
+            
+            # 新增 create_user_id 字段
+            if 'create_user_id' not in columns:
+                db.execute_sql("ALTER TABLE agent_category ADD COLUMN create_user_id VARCHAR(40) DEFAULT NULL")
+                logger.info("[MIGRATION]   成功添加 create_user_id 字段")
+            else:
+                logger.info("[MIGRATION]   create_user_id 字段已存在，跳过")
+            
+            # 新增 update_user_id 字段
+            if 'update_user_id' not in columns:
+                db.execute_sql("ALTER TABLE agent_category ADD COLUMN update_user_id VARCHAR(40) DEFAULT NULL")
+                logger.info("[MIGRATION]   成功添加 update_user_id 字段")
+            else:
+                logger.info("[MIGRATION]   update_user_id 字段已存在，跳过")
+            
+            # 删除 create_time 字段
+            if 'create_time' in columns:
+                db.execute_sql("ALTER TABLE agent_category DROP COLUMN create_time")
+                logger.info("[MIGRATION]   成功删除 create_time 字段")
+            
+            # 删除 update_time 字段
+            if 'update_time' in columns:
+                db.execute_sql("ALTER TABLE agent_category DROP COLUMN update_time")
+                logger.info("[MIGRATION]   成功删除 update_time 字段")
+            
+            # 删除 update_date 字段
+            if 'update_date' in columns:
+                db.execute_sql("ALTER TABLE agent_category DROP COLUMN update_date")
+                logger.info("[MIGRATION]   成功删除 update_date 字段")
+            
+            # 删除 icon 字段
+            if 'icon' in columns:
+                db.execute_sql("ALTER TABLE agent_category DROP COLUMN icon")
+                logger.info("[MIGRATION]   成功删除 icon 字段")
+            
+            # 删除 tenant_id 字段
+            if 'tenant_id' in columns:
+                db.execute_sql("ALTER TABLE agent_category DROP COLUMN tenant_id")
+                logger.info("[MIGRATION]   成功删除 tenant_id 字段")
+            
+            # 添加联合索引 (parent_id, sort_order)
+            try:
+                db.execute_sql("ALTER TABLE agent_category ADD INDEX idx_agent_category_parent_sort (parent_id, sort_order)")
+                logger.info("[MIGRATION]   成功添加联合索引 (parent_id, sort_order)")
+            except:
+                logger.info("[MIGRATION]   联合索引已存在，跳过")
+            
+            # 添加 is_default_select 字段
+            if 'is_default_select' not in columns:
+                db.execute_sql("ALTER TABLE agent_category ADD COLUMN is_default_select TINYINT(1) NOT NULL DEFAULT 0")
+                logger.info("[MIGRATION]   成功添加 is_default_select 字段")
+            else:
+                cursor = db.execute_sql("DESCRIBE agent_category is_default_select;")
+                result = cursor.fetchone()
+                if result and 'tinyint(1)' not in result[1].lower():
+                    db.execute_sql("ALTER TABLE agent_category MODIFY COLUMN is_default_select TINYINT(1) NOT NULL DEFAULT 0")
+                    logger.info("[MIGRATION]   成功修改 is_default_select 字段类型为 TINYINT(1)")
+        else:
+            logger.info("[MIGRATION]   agent_category 表不存在，将在 create_tables 中创建")
+    except Exception as e:
+        logger.error(f"[MIGRATION]   更新 agent_category 表失败: {e}")
+
+    # 更新 agent_instance 表结构
+    logger.info("\n[MIGRATION] 更新 agent_instance 表结构...")
+    try:
+        cursor = db.execute_sql("SHOW TABLES;")
+        tables = cursor.fetchall()
+        table_names = [table[0] for table in tables]
+        
+        if 'agent_instance' in table_names:
+            cursor = db.execute_sql("DESCRIBE agent_instance;")
+            columns = [column[0] for column in cursor.fetchall()]
+            
+            # 修改 id 字段长度从 varchar(32) -> varchar(40)
+            if 'id' in columns:
+                cursor = db.execute_sql("DESCRIBE agent_instance id;")
+                result = cursor.fetchone()
+                if result and '32' in result[1]:
+                    db.execute_sql("ALTER TABLE agent_instance MODIFY COLUMN id VARCHAR(40) NOT NULL")
+                    logger.info("[MIGRATION]   成功修改 id 字段长度为 VARCHAR(40)")
+            
+            # 修改 title 字段为 name
+            if 'title' in columns:
+                db.execute_sql("ALTER TABLE agent_instance CHANGE COLUMN title name VARCHAR(255) DEFAULT NULL")
+                logger.info("[MIGRATION]   成功将 title 字段重命名为 name")
+            
+            # 修改 dsl 字段类型为 LONGTEXT（如果还不是 LONGTEXT）
+            if 'dsl' in columns:
+                cursor = db.execute_sql("DESCRIBE agent_instance dsl;")
+                result = cursor.fetchone()
+                if result and 'text' in result[1].lower() and 'longtext' not in result[1].lower():
+                    db.execute_sql("ALTER TABLE agent_instance MODIFY COLUMN dsl LONGTEXT DEFAULT NULL")
+                    logger.info("[MIGRATION]   成功将 dsl 字段类型修改为 LONGTEXT")
+            
+            # 重命名 create_date -> created_at
+            if 'create_date' in columns and 'created_at' not in columns:
+                db.execute_sql("ALTER TABLE agent_instance CHANGE COLUMN create_date created_at DATETIME DEFAULT CURRENT_TIMESTAMP")
+                logger.info("[MIGRATION]   成功将 create_date 字段重命名为 created_at")
+            
+            # 重命名 update_date -> updated_at
+            if 'update_date' in columns and 'updated_at' not in columns:
+                db.execute_sql("ALTER TABLE agent_instance CHANGE COLUMN update_date updated_at DATETIME DEFAULT NULL")
+                logger.info("[MIGRATION]   成功将 update_date 字段重命名为 updated_at")
+            
+            # 修改 created_at 字段为 NOT NULL（如果存在且可空）
+            if 'created_at' in columns:
+                cursor = db.execute_sql("DESCRIBE agent_instance created_at;")
+                result = cursor.fetchone()
+                if result and result[2].upper() == 'YES':
+                    db.execute_sql("ALTER TABLE agent_instance MODIFY COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP")
+                    logger.info("[MIGRATION]   成功将 created_at 字段修改为 NOT NULL")
+            
+            # 新增 create_user_id 字段
+            if 'create_user_id' not in columns:
+                db.execute_sql("ALTER TABLE agent_instance ADD COLUMN create_user_id VARCHAR(40) DEFAULT NULL")
+                logger.info("[MIGRATION]   成功添加 create_user_id 字段")
+            else:
+                logger.info("[MIGRATION]   create_user_id 字段已存在，跳过")
+            
+            # 新增 update_user_id 字段
+            if 'update_user_id' not in columns:
+                db.execute_sql("ALTER TABLE agent_instance ADD COLUMN update_user_id VARCHAR(40) DEFAULT NULL")
+                logger.info("[MIGRATION]   成功添加 update_user_id 字段")
+            else:
+                logger.info("[MIGRATION]   update_user_id 字段已存在，跳过")
+            
+            # 修改 create_user_id 字段长度（如果存在）
+            if 'create_user_id' in columns:
+                cursor = db.execute_sql("DESCRIBE agent_instance create_user_id;")
+                result = cursor.fetchone()
+                if result and '36' in result[1]:
+                    db.execute_sql("ALTER TABLE agent_instance MODIFY COLUMN create_user_id VARCHAR(40) DEFAULT NULL")
+                    logger.info("[MIGRATION]   成功将 create_user_id 字段长度修改为 VARCHAR(40)")
+            
+            # 修改 update_user_id 字段长度（如果存在）
+            if 'update_user_id' in columns:
+                cursor = db.execute_sql("DESCRIBE agent_instance update_user_id;")
+                result = cursor.fetchone()
+                if result and '36' in result[1]:
+                    db.execute_sql("ALTER TABLE agent_instance MODIFY COLUMN update_user_id VARCHAR(40) DEFAULT NULL")
+                    logger.info("[MIGRATION]   成功将 update_user_id 字段长度修改为 VARCHAR(40)")
+            
+            # 删除 create_time 字段
+            if 'create_time' in columns:
+                db.execute_sql("ALTER TABLE agent_instance DROP COLUMN create_time")
+                logger.info("[MIGRATION]   成功删除 create_time 字段")
+            
+            # 删除 update_time 字段
+            if 'update_time' in columns:
+                db.execute_sql("ALTER TABLE agent_instance DROP COLUMN update_time")
+                logger.info("[MIGRATION]   成功删除 update_time 字段")
+            
+            # 删除 user_id 字段
+            if 'user_id' in columns:
+                db.execute_sql("ALTER TABLE agent_instance DROP COLUMN user_id")
+                logger.info("[MIGRATION]   成功删除 user_id 字段")
+            
+            # 确保 code 字段存在且类型正确
+            if 'code' not in columns:
+                db.execute_sql("ALTER TABLE agent_instance ADD COLUMN code VARCHAR(100) DEFAULT NULL")
+                db.execute_sql("ALTER TABLE agent_instance ADD INDEX idx_agent_instance_code (code)")
+                logger.info("[MIGRATION]   成功添加 code 字段")
+            else:
+                cursor = db.execute_sql("DESCRIBE agent_instance code;")
+                result = cursor.fetchone()
+                if result and '100' not in result[1]:
+                    db.execute_sql("ALTER TABLE agent_instance MODIFY COLUMN code VARCHAR(100) DEFAULT NULL")
+                    logger.info("[MIGRATION]   成功将 code 字段长度修改为 VARCHAR(100)")
+            
+            # 修改 name 字段长度（如果存在且不是 255）
+            if 'name' in columns:
+                cursor = db.execute_sql("DESCRIBE agent_instance name;")
+                result = cursor.fetchone()
+                if result and '255' not in result[1]:
+                    db.execute_sql("ALTER TABLE agent_instance MODIFY COLUMN name VARCHAR(255) DEFAULT NULL")
+                    logger.info("[MIGRATION]   成功将 name 字段长度修改为 VARCHAR(255)")
+            
+            # 修改 deleted 字段为 NOT NULL
+            if 'deleted' in columns:
+                cursor = db.execute_sql("DESCRIBE agent_instance deleted;")
+                result = cursor.fetchone()
+                if result and result[2].upper() == 'YES':
+                    db.execute_sql("ALTER TABLE agent_instance MODIFY COLUMN deleted TINYINT NOT NULL DEFAULT 0")
+                    logger.info("[MIGRATION]   成功将 deleted 字段修改为 NOT NULL")
+            
+            # 修改 deleted_user_id 字段长度（如果存在）
+            if 'deleted_user_id' in columns:
+                cursor = db.execute_sql("DESCRIBE agent_instance deleted_user_id;")
+                result = cursor.fetchone()
+                if result and '36' in result[1]:
+                    db.execute_sql("ALTER TABLE agent_instance MODIFY COLUMN deleted_user_id VARCHAR(40) DEFAULT NULL")
+                    logger.info("[MIGRATION]   成功将 deleted_user_id 字段长度修改为 VARCHAR(40)")
+            
+            # 删除 canvas_type 字段（如果存在）
+            if 'canvas_type' in columns:
+                db.execute_sql("ALTER TABLE agent_instance DROP COLUMN canvas_type")
+                logger.info("[MIGRATION]   成功删除 canvas_type 字段")
+            
+            # 删除 permission 字段（如果存在）
+            if 'permission' in columns:
+                db.execute_sql("ALTER TABLE agent_instance DROP COLUMN permission")
+                logger.info("[MIGRATION]   成功删除 permission 字段")
+            
+            # 修改 created_at 字段为 NOT NULL
+            if 'created_at' in columns:
+                cursor = db.execute_sql("DESCRIBE agent_instance created_at;")
+                result = cursor.fetchone()
+                if result and result[2].upper() == 'YES':
+                    db.execute_sql("ALTER TABLE agent_instance MODIFY COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP")
+                    logger.info("[MIGRATION]   成功将 created_at 字段修改为 NOT NULL")
+            
+            # 修改 name 字段为 DEFAULT NULL（如果当前是 NOT NULL）
+            if 'name' in columns:
+                cursor = db.execute_sql("DESCRIBE agent_instance name;")
+                result = cursor.fetchone()
+                if result and result[2].upper() == 'NO':
+                    db.execute_sql("ALTER TABLE agent_instance MODIFY COLUMN name VARCHAR(255) DEFAULT NULL")
+                    logger.info("[MIGRATION]   成功将 name 字段修改为 DEFAULT NULL")
+            
+            # 修改 deleted 字段为 NOT NULL
+            if 'deleted' in columns:
+                cursor = db.execute_sql("DESCRIBE agent_instance deleted;")
+                result = cursor.fetchone()
+                if result and result[2].upper() == 'YES':
+                    db.execute_sql("ALTER TABLE agent_instance MODIFY COLUMN deleted TINYINT NOT NULL DEFAULT 0")
+                    logger.info("[MIGRATION]   成功将 deleted 字段修改为 NOT NULL")
+            
+            # 删除 version 字段（如果存在）
+            if 'version' in columns:
+                db.execute_sql("ALTER TABLE agent_instance DROP COLUMN version")
+                logger.info("[MIGRATION]   成功删除 version 字段")
+            
+            # 新增 status 字段（如果不存在）
+            if 'status' not in columns:
+                db.execute_sql("ALTER TABLE agent_instance ADD COLUMN status TINYINT NOT NULL DEFAULT 1")
+                logger.info("[MIGRATION]   成功添加 status 字段")
+            else:
+                logger.info("[MIGRATION]   status 字段已存在，跳过")
+            
+            # 新增 is_template 字段（如果不存在）
+            if 'is_template' not in columns:
+                db.execute_sql("ALTER TABLE agent_instance ADD COLUMN is_template TINYINT NOT NULL DEFAULT 0")
+                logger.info("[MIGRATION]   成功添加 is_template 字段")
+            else:
+                logger.info("[MIGRATION]   is_template 字段已存在，跳过")
+            
+            # 新增 tags 字段（如果不存在）
+            if 'tags' not in columns:
+                db.execute_sql("ALTER TABLE agent_instance ADD COLUMN tags TEXT")
+                logger.info("[MIGRATION]   成功添加 tags 字段")
+            else:
+                logger.info("[MIGRATION]   tags 字段已存在，跳过")
+        else:
+            logger.info("[MIGRATION]   agent_instance 表不存在，将在 create_tables 中创建")
+    except Exception as e:
+        logger.error(f"[MIGRATION]   更新 agent_instance 表失败: {e}")
+
+    logger.info("\n[MIGRATION] ✅ 数据库迁移完成")
 except Exception as e:
     logger.error(f"\n[MIGRATION] ❌ 数据库迁移失败: {e}")
     raise

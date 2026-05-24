@@ -10,6 +10,7 @@ from .chat.work_weixin_chat import router as work_weixin_router
 from .datasource import router as datasource_router
 from .datasource_category import router as datasource_category_router
 from .system.monitor import router as system_monitor_router
+from .agent import router as agent_router
 
 # 只有当MCP服务启用时才导入mcp模块
 from app.configs.config import config
@@ -35,3 +36,4 @@ router.include_router(work_weixin_router, prefix="/chat/work_weixin", tags=["wor
 router.include_router(datasource_router, prefix="/datasource", tags=["datasource"])
 router.include_router(datasource_category_router, prefix="/datasource_category", tags=["datasource_category"])
 router.include_router(system_monitor_router, prefix="/system", tags=["system"])
+router.include_router(agent_router, prefix="/agent", tags=["agent"])

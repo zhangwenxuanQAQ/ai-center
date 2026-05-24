@@ -47,13 +47,13 @@ def create_datasource(datasource: DatasourceCreate):
 
 
 @router.get("", response_model=ApiResponse)
-def get_datasources(skip: int = 0, limit: int = 100, category_id: str = None, name: str = None, code: str = None, datasource_type: str = None):
+def get_datasources(page: int = 1, page_size: int = 12, category_id: str = None, name: str = None, code: str = None, datasource_type: str = None):
     """
     获取数据源列表
     
     Args:
-        skip: 跳过的记录数
-        limit: 返回的最大记录数
+        page: 页码，默认1
+        page_size: 每页数量，默认12
         category_id: 分类ID（可选）
         name: 数据源名称（模糊查询）
         code: 数据源编码（模糊查询）
@@ -62,7 +62,7 @@ def get_datasources(skip: int = 0, limit: int = 100, category_id: str = None, na
     Returns:
         ApiResponse: 统一格式的响应对象
     """
-    datasources, total = DatasourceService.get_datasources(skip, limit, category_id, name, code, datasource_type)
+    datasources, total = DatasourceService.get_datasources(page, page_size, category_id, name, code, datasource_type)
     return ResponseUtil.success(data={"data": datasources, "total": total}, message="获取数据源列表成功")
 
 
