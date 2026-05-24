@@ -321,7 +321,7 @@ const ChatbotSetting: React.FC = () => {
         description: data.description,
         source_type: data.source_type,
         greeting: data.greeting,
-        avatar: data.avatar,
+        avatar: data.avatar || '',
         category_id: data.category_id,
         prompt_id: data.prompt_id,
         knowledge_id: data.knowledge_id,
@@ -335,7 +335,7 @@ const ChatbotSetting: React.FC = () => {
         description: data.description,
         source_type: data.source_type,
         greeting: data.greeting,
-        avatar: data.avatar,
+        avatar: data.avatar || '',
         category_id: data.category_id
       });
       setAvatarPreview(data.avatar || '');
@@ -729,11 +729,18 @@ const ChatbotSetting: React.FC = () => {
     const changed = Object.keys(currentValues).some(key => {
       return JSON.stringify(currentValues[key]) !== JSON.stringify(originalData[key as keyof typeof originalData]);
     });
-    setHasChanges(changed);
+    
+    // 头像变化检测
+    const avatarChanged = avatarPreview !== originalData.avatar;
+    
+    setHasChanges(changed || avatarChanged);
   };
 
   const handleRestore = () => {
-    form.setFieldsValue(originalData);
+    form.setFieldsValue({
+      ...originalData,
+      avatar: originalData.avatar || ''
+    });
     setAvatarPreview(originalData.avatar || '');
     setSelectedPromptId(originalData.prompt_id);
     setSelectedKnowledgeId(originalData.knowledge_id);
@@ -826,7 +833,10 @@ const ChatbotSetting: React.FC = () => {
         const base64 = e.target?.result as string;
         setAvatarPreview(base64);
         form.setFieldValue('avatar', base64);
-        handleValuesChange();
+        // 延迟检查变化，确保表单值已更新
+        setTimeout(() => {
+          handleValuesChange();
+        }, 0);
       };
       reader.readAsDataURL(file as Blob);
       if (onSuccess) {
@@ -969,17 +979,34 @@ const ChatbotSetting: React.FC = () => {
               <Form.Item name="avatar" label="头像">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                   {avatarPreview && (
-                    <img 
-                      src={avatarPreview} 
-                      alt="头像预览" 
-                      style={{ 
-                        width: 48, 
-                        height: 48, 
-                        borderRadius: '50%', 
-                        objectFit: 'cover',
-                        border: '2px solid #d9d9d9'
-                      }} 
-                    />
+                    <>
+                      <img 
+                        src={avatarPreview} 
+                        alt="头像预览" 
+                        style={{ 
+                          width: 48, 
+                          height: 48, 
+                          borderRadius: '50%', 
+                          objectFit: 'cover',
+                          border: '2px solid #d9d9d9'
+                        }} 
+                      />
+                      <Button 
+                        icon={<DeleteOutlined />} 
+                        danger 
+                        size="small"
+                        onClick={() => {
+                          form.setFieldsValue({ avatar: '' });
+                          setAvatarPreview('');
+                          // 延迟检查变化，确保表单值已更新
+                          setTimeout(() => {
+                            handleValuesChange();
+                          }, 0);
+                        }}
+                      >
+                        清空
+                      </Button>
+                    </>
                   )}
                   <Upload {...uploadProps} maxCount={1}>
                     <Button icon={<UploadOutlined />} size="small">上传</Button>
@@ -996,8 +1023,14 @@ const ChatbotSetting: React.FC = () => {
               borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8',
               display: 'flex',
               justifyContent: 'flex-end',
-              gap: '8px'
+              gap: '8px',
+              alignItems: 'center'
             }}>
+              {hasChanges && (
+                <span style={{ color: '#faad14', fontSize: 12, marginRight: 'auto' }}>
+                  • 有未保存的变动
+                </span>
+              )}
               <Button 
                 icon={<UndoOutlined />}
                 onClick={handleRestore}

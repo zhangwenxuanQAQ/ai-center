@@ -900,10 +900,23 @@ const MCPManagement: React.FC = () => {
               <Form.Item name="avatar" label="服务头像">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                   {avatarPreview && (
-                    <img src={avatarPreview} alt="头像预览" style={{ width: 60, height: 60, borderRadius: '50%', objectFit: 'cover' }} />
+                    <>
+                      <img src={avatarPreview} alt="头像预览" style={{ width: 60, height: 60, borderRadius: '50%', objectFit: 'cover' }} />
+                      <Button 
+                        icon={<DeleteOutlined />} 
+                        danger 
+                        size="small"
+                        onClick={() => {
+                          form.setFieldsValue({ avatar: '' });
+                          setAvatarPreview('');
+                        }}
+                      >
+                        清空
+                      </Button>
+                    </>
                   )}
                   <Upload {...uploadProps}>
-                    <Button icon={<UploadOutlined />}>上传头像</Button>
+                    <Button icon={<UploadOutlined />}>点击上传</Button>
                   </Upload>
                 </div>
               </Form.Item>
@@ -1030,10 +1043,23 @@ const MCPManagement: React.FC = () => {
               <Form.Item name="avatar" label="服务头像">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                   {editAvatarPreview && (
-                    <img src={editAvatarPreview} alt="头像预览" style={{ width: 60, height: 60, borderRadius: '50%', objectFit: 'cover' }} />
+                    <>
+                      <img src={editAvatarPreview} alt="头像预览" style={{ width: 60, height: 60, borderRadius: '50%', objectFit: 'cover' }} />
+                      <Button 
+                        icon={<DeleteOutlined />} 
+                        danger 
+                        size="small"
+                        onClick={() => {
+                          editForm.setFieldsValue({ avatar: '' });
+                          setEditAvatarPreview('');
+                        }}
+                      >
+                        清空
+                      </Button>
+                    </>
                   )}
                   <Upload {...editUploadProps}>
-                    <Button icon={<UploadOutlined />}>上传头像</Button>
+                    <Button icon={<UploadOutlined />}>点击上传</Button>
                   </Upload>
                 </div>
               </Form.Item>

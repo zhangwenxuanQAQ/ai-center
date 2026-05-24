@@ -849,17 +849,30 @@ const KnowledgebaseManagement: React.FC = () => {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               {avatarPreview && (
-                <img 
-                  src={avatarPreview} 
-                  alt="头像预览" 
-                  style={{ 
-                    width: 60, 
-                    height: 60, 
-                    borderRadius: '50%', 
-                    objectFit: 'cover',
-                    border: '2px solid #d9d9d9'
-                  }} 
-                />
+                <>
+                  <img 
+                    src={avatarPreview} 
+                    alt="头像预览" 
+                    style={{ 
+                      width: 60, 
+                      height: 60, 
+                      borderRadius: '50%', 
+                      objectFit: 'cover',
+                      border: '2px solid #d9d9d9'
+                    }} 
+                  />
+                  <Button 
+                    icon={<DeleteOutlined />} 
+                    danger 
+                    size="small"
+                    onClick={() => {
+                      form.setFieldsValue({ avatar: '' });
+                      setAvatarPreview('');
+                    }}
+                  >
+                    清空
+                  </Button>
+                </>
               )}
               <Upload {...uploadProps} maxCount={1}>
                 <Button icon={<UploadOutlined />}>点击上传</Button>
@@ -921,17 +934,30 @@ const KnowledgebaseManagement: React.FC = () => {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               {editAvatarPreview && (
-                <img 
-                  src={editAvatarPreview} 
-                  alt="头像预览" 
-                  style={{ 
-                    width: 60, 
-                    height: 60, 
-                    borderRadius: '50%', 
-                    objectFit: 'cover',
-                    border: '2px solid #d9d9d9'
-                  }} 
-                />
+                <>
+                  <img 
+                    src={editAvatarPreview} 
+                    alt="头像预览" 
+                    style={{ 
+                      width: 60, 
+                      height: 60, 
+                      borderRadius: '50%', 
+                      objectFit: 'cover',
+                      border: '2px solid #d9d9d9'
+                    }} 
+                  />
+                  <Button 
+                    icon={<DeleteOutlined />} 
+                    danger 
+                    size="small"
+                    onClick={() => {
+                      editForm.setFieldsValue({ avatar: '' });
+                      setEditAvatarPreview('');
+                    }}
+                  >
+                    清空
+                  </Button>
+                </>
               )}
               <Upload {...editUploadProps} maxCount={1}>
                 <Button icon={<UploadOutlined />}>点击上传</Button>
