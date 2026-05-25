@@ -452,7 +452,16 @@ def create_document(kb_id: str, document: KnowledgebaseDocumentCreate):
         try:
             data['chunk_config'] = json.loads(data['chunk_config'])
         except (json.JSONDecodeError, TypeError):
-            pass
+            data['chunk_config'] = {}
+    else:
+        data['chunk_config'] = {}
+    if data.get('document_config'):
+        try:
+            data['document_config'] = json.loads(data['document_config'])
+        except (json.JSONDecodeError, TypeError):
+            data['document_config'] = {}
+    else:
+        data['document_config'] = {}
     return ResponseUtil.created(data=data, message="知识库文档创建成功")
 
 
@@ -727,7 +736,16 @@ def get_document(kb_id: str, document_id: str):
         try:
             data['chunk_config'] = json.loads(data['chunk_config'])
         except (json.JSONDecodeError, TypeError):
-            pass
+            data['chunk_config'] = {}
+    else:
+        data['chunk_config'] = {}
+    if data.get('document_config'):
+        try:
+            data['document_config'] = json.loads(data['document_config'])
+        except (json.JSONDecodeError, TypeError):
+            data['document_config'] = {}
+    else:
+        data['document_config'] = {}
     if data.get('tags'):
         try:
             parsed_tags = json.loads(data['tags'])
@@ -777,7 +795,17 @@ def update_document(kb_id: str, document_id: str, document: KnowledgebaseDocumen
         try:
             data['chunk_config'] = json.loads(data['chunk_config'])
         except (json.JSONDecodeError, TypeError):
-            pass
+            data['chunk_config'] = {}
+    else:
+        data['chunk_config'] = {}
+    
+    if data.get('document_config'):
+        try:
+            data['document_config'] = json.loads(data['document_config'])
+        except (json.JSONDecodeError, TypeError):
+            data['document_config'] = {}
+    else:
+        data['document_config'] = {}
     return ResponseUtil.success(data=data, message="知识库文档更新成功")
 
 

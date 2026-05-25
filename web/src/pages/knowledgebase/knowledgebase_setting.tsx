@@ -166,7 +166,7 @@ const KnowledgebaseSetting: React.FC<KnowledgebaseSettingProps> = ({ knowledgeba
       name: knowledgebase.name,
       code: knowledgebase.code,
       description: knowledgebase.description,
-      avatar: knowledgebase.avatar,
+      avatar: knowledgebase.avatar || '',
       category_id: knowledgebase.category_id,
       embedding_model_id: knowledgebase.embedding_model_id,
       rerank_model_id: knowledgebase.rerank_model_id,
@@ -179,6 +179,7 @@ const KnowledgebaseSetting: React.FC<KnowledgebaseSettingProps> = ({ knowledgeba
       name: knowledgebase.name,
       code: knowledgebase.code,
       description: knowledgebase.description,
+      avatar: knowledgebase.avatar || '',
       category_id: knowledgebase.category_id,
       embedding_model_id: knowledgebase.embedding_model_id,
       rerank_model_id: knowledgebase.rerank_model_id,
@@ -188,9 +189,8 @@ const KnowledgebaseSetting: React.FC<KnowledgebaseSettingProps> = ({ knowledgeba
 
     setRetrievalConfig(configToSet);
 
-    if (knowledgebase.avatar) {
-      setAvatarPreview(knowledgebase.avatar);
-    }
+    // 恢复头像预览（无论是否有头像都要设置，确保清空时也能恢复）
+    setAvatarPreview(knowledgebase.avatar || '');
 
     // 初始化选中的模型
     if (knowledgebase.embedding_model_id) {
@@ -238,11 +238,14 @@ const KnowledgebaseSetting: React.FC<KnowledgebaseSettingProps> = ({ knowledgeba
     
     const statusChanged = currentValues.status !== originalData.status;
     const retrievalConfigChanged = JSON.stringify(retrievalConfig) !== JSON.stringify(originalData.retrieval_config);
+    
+    // 头像变化检测
+    const avatarChanged = currentValues.avatar !== originalData.avatar;
 
     setHasChanges(
       nameChanged || codeChanged || descriptionChanged || categoryChanged ||
       embeddingModelChanged || rerankModelChanged || textModelChanged ||
-      statusChanged || retrievalConfigChanged
+      statusChanged || retrievalConfigChanged || avatarChanged
     );
   }, [form, originalData, retrievalConfig]);
 
@@ -548,17 +551,34 @@ const KnowledgebaseSetting: React.FC<KnowledgebaseSettingProps> = ({ knowledgeba
                   <Form.Item name="avatar" label="头像">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                       {avatarPreview && (
-                        <img 
-                          src={avatarPreview} 
-                          alt="头像预览" 
-                          style={{ 
-                            width: 48, 
-                            height: 48, 
-                            borderRadius: '50%', 
-                            objectFit: 'cover',
-                            border: '2px solid #d9d9d9'
-                          }} 
-                        />
+                        <>
+                          <img 
+                            src={avatarPreview} 
+                            alt="头像预览" 
+                            style={{ 
+                              width: 48, 
+                              height: 48, 
+                              borderRadius: '50%', 
+                              objectFit: 'cover',
+                              border: '2px solid #d9d9d9'
+                            }} 
+                          />
+                          <Button 
+                            icon={<DeleteOutlined />} 
+                            danger 
+                            size="small"
+                            onClick={() => {
+                              form.setFieldsValue({ avatar: '' });
+                              setAvatarPreview('');
+                              // 延迟检查变化，确保表单值已更新
+                              setTimeout(() => {
+                                checkHasChanges();
+                              }, 0);
+                            }}
+                          >
+                            清空
+                          </Button>
+                        </>
                       )}
                       <Upload
                         name="file"

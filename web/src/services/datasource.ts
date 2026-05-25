@@ -110,9 +110,8 @@ export const datasourceService = {
   getDatasources: async (categoryId?: string, page: number = 1, pageSize: number = 12, name?: string, code?: string, datasourceType?: string): Promise<{ data: Datasource[], total: number }> => {
     let params = [];
     if (categoryId) params.push(`category_id=${categoryId}`);
-    const skip = (page - 1) * pageSize;
-    params.push(`skip=${skip}`);
-    params.push(`limit=${pageSize}`);
+    params.push(`page=${page}`);
+    params.push(`page_size=${pageSize}`);
     if (name) params.push(`name=${encodeURIComponent(name)}`);
     if (code) params.push(`code=${encodeURIComponent(code)}`);
     if (datasourceType) params.push(`datasource_type=${encodeURIComponent(datasourceType)}`);

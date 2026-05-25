@@ -153,7 +153,7 @@ const MCPSetting: React.FC = () => {
         url: data.url,
         config: data.config,
         category_id: data.category_id,
-        avatar: data.avatar
+        avatar: data.avatar || ''
       });
       form.setFieldsValue({
         name: data.name,
@@ -164,7 +164,7 @@ const MCPSetting: React.FC = () => {
         url: data.url,
         config: data.config,
         category_id: data.category_id,
-        avatar: data.avatar
+        avatar: data.avatar || ''
       });
       setSelectedSourceType(data.source_type);
       setSelectedTransportType(data.transport_type);
@@ -221,7 +221,11 @@ const MCPSetting: React.FC = () => {
     const changed = Object.keys(currentValues).some(key => {
       return JSON.stringify(currentValues[key]) !== JSON.stringify(originalData[key as keyof typeof originalData]);
     });
-    setHasChanges(changed);
+    
+    // 头像变化检测
+    const avatarChanged = avatarPreview !== originalData.avatar;
+    
+    setHasChanges(changed || avatarChanged);
   };
 
   const handleSourceTypeChange = (value: string) => {
@@ -279,7 +283,10 @@ const MCPSetting: React.FC = () => {
   };
 
   const handleRestore = () => {
-    form.setFieldsValue(originalData);
+    form.setFieldsValue({
+      ...originalData,
+      avatar: originalData.avatar || ''
+    });
     setSelectedSourceType(originalData.source_type || '');
     setSelectedTransportType(originalData.transport_type || '');
     setAvatarPreview(originalData.avatar || '');
@@ -338,7 +345,10 @@ const MCPSetting: React.FC = () => {
         const base64 = e.target?.result as string;
         setAvatarPreview(base64);
         form.setFieldValue('avatar', base64);
-        handleValuesChange();
+        // 延迟检查变化，确保表单值已更新
+        setTimeout(() => {
+          handleValuesChange();
+        }, 0);
       };
       reader.readAsDataURL(file as Blob);
       if (onSuccess) {
@@ -1093,10 +1103,27 @@ const MCPSetting: React.FC = () => {
                   <Form.Item name="avatar" label="服务头像">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                       {avatarPreview && (
-                        <img src={avatarPreview} alt="头像预览" style={{ width: 60, height: 60, borderRadius: '50%', objectFit: 'cover' }} />
+                        <>
+                          <img src={avatarPreview} alt="头像预览" style={{ width: 60, height: 60, borderRadius: '50%', objectFit: 'cover' }} />
+                          <Button 
+                            icon={<DeleteOutlined />} 
+                            danger 
+                            size="small"
+                            onClick={() => {
+                              form.setFieldsValue({ avatar: '' });
+                              setAvatarPreview('');
+                              // 延迟检查变化，确保表单值已更新
+                              setTimeout(() => {
+                                handleValuesChange();
+                              }, 0);
+                            }}
+                          >
+                            清空
+                          </Button>
+                        </>
                       )}
                       <Upload {...uploadProps}>
-                        <Button icon={<UploadOutlined />}>上传头像</Button>
+                        <Button icon={<UploadOutlined />}>上传</Button>
                       </Upload>
                     </div>
                   </Form.Item>
@@ -1112,8 +1139,14 @@ const MCPSetting: React.FC = () => {
               borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8',
               display: 'flex',
               justifyContent: 'flex-end',
-              gap: '8px'
+              gap: '8px',
+              alignItems: 'center'
             }}>
+              {hasChanges && (
+                <span style={{ color: '#faad14', fontSize: 12, marginRight: 'auto' }}>
+                  • 有未保存的变动
+                </span>
+              )}
               <Button 
                 icon={testingConnection ? <LoadingOutlined /> : <ApiTwoTone />}
                 onClick={handleTestConnection}

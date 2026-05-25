@@ -507,6 +507,9 @@ class KnowledgebaseDocumentService:
         if doc_data.get('chunk_config') and isinstance(doc_data['chunk_config'], dict):
             doc_data['chunk_config'] = json.dumps(doc_data['chunk_config'], ensure_ascii=False)
 
+        if doc_data.get('document_config') and isinstance(doc_data['document_config'], dict):
+            doc_data['document_config'] = json.dumps(doc_data['document_config'], ensure_ascii=False)
+
         if doc_data.get('source_config') and isinstance(doc_data['source_config'], dict):
             doc_data['source_config'] = json.dumps(doc_data['source_config'], ensure_ascii=False)
 
@@ -643,11 +646,24 @@ class KnowledgebaseDocumentService:
                     doc_dict['chunk_config'] = json.loads(doc_dict['chunk_config'])
                 except:
                     doc_dict['chunk_config'] = {}
+            else:
+                doc_dict['chunk_config'] = {}
+            
+            if doc_dict.get('document_config'):
+                try:
+                    doc_dict['document_config'] = json.loads(doc_dict['document_config'])
+                except:
+                    doc_dict['document_config'] = {}
+            else:
+                doc_dict['document_config'] = {}
+            
             if doc_dict.get('source_config'):
                 try:
                     doc_dict['source_config'] = json.loads(doc_dict['source_config'])
                 except:
                     doc_dict['source_config'] = {}
+            else:
+                doc_dict['source_config'] = {}
             documents.append(doc_dict)
 
         return documents
@@ -756,6 +772,12 @@ class KnowledgebaseDocumentService:
 
         if update_data.get('chunk_config') and isinstance(update_data['chunk_config'], dict):
             update_data['chunk_config'] = json.dumps(update_data['chunk_config'], ensure_ascii=False)
+
+        if update_data.get('document_config'):
+            if isinstance(update_data['document_config'], dict):
+                update_data['document_config'] = json.dumps(update_data['document_config'], ensure_ascii=False)
+            else:
+                update_data['document_config'] = None
 
         if update_data.get('source_config') and isinstance(update_data['source_config'], dict):
             update_data['source_config'] = json.dumps(update_data['source_config'], ensure_ascii=False)
