@@ -815,6 +815,17 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
     padding: 16px;
     border-bottom: 1px solid #e8e8e8;
     
+    .back-btn {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      padding: 4px 12px !important;
+      
+      &:hover {
+        background: rgba(0, 0, 0, 0.05) !important;
+      }
+    }
+    
     .agent-setting-title {
       font-size: 18px;
       font-weight: 500;
@@ -823,6 +834,62 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
     .agent-setting-actions {
       display: flex;
       gap: 8px;
+      
+      .action-btn {
+        background: transparent !important;
+        border: 1px solid rgba(0, 0, 0, 0.2) !important;
+        color: rgba(0, 0, 0, 0.85) !important;
+        border-radius: 8px !important;
+        padding: 4px 16px !important;
+        height: 32px !important;
+        
+        &:hover {
+          border-color: #1890ff !important;
+          color: #1890ff !important;
+        }
+        
+        &.delete-btn {
+          border-color: #ff6b6b !important;
+          color: #ff6b6b !important;
+          
+          &:hover {
+            background: rgba(255, 107, 107, 0.1) !important;
+          }
+        }
+      }
+    }
+  }
+  
+  &.dark {
+    --xy-background-color: rgb(30, 30, 30);
+    
+    .agent-setting-header {
+      background: rgb(30, 30, 30) !important;
+      
+      .back-btn {
+        color: rgba(255, 255, 255, 0.9) !important;
+        
+        &:hover {
+          background: rgba(255, 255, 255, 0.1) !important;
+        }
+      }
+      
+      .agent-setting-actions {
+        .action-btn {
+          border-color: rgba(255, 255, 255, 0.2) !important;
+          color: rgba(255, 255, 255, 0.9) !important;
+          
+          &:hover {
+            border-color: #667eea !important;
+            color: #667eea !important;
+          }
+          
+          &.delete-btn {
+            border-color: #ff6b6b !important;
+            color: #ff6b6b !important;
+          }
+        }
+      }
     }
   }
   

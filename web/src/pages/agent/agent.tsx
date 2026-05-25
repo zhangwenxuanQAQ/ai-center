@@ -889,15 +889,17 @@ const AgentManagement: React.FC = () => {
                                   )}
                                 </div>
                               </div>
-                              <div className="card-tags" style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', justifyContent: 'center', marginBottom: '4px' }}>
-                                {parseTags(agent.tags).slice(0, 3).map((tag, idx) => (
-                                  <Tag key={idx} style={{ marginBottom: 0 }}>{tag}</Tag>
-                                ))}
-                                {parseTags(agent.tags).length > 3 && (
-                                  <Tag style={{ marginBottom: 0 }}>+{parseTags(agent.tags).length - 3}</Tag>
-                                )}
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                <div className="card-tags" style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: 0 }}>
+                                  {parseTags(agent.tags).slice(0, 3).map((tag, idx) => (
+                                    <Tag key={idx} style={{ marginBottom: 0 }}>{tag}</Tag>
+                                  ))}
+                                  {parseTags(agent.tags).length > 3 && (
+                                    <Tag style={{ marginBottom: 0 }}>+{parseTags(agent.tags).length - 3}</Tag>
+                                  )}
+                                </div>
+                                <div className="card-date">{formatDate(agent.created_at)}</div>
                               </div>
-                              <div className="card-date">{formatDate(agent.created_at)}</div>
                             </div>
                           </div>
                         </div>

@@ -187,7 +187,8 @@ def get_instances(
         data = instance.__data__.copy()
         if data.get('dsl'):
             import json
-            data['dsl'] = json.loads(data['dsl'])
+            if isinstance(data['dsl'], str):
+                data['dsl'] = json.loads(data['dsl'])
         instances_data.append(data)
     return ResponseUtil.success(data={"data": instances_data, "total": total}, message="获取智能体实例列表成功")
 
@@ -203,7 +204,8 @@ def get_instance(instance_id: str):
     data = instance.__data__.copy()
     if data.get('dsl'):
         import json
-        data['dsl'] = json.loads(data['dsl'])
+        if isinstance(data['dsl'], str):
+            data['dsl'] = json.loads(data['dsl'])
     return ResponseUtil.success(data=data, message="获取智能体实例成功")
 
 
@@ -216,7 +218,8 @@ def update_instance(instance_id: str, instance: AgentInstanceUpdate):
     data = db_instance.__data__.copy()
     if data.get('dsl'):
         import json
-        data['dsl'] = json.loads(data['dsl'])
+        if isinstance(data['dsl'], str):
+            data['dsl'] = json.loads(data['dsl'])
     return ResponseUtil.success(data=data, message="智能体实例更新成功")
 
 

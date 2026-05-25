@@ -1,24 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Layout, Button, message, Spin, Popconfirm } from 'antd';
-import { SaveOutlined, PlayCircleOutlined, DeleteOutlined, CloudUploadOutlined } from '@ant-design/icons';
-import {
-  ReactFlow,
-  Node,
-  Edge,
-  Controls,
-  MiniMap,
-  Background,
-  BackgroundVariant,
-  useNodesState,
-  useEdgesState,
-  addEdge,
-  Connection,
-  ReactFlowProvider,
-} from '@xyflow/react';
+import { SaveOutlined, PlayCircleOutlined, DeleteOutlined, CloudUploadOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import { Node, ReactFlowProvider } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import AgentComponents from './agent_components';
 import AgentDrawer from './agent_drawer';
+import AgentCanvas from './agent_canvas';
 import './agent.less';
 
 const { Sider, Content } = Layout;
@@ -38,6 +26,11 @@ interface AgentInstance {
   updated_at?: string;
 }
 
+interface AgentCanvasRef {
+  getNodes: () => Node[];
+  getEdges: () => Node[];
+}
+
 const AgentSetting: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -45,15 +38,14 @@ const AgentSetting: React.FC = () => {
   const [agent, setAgent] = useState<AgentInstance | null>(null);
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [initialNodes, setInitialNodes] = useState<Node[]>([]);
+  const [initialEdges, setInitialEdges] = useState<any[]>([]);
   
   const [isDrawerVisible, setIsDrawerVisible] = useState(false);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [runResults, setRunResults] = useState<any[]>([]);
 
-  const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
+  const canvasRef = useRef<AgentCanvasRef>(null);
 
   useEffect(() => {
     const currentTheme = document.body.getAttribute('data-theme') || 'dark';
@@ -86,8 +78,8 @@ const AgentSetting: React.FC = () => {
         if (result.data.dsl) {
           const dsl = result.data.dsl;
           if (dsl.graph) {
-            setNodes(dsl.graph.nodes || []);
-            setEdges(dsl.graph.edges || []);
+            setInitialNodes(dsl.graph.nodes || []);
+            setInitialEdges(dsl.graph.edges || []);
           }
         } else {
           initializeDefaultCanvas();
@@ -117,7 +109,7 @@ const AgentSetting: React.FC = () => {
       }
     ];
     
-    const defaultEdges: Edge[] = [
+    const defaultEdges = [
       {
         id: 'begin-answer',
         source: 'begin',
@@ -126,17 +118,9 @@ const AgentSetting: React.FC = () => {
       }
     ];
     
-    setNodes(defaultNodes);
-    setEdges(defaultEdges);
+    setInitialNodes(defaultNodes);
+    setInitialEdges(defaultEdges);
   };
-
-  const onConnect = useCallback((params: Connection) => {
-    if (params.source === params.target) {
-      message.warning('不能创建自连接');
-      return;
-    }
-    setEdges((eds) => addEdge(params, eds));
-  }, [setEdges]);
 
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
     setSelectedNode(node);
@@ -149,43 +133,11 @@ const AgentSetting: React.FC = () => {
     event.dataTransfer.effectAllowed = 'move';
   };
 
-  const onDragOver = useCallback((event: React.DragEvent) => {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-  }, []);
-
-  const onDrop = useCallback(
-    (event: React.DragEvent) => {
-      event.preventDefault();
-
-      const type = event.dataTransfer.getData('application/reactflow');
-      const dataStr = event.dataTransfer.getData('application/reactflow-data');
-      const nodeData = dataStr ? JSON.parse(dataStr) : {};
-      
-      if (!type || !reactFlowWrapper.current) {
-        return;
-      }
-
-      const bounds = reactFlowWrapper.current.getBoundingClientRect();
-      const position = {
-        x: event.clientX - bounds.left - 100,
-        y: event.clientY - bounds.top - 50,
-      };
-
-      const newNode: Node = {
-        id: `${type}-${Date.now()}`,
-        type: type === 'Begin' ? 'beginNode' : type === 'Answer' ? 'answerNode' : type === 'Generate' ? 'generateNode' : 'ragNode',
-        position,
-        data: { ...nodeData, form: {} },
-      };
-
-      setNodes((nds) => nds.concat(newNode));
-    },
-    [setNodes]
-  );
-
   const handleSave = async () => {
     try {
+      const nodes = canvasRef.current?.getNodes() || [];
+      const edges = canvasRef.current?.getEdges() || [];
+      
       const dsl = {
         graph: {
           nodes,
@@ -279,18 +231,7 @@ const AgentSetting: React.FC = () => {
 
   const handleFormSubmit = (values: any) => {
     if (selectedNode) {
-      setNodes(nodes.map(node => {
-        if (node.id === selectedNode.id) {
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              ...values
-            }
-          };
-        }
-        return node;
-      }));
+      message.info('节点配置更新功能开发中...');
     }
     handleDrawerClose();
   };
@@ -304,28 +245,43 @@ const AgentSetting: React.FC = () => {
   }
 
   return (
-    <div className="agent-setting" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div className={`agent-setting ${theme}`} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div className="agent-setting-header" style={{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: '16px',
-        borderBottom: '1px solid #e8e8e8'
+        borderBottom: `1px solid ${theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#e8e8e8'}`,
+        background: theme === 'dark' ? '#1a1a2e' : '#fff'
       }}>
-        <div className="agent-setting-title" style={{ fontSize: '18px', fontWeight: 500 }}>
-          {agent?.name || '新建智能体'}
-          {agent?.version && <span style={{ marginLeft: 8, fontSize: '14px', color: '#999' }}>v{agent.version}</span>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <Button 
+            icon={<ArrowLeftOutlined />} 
+            onClick={() => navigate('/agents')}
+            className="back-btn"
+            style={{
+              borderRadius: '8px',
+              color: theme === 'dark' ? '#fff' : '#000'
+            }}
+          >
+            返回
+          </Button>
+          <div className="agent-setting-title" style={{ fontSize: '18px', fontWeight: 600, color: theme === 'dark' ? '#fff' : '#000' }}>
+            {agent?.name || '智能体配置'}
+            {agent?.version && <span style={{ marginLeft: 8, fontSize: '14px', color: '#999' }}>v{agent.version}</span>}
+          </div>
         </div>
-        <div className="agent-setting-actions" style={{ display: 'flex', gap: 8 }}>
-          <Button icon={<PlayCircleOutlined />} onClick={handleRun}>
+
+        <div className="agent-setting-actions">
+          <Button icon={<PlayCircleOutlined />} onClick={handleRun} className="action-btn">
             运行
           </Button>
           {id && (
-            <Button icon={<CloudUploadOutlined />} onClick={handlePublish}>
+            <Button icon={<CloudUploadOutlined />} onClick={handlePublish} className="action-btn">
               发布
             </Button>
           )}
-          <Button icon={<SaveOutlined />} type="primary" onClick={handleSave}>
+          <Button icon={<SaveOutlined />} onClick={handleSave} className="action-btn">
             保存
           </Button>
           {id && (
@@ -335,7 +291,7 @@ const AgentSetting: React.FC = () => {
               okText="确定"
               cancelText="取消"
             >
-              <Button danger icon={<DeleteOutlined />}>
+              <Button icon={<DeleteOutlined />} className="action-btn delete-btn">
                 删除
               </Button>
             </Popconfirm>
@@ -352,29 +308,13 @@ const AgentSetting: React.FC = () => {
         </Sider>
 
         <Content style={{ flex: 1, position: 'relative' }}>
-          <div
-            ref={reactFlowWrapper}
-            style={{ width: '100%', height: '100%' }}
-            onDrop={onDrop}
-            onDragOver={onDragOver}
-          >
-            <ReactFlow
-              nodes={nodes}
-              edges={edges}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onConnect={onConnect}
-              onNodeClick={onNodeClick}
-              onInit={setReactFlowInstance}
-              fitView
-              attributionPosition="bottom-left"
-              deleteKeyCode="Delete"
-            >
-              <Controls position="bottom-left" />
-              <MiniMap position="bottom-right" />
-              <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
-            </ReactFlow>
-          </div>
+          <AgentCanvas
+            ref={canvasRef}
+            initialNodes={initialNodes}
+            initialEdges={initialEdges}
+            colorMode={theme}
+            onNodeClick={onNodeClick}
+          />
         </Content>
       </div>
 
