@@ -43,6 +43,7 @@ export interface KnowledgebaseDocumentCategory {
   description?: string;
   parent_id?: string;
   sort_order: number;
+  document_config?: string | Record<string, any>;
   created_at: string;
   updated_at?: string;
   children?: KnowledgebaseDocumentCategory[];

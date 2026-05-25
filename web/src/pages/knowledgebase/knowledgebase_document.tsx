@@ -11,7 +11,7 @@ import KnowledgebaseDocumentSetting from './knowledgebase_document_setting';
 import ChunkMethodModal from './chunk-method-modal';
 import ChunksView from './chunks_view';
 import KnowledgebaseDocumentFolderModal from './knowledgebase_document_folder_modal';
-import AddDatasetModal from './folder_modal/AddDatasetModal';
+import KnowledgeModal from './knowledgebase_knowledge_modal';
 import MetadataModal from './knowledgebase_document_metadata';
 import '../../styles/common.css';
 import './knowledgebase.less';
@@ -116,7 +116,8 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
   }, [selectedCategory, searchName, filterFileType, filterStatus, filterNewStatus]);
 
   useEffect(() => {
-    const eventSource = new EventSource(`/aicenter/v1/knowledgebase/document_events/${knowledgebase.id}`);
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    const eventSource = new EventSource(`${apiBaseUrl}/aicenter/v1/knowledgebase/document_events/${knowledgebase.id}`);
     
     eventSource.addEventListener('update', (event) => {
       try {
@@ -161,9 +162,26 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
     return keys;
   };
 
+  // 递归查找目录（支持嵌套目录）
+  const findCategoryById = (categories: KnowledgebaseDocumentCategory[], id: string): KnowledgebaseDocumentCategory | null => {
+    for (const category of categories) {
+      if (category.id === id) {
+        return category;
+      }
+      if (category.children && Array.isArray(category.children) && category.children.length > 0) {
+        const found = findCategoryById(category.children, id);
+        if (found) {
+          return found;
+        }
+      }
+    }
+    return null;
+  };
+
   const fetchCategories = async () => {
     try {
       const data = await knowledgebaseService.getDocumentCategoryTree(knowledgebase.id);
+      console.log("data：",JSON.stringify(data))
       setCategories(data);
       const allKeys = getAllCategoryKeys(data);
       setExpandedKeys(allKeys);
@@ -350,14 +368,8 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       message.warning('默认分类不能编辑');
       return;
     }
-    categoryEditForm.setFieldsValue({
-      name: category.name,
-      description: category.description || '',
-      parent_id: category.parent_id || null,
-      sort_order: category.sort_order || 1
-    });
     setEditingCategory(category);
-    setIsCategoryEditModalVisible(true);
+    setIsFolderModalVisible(true);
   };
 
   const handleSaveEditCategory = async () => {
@@ -1051,12 +1063,8 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
           <Button
             type="primary"
             icon={<PlusOutlined />}
-            // onClick={() => setIsDatasetModalVisible(true)}
-            onClick={() => { 
-              setEditingDocument(undefined); 
-              // setShowSetting(true); 
+            onClick={() => {
               setIsDatasetModalVisible(true)
-              setSearchParams({ view: 'edit' });
             }}
             style={{
               background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -1065,7 +1073,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
               height: '36px',
             }}
           >
-            新增数据集
+            新增知识
           </Button>
           <Dropdown menu={{ items: batchMenuItems }} disabled={selectedRowKeys.length === 0}>
             <Button>
@@ -1361,14 +1369,20 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
         categories={categories}
         onCancel={() => setIsFolderModalVisible(false)}
         onSuccess={fetchCategories}
+        editData={editingCategory}
       />
 
-      {/* 新增数据集弹窗 */}
-      <AddDatasetModal
+      {/* 新增知识弹窗 */}
+      <KnowledgeModal
         visible={isDatasetModalVisible}
+        knowledgebaseId={knowledgebase.id}
+        selectedCategory={selectedCategory ? findCategoryById(categories, selectedCategory) : null}
         onCancel={() => setIsDatasetModalVisible(false)}
-        onSuccess={() => setIsDatasetModalVisible(false)}
-        />
+        onSuccess={() => {
+          setIsDatasetModalVisible(false);
+          fetchDocuments();
+        }}
+      />
       <MetadataModal
         visible={metadataModalVisible}
         document={metadataDocument}

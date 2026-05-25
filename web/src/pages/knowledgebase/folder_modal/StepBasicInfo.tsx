@@ -2,11 +2,28 @@ import React from 'react';
 import { Form, Input, TreeSelect } from 'antd';
 
 interface StepBasicInfoProps {
-  form: any;
+  name: string;
+  setName: (value: string) => void;
+  description: string;
+  setDescription: (value: string) => void;
+  parentId: string | undefined;
+  setParentId: (value: string | undefined) => void;
+  sortOrder: number;
+  setSortOrder: (value: number) => void;
   categories: any[];
 }
 
-const StepBasicInfo: React.FC<StepBasicInfoProps> = ({ form, categories }) => {
+const StepBasicInfo: React.FC<StepBasicInfoProps> = ({ 
+  name, 
+  setName, 
+  description, 
+  setDescription, 
+  parentId, 
+  setParentId, 
+  sortOrder, 
+  setSortOrder,
+  categories 
+}) => {
   const buildCategoryTreeSelectData = (items: any[] = []): any[] => {
     return items.map(item => ({
       title: item.name,
@@ -19,40 +36,45 @@ const StepBasicInfo: React.FC<StepBasicInfoProps> = ({ form, categories }) => {
   };
 
   return (
-    <Form form={form} layout="vertical">
-      <Form.Item
-        name="name"
-        label="分类名称"
-        rules={[{ required: true, message: '请输入分类名称' }]}
-      >
-        <Input placeholder="请输入分类名称" />
-      </Form.Item>
-      <Form.Item
-        name="description"
-        label="分类描述"
-      >
-        <Input.TextArea rows={3} placeholder="请输入分类描述" />
-      </Form.Item>
-      <Form.Item
-        name="parent_id"
-        label="父分类"
-      >
+    <div>
+      <div style={{ marginBottom: '16px' }}>
+        <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>分类名称 <span style={{ color: '#ff4d4f' }}>*</span></label>
+        <Input 
+          placeholder="请输入分类名称" 
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </div>
+      <div style={{ marginBottom: '16px' }}>
+        <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>分类描述</label>
+        <Input.TextArea 
+          rows={3} 
+          placeholder="请输入分类描述"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
+      </div>
+      <div style={{ marginBottom: '16px' }}>
+        <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>父分类</label>
         <TreeSelect
           placeholder="请选择父分类"
           treeData={buildCategoryTreeSelectData(categories)}
           allowClear
           treeDefaultExpandAll
+          value={parentId}
+          onChange={(value) => setParentId(value || undefined)}
         />
-      </Form.Item>
-      <Form.Item
-        name="sort_order"
-        label="排序顺序"
-        initialValue={1}
-        rules={[{ required: true, message: '请输入排序顺序' }]}
-      >
-        <Input type="number" placeholder="请输入排序顺序（大于0）" />
-      </Form.Item>
-    </Form>
+      </div>
+      <div style={{ marginBottom: '16px' }}>
+        <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>排序顺序 <span style={{ color: '#ff4d4f' }}>*</span></label>
+        <Input 
+          type="number" 
+          placeholder="请输入排序顺序（大于0）"
+          value={sortOrder}
+          onChange={(e) => setSortOrder(Number(e.target.value) || 0)}
+        />
+      </div>
+    </div>
   );
 };
 

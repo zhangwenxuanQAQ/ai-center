@@ -1,29 +1,94 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Checkbox, Select, Switch, Input, Tooltip, Button, InputNumber } from 'antd';
 import { QuestionCircleOutlined } from '@ant-design/icons';
 import SliderInput from '../../../components/SliderInput';
 import TagsInput from '../../../components/TagsInput';
 
-const StepOtherConfig: React.FC = () => {
-  const [vectorRetrieval, setVectorRetrieval] = useState(false);
-  const [graphRetrieval, setGraphRetrieval] = useState(false);
-  const [chunkMethod, setChunkMethod] = useState('');
-  const [textBlockSize, setTextBlockSize] = useState(512);
-  const [segmentIdentifiers, setSegmentIdentifiers] = useState('');
-  const [pageRank, setPageRank] = useState(0);
-  const [tagSets, setTagSets] = useState<string[]>([]);
-  const [autoKeywords, setAutoKeywords] = useState(5);
-  const [autoQuestions, setAutoQuestions] = useState(3);
-  const [useRaptor, setUseRaptor] = useState(false);
-  const [maxTokens, setMaxTokens] = useState(256);
-  const [threshold, setThreshold] = useState(0.7);
-  const [maxClusters, setMaxClusters] = useState(64);
-  const [randomSeed, setRandomSeed] = useState<number | null>(null);
-  const [entityTypes, setEntityTypes] = useState<string[]>([]);
-  const [graphMethod, setGraphMethod] = useState('');
-  const [entityNormalization, setEntityNormalization] = useState(false);
-  const [blockAggregation, setBlockAggregation] = useState(false);
+interface StepOtherConfigProps {
+  vectorRetrieval: boolean;
+  setVectorRetrieval: (value: boolean) => void;
+  graphRetrieval: boolean;
+  setGraphRetrieval: (value: boolean) => void;
+  chunkMethod: string;
+  setChunkMethod: (value: string) => void;
+  textBlockSize: number;
+  setTextBlockSize: (value: number) => void;
+  segmentIdentifiers: string;
+  setSegmentIdentifiers: (value: string) => void;
+  pageRank: number;
+  setPageRank: (value: number) => void;
+  tagSets: string[];
+  setTagSets: (value: string[]) => void;
+  autoKeywords: number;
+  setAutoKeywords: (value: number) => void;
+  autoQuestions: number;
+  setAutoQuestions: (value: number) => void;
+  useRaptor: boolean;
+  setUseRaptor: (value: boolean) => void;
+  maxTokens: number;
+  setMaxTokens: (value: number) => void;
+  threshold: number;
+  setThreshold: (value: number) => void;
+  maxClusters: number;
+  setMaxClusters: (value: number) => void;
+  randomSeed: number | null;
+  setRandomSeed: (value: number | null) => void;
+  convertTableToHtml: boolean;
+  setConvertTableToHtml: (value: boolean) => void;
+  prompt: string;
+  setPrompt: (value: string) => void;
+  entityTypes: string[];
+  setEntityTypes: (value: string[]) => void;
+  graphMethod: string;
+  setGraphMethod: (value: string) => void;
+  entityNormalization: boolean;
+  setEntityNormalization: (value: boolean) => void;
+  blockAggregation: boolean;
+  setBlockAggregation: (value: boolean) => void;
+}
 
+const StepOtherConfig: React.FC<StepOtherConfigProps> = ({
+  vectorRetrieval,
+  setVectorRetrieval,
+  graphRetrieval,
+  setGraphRetrieval,
+  chunkMethod,
+  setChunkMethod,
+  textBlockSize,
+  setTextBlockSize,
+  segmentIdentifiers,
+  setSegmentIdentifiers,
+  pageRank,
+  setPageRank,
+  tagSets,
+  setTagSets,
+  autoKeywords,
+  setAutoKeywords,
+  autoQuestions,
+  setAutoQuestions,
+  useRaptor,
+  setUseRaptor,
+  maxTokens,
+  setMaxTokens,
+  threshold,
+  setThreshold,
+  maxClusters,
+  setMaxClusters,
+  randomSeed,
+  setRandomSeed,
+  convertTableToHtml,
+  setConvertTableToHtml,
+  prompt,
+  setPrompt,
+  entityTypes,
+  setEntityTypes,
+  graphMethod,
+  setGraphMethod,
+  entityNormalization,
+  setEntityNormalization,
+  blockAggregation,
+  setBlockAggregation,
+}) => {
   const chunkMethodOptions = [
     { value: 'general', label: 'General' },
     { value: 'qa', label: 'Q&A' },
@@ -115,7 +180,9 @@ const StepOtherConfig: React.FC = () => {
                   <QuestionCircleOutlined style={{ marginLeft: 4, cursor: 'help', color: '#999' }} />
                 </Tooltip>
               </div>
-              <Switch checked={useRaptor} onChange={setUseRaptor} />
+              <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                <Switch checked={convertTableToHtml} onChange={setConvertTableToHtml} />
+              </div>
             </div>
             <div style={{ marginBottom: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
@@ -190,7 +257,9 @@ const StepOtherConfig: React.FC = () => {
                   <QuestionCircleOutlined style={{ marginLeft: 4, cursor: 'help', color: '#999' }} />
                 </Tooltip>
               </div>
-              <Switch checked={useRaptor} onChange={setUseRaptor} />
+              <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                <Switch checked={useRaptor} onChange={setUseRaptor} />
+              </div>
             </div>
             {useRaptor && (
               <div style={{ marginBottom: 16 }}>
@@ -207,6 +276,8 @@ const StepOtherConfig: React.FC = () => {
                   </div>
                   <Input.TextArea
                     rows={4}
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
                     placeholder="请输入提示词"
                   />
                 </div>
@@ -335,7 +406,9 @@ const StepOtherConfig: React.FC = () => {
                   <QuestionCircleOutlined style={{ marginLeft: 4, cursor: 'help', color: '#999' }} />
                 </Tooltip>
               </div>
-              <Switch checked={useRaptor} onChange={setUseRaptor} />
+              <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                <Switch checked={useRaptor} onChange={setUseRaptor} />
+              </div>
             </div>
             {useRaptor && (
               <div style={{ paddingLeft: 24, marginBottom: 16 }}>
@@ -352,6 +425,8 @@ const StepOtherConfig: React.FC = () => {
                   </div>
                   <Input.TextArea
                     rows={4}
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
                     placeholder="请输入提示词"
                   />
                 </div>
@@ -420,7 +495,9 @@ const StepOtherConfig: React.FC = () => {
                   <QuestionCircleOutlined style={{ marginLeft: 4, cursor: 'help', color: '#999' }} />
                 </Tooltip>
               </div>
-              <Switch checked={useRaptor} onChange={setUseRaptor} />
+              <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                <Switch checked={useRaptor} onChange={setUseRaptor} />
+              </div>
             </div>
             {useRaptor && (
               <div style={{ paddingLeft: 24, marginBottom: 16 }}>
@@ -437,6 +514,8 @@ const StepOtherConfig: React.FC = () => {
                   </div>
                   <Input.TextArea
                     rows={4}
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
                     placeholder="请输入提示词"
                   />
                 </div>

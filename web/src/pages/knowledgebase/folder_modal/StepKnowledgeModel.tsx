@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Card, Switch, Radio, Input } from 'antd';
 import TagsInput from '../../../components/TagsInput';
 import DynamicTable, { DynamicTableRow } from '../../../components/DynamicTable';
@@ -13,6 +13,14 @@ interface StepKnowledgeModelProps {
   setSelectedTemplate: (template: string) => void;
   customFields: DynamicTableRow[];
   setCustomFields: (fields: DynamicTableRow[]) => void;
+  hasKnowledgeContent: boolean;
+  setHasKnowledgeContent: (value: boolean) => void;
+  chapterType: string;
+  setChapterType: (type: string) => void;
+  chapters: Chapter[];
+  setChapters: (chapters: Chapter[]) => void;
+  editingRequirements: string;
+  setEditingRequirements: (value: string) => void;
 }
 
 const StepKnowledgeModel: React.FC<StepKnowledgeModelProps> = ({
@@ -22,12 +30,15 @@ const StepKnowledgeModel: React.FC<StepKnowledgeModelProps> = ({
   setSelectedTemplate,
   customFields,
   setCustomFields,
+  hasKnowledgeContent,
+  setHasKnowledgeContent,
+  chapterType,
+  setChapterType,
+  chapters,
+  setChapters,
+  editingRequirements,
+  setEditingRequirements,
 }) => {
-  const [hasKnowledgeContent, setHasKnowledgeContent] = useState(false);
-  const [chapterType, setChapterType] = useState<string>('fixed');
-  const [chapters, setChapters] = useState<Chapter[]>([]);
-  const [editingRequirements, setEditingRequirements] = useState('');
-
   const templateCards = [
     {
       key: 'file',
@@ -138,7 +149,7 @@ const StepKnowledgeModel: React.FC<StepKnowledgeModelProps> = ({
 
             {chapterType === 'fixed' && (
               <div style={{ marginBottom: 16 }}>
-                <ChapterList chapters={chapters} onChange={setChapters} />
+                <ChapterList chapters={chapters} onChange={setChapters} editable={true} />
               </div>
             )}
           </div>
