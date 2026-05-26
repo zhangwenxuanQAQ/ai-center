@@ -20,7 +20,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-from agent.component.base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase
 from api import settings
 
 

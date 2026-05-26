@@ -20,16 +20,12 @@ from functools import partial
 from typing import Any
 import pandas as pd
 
-from agent.model.component_arg import ComponentResetArg
-from api.db import LLMType
-from api.db.services.conversation_service import structure_answer
-from api.db.services.llm_service import LLMBundle
-from api import settings
-from agent.component.base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase
 from plugin import GlobalPluginManager
 from plugin.llm_tool_plugin import llm_tool_metadata_to_openai_tool
 from rag.llm.chat_model import ToolCallSession
 from rag.prompts import message_fit_in
+from app.core.llm_model.utils.model_caller import ModelCaller
 import time
 
 
@@ -57,7 +53,6 @@ class GenerateParam(ComponentParamBase):
         self.top_p = 0
         self.presence_penalty = 0
         self.frequency_penalty = 0
-        self.cite = True
         self.parameters = []
         self.deep_thinking = True
         self.llm_enabled_tools = []
@@ -93,10 +88,11 @@ class GenerateParam(ComponentParamBase):
 
 class Generate(ComponentBase):
     component_name = "Generate"
+    component_title = "生成回答"
 
     def reset(self, **kwargs):
         super().reset()
-        mem = False if ComponentResetArg.MEMORY.value not in kwargs else kwargs[ComponentResetArg.MEMORY.value]
+        mem = kwargs.get('memory', False)
         if not mem:
             self._param.messages = []
 
@@ -108,45 +104,6 @@ class Generate(ComponentBase):
                      i["key"].lower().find("answer") < 0 and i["key"].lower().find("begin") <0 and i["key"].lower().find("sys.") < 0])
         return list(cpnts)
 
-    def set_cite(self, retrieval_res, answer):
-        if "empty_response" in retrieval_res.columns:
-            retrieval_res["empty_response"].fillna("", inplace=True)
-        chunks = json.loads(retrieval_res["chunks"][0])
-        # 暂时不插入citation
-        # answer, idx = settings.retrievaler.insert_citations(answer,
-        #                                                     [ck["content_ltks"] for ck in chunks],
-        #                                                     [ck["vector"] for ck in chunks],
-        #                                                     LLMBundle(self._canvas.get_tenant_id(),
-        #                                                               LLMType.EMBEDDING,
-        #                                                               self._canvas.get_embedding_model()),
-        #                                                     tkweight=0.7,
-        #                                                     vtweight=0.3)
-
-        doc_ids = set([])
-        recall_docs = []
-        # for i in idx: 注释这行
-        for i in range(0, len(chunks)):
-            did = chunks[int(i)]["doc_id"]
-            if did in doc_ids:
-                continue
-            doc_ids.add(did)
-            recall_docs.append({"doc_id": did, "doc_name": chunks[int(i)]["docnm_kwd"]})
-
-        for c in chunks:
-            del c["vector"]
-            del c["content_ltks"]
-
-        reference = {
-            "chunks": chunks,
-            "doc_aggs": recall_docs
-        }
-
-        if answer.lower().find("invalid key") >= 0 or answer.lower().find("invalid api") >= 0:
-            answer += " Please set LLM API-Key in 'User Setting -> Model providers -> API-Key'"
-        res = {"content": answer, "reference": reference}
-        res = structure_answer(None, res, "", "")
-
-        return res
 
     def get_prompt_input_elements(self):
         """
@@ -178,7 +135,7 @@ class Generate(ComponentBase):
         return res
 
     def _run(self, history, **kwargs):
-        chat_mdl = LLMBundle(self._canvas.get_tenant_id(), LLMType.CHAT, self._param.llm_id)
+        chat_mdl = ModelCaller.get_chat_model(self._param.llm_id)
 
         if len(self._param.llm_enabled_tools) > 0:
             tools = GlobalPluginManager.get_llm_tools_by_names(self._param.llm_enabled_tools)
@@ -312,9 +269,6 @@ class Generate(ComponentBase):
         self._param.messages = msg
         self._canvas.set_component_infor(self._id, {"prompt": msg[0]["content"], "messages": msg[1:],
                                                     "conf": self._param.gen_conf()})
-        if self._param.cite and "chunks" in retrieval_res.columns:
-            res = self.set_cite(retrieval_res, ans)
-            return pd.DataFrame([res])
 
         return Generate.be_output(ans)
 
@@ -355,10 +309,6 @@ class Generate(ComponentBase):
             answer = ans
             yield res
 
-        if self._param.cite and "chunks" in retrieval_res.columns:
-            res = self.set_cite(retrieval_res, answer)
-            yield res
-
         msg.append({"role": "assistant", "content": answer})
         self._param.messages = msg
 
@@ -368,7 +318,7 @@ class Generate(ComponentBase):
         self.set_output(Generate.be_output(res["content"]))
 
     def debug(self, **kwargs):
-        chat_mdl = LLMBundle(self._canvas.get_tenant_id(), LLMType.CHAT, self._param.llm_id)
+        chat_mdl = ModelCaller.get_chat_model(self._param.llm_id)
         prompt = self._param.prompt
 
         for para in self._param.debug_inputs:

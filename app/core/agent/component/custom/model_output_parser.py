@@ -6,8 +6,8 @@ import re
 import time
 from abc import ABC
 
-from agent.component import GenerateParam
-from agent.component.base import ComponentBase
+from .. import GenerateParam
+from ..base import ComponentBase
 import json
 from api.db.db_models import ApproveInfo
 from conf.es_search_settings import BASE_URL
@@ -26,7 +26,7 @@ class ModelOutputParserParam(GenerateParam):
 
 class ModelOutputParser(ComponentBase, ABC):
     component_name = "ModelOutputParser"
-
+    component_title = "模型输出解析"
 
     @staticmethod
     def extract_and_parse_json(text, task):

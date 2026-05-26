@@ -17,7 +17,7 @@ import logging
 from abc import ABC
 import wikipedia
 import pandas as pd
-from agent.component.base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase
 
 
 class WikipediaParam(ComponentParamBase):

@@ -18,7 +18,7 @@ from abc import ABC
 import pandas as pd
 import requests
 import re
-from agent.component.base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase
 
 
 class BaiduParam(ComponentParamBase):

@@ -55,6 +55,7 @@ dependencies = [
     "nltk",
     "pygtrie",
     "vscode-icons>=1.0.0",
+    "tavily>=0.3.0",
 ]
 
 [tool.setuptools.packages.find]

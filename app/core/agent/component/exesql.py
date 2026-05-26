@@ -20,7 +20,7 @@ from copy import deepcopy
 import pandas as pd
 import pymysql
 import psycopg2
-from agent.component import GenerateParam, Generate
+from .. import GenerateParam, Generate
 #import pyodbc
 import logging
 
@@ -59,6 +59,7 @@ class ExeSQLParam(GenerateParam):
 
 class ExeSQL(Generate, ABC):
     component_name = "ExeSQL"
+    component_title = "SQL执行器"
 
     def _refactor(self, ans):
         ans = re.sub(r"^.*</think>", "", ans, flags=re.DOTALL)

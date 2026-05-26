@@ -19,7 +19,7 @@ import re
 from jinja2 import StrictUndefined
 from jinja2.sandbox import SandboxedEnvironment
 
-from agent.component.base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase
 
 
 class TemplateParam(ComponentParamBase):
@@ -39,6 +39,9 @@ class TemplateParam(ComponentParamBase):
 
 class Template(ComponentBase):
     component_name = "Template"
+    component_title = "模板转换"
+    
+    @property
     def get_dependent_components(self):
         inputs = self.get_input_elements()
         cpnts = set([i["key"] for i in inputs if i["key"].lower().find("answer") < 0 and i["key"].lower().find("begin") < 0])

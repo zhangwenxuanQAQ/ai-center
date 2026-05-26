@@ -11,17 +11,16 @@ import json
 import requests
 from plantuml import PlantUML
 
-from agent.component import GenerateParam, Generate
-from api.utils.llm_util import get_llm_content, format_prompt_template
+from .. import GenerateParam, Generate
 from api import settings
-from api.db import LLMType
-from api.db.services.llm_service import LLMBundle
 from rag.prompts import message_fit_in
+from app.core.llm_model.utils.llm_util import get_output_json_content
+from app.core.llm_model.utils.model_caller import ModelCaller
 
 
 class PlantUMLGeneratorParam(GenerateParam):
     """
-    MCP工具调用组件参数
+    PlantUML
     """
 
     def __init__(self):
@@ -112,7 +111,8 @@ class PlantUMLGeneratorParam(GenerateParam):
 
 class PlantUMLGenerator(Generate, ABC):
     component_name = "PlantUMLGenerator"
-
+    component_title = "UML图表生成工具"
+    
     def reset(self, **kwargs):
         super().reset()
 
@@ -135,7 +135,7 @@ class PlantUMLGenerator(Generate, ABC):
             self.append_log("开始生成PlantUML代码")
             logging.info(f"模型生成PlantUML代码")
             self.append_log(f"模型生成PlantUML代码")
-            chat_mdl = LLMBundle(self._canvas.get_tenant_id(), LLMType.CHAT, self._param.llm_id)
+            chat_mdl = ModelCaller.get_chat_model(self._param.llm_id)
             chat_conf = copy.deepcopy(self._param.gen_conf())
             chat_conf["deep_thinking"] = self._param.deep_thinking
 
@@ -166,7 +166,7 @@ class PlantUMLGenerator(Generate, ABC):
 
             logging.info(f"模型返回结果：{ans}")
             self.append_log(f"模型返回结果：{ans}")
-            content = get_llm_content(ans)
+            content = get_output_json_content(ans)
             result = content
             # 去掉<answer>
             pattern = r"<answer>(.*?)</answer>"

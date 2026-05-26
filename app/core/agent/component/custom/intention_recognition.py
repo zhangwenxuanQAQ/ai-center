@@ -12,19 +12,19 @@ import time
 from abc import ABC
 
 from agent.agent import Agent
-from agent.component import GenerateParam, Generate
+from .. import GenerateParam, Generate
 from api.utils.llm_util import format_prompt_template
-from api.db import LLMType, StatusEnum
+from api.db import StatusEnum
 from api.db.services.agent_service import AgentService
-from api.db.services.conversation_service import structure_answer
+
 from api.db.services.dialog_service import DialogService, chat
-from api.db.services.llm_service import LLMBundle
 from api.db.services.mcp_service import MCPService
 from api.db.services.user_service import UserTenantService
 from api.model.agent_output import AgentOutput, AgentDataOutput
 from api.model.component_output import MessageType, ComponentStatus
 from api.model.mcp_output import MCPOutput, MCPStatus
 from api.utils.mcp_utils import mcp_server_list_tools
+from app.core.llm_model.utils.model_caller import ModelCaller
 
 
 class IntentionRecognitionParam(GenerateParam):
@@ -169,6 +169,7 @@ class IntentionRecognitionParam(GenerateParam):
 
 class IntentionRecognition(Generate, ABC):
     component_name = "IntentionRecognition"
+    component_title = "任务分发 (最开始版本，已弃用)"
 
     def reset(self,**kwargs):
         super().reset()
@@ -193,7 +194,7 @@ class IntentionRecognition(Generate, ABC):
                 tool_list.append(tool)
         chat_input = self._param.complete_prompt(query, agents, tool_list)
 
-        chat_mdl = LLMBundle(self._canvas.get_tenant_id(), LLMType.CHAT, self._param.llm_id)
+        chat_mdl = ModelCaller.get_chat_model(self._param.llm_id)
         ans = chat_mdl.chat(system_prompt, [{"role": "user", "content": chat_input}],
                             self._param.gen_conf())
         res = self._param.extract_and_parse_json(ans)
@@ -250,11 +251,10 @@ class IntentionRecognition(Generate, ABC):
             # 普通聊天输出
             if isinstance(output, dict):
                 try:
-                    sub_ans = structure_answer(None, output, self._param.message_id, self._param.conversation_id)
                     agent_output = AgentOutput(code=0, message="", conversation_id=self._param.conversation_id,
                                                agent_id=self._param.conversation_id, agent_name="知识检索",
-                                               data=AgentDataOutput(answer=sub_ans["answer"], component_name="知识检索",
-                                                                    reference=sub_ans["reference"],
+                                               data=AgentDataOutput(answer=output.get("answer", ""), component_name="知识检索",
+                                                                    reference=output.get("reference", {}),
                                                                     message_type=MessageType.TEXT.value,
                                                                     stream=True,
                                                                     status=ComponentStatus.FINISHED.value,

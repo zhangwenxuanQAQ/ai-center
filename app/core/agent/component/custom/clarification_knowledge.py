@@ -12,13 +12,12 @@ from typing import Dict, List
 import requests
 from pydantic import BaseModel
 
-from agent.component.base import ComponentParamBase, ComponentBase
-from agent.model.component_arg import ComponentResetArg
+from ..base import ComponentParamBase, ComponentBase
 from agent.util.es_util import generate_ablility_openness_request_headers
-from api.db.services.llm_service import LLMBundle
 from api.db.services.topic_service import TopicWordApproveRelationService, TopicWordInfoService
 from api.utils.neo4j_utils import Neo4jConnection, APPROVE_LABELS
 from conf.es_search_settings import BASE_URL
+from app.core.llm_model.utils.model_caller import ModelCaller
 
 
 class ClarificationVO(BaseModel):
@@ -682,10 +681,11 @@ class ClarificationKnowledge(ComponentBase, ABC):
     澄清组件
     """
     component_name = "ClarificationKnowledge"
+    component_title = "澄清知识查询"
 
     def reset(self, **kwargs):
         super().reset()
-        mem = False if ComponentResetArg.MEMORY.value not in kwargs else kwargs[ComponentResetArg.MEMORY.value]
+        mem = kwargs.get('memory', False)
         if not mem:
             self._param.history_qa_list = []
             self._param.history_words = []

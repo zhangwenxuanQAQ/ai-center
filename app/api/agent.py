@@ -107,13 +107,23 @@ def create_component(component: AgentComponentCreate):
 
 
 @router.get("/components", response_model=ApiResponse)
-def get_components(skip: int = 0, limit: int = 100, component_type: str = None, category: str = None):
+def get_components(skip: int = 0, limit: int = 100, component_type: str = None, category: str = None, status: int = None):
     """
     获取智能体组件列表
     """
-    components = AgentComponentService.get_components(skip, limit, component_type, category)
+    components = AgentComponentService.get_components(skip, limit, component_type, category, status)
     components_data = [component.__data__ for component in components]
     return ResponseUtil.success(data=components_data, message="获取智能体组件列表成功")
+
+
+@router.get("/components/all", response_model=ApiResponse)
+def get_all_components(component_type: str = None, category: str = None, status: int = None):
+    """
+    获取所有智能体组件（不分页）
+    """
+    components = AgentComponentService.get_all_components(component_type, category, status)
+    components_data = [component.__data__ for component in components]
+    return ResponseUtil.success(data=components_data, message="获取所有智能体组件成功")
 
 
 @router.get("/components/{component_id}", response_model=ApiResponse)

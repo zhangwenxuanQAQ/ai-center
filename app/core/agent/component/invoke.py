@@ -18,7 +18,7 @@ import re
 from abc import ABC
 import requests
 from deepdoc.parser import HtmlParser
-from agent.component.base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase
 
 
 class InvokeParam(ComponentParamBase):
@@ -47,6 +47,8 @@ class InvokeParam(ComponentParamBase):
 
 class Invoke(ComponentBase, ABC):
     component_name = "Invoke"
+    component_title = "接口调用"
+
 
     def _run(self, history, **kwargs):
         args = {}

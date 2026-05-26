@@ -14,7 +14,7 @@
 #  limitations under the License.
 #
 from abc import ABC
-from agent.component.base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase
 
 
 class ConcentratorParam(ComponentParamBase):
@@ -31,6 +31,9 @@ class ConcentratorParam(ComponentParamBase):
 
 class Concentrator(ComponentBase, ABC):
     component_name = "Concentrator"
+    component_title = "集线器"
+
+
 
     def _run(self, history, **kwargs):
         return Concentrator.be_output("")

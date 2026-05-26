@@ -16,9 +16,8 @@
 import logging
 import re
 from abc import ABC
-from api.db import LLMType
-from api.db.services.llm_service import LLMBundle
-from agent.component import GenerateParam, Generate
+from .. import GenerateParam, Generate
+from app.core.llm_model.utils.model_caller import ModelCaller
 
 
 class KeywordExtractParam(GenerateParam):
@@ -53,6 +52,9 @@ class KeywordExtractParam(GenerateParam):
 
 class KeywordExtract(Generate, ABC):
     component_name = "KeywordExtract"
+    component_title = "关键词"
+
+
 
     def _run(self, history, **kwargs):
         query = self.get_input()
@@ -61,7 +63,7 @@ class KeywordExtract(Generate, ABC):
         else:
             query = str(query)
 
-        chat_mdl = LLMBundle(self._canvas.get_tenant_id(), LLMType.CHAT, self._param.llm_id)
+        chat_mdl = ModelCaller.get_chat_model(self._param.llm_id)
 
         prompt = self._param.prompt
         prompt = self.process_prompt(**kwargs)

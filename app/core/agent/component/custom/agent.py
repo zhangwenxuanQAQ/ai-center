@@ -11,11 +11,11 @@ import pandas as pd
 from pandas import DataFrame
 
 from agent.agent import Agent
-from agent.component.base import ComponentParamBase, ComponentBase
-from api.utils.llm_util import parse_llm_tags, get_llm_answer_content
+from ..base import ComponentParamBase, ComponentBase
 from api.db.services.agent_service import AgentService
 from api.service.agent_run_service import AgentRunService
 from api.utils.agent_utils import parse_begin_param_file, parse_begin_param
+from app.core.llm_model.utils.llm_util import get_output_tag_content
 
 
 class AgentInstanceParam(ComponentParamBase):
@@ -69,6 +69,7 @@ class AgentInstanceParam(ComponentParamBase):
 
 class AgentInstance(ComponentBase, ABC):
     component_name = "AgentInstance"
+    component_title = "智能体"
 
     def get_dependent_components(self):
         if self._param.input_params:
@@ -86,7 +87,7 @@ class AgentInstance(ComponentBase, ABC):
         self._param.dsl = {}
 
     def get_memory_value(self, memory_config: dict = {}):
-        from agent.component import component_class
+        from .. import component_class
         from agent.agent import Agent
         value = ""
         if memory_config:
@@ -400,8 +401,8 @@ class AgentInstance(ComponentBase, ABC):
                 stream = action_answer[
                     "stream"] if "stream" in action_answer else False
         res = content
-        think_content = parse_llm_tags(content, "think")
-        answer_content = get_llm_answer_content(content)
+        think_content = get_output_tag_content(content, "think")
+        answer_content = get_output_tag_content(content, "answer")
         if remove_think:
             res = content.replace(f"<think>{think_content}</think>", "")
         res = res.replace(f"<answer>{answer_content}</answer>", answer_content)

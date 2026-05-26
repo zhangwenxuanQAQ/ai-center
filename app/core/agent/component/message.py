@@ -16,7 +16,7 @@
 import random
 from abc import ABC
 from functools import partial
-from agent.component.base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase
 
 
 class MessageParam(ComponentParamBase):
@@ -35,7 +35,9 @@ class MessageParam(ComponentParamBase):
 
 class Message(ComponentBase, ABC):
     component_name = "Message"
+    component_title = "静态消息"
 
+    
     def _run(self, history, **kwargs):
         if kwargs.get("stream"):
             return partial(self.stream_output)

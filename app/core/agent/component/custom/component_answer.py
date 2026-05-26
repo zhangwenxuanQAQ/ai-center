@@ -22,7 +22,7 @@ from functools import partial
 
 import pandas as pd
 
-from agent.component.base import ComponentBase, ComponentParamBase
+from ..base import ComponentBase, ComponentParamBase
 from api.model.agent_output import AgentOutput
 
 
@@ -42,6 +42,7 @@ class ComponentAnswer(ComponentBase, ABC):
     组件结果输出
     """
     component_name = "ComponentAnswer"
+    component_title = "组件结果输出"
 
     def get_dependent_components(self):
         inputs = self.get_input_elements()

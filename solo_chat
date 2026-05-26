@@ -967,3 +967,58 @@ ragflow源码主要阅读一下方法：
 - 修改后端数据集分类相关模型和接口，需要返回以上3个字段
 
 - 重启后端并且更新数据库结构
+
+
+
+
+在core/agent/component的__init__.py中实现组件注册方法，将组件添加到智能体组件表中，方法逻辑如下：
+扫描core/agent/componen目录以及子目录下所有智能体组件类（也就是所有继承了ComponentBase的类），根据component_name属性值和组件库中的组件对比，有如下情况：
+- 当不在表中时需要新增，需要设置如下字段：
+   1. id 组件id
+   2. component_name 组件名称
+   3. component_title 组件标题
+   4. default_params 默认组件参数
+   6. status 默认开启
+   7. category 分类名称
+   8. sort_order 
+
+- 当在表中时，需要更新字段：
+    1. component_title 组件标题 (如果表中标题为空则更新为当前组件标题)
+    2. default_params 默认组件参数
+
+default_params字段是json对象字符串，来自 "组件Param"类的所有属性和属性值。
+新增时category需要根据类所在目录判断:
+    - 在core/agent/component/目录下，分类为"default"
+    - 在core/agent/component/builtin目录下，分类为"基础组件"
+    - 在core/agent/component/custom目录下，分类为"自定义组件"
+新增时sort_order为所有分类下已有组件最大sort_order+1
+
+后端服务启动时需要调用组件注册方法，并且添加启动日志。
+
+
+
+在llm_model/utils/llm_util.py文件文件中实现3个方法：
+- get_output_json_content : 提取模型输出中的json内容，入参为模型回复字符串。
+  逻辑：正则匹配r"```json(.*?)```"，如果匹配到则去除前后空白后返回json字符串，如果没有匹配到则直接返回模型输出。
+
+- get_output_tag_content: 提取模型输出中指定标签内容，入参为模型回复字符串，标签名称。 
+  逻辑：正则匹配r"<标签名称>(.*?)</标签名称>"，如果匹配到则返回标签内容，如果没有匹配到则直接返回模型输出。
+
+- get_stream_output_tag_content: 提取模型流式输出中指定标签内容，入参为本次流式输出字符串，标签名称。
+  逻辑：从开始标签开始匹配，直到遇到结束标签，返回标签中的内容。
+
+- format_prompt: 格式化提示词，入参为提示字符串，需要替换的参数字典。
+  逻辑：使用jinja2的render方法替换参数字典中的参数，返回格式化后的提示字符串。
+  提示词中参数占位符为"{{参数名}}"，例如："{{user_input}}"
+
+上述方法实现完成按照下面的步骤修改其他相关方法：
+- 所有使用get_llm_content的方法，都改成调用get_output_json_content方法。
+- 所有使用get_llm_answer_content的方法，都改成调用get_output_tag_content方法,入参为"answer"。
+- 所有使用parse_llm_tags的方法，都改成本parse_llm_tags方法
+- 所有使用format_prompt_template的方法，都改成调用format_prompt方法。
+
+
+修改retrieval组件_run方法：
+- 修改embedding模型获取以及调用以及rerank模型获取以及调用
+- 修改知识检索逻辑，改成使用es的hybrid_search方法。
+- run方法最终返回格式需要保持不变

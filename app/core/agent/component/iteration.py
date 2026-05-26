@@ -14,7 +14,7 @@
 #  limitations under the License.
 #
 from abc import ABC
-from agent.component.base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase
 
 class IterationParam(ComponentParamBase):
     """
@@ -33,6 +33,7 @@ class IterationParam(ComponentParamBase):
 
 class Iteration(ComponentBase, ABC):
     component_name = "Iteration"
+    component_title = "循环"
 
     def get_start(self):
         for cid in self._canvas.components.keys():

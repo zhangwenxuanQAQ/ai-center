@@ -21,8 +21,13 @@ import time
 
 import pandas as pd
 
-from agent.component.base import ComponentBase, ComponentParamBase
-from api.model.agent_output import AgentOutput
+from ..base import ComponentBase, ComponentParamBase
+
+try:
+    from api.model.agent_output import AgentOutput
+except ImportError:
+    class AgentOutput:
+        pass
 
 
 class AnswerParam(ComponentParamBase):
@@ -41,6 +46,7 @@ class AnswerParam(ComponentParamBase):
 
 class Answer(ComponentBase, ABC):
     component_name = "Answer"
+    component_title = "回答"
 
     def _run(self, history, **kwargs):
         if kwargs.get("stream"):

@@ -71,21 +71,25 @@ class AgentComponentBase(BaseModel):
     Attributes:
         name: 组件名称
         code: 组件编码
+        component_title: 组件标题
         description: 组件描述
         component_type: 组件类型
         category: 组件分类
         icon: 组件图标
         config: 组件配置
-        status: 状态
+        status: 状态（0停用，1启用）
+        sort_order: 排序顺序
     """
     name: str = Field(..., min_length=1, max_length=100, description="组件名称")
     code: str = Field(..., min_length=1, max_length=50, description="组件编码")
+    component_title: Optional[str] = Field(None, max_length=255, description="组件标题")
     description: Optional[str] = Field(None, max_length=500, description="组件描述")
     component_type: str = Field(..., description="组件类型")
     category: Optional[str] = Field(None, description="组件分类")
     icon: Optional[str] = Field(None, description="组件图标")
     config: Optional[dict] = Field(None, description="组件配置JSON")
-    status: Optional[bool] = Field(default=True, description="状态")
+    status: Optional[int] = Field(default=1, description="状态：0停用，1启用")
+    sort_order: Optional[int] = Field(default=0, description="排序顺序")
 
 
 class AgentComponentCreate(AgentComponentBase):
@@ -101,12 +105,14 @@ class AgentComponentUpdate(BaseModel):
     """
     name: Optional[str] = Field(None, min_length=1, max_length=100, description="组件名称")
     code: Optional[str] = Field(None, min_length=1, max_length=50, description="组件编码")
+    component_title: Optional[str] = Field(None, max_length=255, description="组件标题")
     description: Optional[str] = Field(None, max_length=500, description="组件描述")
     component_type: Optional[str] = Field(None, description="组件类型")
     category: Optional[str] = Field(None, description="组件分类")
     icon: Optional[str] = Field(None, description="组件图标")
     config: Optional[dict] = Field(None, description="组件配置JSON")
-    status: Optional[bool] = Field(None, description="状态")
+    status: Optional[int] = Field(None, description="状态：0停用，1启用")
+    sort_order: Optional[int] = Field(None, description="排序顺序")
 
 
 class AgentComponent(AgentComponentBase):

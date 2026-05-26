@@ -4,16 +4,16 @@
 import json
 from abc import ABC
 
-from agent.component.base import ComponentBase, ComponentParamBase
+from ..base import ComponentBase, ComponentParamBase
 from api import settings
 from api.db import LLMType
 # from api.db.db_models import KnowledgeInfo, ApproveInfo
 from api.db.services.knowledgebase_service import KnowledgebaseService
-from api.db.services.llm_service import LLMBundle
 from rag.app.tag import label_question
 import requests
 from conf.es_search_settings import BASE_URL
 from agent.util.es_util import generate_ablility_openness_request_headers
+from app.core.llm_model.utils.model_caller import ModelCaller
 
 
 class KnowledgeSearchParam(ComponentParamBase):
@@ -41,6 +41,8 @@ class KnowledgeSearchParam(ComponentParamBase):
 
 class KnowledgeSearch(ComponentBase, ABC):
     component_name = "KnowledgeSearch"
+    component_title = "助理知识检索"
+
 
     def get_ori_input(self):
         for item in self.get_input_elements():

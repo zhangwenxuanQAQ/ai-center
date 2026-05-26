@@ -1391,13 +1391,109 @@ try:
     except Exception as e:
         logger.error(f"[MIGRATION]   更新 agent_instance 表失败: {e}")
 
+    # 更新 agent_component 表结构
+    logger.info("\n[MIGRATION] 更新 agent_component 表结构...")
+    try:
+        cursor = db.execute_sql("SHOW TABLES;")
+        tables = cursor.fetchall()
+        table_names = [table[0] for table in tables]
+        
+        if 'agent_component' in table_names:
+            cursor = db.execute_sql("DESCRIBE agent_component;")
+            columns = [column[0] for column in cursor.fetchall()]
+            
+            # 修改 status 字段类型为 INT（从 BOOLEAN 改为 INT）
+            if 'status' in columns:
+                cursor = db.execute_sql("DESCRIBE agent_component status;")
+                result = cursor.fetchone()
+                if result and 'tinyint' not in result[1].lower() and 'int' not in result[1].lower():
+                    db.execute_sql("ALTER TABLE agent_component MODIFY COLUMN status INT DEFAULT 1")
+                    logger.info("[MIGRATION]   成功将 status 字段类型修改为 INT")
+                else:
+                    logger.info("[MIGRATION]   status 字段已经是 INT 类型，跳过")
+            else:
+                db.execute_sql("ALTER TABLE agent_component ADD COLUMN status INT DEFAULT 1")
+                logger.info("[MIGRATION]   成功添加 status 字段")
+            
+            # 如果同时存在 sort 和 sort_order 字段，将 sort 的值复制到 sort_order，然后删除 sort
+            if 'sort' in columns and 'sort_order' in columns:
+                db.execute_sql("UPDATE agent_component SET sort_order = sort WHERE sort IS NOT NULL")
+                logger.info("[MIGRATION]   成功将 sort 字段的值复制到 sort_order")
+                db.execute_sql("ALTER TABLE agent_component DROP COLUMN sort")
+                logger.info("[MIGRATION]   成功删除 sort 字段")
+            # 如果只存在 sort 字段，直接重命名为 sort_order
+            elif 'sort' in columns and 'sort_order' not in columns:
+                db.execute_sql("ALTER TABLE agent_component CHANGE COLUMN sort sort_order INT DEFAULT 0")
+                logger.info("[MIGRATION]   成功将 sort 字段重命名为 sort_order")
+            elif 'sort_order' not in columns:
+                # 新增 sort_order 字段（如果不存在）
+                db.execute_sql("ALTER TABLE agent_component ADD COLUMN sort_order INT DEFAULT 0")
+                logger.info("[MIGRATION]   成功添加 sort_order 字段")
+            else:
+                logger.info("[MIGRATION]   sort_order 字段已存在，跳过")
+            
+            # 新增 component_title 字段（如果不存在）
+            if 'component_title' not in columns:
+                db.execute_sql("ALTER TABLE agent_component ADD COLUMN component_title VARCHAR(255) DEFAULT NULL")
+                logger.info("[MIGRATION]   成功添加 component_title 字段")
+            else:
+                logger.info("[MIGRATION]   component_title 字段已存在，跳过")
+            
+            # 新增 created_at 字段（如果不存在）
+            if 'created_at' not in columns:
+                db.execute_sql("ALTER TABLE agent_component ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP")
+                logger.info("[MIGRATION]   成功添加 created_at 字段")
+            else:
+                logger.info("[MIGRATION]   created_at 字段已存在，跳过")
+            
+            # 新增 updated_at 字段（如果不存在）
+            if 'updated_at' not in columns:
+                db.execute_sql("ALTER TABLE agent_component ADD COLUMN updated_at DATETIME DEFAULT NULL")
+                logger.info("[MIGRATION]   成功添加 updated_at 字段")
+            else:
+                logger.info("[MIGRATION]   updated_at 字段已存在，跳过")
+            
+            # 新增 create_user_id 字段（如果不存在）
+            if 'create_user_id' not in columns:
+                db.execute_sql("ALTER TABLE agent_component ADD COLUMN create_user_id VARCHAR(40) DEFAULT NULL")
+                logger.info("[MIGRATION]   成功添加 create_user_id 字段")
+            else:
+                logger.info("[MIGRATION]   create_user_id 字段已存在，跳过")
+            
+            # 新增 update_user_id 字段（如果不存在）
+            if 'update_user_id' not in columns:
+                db.execute_sql("ALTER TABLE agent_component ADD COLUMN update_user_id VARCHAR(40) DEFAULT NULL")
+                logger.info("[MIGRATION]   成功添加 update_user_id 字段")
+            else:
+                logger.info("[MIGRATION]   update_user_id 字段已存在，跳过")
+    except Exception as e:
+        logger.error(f"[MIGRATION]   更新 agent_component 表失败: {e}")
+
     logger.info("\n[MIGRATION] ✅ 数据库迁移完成")
 except Exception as e:
     logger.error(f"\n[MIGRATION] ❌ 数据库迁移失败: {e}")
     raise
 
 logger.info("\n" + "=" * 80)
-logger.info("[阶段3/4] 启动MCP服务")
+logger.info("[阶段3/4] 注册智能体组件")
+logger.info("=" * 80)
+
+logger.info("\n[COMPONENT] 正在注册智能体组件...")
+try:
+    from app.core.agent.component import register_components
+    
+    result = register_components()
+    logger.info(f"[COMPONENT] 组件注册完成:")
+    logger.info(f"  - 新增组件: {result['added']} 个")
+    logger.info(f"  - 更新组件: {result['updated']} 个")
+    logger.info(f"  - 失败组件: {result['failed']} 个")
+    logger.info(f"  - 扫描组件总数: {result['total']} 个")
+    logger.info("[COMPONENT] ✅ 智能体组件注册成功")
+except Exception as e:
+    logger.error(f"[COMPONENT] ❌ 智能体组件注册失败: {e}")
+
+logger.info("\n" + "=" * 80)
+logger.info("[阶段4/5] 启动MCP服务")
 logger.info("=" * 80)
 
 mcp_enabled = config.config.get('mcp', {}).get('enabled', False)
@@ -1422,7 +1518,7 @@ else:
     logger.info("[MCP] ⚠️ MCP服务未启用（配置文件中mcp.enabled=false）")
 
 logger.info("\n" + "=" * 80)
-logger.info("[阶段4/4] 启动文档切片任务执行器")
+logger.info("[阶段5/5] 启动文档切片任务执行器")
 logger.info("=" * 80)
 
 logger.info("\n[TASK] 正在启动文档切片任务执行器...")

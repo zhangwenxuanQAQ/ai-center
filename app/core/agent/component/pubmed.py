@@ -19,7 +19,7 @@ from Bio import Entrez
 import re
 import pandas as pd
 import xml.etree.ElementTree as ET
-from agent.component.base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase
 
 
 class PubMedParam(ComponentParamBase):

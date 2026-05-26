@@ -15,9 +15,8 @@
 #
 import logging
 from abc import ABC
-from api.db import LLMType
-from api.db.services.llm_service import LLMBundle
-from agent.component import GenerateParam, Generate
+from .. import GenerateParam, Generate
+from app.core.llm_model.utils.model_caller import ModelCaller
 
 
 class CategorizeParam(GenerateParam):
@@ -100,11 +99,14 @@ class CategorizeParam(GenerateParam):
 
 class Categorize(Generate, ABC):
     component_name = "Categorize"
+    component_title = "问题分类"
+
+
 
     def _run(self, history, **kwargs):
         input = self.get_input()
         input = " - ".join(input["content"]) if "content" in input else ""
-        chat_mdl = LLMBundle(self._canvas.get_tenant_id(), LLMType.CHAT, self._param.llm_id)
+        chat_mdl = ModelCaller.get_chat_model(self._param.llm_id)
         self._canvas.set_component_infor(self._id, {"prompt":self._param.get_prompt(input),"messages":  [{"role": "user", "content": "\nCategory: "}],"conf": self._param.gen_conf()})
 
         ans = chat_mdl.chat(self._param.get_prompt(input), [{"role": "user", "content": "\nCategory: "}],

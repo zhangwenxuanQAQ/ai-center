@@ -12,7 +12,7 @@ import pandas as pd
 from pandas import DataFrame
 import jsonpath
 
-from agent.component.base import ComponentBase, ComponentParamBase
+from ..base import ComponentBase, ComponentParamBase
 
 
 class CodeExecutorParam(ComponentParamBase):
@@ -33,6 +33,7 @@ class CodeExecutorParam(ComponentParamBase):
 
 class CodeExecutor(ComponentBase, ABC):
     component_name = "CodeExecutor"
+    component_title = "代码执行"
 
     def get_dependent_components(self):
         cpnts = set([para["component_id"] for para in self._param.input_params \

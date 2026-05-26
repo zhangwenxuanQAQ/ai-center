@@ -16,7 +16,7 @@
 import random
 from abc import ABC
 import requests
-from agent.component.base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase
 from hashlib import md5
 
 

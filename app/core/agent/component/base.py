@@ -25,7 +25,14 @@ from typing import Any, Tuple, Union
 
 import pandas as pd
 
-from agent import settings
+try:
+    from agent import settings
+except ImportError:
+    class Settings:
+        PARAM_MAXDEPTH = 5
+        FLOAT_ZERO = 1e-9
+    
+    settings = Settings()
 
 _FEEDED_DEPRECATED_PARAMS = "_feeded_deprecated_params"
 _DEPRECATED_PARAMS = "_deprecated_params"
@@ -384,7 +391,9 @@ class ComponentParamBase(ABC):
 
 
 class ComponentBase(ABC):
+    
     component_name: str
+    component_title: str = ""  # 默认标题，子类中可以设置为component_name
 
     def __str__(self):
         """

@@ -1859,7 +1859,7 @@ class VisionParser(PdfParser):
             if pdf_page_num < start_page or pdf_page_num >= end_page:
                 continue
 
-            from rag.app.picture import vision_llm_chunk as picture_vision_llm_chunk
+            from app.core.knowledgebase.rag.app.picture import vision_llm_chunk as picture_vision_llm_chunk
 
             text = picture_vision_llm_chunk(
                 binary=img_binary,

@@ -18,7 +18,7 @@ from abc import ABC
 import pandas as pd
 import time
 import requests
-from agent.component.base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase
 
 
 class TuShareParam(ComponentParamBase):

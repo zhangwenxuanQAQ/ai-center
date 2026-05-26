@@ -13,23 +13,18 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
+
 import json
 import logging
-import re
 from abc import ABC
 from copy import deepcopy
 
 import pandas as pd
 
-from agent.component.base import ComponentBase, ComponentParamBase
-from api import settings
-from api.db import LLMType, StatusEnum
-from api.db.services.document_service import DocumentService
-from api.db.services.knowledgebase_service import KnowledgebaseService
-from api.db.services.llm_service import LLMBundle
-from rag.app.tag import label_question
-from rag.prompts import kb_prompt
-from rag.utils.tavily_conn import Tavily
+from .base import ComponentBase, ComponentParamBase
+from app.services.knowledgebase.service import KnowledgebaseService
+from app.core.datasource.tavily_datasource import TavilyDatasource
+from app.core.knowledgebase.retrieval_service import RetrievalService
 
 
 class RetrievalParam(ComponentParamBase):
@@ -50,8 +45,8 @@ class RetrievalParam(ComponentParamBase):
         self.tavily_api_key = ""
         self.use_kg = False
         self.sort_by = "sim"
-        self.return_as_chunks = False # 以chunks数组返回
-        self.doc_ids = [] # 指定文档id
+        self.return_as_chunks = False
+        self.doc_ids = []
 
     def check(self):
         self.check_decimal_float(self.similarity_threshold, "[Retrieval] Similarity threshold")
@@ -61,6 +56,7 @@ class RetrievalParam(ComponentParamBase):
 
 class Retrieval(ComponentBase, ABC):
     component_name = "Retrieval"
+    component_title = "知识检索"
 
     def _run(self, history, **kwargs):
         query = self.get_input()
@@ -84,78 +80,55 @@ class Retrieval(ComponentBase, ABC):
 
         filtered_kb_ids: list[str] = [kb_id for kb_id in kb_ids if kb_id]
 
-        kbs = KnowledgebaseService.get_by_ids(filtered_kb_ids)
+        kbs = []
+        for kb_id in filtered_kb_ids:
+            kb = KnowledgebaseService.get_knowledgebase(kb_id)
+            if kb:
+                kbs.append(kb)
         if not kbs:
             return Retrieval.be_output("")
 
-        filtered_kb_ids = [kb.id for kb in kbs]
+        filtered_kb_ids = [str(kb.id) for kb in kbs]
 
-        tenant_id = self._param.user_id if self._param.user_id else kbs[0].tenant_id
-        tenant_ids = [kb.tenant_id for kb in kbs]
-        if self._param.user_id:
-            tenant_ids.append(self._param.user_id)
-
-        embd_nms = list(set([kb.embd_id for kb in kbs]))
-        assert len(embd_nms) == 1, "Knowledge bases use different embedding models."
-
-        embd_mdl = None
-        if embd_nms:
-            embd_mdl = LLMBundle(self._canvas.get_tenant_id(), LLMType.EMBEDDING, embd_nms[0])
-            self._canvas.set_embedding_model(embd_nms[0])
-
-        rerank_mdl = None
-        if self._param.rerank_id:
-            query = re.sub(r"^user[:：\s]*", "", query, flags=re.IGNORECASE)
-            rerank_mdl = LLMBundle(tenant_id, LLMType.RERANK, self._param.rerank_id)
-
-        if kbs:
-            var_doc_ids = []
-            if kb_ids:
-                doc_query = DocumentService.model.select().where(DocumentService.model.id.in_(kb_ids),
-                                                     DocumentService.model.status == StatusEnum.VALID.value)
-                docs = list(doc_query.dicts())
+        var_doc_ids = []
+        if kb_ids:
+            for kb_id in kb_ids:
+                docs = KnowledgebaseService.get_documents(kb_id=kb_id, status=True, limit=10000)
                 if docs:
-                    tmp_doc_ids = [x["id"] for x in docs]
+                    tmp_doc_ids = [str(doc["id"]) for doc in docs]
                     var_doc_ids.extend(tmp_doc_ids)
 
-            doc_ids = None
-            if self._param.doc_ids:
-                doc_ids = self._param.doc_ids
-            elif not var_doc_ids:
-                doc_query = DocumentService.model.select().where(DocumentService.model.kb_id.in_(kb_ids),
-                                                                 DocumentService.model.status == StatusEnum.VALID.value)
-                docs = list(doc_query.dicts())
+        doc_ids = None
+        if self._param.doc_ids:
+            doc_ids = self._param.doc_ids
+        elif not var_doc_ids:
+            all_doc_ids = []
+            for kb_id in filtered_kb_ids:
+                docs = KnowledgebaseService.get_documents(kb_id=kb_id, status=True, limit=10000)
                 if docs:
-                    doc_ids = [x["id"] for x in docs]
-                else:
-                    doc_ids = None
+                    all_doc_ids.extend([str(doc["id"]) for doc in docs])
+            doc_ids = all_doc_ids if all_doc_ids else None
 
-            if var_doc_ids:
-                doc_ids = [] if doc_ids is None else doc_ids
-                doc_ids.extend(var_doc_ids)
+        if var_doc_ids:
+            doc_ids = [] if doc_ids is None else doc_ids
+            doc_ids.extend(var_doc_ids)
 
-
-            kbinfos = settings.retrievaler.retrieval(query, embd_mdl, tenant_ids, filtered_kb_ids,
-                                                     1, self._param.top_n,
-                                                     self._param.similarity_threshold,
-                                                     1 - self._param.keywords_similarity_weight,
-                                                     aggs=False, rerank_mdl=rerank_mdl,
-                                                     rank_feature=label_question(query, kbs), doc_ids=doc_ids,sort_by=self._param.sort_by)
-        else:
-            kbinfos = {"chunks": [], "doc_aggs": []}
-
-        if self._param.use_kg and kbs:
-            ck = settings.kg_retrievaler.retrieval(query,
-                                                   tenant_ids,
-                                                   filtered_kb_ids,
-                                                   embd_mdl,
-                                                   LLMBundle(tenant_id, LLMType.CHAT))
-            if ck["content_with_weight"]:
-                kbinfos["chunks"].insert(0, ck)
+        kbinfos = RetrievalService.retrieval(
+            kb_ids=filtered_kb_ids,
+            question=query,
+            doc_ids=doc_ids,
+            page=1,
+            page_size=self._param.top_n,
+            top_k=self._param.top_k,
+            vector_similarity_threshold=self._param.similarity_threshold,
+            vector_similarity_weight=1 - self._param.keywords_similarity_weight,
+            sort_by=self._param.sort_by,
+            rerank_model_id=self._param.rerank_id if self._param.rerank_id else None,
+        )
 
         if self._param.tavily_api_key:
-            tav = Tavily(self._param.tavily_api_key)
-            tav_res = tav.retrieve_chunks(query)
+            tavily_datasource = TavilyDatasource({"api_key": self._param.tavily_api_key})
+            tav_res = tavily_datasource.search_chunks(query)
             kbinfos["chunks"].extend(tav_res["chunks"])
             kbinfos["doc_aggs"].extend(tav_res["doc_aggs"])
 
@@ -175,7 +148,7 @@ class Retrieval(ComponentBase, ABC):
                 del output_chunk["image_id"]
                 output_chunks.append(output_chunk)
 
-            df = pd.DataFrame({"content": [json.dumps(output_chunks,ensure_ascii=False)]})
+            df = pd.DataFrame({"content": [json.dumps(output_chunks, ensure_ascii=False)]})
         else:
             df = pd.DataFrame({"content": kb_prompt(kbinfos, 200000), "chunks": json.dumps(kbinfos["chunks"])})
         logging.debug("{} {}".format(query, df))

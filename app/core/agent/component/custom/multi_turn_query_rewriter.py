@@ -9,11 +9,9 @@ import time
 from abc import ABC
 from typing import List
 
-from agent.component import GenerateParam, Generate
-from agent.model.component_arg import ComponentResetArg
-from api.utils.llm_util import get_llm_content, format_prompt_template
-from api.db import LLMType
-from api.db.services.llm_service import LLMBundle
+from .. import GenerateParam, Generate
+from app.core.llm_model.utils.llm_util import get_output_json_content
+from app.core.llm_model.utils.model_caller import ModelCaller
 
 
 class MultiTurnQueryRewriteParam(GenerateParam):
@@ -60,10 +58,11 @@ class MultiTurnQueryRewriteParam(GenerateParam):
 
 class MultiTurnQueryRewrite(Generate, ABC):
     component_name = "MultiTurnQueryRewrite"
-
+    component_title = "多轮问题改写"
+    
     def reset(self, **kwargs):
         super().reset()
-        mem = False if ComponentResetArg.MEMORY.value not in kwargs else kwargs[ComponentResetArg.MEMORY.value]
+        mem = kwargs.get('memory', False)
         if not mem:
             self._param.history_input = []
 
@@ -141,12 +140,12 @@ class MultiTurnQueryRewrite(Generate, ABC):
 
         logging.info(f"多轮问题改写-输入：{query_input}")
         self.append_log(f"多轮问题改写-输入：{query_input}")
-        chat_mdl = LLMBundle(self._canvas.get_tenant_id(), LLMType.CHAT, self._param.llm_id)
+        chat_mdl = ModelCaller.get_chat_model(self._param.llm_id)
         ans = chat_mdl.chat(system_prompt, [{"role": "user", "content": chat_input}],
                             self._param.gen_conf())
         logging.info(f"模型返回结果：{ans}")
         self.append_log(f"模型返回结果：{ans}")
-        content = get_llm_content(ans)
+        content = get_output_json_content(ans)
         # 去掉<answer>
         pattern = r"<answer>(.*?)</answer>"
         # re.DOTALL标志允许.匹配包括换行符在内的所有字符

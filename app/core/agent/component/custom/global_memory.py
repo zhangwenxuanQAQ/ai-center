@@ -8,7 +8,7 @@ from abc import ABC
 
 from pandas import DataFrame
 
-from agent.component.base import ComponentBase, ComponentParamBase
+from ..base import ComponentBase, ComponentParamBase
 from agent.util.global_memory_util import init_single_memory_config, get_memory_result
 
 
@@ -71,6 +71,7 @@ class GlobalMemoryParam(ComponentParamBase):
 
 class GlobalMemory(ComponentBase, ABC):
     component_name = "GlobalMemory"
+    component_title = "全局记忆"
 
     def __init__(self, canvas, id, param: ComponentParamBase):
         super().__init__(canvas, id, param)

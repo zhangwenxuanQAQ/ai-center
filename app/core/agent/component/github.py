@@ -17,7 +17,7 @@ import logging
 from abc import ABC
 import pandas as pd
 import requests
-from agent.component.base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase
 
 
 class GitHubParam(ComponentParamBase):

@@ -10,7 +10,7 @@ from functools import partial
 
 from pandas import DataFrame
 
-from agent.component import GenerateParam, Generate
+from .. import GenerateParam, Generate
 from api.db import FileType
 from api.db.services.file_service import FileService
 from api.utils.file_utils import filename_type
@@ -33,6 +33,7 @@ class FileParseParam(GenerateParam):
 
 class FileParse(Generate):
     component_name = "FileParse"
+    component_title = "文件识别"
 
     def get_dependent_components(self):
         cpnts = set([para["component_id"] for para in self._param.file_params \

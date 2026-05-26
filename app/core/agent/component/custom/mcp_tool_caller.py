@@ -11,12 +11,12 @@ from abc import ABC
 
 from pandas import DataFrame
 
-from agent.component import GenerateParam, Generate
-from api.db import LLMType, StatusEnum
-from api.db.services.llm_service import LLMBundle
-from api.utils.llm_util import get_llm_content, format_prompt_template
+from .. import GenerateParam, Generate
+from api.db import StatusEnum
 from api.utils.mcp_utils import mcp_server_test_connection, mcp_server_list_tools, mcp_server_call_tool
 from rag.prompts import message_fit_in
+from app.core.llm_model.utils.llm_util import get_output_json_content
+from app.core.llm_model.utils.model_caller import ModelCaller
 
 
 class MCPToolCallerParam(GenerateParam):
@@ -144,6 +144,7 @@ class MCPToolCallerParam(GenerateParam):
 
 class MCPToolCaller(Generate, ABC):
     component_name = "MCPToolCaller"
+    component_title = "MCP工具"
 
     def reset(self, **kwargs):
         super().reset(**kwargs)
@@ -192,7 +193,7 @@ class MCPToolCaller(Generate, ABC):
         name = None
         arguments = {}
         if not self._param.tool_name:
-            chat_mdl = LLMBundle(self._canvas.get_tenant_id(), LLMType.CHAT, self._param.llm_id)
+            chat_mdl = ModelCaller.get_chat_model(self._param.llm_id)
             chat_conf = copy.deepcopy(self._param.gen_conf())
             chat_conf["deep_thinking"] = self._param.deep_thinking
             query_input = {"question": query, "tools": json.dumps(available_tools, indent=4, ensure_ascii=False)}
@@ -224,7 +225,7 @@ class MCPToolCaller(Generate, ABC):
 
             logging.info(f"模型返回结果：{ans}")
             self.append_log(f"模型返回结果：{ans}")
-            content = get_llm_content(ans)
+            content = get_output_json_content(ans)
             # 去掉<answer>
             pattern = r"<answer>(.*?)</answer>"
             # re.DOTALL标志允许.匹配包括换行符在内的所有字符

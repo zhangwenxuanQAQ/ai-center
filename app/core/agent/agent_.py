@@ -13,7 +13,6 @@ from pandas import DataFrame, Series
 
 from agent.component import component_class
 from agent.component.base import ComponentBase
-from agent.model.component_arg import ComponentResetArg
 from api.model.agent_output import AgentOutput
 from api.model.component_output import ComponentOutput, MessageType, ComponentStatus
 
@@ -175,13 +174,12 @@ class Agent:
 
     def reset(self, **kwargs):
         self.path = []
-        mem = False if ComponentResetArg.MEMORY.value not in kwargs else kwargs[ComponentResetArg.MEMORY.value]
+        mem = kwargs.get('memory', False)
         if not mem:
             self.history = []
             self.messages = []
 
-        mem_sys = False if ComponentResetArg.MEMORY_SYS.value not in kwargs else kwargs[
-            ComponentResetArg.MEMORY_SYS.value]
+        mem_sys = kwargs.get('memory_sys', False)
         if not mem_sys:
             # 重置globals
             for k in self.globals.keys():

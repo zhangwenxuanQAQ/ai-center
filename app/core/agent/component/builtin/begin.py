@@ -15,7 +15,7 @@
 #
 from functools import partial
 import pandas as pd
-from agent.component.base import ComponentBase, ComponentParamBase
+from ..base import ComponentBase, ComponentParamBase
 
 
 class BeginParam(ComponentParamBase):
@@ -45,6 +45,7 @@ class BeginParam(ComponentParamBase):
 
 class Begin(ComponentBase):
     component_name = "Begin"
+    component_title = "开始"
 
     def _run(self, history, **kwargs):
         if kwargs.get("stream"):

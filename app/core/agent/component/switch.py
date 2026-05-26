@@ -15,7 +15,7 @@
 #
 import json
 from abc import ABC
-from agent.component.base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase
 from agent.util.global_memory_util import get_memory_result_by_config_ids
 
 
@@ -49,7 +49,9 @@ class SwitchParam(ComponentParamBase):
 
 class Switch(ComponentBase, ABC):
     component_name = "Switch"
+    component_title = "条件"
 
+    @property
     def get_dependent_components(self):
         res = []
         for cond in self._param.conditions:

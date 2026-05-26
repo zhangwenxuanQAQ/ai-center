@@ -13,6 +13,7 @@ from app.core.datasource.sql_server_datasource import SQLServerDatasource
 from app.core.datasource.s3_datasource import S3Datasource
 from app.core.datasource.minio_datasource import MinIODatasource
 from app.core.datasource.rustfs_datasource import RustFSDatasource
+from app.core.datasource.tavily_datasource import TavilyDatasource
 from app.constants.datasource_constants import DatasourceType
 
 
@@ -24,6 +25,7 @@ _datasource_registry: Dict[str, type] = {
     DatasourceType.S3: S3Datasource,
     DatasourceType.MINIO: MinIODatasource,
     DatasourceType.RUSTFS: RustFSDatasource,
+    DatasourceType.TAVILY: TavilyDatasource,
 }
 
 

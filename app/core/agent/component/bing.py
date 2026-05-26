@@ -17,7 +17,7 @@ import logging
 from abc import ABC
 import requests
 import pandas as pd
-from agent.component.base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase
 
 class BingParam(ComponentParamBase):
     """

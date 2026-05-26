@@ -9,7 +9,7 @@ from typing import List
 
 import pandas as pd
 
-from agent.component.base import ComponentBase, ComponentParamBase
+from ..base import ComponentBase, ComponentParamBase
 from api.db import StatusEnum
 from api.db.services.bot_service import BotConfigInputLimitService, BotConfigStatusService, \
     BotConfigSensitiveWordService, BotConfigSensitiveWordReplyService, BotConfigRepeatQuestionReplyService
@@ -33,6 +33,7 @@ class InputBlockingParam(ComponentParamBase):
 
 class InputBlocking(ComponentBase, ABC):
     component_name = "InputBlocking"
+    component_title = "输入阻断"
 
     def _run(self, history, **kwargs):
         start = time.time()

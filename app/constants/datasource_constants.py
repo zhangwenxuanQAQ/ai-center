@@ -18,6 +18,7 @@ class DatasourceType:
     S3 = "s3"
     MINIO = "minio"
     RUSTFS = "rustfs"
+    TAVILY = "tavily"
 
 
 DATASOURCE_TYPE_LABELS = {
@@ -28,11 +29,13 @@ DATASOURCE_TYPE_LABELS = {
     DatasourceType.S3: "Amazon S3",
     DatasourceType.MINIO: "MinIO",
     DatasourceType.RUSTFS: "RustFS",
+    DatasourceType.TAVILY: "Tavily",
 }
 
 DATASOURCE_CATEGORY = {
     "relational_db": "关系型数据库",
     "file_storage": "文件存储服务",
+    "search_api": "搜索API服务",
 }
 
 DATASOURCE_TYPE_CATEGORY = {
@@ -43,6 +46,7 @@ DATASOURCE_TYPE_CATEGORY = {
     DatasourceType.S3: "file_storage",
     DatasourceType.MINIO: "file_storage",
     DatasourceType.RUSTFS: "file_storage",
+    DatasourceType.TAVILY: "search_api",
 }
 
 DATASOURCE_CONFIG_FIELDS = {
@@ -96,5 +100,8 @@ DATASOURCE_CONFIG_FIELDS = {
         {"title": "Secret Key", "name": "secret_key", "type": "password", "description": "访问密钥密码", "required": True, "sensitive": True},
         {"title": "Bucket", "name": "bucket", "type": "string", "description": "默认Bucket名称，例如：my-bucket", "required": False},
         {"title": "安全连接", "name": "secure", "type": "boolean", "description": "是否使用HTTPS，默认False", "required": False, "default_value": False},
+    ],
+    DatasourceType.TAVILY: [
+        {"title": "API Key", "name": "api_key", "type": "password", "description": "Tavily API Key，从 Tavily 控制台获取", "required": True, "sensitive": True},
     ],
 }

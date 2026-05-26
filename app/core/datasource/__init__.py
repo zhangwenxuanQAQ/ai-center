@@ -13,6 +13,7 @@ from app.core.datasource.sql_server_datasource import SQLServerDatasource
 from app.core.datasource.s3_datasource import S3Datasource
 from app.core.datasource.minio_datasource import MinIODatasource
 from app.core.datasource.rustfs_datasource import RustFSDatasource
+from app.core.datasource.tavily_datasource import TavilyDatasource
 
 __all__ = [
     'DatasourceBase',
@@ -24,4 +25,5 @@ __all__ = [
     'S3Datasource',
     'MinIODatasource',
     'RustFSDatasource',
+    'TavilyDatasource',
 ]

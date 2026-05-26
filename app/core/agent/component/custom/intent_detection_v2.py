@@ -5,12 +5,11 @@ import json
 import time
 from functools import partial
 
-from agent.component import GenerateParam, Generate
+from .. import GenerateParam, Generate
 from agent.prompt_template import intent_detection_v2_system_prompt_template
-from api.db import LLMType
-from api.db.services.llm_service import LLMBundle
-from api.utils.llm_util import format_prompt_template, get_llm_content, parse_llm_tags
 from rag.prompts import message_fit_in
+from app.core.llm_model.utils.llm_util import get_output_json_content, get_output_tag_content
+from app.core.llm_model.utils.model_caller import ModelCaller
 
 
 class IntentDetectionV2Param(GenerateParam):
@@ -45,6 +44,7 @@ class IntentDetectionV2Param(GenerateParam):
 
 class IntentDetectionV2(Generate):
     component_name = "IntentDetectionV2"
+    component_title = "意图识别"
 
     def reset(self, **kwargs):
         super().reset()
@@ -54,7 +54,7 @@ class IntentDetectionV2(Generate):
         query = '\n'.join(query["content"]) if "content" in query else ""
         query = query.strip()
 
-        chat_mdl = LLMBundle(self._canvas.get_tenant_id(), LLMType.CHAT, self._param.llm_id)  # 使用默认模型
+        chat_mdl = ModelCaller.get_chat_model(self._param.llm_id)  # 使用默认模型
 
         system_prompt = self.process_prompt(**kwargs)
         system_prompt = format_prompt_template(system_prompt, {
@@ -83,7 +83,7 @@ class IntentDetectionV2(Generate):
         self.append_log(f"意图识别返回：{ans}")
 
         to_component_ids = []
-        content = get_llm_content(ans)
+        content = get_output_json_content(ans)
         try:
             content_dict = json.loads(content) if content else {}
             to_component_ids = content_dict.get("actions", [])
@@ -104,7 +104,7 @@ class IntentDetectionV2(Generate):
         think_content = ""
         for ans in chat_mdl.chat_streamly(messages[0]["content"], messages[1:], self._param.gen_conf()):
             # 这里打印think
-            thought_content = parse_llm_tags(ans, "think") or parse_llm_tags(ans, "thought")
+            thought_content = get_output_tag_content(ans, "think") or get_output_tag_content(ans, "thought")
             if thought_content:
                 res = {"content": f"<think>{thought_content}</think>", "reference": {}}
                 think_content = f"<think>{thought_content}</think>"
@@ -113,7 +113,7 @@ class IntentDetectionV2(Generate):
             answer = ans
 
         to_component_ids = []
-        content = get_llm_content(answer)
+        content = get_output_json_content(answer)
         try:
             content_dict = json.loads(content) if content else {}
             to_component_ids = content_dict.get("actions", [])

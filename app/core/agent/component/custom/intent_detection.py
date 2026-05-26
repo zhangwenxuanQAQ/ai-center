@@ -3,8 +3,7 @@
 # Description: 意图识别组件（用户输入 -> 解析用户意图 -> 选择动作 -> 用户确认 ->执行动作 -> 最终结果）
 import copy
 
-from agent.component import GenerateParam, Generate
-from agent.model.component_arg import ComponentResetArg
+from .. import GenerateParam, Generate
 from agent.prompt_template import intent_detection_system_prompt_template
 import json
 
@@ -99,16 +98,17 @@ class IntentDetectionParam(GenerateParam):
 
 class IntentDetection(Generate):
     component_name = "IntentDetection"
+    component_title = "意图识别 （已弃用）"
 
     def reset(self, **kwargs):
         super().reset()
-        mem = False if ComponentResetArg.MEMORY.value not in kwargs else kwargs[ComponentResetArg.MEMORY.value]
+        mem = kwargs.get('memory', False)
         if not mem:
             self._param.messages = []
             self._param.action_dsl_map = {}
 
     def get_memory_value(self, memory_config: dict = {}):
-        from agent.component import component_class
+        from .. import component_class
         from agent.agent import Agent
         value = ""
         if memory_config:

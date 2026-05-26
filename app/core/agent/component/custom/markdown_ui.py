@@ -8,11 +8,10 @@ from functools import partial
 
 import pandas as pd
 
-from agent.component import GenerateParam, Generate
+from .. import GenerateParam, Generate
 from agent.prompt_template import markdown_ui_system_prompt_template
-from api.db import LLMType
-from api.db.services.llm_service import LLMBundle
 from rag.prompts import message_fit_in
+from app.core.llm_model.utils.model_caller import ModelCaller
 
 
 class MarkdownUIParam(GenerateParam):
@@ -30,6 +29,7 @@ class MarkdownUIParam(GenerateParam):
 
 class MarkdownUI(Generate, ABC):
     component_name = "MarkdownUI"
+    component_title = "Markdown UI "
 
     # def get_dependent_components(self):
     #     cpnts = set([para["component_id"] for para in self._param.begin_params \
@@ -49,7 +49,7 @@ class MarkdownUI(Generate, ABC):
         # TODO 根据配置进一步处理用户输入
         user_prompt = self.get_user_prompt(query)
 
-        chat_mdl = LLMBundle(self._canvas.get_tenant_id(), LLMType.CHAT, self._param.llm_id)  # 使用默认模型
+        chat_mdl = ModelCaller.get_chat_model(self._param.llm_id)  # 使用默认模型
         system_prompt = self._param.prompt
 
         # 历史问答

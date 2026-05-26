@@ -240,7 +240,7 @@ class AgentComponentService:
         return db_component
     
     @staticmethod
-    def get_components(skip: int = 0, limit: int = 100, component_type: str = None, category: str = None):
+    def get_components(skip: int = 0, limit: int = 100, component_type: str = None, category: str = None, status: int = None):
         """
         获取智能体组件列表
         """
@@ -249,7 +249,23 @@ class AgentComponentService:
             query = query.where(AgentComponent.component_type == component_type)
         if category:
             query = query.where(AgentComponent.category == category)
+        if status is not None:
+            query = query.where(AgentComponent.status == status)
         return list(query.offset(skip).limit(limit))
+    
+    @staticmethod
+    def get_all_components(component_type: str = None, category: str = None, status: int = None):
+        """
+        获取所有智能体组件（不分页）
+        """
+        query = AgentComponent.select().order_by(AgentComponent.sort_order.asc(), AgentComponent.created_at.asc())
+        if component_type:
+            query = query.where(AgentComponent.component_type == component_type)
+        if category:
+            query = query.where(AgentComponent.category == category)
+        if status is not None:
+            query = query.where(AgentComponent.status == status)
+        return list(query)
     
     @staticmethod
     def get_component(component_id: str):

@@ -7,7 +7,7 @@ import time
 from abc import ABC
 from typing import List
 
-from agent.component.base import ComponentBase, ComponentParamBase
+from ..base import ComponentBase, ComponentParamBase
 from api.db import StatusEnum
 from api.db.services.bot_service import BotConfigStatusService, BotConfigStopWordService, \
     BotConfigSpecialCharacterService, BotConfigSpecialCharacterExcludeService, BotConfigRepetitiveWordService
@@ -31,6 +31,7 @@ class InputOptimizeParam(ComponentParamBase):
 
 class InputOptimize(ComponentBase, ABC):
     component_name = "InputOptimize"
+    component_title = "输入优化"
 
     def _run(self, history, **kwargs):
         start = time.time()
