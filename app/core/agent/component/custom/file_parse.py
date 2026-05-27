@@ -11,9 +11,12 @@ from functools import partial
 from pandas import DataFrame
 
 from .. import GenerateParam, Generate
-from api.db import FileType
-from api.db.services.file_service import FileService
-from api.utils.file_utils import filename_type
+from app.constants.knowledgebase_document_constants import FileType
+from app.core.knowledgebase.utils.file_utils import filename_type
+from app.core.knowledgebase.rag.app import CHUNK_STRATEGIES
+from app.core.knowledgebase.rag.app.picture import chunk as picture_chunk, chunk_streamly as picture_chunk_streamly
+from app.core.knowledgebase.rag.app.audio import chunk as audio_chunk, chunk_streamly as audio_chunk_streamly
+
 
 
 class FileParseParam(GenerateParam):
@@ -54,56 +57,32 @@ class FileParse(Generate):
         system_prompt = self.process_prompt(**kwargs)
 
         files = self.get_file_params_values()  # 从文件配置获取文件列表
-        messages = [{"role": "system", "content": system_prompt}]
-        for up in user_prompt:
-            messages.append({"role": "user", "content": up})
-
-        # messages.append({"role": "user", "content": files})
+        
+        prompt = f"{system_prompt}\n{'\n'.join(user_prompt)}" if system_prompt else '\n'.join(user_prompt)
 
         downstreams = self._canvas.get_component(self._id)["downstream"]
         if self._param.stream and kwargs.get("stream") and len(downstreams) == 1 and \
                 self._canvas.get_component(downstreams[0])[
                     "obj"].component_name.lower() == "answer":
-            return partial(self.stream_parse, system_prompt, user_prompt, files, messages)  # 流式输出
+            return partial(self.stream_parse, prompt, files)  # 流式输出
 
-        # 如果下游有结果输出节点
         component_answer_downstream = [x for x in downstreams if "ComponentAnswer" in x]
         if kwargs.get("stream") and len(component_answer_downstream) > 0:
-            return partial(self.stream_parse, system_prompt, user_prompt, files, messages)  # 流式输出
-
-        def return_content(file):
-            return file["content"]
+            return partial(self.stream_parse, prompt, files)  # 流式输出
 
         conf = self._param.gen_conf()
         exe = ThreadPoolExecutor(max_workers=5)
         threads = []
         task_size = len(files)
-        output_queue = queue.Queue()  # 线程输出结果队列
-        done_events = [threading.Event() for _ in range(task_size)]  # 线程信号
+        output_queue = queue.Queue()
+        done_events = [threading.Event() for _ in range(task_size)]
 
         for i in range(len(files)):
             file = files[i]
             threads.append(
-                exe.submit(self.task_thread, i, file, system_prompt, user_prompt, output_queue, done_events[i]))
-            # if "content" in file:
-            #     threads.append(exe.submit(return_content, file))
-            # else:
-            #     file_type = filename_type(file["name"])
-            #     llm_name = self._param.vision_llm_id  # 默认视觉模型
-            #     if file_type == FileType.AURAL:
-            #         llm_name = self._param.audio_llm_id
-            #
-            #     threads.append(
-            #         exe.submit(FileService.parse, file["name"], FileService.get_blob(file["created_by"], file["id"]),
-            #                    True,
-            #                    file["created_by"], prompt=system_prompt, user_prompt=user_prompt, llm_name=llm_name,
-            #                    only_use_llm=True if llm_name else False,
-            #                    conf=conf))
-        # for future in as_completed(threads):
-        #     res, i = future.result()  # 获取已完成任务的结果
-        #     files[i]["content"] = threads[i].result()
+                exe.submit(self.task_thread, i, file, prompt, conf, output_queue, done_events[i]))
+
         completed_count = 0
-        # 实时处理输出
         while completed_count < task_size:
             try:
                 item, generator_id = output_queue.get(timeout=0.1)
@@ -112,88 +91,152 @@ class FileParse(Generate):
                     print(f"file parse thread {generator_id} completed, {task_size-completed_count} left")
                 else:
                     files[generator_id]["content"] = item
-                    # yield item, thread_agent
             except queue.Empty:
-                # 检查是否有生成器完成但队列为空的情况
                 if any(event.is_set() for event in done_events):
                     continue
-        # for i in range(len(files)):
-        #     files[i]["content"] = threads[i].result()
 
         self.append_log(f"文件识别返回：{files}")
-        self._canvas.set_component_infor(self._id, {"prompt": system_prompt, "messages": messages,
+        self._canvas.set_component_infor(self._id, {"prompt": prompt,
                                                     "conf": self._param.gen_conf()})
 
         return FileParse.be_output(json.dumps(files, ensure_ascii=False))
 
-    def task_thread(self, generator_id, file, system_prompt, user_prompt, output_queue, done_event):
-        """流式传输生成器输出"""
-        conf = self._param.gen_conf()
+    def task_thread(self, generator_id, file, prompt, conf, output_queue, done_event):
         res = ""
         try:
             if "content" in file:
-                # return res, generator_id
                 output_queue.put((file["content"], generator_id))
             else:
                 file_type = filename_type(file["name"])
-                llm_name = None
-                if file_type == FileType.VISUAL:
-                    llm_name = self._param.vision_llm_id
-                if file_type == FileType.AURAL:
-                    llm_name = self._param.audio_llm_id
-
-                res = FileService.parse(file["name"], FileService.get_blob(file["created_by"], file["id"]),
-                                        True,
-                                        file["created_by"], prompt=system_prompt, user_prompt=user_prompt,
-                                        llm_name=llm_name,
-                                        only_use_llm=True if llm_name else False,
-                                        conf=conf)
+                binary = file.get("binary") or file.get("content_binary")
+                
+                res = self._parse_file(file["name"], binary, file_type, prompt, conf)
                 output_queue.put((res, generator_id))
         finally:
-            # return res, generator_id
             output_queue.put(("COMPLETED", generator_id))
             done_event.set()
 
-    def stream_parse(self, system_prompt, user_prompt, files, messages):
+    def _parse_file(self, filename, binary, file_type, prompt, conf):
+        """根据文件类型调用不同的切片方法"""
+        kwargs = {
+            'temperature': conf.get('temperature', 0.5),
+            'max_tokens': conf.get('max_tokens', 8192),
+            'top_p': conf.get('top_p', 0.9),
+        }
+        
+        if self._param.vision_llm_id:
+            kwargs['llm_id'] = self._param.vision_llm_id
+        
+        if self._param.audio_llm_id and file_type == FileType.AURAL:
+            kwargs['llm_id'] = self._param.audio_llm_id
+
+        visual_types = (FileType.VISUAL, FileType.DOC, FileType.PDF)
+        if self._param.vision_llm_id and file_type in visual_types:
+            chunks = picture_chunk(filename, binary, lang="Chinese", **kwargs)
+        elif file_type == FileType.AURAL:
+            chunks = audio_chunk(filename, binary, lang="Chinese", **kwargs)
+        else:
+            chunk_method = self._get_chunk_method(file_type, filename)
+            chunk_func = CHUNK_STRATEGIES.get(chunk_method)
+            if chunk_func:
+                chunks = chunk_func(filename, binary, lang="Chinese", **kwargs)
+            else:
+                return f"不支持的文件类型: {file_type}"
+
+        text_parts = []
+        if chunks:
+            for chunk in chunks:
+                if isinstance(chunk, dict):
+                    content = chunk.get("content", "") or chunk.get("content_with_weight", "")
+                    if content:
+                        text_parts.append(content.strip())
+                elif isinstance(chunk, str):
+                    text_parts.append(chunk.strip())
+        
+        return "\n".join(text_parts) if text_parts else "文件解析结果为空"
+
+    def _get_chunk_method(self, file_type, filename):
+        """根据文件类型获取切片方法"""
+        from app.constants.knowledgebase_document_constants import get_default_chunk_method
+        return get_default_chunk_method(file_type, filename)
+
+    def stream_parse(self, prompt, files):
         self.set_start_time(time.time())
         res = None
         exe = ThreadPoolExecutor(max_workers=5)
         threads = []
 
-        def yield_content(file):
-            yield file["content"]
-
         conf = self._param.gen_conf()
+
         for file in files:
             if "content" in file:
-                threads.append(exe.submit(yield_content, file))
+                def yield_content(content):
+                    yield content
+                threads.append(exe.submit(yield_content, file["content"]))
             else:
                 file_type = filename_type(file["name"])
-                llm_name = None
-                if file_type == FileType.VISUAL:
-                    llm_name = self._param.vision_llm_id
-                if file_type == FileType.AURAL:
-                    llm_name = self._param.audio_llm_id
-
-                threads.append(
-                    exe.submit(FileService.parse_streamly, file["name"],
-                               FileService.get_blob(file["created_by"], file["id"]),
-                               True,
-                               file["created_by"], prompt=system_prompt, user_prompt=user_prompt, llm_name=llm_name,
-                               only_use_llm=True if llm_name else False,
-                               conf=conf))
+                binary = file.get("binary") or file.get("content_binary")
+                
+                threads.append(exe.submit(self._stream_parse_file, file["name"], binary, file_type, prompt, conf))
 
         for i in range(len(files)):
             gen = threads[i].result()
+            file_content = ""
             for ans in gen:
-                yield {"content": ans, "reference": []}
+                if isinstance(ans, dict):
+                    content = ans.get("content", "")
+                    file_content += content
+                    yield {"content": content, "reference": []}
+                else:
+                    file_content += str(ans)
+                    yield {"content": str(ans), "reference": []}
 
-            files[i]["content"] = ans
+            files[i]["content"] = file_content
 
-        self._canvas.set_component_infor(self._id, {"prompt": system_prompt, "messages": messages,
+        self._canvas.set_component_infor(self._id, {"prompt": prompt,
                                                     "conf": self._param.gen_conf()})
-        self.set_end_time_and_append_log(time.time())  # 添加结束时间
+        self.set_end_time_and_append_log(time.time())
         self.set_output(FileParse.be_output(json.dumps(files, ensure_ascii=False)))
+
+    def _stream_parse_file(self, filename, binary, file_type, prompt, conf):
+        """流式解析文件"""
+        kwargs = {
+            'temperature': conf.get('temperature', 0.5),
+            'max_tokens': conf.get('max_tokens', 8192),
+            'top_p': conf.get('top_p', 0.9),
+        }
+        
+        if self._param.vision_llm_id:
+            kwargs['llm_id'] = self._param.vision_llm_id
+        
+        if self._param.audio_llm_id and file_type == FileType.AURAL:
+            kwargs['llm_id'] = self._param.audio_llm_id
+
+        visual_types = (FileType.VISUAL, FileType.DOC, FileType.PDF)
+        if self._param.vision_llm_id and file_type in visual_types:
+            chunks = picture_chunk_streamly(filename, binary, lang="Chinese", **kwargs)
+        elif file_type == FileType.AURAL:
+            chunks = audio_chunk_streamly(filename, binary, lang="Chinese", **kwargs)
+        else:
+            chunk_method = self._get_chunk_method(file_type, filename)
+            chunk_func = CHUNK_STRATEGIES.get(chunk_method)
+            if chunk_func:
+                chunks = chunk_func(filename, binary, lang="Chinese", **kwargs)
+                for chunk in chunks:
+                    if isinstance(chunk, dict):
+                        content = chunk.get("content", "") or chunk.get("content_with_weight", "")
+                        if content:
+                            yield content
+            else:
+                yield f"不支持的文件类型: {file_type}"
+            return
+
+        for chunk in chunks:
+            if isinstance(chunk, dict):
+                if chunk.get("type") == "content":
+                    yield chunk.get("content", "")
+            elif isinstance(chunk, str):
+                yield chunk
 
     def get_file_params_values(self):
         result = []
@@ -230,8 +273,9 @@ class FileParse(Generate):
             elif isinstance(value, list):
                 return value
             else:
-                raise Exception(f"文件参数格式不正确,正确格式为{json.dumps(file_format, ensure_ascii=False)}")
-                self.append_log(f"文件参数解析异常{str(e)}")
+                err_msg = f"文件参数格式不正确,正确格式为{json.dumps(file_format, ensure_ascii=False)}"
+                self.append_log(err_msg)
+                raise Exception(err_msg)
         except Exception as e:
             self.append_log(f"文件参数解析异常{str(e)}")
             raise e

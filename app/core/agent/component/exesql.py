@@ -20,7 +20,7 @@ from copy import deepcopy
 import pandas as pd
 import pymysql
 import psycopg2
-from .. import GenerateParam, Generate
+from .generate import GenerateParam, Generate
 #import pyodbc
 import logging
 

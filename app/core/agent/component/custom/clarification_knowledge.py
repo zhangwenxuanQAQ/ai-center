@@ -726,7 +726,7 @@ class ClarificationKnowledge(ComponentBase, ABC):
     # 获取图谱链路澄清结果 words为澄清词数组
     def get_clarification_data(self, input_text: str = ""):
         from api.db.services.document_service import DocumentService
-        from api.db import LLMType, StatusEnum
+        from api.db import LLMType
 
         result = {"type": "4", "data": {}, "msg": "未匹配到事项和澄清信息"}
 
@@ -770,7 +770,7 @@ class ClarificationKnowledge(ComponentBase, ABC):
 
         doc_query = DocumentService.model.select().where(DocumentService.model.kb_id == self._param.kb_id,
                                                          DocumentService.model.parser_id == "c2_clarification",
-                                                         DocumentService.model.status == StatusEnum.VALID.value)
+                                                         DocumentService.model.status == 1)
         docs = list(doc_query.dicts())
         doc_ids = [x["id"] for x in docs]
 
@@ -974,7 +974,7 @@ class ClarificationKnowledge(ComponentBase, ABC):
         from api import settings
         from api.db.services.document_service import DocumentService
         from api.db.services.knowledgebase_service import KnowledgebaseService
-        from api.db import LLMType, StatusEnum
+        from api.db import LLMType
         # http://172.24.1.106:31202/smart/search/v1/service/kg_search/qa/buttons
         button_url = f"{BASE_URL}/v1/service/kg_search/qa/buttons"
         header = generate_ablility_openness_request_headers()
@@ -1092,12 +1092,12 @@ class ClarificationKnowledge(ComponentBase, ABC):
         from api import settings
         from api.db.services.document_service import DocumentService
         from api.db.services.knowledgebase_service import KnowledgebaseService
-        from api.db import LLMType, StatusEnum
+        from api.db import LLMType
         chunks = []
         kb_id = self._param.kb_id
         doc_query = DocumentService.model.select().where(DocumentService.model.kb_id == kb_id,
                                                          DocumentService.model.parser_id == "c2_clarification",
-                                                         DocumentService.model.status == StatusEnum.VALID.value)
+                                                         DocumentService.model.status == 1)
         docs = list(doc_query.dicts())
         if not docs:
             return chunks

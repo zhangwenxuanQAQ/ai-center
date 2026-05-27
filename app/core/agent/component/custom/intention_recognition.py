@@ -14,7 +14,6 @@ from abc import ABC
 from agent.agent import Agent
 from .. import GenerateParam, Generate
 from api.utils.llm_util import format_prompt_template
-from api.db import StatusEnum
 from api.db.services.agent_service import AgentService
 
 from api.db.services.dialog_service import DialogService, chat
@@ -450,8 +449,8 @@ class IntentionRecognition(Generate, ABC):
                         annotations = tool["annotations"] if "annotations" in tool else {}
                         annotations["server_id"] = server_id
                         mcp_tool_info = annotations["mcp_tool_info"] if "mcp_tool_info" in annotations else {}
-                        status = mcp_tool_info["status"] if "status" in mcp_tool_info else StatusEnum.VALID.value
-                        if status != StatusEnum.VALID.value:
+                        status = mcp_tool_info["status"] if "status" in mcp_tool_info else 1
+                        if status != 1:
                             continue
 
                         tool["annotations"] = annotations

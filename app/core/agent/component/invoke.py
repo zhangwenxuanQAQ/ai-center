@@ -17,7 +17,7 @@ import json
 import re
 from abc import ABC
 import requests
-from deepdoc.parser import HtmlParser
+from app.core.knowledgebase.deepdoc.parser import HtmlParser
 from .base import ComponentBase, ComponentParamBase
 
 

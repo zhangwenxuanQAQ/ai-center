@@ -3,6 +3,7 @@ uvicorn
 peewee
 playhouse
 pymysql
+psycopg2-binary
 pyyaml
 python-dotenv
 pydantic

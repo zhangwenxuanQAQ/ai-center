@@ -15,7 +15,7 @@
 #
 import logging
 from abc import ABC
-from .. import GenerateParam, Generate
+from .generate import GenerateParam, Generate
 from app.core.llm_model.utils.model_caller import ModelCaller
 
 

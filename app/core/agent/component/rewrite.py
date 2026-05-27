@@ -14,8 +14,8 @@
 #  limitations under the License.
 #
 from abc import ABC
-from .. import GenerateParam, Generate
-from rag.prompts import full_question
+from .generate import GenerateParam, Generate
+from app.core.knowledgebase.rag.prompts.generator import full_question
 
 
 class RewriteQuestionParam(GenerateParam):

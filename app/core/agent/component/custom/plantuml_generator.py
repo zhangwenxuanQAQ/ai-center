@@ -13,7 +13,7 @@ from plantuml import PlantUML
 
 from .. import GenerateParam, Generate
 from api import settings
-from rag.prompts import message_fit_in
+from app.core.knowledgebase.rag.prompts.generator import message_fit_in
 from app.core.llm_model.utils.llm_util import get_output_json_content
 from app.core.llm_model.utils.model_caller import ModelCaller
 
@@ -226,31 +226,33 @@ class PlantUMLGenerator(Generate, ABC):
             return False
 
     def get_chunks(self):
-        from rag.nlp import search
-        from api import settings
-        from api.db.services.document_service import DocumentService
-        from api.db.services.knowledgebase_service import KnowledgebaseService
+        from app.core.knowledgebase.retrieval_service import RetrievalService
+        from app.database.models import KnowledgebaseDocument
         chunks = []
         doc_ids = self._param.doc_ids
-        for doc_id in doc_ids:
-            e, doc = DocumentService.get_by_id(doc_id)
-            if not e:
-                continue
-            kb_id = doc.kb_id
-            kbs = KnowledgebaseService.get_by_ids([kb_id])
-            embedding_list = list(set([kb.embd_id for kb in kbs]))
-            if len(embedding_list) != 1:
-                continue
-            embedding_model_name = embedding_list[0]
-            embd_mdl = LLMBundle(self._canvas.get_tenant_id(), LLMType.EMBEDDING, embedding_model_name)
-            tenant_id = kbs[0].tenant_id
-            req = {"doc_ids": [doc_id]}
-            sres = settings.retrievaler.search(req, search.index_name(tenant_id),
-                                               [kb_id], embd_mdl,
-                                               highlight=False)
-            for id in sres.ids:
-                chunk_content = sres.field[id].get("content_with_weight", "")
+        if not doc_ids:
+            return chunks
+        
+        docs = list(KnowledgebaseDocument.select().where(
+            KnowledgebaseDocument.id.in_(doc_ids)
+        ))
+        if not docs:
+            return chunks
+        
+        kb_ids = list(set([str(doc.kb_id) for doc in docs]))
+        
+        result = RetrievalService.retrieval(
+            kb_ids=kb_ids,
+            question=" ",
+            doc_ids=[str(doc_id) for doc_id in doc_ids],
+            top_k=1000,
+        )
+        
+        for chunk_info in result.get("chunks", []):
+            chunk_content = chunk_info.get("content_with_weight", "") or chunk_info.get("content", "")
+            if chunk_content:
                 chunks.append(chunk_content)
+        
         return chunks
 
     def debug(self, **kwargs):

@@ -21,22 +21,9 @@ from typing import Any
 import pandas as pd
 
 from .base import ComponentBase, ComponentParamBase
-from plugin import GlobalPluginManager
-from plugin.llm_tool_plugin import llm_tool_metadata_to_openai_tool
-from rag.llm.chat_model import ToolCallSession
-from rag.prompts import message_fit_in
+from app.core.knowledgebase.rag.prompts.generator import message_fit_in
 from app.core.llm_model.utils.model_caller import ModelCaller
 import time
-
-
-class LLMToolPluginCallSession(ToolCallSession):
-    def tool_call(self, name: str, arguments: dict[str, Any]) -> str:
-        tool = GlobalPluginManager.get_llm_tool_by_name(name)
-
-        if tool is None:
-            raise ValueError(f"LLM tool {name} does not exist")
-
-        return tool().invoke(**arguments)
 
 
 class GenerateParam(ComponentParamBase):
@@ -136,15 +123,6 @@ class Generate(ComponentBase):
 
     def _run(self, history, **kwargs):
         chat_mdl = ModelCaller.get_chat_model(self._param.llm_id)
-
-        if len(self._param.llm_enabled_tools) > 0:
-            tools = GlobalPluginManager.get_llm_tools_by_names(self._param.llm_enabled_tools)
-
-            chat_mdl.bind_tools(
-                LLMToolPluginCallSession(),
-                [llm_tool_metadata_to_openai_tool(t.get_metadata()) for t in tools]
-            )
-
         prompt = self._param.prompt
 
         retrieval_res = []

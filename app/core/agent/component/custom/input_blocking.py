@@ -10,7 +10,6 @@ from typing import List
 import pandas as pd
 
 from ..base import ComponentBase, ComponentParamBase
-from api.db import StatusEnum
 from api.db.services.bot_service import BotConfigInputLimitService, BotConfigStatusService, \
     BotConfigSensitiveWordService, BotConfigSensitiveWordReplyService, BotConfigRepeatQuestionReplyService
 
@@ -48,7 +47,7 @@ class InputBlocking(ComponentBase, ABC):
             self.append_log(f"聊天策略不存在，bot_id{bot_id},跳过输入阻断模块")
             return InputBlocking.be_output(query)
 
-        if self._param.input_limit and StatusEnum.VALID.value == config_status.get("input_limit"):
+        if self._param.input_limit and 1 == config_status.get("input_limit"):
             logging.info("输入限制判断处理")
             self.append_log("输入限制判断处理")
             one: dict = BotConfigInputLimitService.get_by_bot_id(bot_id)
@@ -64,12 +63,12 @@ class InputBlocking(ComponentBase, ABC):
             logging.info("输入限制判断结束")
             self.append_log("输入限制判断结束")
 
-        if self._param.sensitive_word and StatusEnum.VALID.value == config_status.get("sensitive_word"):
+        if self._param.sensitive_word and 1 == config_status.get("sensitive_word"):
             logging.info("敏感词判断")
             self.append_log("敏感词判断")
-            sensitive_words = BotConfigSensitiveWordService.get_by_list(bot_id=bot_id, status=StatusEnum.VALID.value)
+            sensitive_words = BotConfigSensitiveWordService.get_by_list(bot_id=bot_id, status=1)
             sensitive_word_replys = BotConfigSensitiveWordReplyService.get_by_list(bot_id=bot_id,
-                                                                                   status=StatusEnum.VALID.value)
+                                                                                   status=1)
             sensitive_word_replys_category_map = {x["category"]: x["content"] for x in sensitive_word_replys}
             if sensitive_words:
                 for sensitive_word in sensitive_words:
@@ -83,13 +82,13 @@ class InputBlocking(ComponentBase, ABC):
             logging.info("敏感词判断结束")
             self.append_log("敏感词判断结束")
 
-        if self._param.repeat_question_reply and StatusEnum.VALID.value == config_status.get("repeat_question_reply"):
+        if self._param.repeat_question_reply and 1 == config_status.get("repeat_question_reply"):
             logging.info("重复问题处理")
             self.append_log("重复问题处理")
             hist: List = self._canvas.get_history(self._param.message_history_window_size)  # 历史问题
             hist_messages = [h["content"] for h in hist if h["role"] == "user"]
             repeat_question_replys = BotConfigRepeatQuestionReplyService.get_by_list(bot_id=bot_id,
-                                                                                     status=StatusEnum.VALID.value)
+                                                                                     status=1)
             count = hist_messages.count(query)
             default_limit = 3  # 取默认3次
             if repeat_question_replys:

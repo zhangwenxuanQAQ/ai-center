@@ -12,9 +12,8 @@ from abc import ABC
 from pandas import DataFrame
 
 from .. import GenerateParam, Generate
-from api.db import StatusEnum
 from api.utils.mcp_utils import mcp_server_test_connection, mcp_server_list_tools, mcp_server_call_tool
-from rag.prompts import message_fit_in
+from app.core.knowledgebase.rag.prompts.generator import message_fit_in
 from app.core.llm_model.utils.llm_util import get_output_json_content
 from app.core.llm_model.utils.model_caller import ModelCaller
 
@@ -314,10 +313,10 @@ class MCPToolCaller(Generate, ABC):
         annotations = tool["annotations"] if "annotations" in tool else {}
         mcp_tool_info = annotations["mcp_tool_info"] if "mcp_tool_info" in annotations else {}
         status = mcp_tool_info["status"] if "status" in mcp_tool_info else annotations[
-            "status"] if "status" in annotations else StatusEnum.VALID.value
+            "status"] if "status" in annotations else 1
         tool["title"] = annotations["title"] if "title" in annotations else ""
         tool["server_id"] = server_id
-        if status != StatusEnum.VALID.value:
+        if status != 1:
             return None
         simple_tool["name"] = tool["name"]
         simple_tool["server_id"] = tool["server_id"]

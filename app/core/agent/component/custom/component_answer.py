@@ -23,7 +23,11 @@ from functools import partial
 import pandas as pd
 
 from ..base import ComponentBase, ComponentParamBase
-from api.model.agent_output import AgentOutput
+try:
+    from api.model.agent_output import AgentOutput
+except ImportError:
+    class AgentOutput:
+        pass
 
 
 class ComponentAnswerParam(ComponentParamBase):

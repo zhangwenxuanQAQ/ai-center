@@ -7,7 +7,7 @@ from functools import partial
 
 from .. import GenerateParam, Generate
 from agent.prompt_template import intent_detection_v2_system_prompt_template
-from rag.prompts import message_fit_in
+from app.core.knowledgebase.rag.prompts.generator import message_fit_in
 from app.core.llm_model.utils.llm_util import get_output_json_content, get_output_tag_content
 from app.core.llm_model.utils.model_caller import ModelCaller
 

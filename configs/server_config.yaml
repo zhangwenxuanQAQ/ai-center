@@ -30,5 +30,5 @@ rustfs:
   host: '10.9.44.5'
   port: 9000
 logging:
-  level: 'INFO'
+  level: 'DEBUG'
   format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'

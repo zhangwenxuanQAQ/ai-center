@@ -11,20 +11,36 @@ from app.database.models import LLMModel
 logger = logging.getLogger(__name__)
 
 
-def get_suitable_vision_model():
+def get_suitable_vision_model(llm_id: str = None):
     """
     获取合适的视觉描述模型
     
     优先级：
-    1. 默认视觉模型 (is_default=True, model_type='vision')
-    2. 最新创建的视觉模型 (model_type='vision')
-    3. 支持图片的文本模型 (model_type='text', support_image=True)
-    4. 默认全模态模型 (is_default=True, model_type='multimodal')
-    5. 最新创建的全模态模型 (model_type='multimodal')
+    1. 如果指定了llm_id，则使用该ID对应的模型
+    2. 默认视觉模型 (is_default=True, model_type='vision')
+    3. 最新创建的视觉模型 (model_type='vision')
+    4. 支持图片的文本模型 (model_type='text', support_image=True)
+    5. 默认全模态模型 (is_default=True, model_type='multimodal')
+    6. 最新创建的全模态模型 (model_type='multimodal')
     
+    Args:
+        llm_id: 指定的模型ID（可选）
+        
     Returns:
         LLMModel: 合适的模型对象，没有则返回None
     """
+    if llm_id:
+        model = LLMModel.get_or_none(
+            (LLMModel.id == llm_id) &
+            (LLMModel.status == True) &
+            (LLMModel.deleted == False)
+        )
+        if model:
+            logger.info(f"使用指定的视觉模型: {model.name} (id: {llm_id})")
+            return model
+        else:
+            logger.warning(f"指定的视觉模型不存在或已禁用: {llm_id}")
+    
     # 1. 查找默认视觉模型
     model = LLMModel.select().where(
         (LLMModel.model_type == 'vision') &
@@ -86,19 +102,35 @@ def get_suitable_vision_model():
     return None
 
 
-def get_suitable_audio_model():
+def get_suitable_audio_model(llm_id: str = None):
     """
     获取合适的音频转录模型
     
     优先级：
-    1. 默认音频模型 (is_default=True, model_type='audio')
-    2. 最新创建的音频模型 (model_type='audio')
-    3. 默认全模态模型 (is_default=True, model_type='multimodal')
-    4. 最新创建的全模态模型 (model_type='multimodal')
+    1. 如果指定了llm_id，则使用该ID对应的模型
+    2. 默认音频模型 (is_default=True, model_type='audio')
+    3. 最新创建的音频模型 (model_type='audio')
+    4. 默认全模态模型 (is_default=True, model_type='multimodal')
+    5. 最新创建的全模态模型 (model_type='multimodal')
     
+    Args:
+        llm_id: 指定的模型ID（可选）
+        
     Returns:
         LLMModel: 合适的模型对象，没有则返回None
     """
+    if llm_id:
+        model = LLMModel.get_or_none(
+            (LLMModel.id == llm_id) &
+            (LLMModel.status == True) &
+            (LLMModel.deleted == False)
+        )
+        if model:
+            logger.info(f"使用指定的音频模型: {model.name} (id: {llm_id})")
+            return model
+        else:
+            logger.warning(f"指定的音频模型不存在或已禁用: {llm_id}")
+    
     # 1. 查找默认音频模型
     model = LLMModel.select().where(
         (LLMModel.model_type == 'audio') &

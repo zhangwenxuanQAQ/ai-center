@@ -86,6 +86,75 @@ def chunk(filename, binary, tenant_id="", lang="Chinese", callback=None, **kwarg
                 logger.warning(f"无法删除临时文件: {tmp_path}, 错误: {e}")
 
 
+def chunk_streamly(filename, binary, tenant_id="", lang="Chinese", callback=None, **kwargs):
+    """
+    音频切片流式函数
+    
+    支持多种音频格式，使用ASR模型进行语音转文字，流式返回结果
+    
+    Args:
+        filename: 文件名或文件路径
+        binary: 文件二进制数据
+        tenant_id: 租户ID（用于调用LLM）
+        lang: 语言 ("Chinese" 或 "English")
+        callback: 进度回调函数 callback(progress, message)
+        **kwargs: 其他参数
+        
+    Yields:
+        dict: 切片后的文档或进度信息
+    """
+    from ..nlp import rag_tokenizer, tokenize_doc
+    
+    doc = {"docnm_kwd": filename}
+    doc["title_tks"] = rag_tokenizer.tokenize(re.sub(r"\.[a-zA-Z]+$", "", filename))
+    doc["title_sm_tws"] = rag_tokenizer.fine_grained_tokenize(doc["title_tks"])
+    
+    is_english = lang.lower() == "english"
+    callback = callback or (lambda prog, msg: None)
+    
+    tmp_path = ""
+    try:
+        _, ext = os.path.splitext(filename)
+        if not ext:
+            raise RuntimeError("未检测到文件扩展名")
+        
+        ext_lower = ext.lower()
+        if ext_lower not in SUPPORTED_AUDIO_EXTENSIONS:
+            raise RuntimeError(f"不支持的音频格式: {ext}")
+        
+        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmpf:
+            tmpf.write(binary)
+            tmpf.flush()
+            tmp_path = os.path.abspath(tmpf.name)
+        
+        callback(0.1, "使用Sequence2Txt LLM转录音频...")
+        
+        txt = ""
+        for chunk in _transcribe_audio_stream(tmp_path, **kwargs):
+            if isinstance(chunk, dict) and chunk.get("type") == "content":
+                txt += chunk.get("content", "")
+                yield {"type": "content", "content": chunk.get("content", "")}
+            elif isinstance(chunk, str):
+                txt += chunk
+                yield {"type": "content", "content": chunk}
+        
+        callback(0.8, f"转录完成: {txt[:32]}...")
+        
+        tokenize_doc(doc, txt, is_english)
+        yield {"type": "doc", "doc": doc}
+        
+    except Exception as e:
+        logger.error(f"音频处理失败: {e}", exc_info=True)
+        callback(-1, str(e))
+        yield {"type": "error", "message": str(e)}
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except Exception as e:
+                logger.warning(f"无法删除临时文件: {tmp_path}, 错误: {e}")
+
+
 def _transcribe_audio(file_path, **kwargs):
     """
     音频转文字
@@ -94,7 +163,7 @@ def _transcribe_audio(file_path, **kwargs):
     
     Args:
         file_path: 音频文件路径
-        **kwargs: 额外参数
+        **kwargs: 额外参数，包括 llm_id
         
     Returns:
         str: 转录文本
@@ -103,8 +172,8 @@ def _transcribe_audio(file_path, **kwargs):
         RuntimeError: 转录失败
     """
     try:
-        # 获取合适的模型
-        db_model = get_suitable_audio_model()
+        llm_id = kwargs.get('llm_id')
+        db_model = get_suitable_audio_model(llm_id)
         
         if not db_model:
             raise RuntimeError("请在模型库中创建音频模型或全模态模型")
@@ -134,6 +203,53 @@ def _transcribe_audio(file_path, **kwargs):
         
         # 返回转录文本
         return result.get('text', '')
+        
+    except Exception as e:
+        logger.error(f"音频转录异常: %s", str(e), exc_info=True)
+        raise RuntimeError(f"音频转录失败: {str(e)}")
+
+
+def _transcribe_audio_stream(file_path, **kwargs):
+    """
+    音频转文字（流式）
+    
+    使用ASR模型将音频转换为文字，流式返回结果
+    
+    Args:
+        file_path: 音频文件路径
+        **kwargs: 额外参数，包括 llm_id
+        
+    Yields:
+        str: 转录文本片段
+        
+    Raises:
+        RuntimeError: 转录失败
+    """
+    try:
+        llm_id = kwargs.get('llm_id')
+        db_model = get_suitable_audio_model(llm_id)
+        
+        if not db_model:
+            raise RuntimeError("请在模型库中创建音频模型或全模态模型")
+        
+        model_config = {
+            'api_key': db_model.api_key,
+            'endpoint': db_model.endpoint,
+            'name': db_model.name,
+            'provider': db_model.provider,
+            'model_name': db_model.name
+        }
+        
+        model = LLMFactory.create_model(db_model.model_type, model_config)
+        
+        allowed_params = {'temperature', 'max_tokens', 'top_p', 'frequency_penalty', 
+                          'presence_penalty', 'deep_thinking', 'tools'}
+        model_kwargs = {k: v for k, v in kwargs.items() if k in allowed_params}
+        
+        for chunk in model.stream_generate(file_path, **model_kwargs):
+            if 'error' in chunk:
+                raise RuntimeError(f"音频转录失败: {chunk['error']}")
+            yield chunk.get('text', '')
         
     except Exception as e:
         logger.error(f"音频转录异常: %s", str(e), exc_info=True)

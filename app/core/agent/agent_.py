@@ -13,7 +13,11 @@ from pandas import DataFrame, Series
 
 from agent.component import component_class
 from agent.component.base import ComponentBase
-from api.model.agent_output import AgentOutput
+try:
+    from api.model.agent_output import AgentOutput
+except ImportError:
+    class AgentOutput:
+        pass
 from api.model.component_output import ComponentOutput, MessageType, ComponentStatus
 
 

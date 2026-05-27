@@ -76,6 +76,41 @@ def chunk(filename, binary, tenant_id="", lang="Chinese", callback=None, **kwarg
         return _process_image(filename, binary, tenant_id, lang, doc, eng, image_ctx, callback, **kwargs)
 
 
+def chunk_streamly(filename, binary, tenant_id="", lang="Chinese", callback=None, **kwargs):
+    """
+    图片/视频切片流式函数
+    
+    支持图片OCR识别和视频内容理解，流式返回结果
+    
+    Args:
+        filename: 文件名或文件路径
+        binary: 文件二进制数据
+        tenant_id: 租户ID（用于调用LLM）
+        lang: 语言（"Chinese"或"English"）
+        callback: 进度回调函数 callback(progress, message)
+        **kwargs: 其他参数，包括：
+            - image_context_size: 图片上下文大小
+            
+    Yields:
+        dict: 切片后的文档或进度信息
+    """
+    from ..nlp import rag_tokenizer, tokenize_doc
+    
+    doc = {
+        "docnm_kwd": filename,
+        "title_tks": rag_tokenizer.tokenize(re.sub(r"\.[a-zA-Z]+$", "", filename)),
+    }
+    eng = lang.lower() == "english"
+    
+    parser_config = kwargs.get("parser_config", {}) or {}
+    image_ctx = max(0, int(parser_config.get("image_context_size", 0) or 0))
+    
+    if any(filename.lower().endswith(ext) for ext in VIDEO_EXTS):
+        yield from _process_video_stream(filename, binary, tenant_id, lang, doc, eng, callback, **kwargs)
+    else:
+        yield from _process_image_stream(filename, binary, tenant_id, lang, doc, eng, image_ctx, callback, **kwargs)
+
+
 def _process_image(filename, binary, tenant_id, lang, doc, eng, image_ctx, callback, **kwargs):
     """处理图片文件"""
     from ..nlp import tokenize_doc
@@ -96,8 +131,23 @@ def _process_image(filename, binary, tenant_id, lang, doc, eng, image_ctx, callb
         "doc_type_kwd": "image",
     })
     
-    ocr = get_ocr()
     txt = ""
+    
+    llm_id = kwargs.get('llm_id')
+    db_model = get_suitable_vision_model(llm_id)
+    
+    if db_model:
+        try:
+            callback(0.4, "使用视觉模型描述图片")
+            ans = _describe_with_vision_model(img, **kwargs)
+            callback(0.8, f"视觉模型响应: {ans[:32]}...")
+            txt = ans
+            tokenize_doc(doc, txt, eng)
+            return attach_media_context([doc], 0, image_ctx)
+        except Exception as e:
+            logger.warning(f"视觉模型描述失败: {e}")
+    
+    ocr = get_ocr()
     
     if ocr and np is not None:
         try:
@@ -114,25 +164,82 @@ def _process_image(filename, binary, tenant_id, lang, doc, eng, image_ctx, callb
         except:
             txt = ""
     
-    if txt and ((eng and len(txt.split()) > 32) or len(txt) > 32):
+    if txt:
         tokenize_doc(doc, txt, eng)
-        callback(0.8, "OCR结果较长，跳过VLM增强")
         return attach_media_context([doc], 0, image_ctx)
     
+    callback(-1, "无法识别图片内容")
+    return []
+
+
+def _process_image_stream(filename, binary, tenant_id, lang, doc, eng, image_ctx, callback, **kwargs):
+    """处理图片文件（流式）"""
+    from ..nlp import tokenize_doc
+    callback = callback or (lambda prog, msg: None)
+    
+    if Image is None:
+        raise ImportError("请安装Pillow: pip install Pillow")
+    
     try:
-        callback(0.4, "使用CV LLM描述图片")
-        ans = _describe_with_vision_model(img, **kwargs)
-        callback(0.8, f"CV LLM响应: {ans[:32]}...")
-        txt += "\n" + ans
-        tokenize_doc(doc, txt, eng)
-        return attach_media_context([doc], 0, image_ctx)
+        img = Image.open(io.BytesIO(binary)).convert("RGB")
     except Exception as e:
-        logger.warning(f"视觉LLM描述失败: {e}")
-        if txt:
+        logger.error(f"无法打开图片: {e}")
+        callback(-1, f"无法打开图片: {e}")
+        yield {"type": "error", "message": f"无法打开图片: {e}"}
+        return
+    
+    doc.update({
+        "image": img,
+        "doc_type_kwd": "image",
+    })
+    
+    txt = ""
+    
+    llm_id = kwargs.get('llm_id')
+    db_model = get_suitable_vision_model(llm_id)
+    
+    if db_model:
+        try:
+            callback(0.4, "使用视觉模型描述图片")
+            for chunk in _describe_with_vision_model_stream(img, **kwargs):
+                if isinstance(chunk, dict) and chunk.get("type") == "content":
+                    txt += chunk.get("content", "")
+                    yield {"type": "content", "content": chunk.get("content", "")}
+                elif isinstance(chunk, str):
+                    txt += chunk
+                    yield {"type": "content", "content": chunk}
+            
+            callback(0.8, f"视觉模型响应: {txt[:32]}...")
             tokenize_doc(doc, txt, eng)
-            return attach_media_context([doc], 0, image_ctx)
-        callback(-1, str(e))
-        return []
+            yield {"type": "doc", "doc": attach_media_context([doc], 0, image_ctx)[0]}
+            return
+        except Exception as e:
+            logger.warning(f"视觉模型描述失败: {e}")
+    
+    ocr = get_ocr()
+    
+    if ocr and np is not None:
+        try:
+            bxs = ocr(np.array(img))
+            txt = "\n".join([t[0] for _, t in bxs if t[0]])
+            callback(0.4, f"OCR完成: {txt[:32]}...")
+        except Exception as e:
+            logger.warning(f"OCR识别失败: {e}")
+            txt = ""
+    else:
+        try:
+            if hasattr(img, 'text'):
+                txt = getattr(img, 'text', '')
+        except:
+            txt = ""
+    
+    if txt:
+        tokenize_doc(doc, txt, eng)
+        yield {"type": "doc", "doc": attach_media_context([doc], 0, image_ctx)[0]}
+        return
+    
+    callback(-1, "无法识别图片内容")
+    yield {"type": "error", "message": "无法识别图片内容"}
 
 
 def _process_video(filename, binary, tenant_id, lang, doc, eng, callback, **kwargs):
@@ -158,6 +265,37 @@ def _process_video(filename, binary, tenant_id, lang, doc, eng, callback, **kwar
         return []
 
 
+def _process_video_stream(filename, binary, tenant_id, lang, doc, eng, callback, **kwargs):
+    """处理视频文件（流式）"""
+    from ..nlp import tokenize_doc
+    callback = callback or (lambda prog, msg: None)
+    
+    doc.update({
+        "doc_type_kwd": "video",
+    })
+    
+    try:
+        txt = ""
+        for chunk in _transcribe_audio_stream(binary, **kwargs):
+            if isinstance(chunk, dict) and chunk.get("type") == "content":
+                txt += chunk.get("content", "")
+                yield {"type": "content", "content": chunk.get("content", "")}
+            elif isinstance(chunk, str):
+                txt += chunk
+                yield {"type": "content", "content": chunk}
+        
+        callback(0.8, f"Sequence2Txt LLM响应: {txt[:32]}...")
+        txt += "\n" + txt
+        
+        tokenize_doc(doc, txt, eng)
+        yield {"type": "doc", "doc": doc}
+        
+    except Exception as e:
+        logger.error(f"视频转录失败: {e}")
+        callback(-1, str(e))
+        yield {"type": "error", "message": str(e)}
+
+
 def _describe_with_vision_model(image, **kwargs):
     """
     使用视觉语言模型描述图片
@@ -166,7 +304,7 @@ def _describe_with_vision_model(image, **kwargs):
     
     Args:
         image: PIL Image对象
-        **kwargs: 额外参数
+        **kwargs: 额外参数，包括 llm_id
         
     Returns:
         str: 图片描述文本
@@ -174,7 +312,8 @@ def _describe_with_vision_model(image, **kwargs):
     Raises:
         RuntimeError: 没有找到可用的视觉模型
     """
-    db_model = get_suitable_vision_model()
+    llm_id = kwargs.get('llm_id')
+    db_model = get_suitable_vision_model(llm_id)
     
     if not db_model:
         width, height = image.size if hasattr(image, 'size') else (0, 0)
@@ -208,7 +347,7 @@ def _describe_with_vision_model(image, **kwargs):
         img_base64 = base64.b64encode(img_data).decode('utf-8')
         img_data_uri = f"data:image/jpeg;base64,{img_base64}"
     
-    prompt = "请详细描述这张图片的内容。"
+    prompt = kwargs.get('prompt', "请详细描述这张图片的内容。")
     
     # 过滤掉不应该传递给模型的参数，只保留模型支持的参数
     allowed_params = {'temperature', 'max_tokens', 'top_p', 'frequency_penalty', 
@@ -223,6 +362,70 @@ def _describe_with_vision_model(image, **kwargs):
     return result.get('text', '')
 
 
+def _describe_with_vision_model_stream(image, **kwargs):
+    """
+    使用视觉语言模型描述图片（流式）
+    
+    自动选择合适的视觉模型进行图片描述，流式返回结果
+    
+    Args:
+        image: PIL Image对象
+        **kwargs: 额外参数，包括 llm_id
+        
+    Yields:
+        str: 图片描述文本片段
+        
+    Raises:
+        RuntimeError: 没有找到可用的视觉模型
+    """
+    llm_id = kwargs.get('llm_id')
+    db_model = get_suitable_vision_model(llm_id)
+    
+    if not db_model:
+        width, height = image.size if hasattr(image, 'size') else (0, 0)
+        yield (
+            f"[图片描述]\n"
+            f"尺寸: {width}x{height}\n"
+            f"模式: {image.mode if hasattr(image, 'mode') else 'unknown'}\n"
+            f"注意: 未找到可用的视觉模型，请在模型库中创建视觉模型、支持图片的文本模型或全模态模型"
+        )
+        return
+    
+    model_config = {
+        'api_key': db_model.api_key,
+        'endpoint': db_model.endpoint,
+        'name': db_model.name,
+        'provider': db_model.provider,
+        'model_name': db_model.name
+    }
+    
+    model = LLMFactory.create_model(db_model.model_type, model_config)
+    
+    with io.BytesIO() as img_binary:
+        try:
+            image.save(img_binary, format="JPEG")
+        except Exception:
+            img_binary.seek(0)
+            img_binary.truncate()
+            image.save(img_binary, format="PNG")
+        
+        img_binary.seek(0)
+        img_data = img_binary.read()
+        img_base64 = base64.b64encode(img_data).decode('utf-8')
+        img_data_uri = f"data:image/jpeg;base64,{img_base64}"
+    
+    prompt = kwargs.get('prompt', "请详细描述这张图片的内容。")
+    
+    allowed_params = {'temperature', 'max_tokens', 'top_p', 'frequency_penalty', 
+                      'presence_penalty', 'deep_thinking', 'tools'}
+    model_kwargs = {k: v for k, v in kwargs.items() if k in allowed_params}
+    
+    for chunk in model.stream_generate(prompt, image_url=img_data_uri, **model_kwargs):
+        if 'error' in chunk:
+            raise RuntimeError(f"视觉模型描述失败: {chunk['error']}")
+        yield chunk.get('text', '')
+
+
 def _transcribe_audio(binary, **kwargs):
     """
     音频/视频转录
@@ -231,7 +434,7 @@ def _transcribe_audio(binary, **kwargs):
     
     Args:
         binary: 音频/视频二进制数据
-        **kwargs: 额外参数
+        **kwargs: 额外参数，包括 llm_id
         
     Returns:
         str: 转录文本
@@ -243,7 +446,8 @@ def _transcribe_audio(binary, **kwargs):
     import os
     from app.core.knowledgebase.utils.file_utils import convert_to_wav, cleanup_temp_files
     
-    db_model = get_suitable_audio_model()
+    llm_id = kwargs.get('llm_id')
+    db_model = get_suitable_audio_model(llm_id)
     
     if not db_model:
         return "[视频/音频内容]\n注意: 未找到可用的音频模型，请在模型库中创建音频模型或全模态模型"
@@ -276,6 +480,66 @@ def _transcribe_audio(binary, **kwargs):
             raise RuntimeError(f"音频转录失败: {result['error']}")
         
         return result.get('text', '')
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+
+def _transcribe_audio_stream(binary, **kwargs):
+    """
+    音频/视频转录（流式）
+    
+    自动选择合适的音频模型进行语音转录，流式返回结果
+    
+    Args:
+        binary: 音频/视频二进制数据
+        **kwargs: 额外参数，包括 llm_id
+        
+    Yields:
+        str: 转录文本片段
+        
+    Raises:
+        RuntimeError: 没有找到可用的音频模型
+    """
+    import tempfile
+    import os
+    from app.core.knowledgebase.utils.file_utils import convert_to_wav, cleanup_temp_files
+    
+    llm_id = kwargs.get('llm_id')
+    db_model = get_suitable_audio_model(llm_id)
+    
+    if not db_model:
+        yield "[视频/音频内容]\n注意: 未找到可用的音频模型，请在模型库中创建音频模型或全模态模型"
+        return
+    
+    model_config = {
+        'api_key': db_model.api_key,
+        'endpoint': db_model.endpoint,
+        'name': db_model.name,
+        'provider': db_model.provider,
+        'model_name': db_model.name
+    }
+    
+    model = LLMFactory.create_model(db_model.model_type, model_config)
+    
+    tmp_path = ""
+    try:
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmpf:
+            tmpf.write(binary)
+            tmpf.flush()
+            tmp_path = os.path.abspath(tmpf.name)
+        
+        allowed_params = {'temperature', 'max_tokens', 'top_p', 'frequency_penalty', 
+                          'presence_penalty', 'deep_thinking', 'tools'}
+        model_kwargs = {k: v for k, v in kwargs.items() if k in allowed_params}
+        
+        for chunk in model.stream_generate(tmp_path, **model_kwargs):
+            if 'error' in chunk:
+                raise RuntimeError(f"音频转录失败: {chunk['error']}")
+            yield chunk.get('text', '')
     finally:
         if tmp_path and os.path.exists(tmp_path):
             try:

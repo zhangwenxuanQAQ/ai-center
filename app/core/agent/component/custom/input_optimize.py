@@ -8,7 +8,6 @@ from abc import ABC
 from typing import List
 
 from ..base import ComponentBase, ComponentParamBase
-from api.db import StatusEnum
 from api.db.services.bot_service import BotConfigStatusService, BotConfigStopWordService, \
     BotConfigSpecialCharacterService, BotConfigSpecialCharacterExcludeService, BotConfigRepetitiveWordService
 
@@ -48,10 +47,10 @@ class InputOptimize(ComponentBase, ABC):
 
         output_query = query
 
-        if self._param.stop_word and StatusEnum.VALID.value == config_status.get("stop_word"):
+        if self._param.stop_word and 1 == config_status.get("stop_word"):
             logging.info("停用词处理")
             self.append_log("停用词处理")
-            stop_words = BotConfigStopWordService.get_by_list(bot_id=bot_id, status=StatusEnum.VALID.value)
+            stop_words = BotConfigStopWordService.get_by_list(bot_id=bot_id, status=1)
             word_list = [x["word"] for x in stop_words]
             for stop_word in word_list:
                 if stop_word in output_query:
@@ -59,12 +58,12 @@ class InputOptimize(ComponentBase, ABC):
             logging.info("停用词处理结束")
             self.append_log("停用词处理结束")
 
-        if self._param.special_character and StatusEnum.VALID.value == config_status.get("special_character"):
+        if self._param.special_character and 1 == config_status.get("special_character"):
             logging.info("特殊字符处理")
             self.append_log("特殊字符处理")
-            special_words = BotConfigSpecialCharacterService.get_by_list(bot_id=bot_id, status=StatusEnum.VALID.value)
+            special_words = BotConfigSpecialCharacterService.get_by_list(bot_id=bot_id, status=1)
             special_words_exclude = BotConfigSpecialCharacterExcludeService.get_by_list(bot_id=bot_id,
-                                                                                        status=StatusEnum.VALID.value)
+                                                                                        status=1)
             word_list = [x["word"] for x in special_words]
             word_exclude_list = [x["word"] for x in special_words_exclude]
             for special_word in word_list:
@@ -74,11 +73,11 @@ class InputOptimize(ComponentBase, ABC):
             logging.info("特殊字符处理结束")
             self.append_log("特殊字符处理结束")
 
-        if self._param.repetitive_word and StatusEnum.VALID.value == config_status.get("repetitive_word"):
+        if self._param.repetitive_word and 1 == config_status.get("repetitive_word"):
             logging.info("重复词处理")
             self.append_log("重复词处理")
             repetitive_words = BotConfigRepetitiveWordService.get_by_list(bot_id=bot_id,
-                                                                          status=StatusEnum.VALID.value)
+                                                                          status=1)
             word_list = [x["word"] for x in repetitive_words]
             for repetitive_word in word_list:
                 if repetitive_word:

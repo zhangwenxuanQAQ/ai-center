@@ -165,7 +165,7 @@ def register_components():
                 update_fields = []
                 params = []
                 
-                if not existing[1] and component_title:
+                if component_title and component_title != existing[1]:
                     update_fields.append("component_title = %s")
                     params.append(component_title)
                 
