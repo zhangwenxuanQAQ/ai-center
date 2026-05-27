@@ -393,6 +393,37 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     return buildTree(categories);
   };
 
+  // 查找目录对象
+  const findCategoryById = (categories: KnowledgebaseDocumentCategory[], id: string): KnowledgebaseDocumentCategory | null => {
+    for (const category of categories) {
+      if (category.id === id) {
+        return category;
+      }
+      if (category.children && Array.isArray(category.children) && category.children.length > 0) {
+        const found = findCategoryById(category.children, id);
+        if (found) {
+          return found;
+        }
+      }
+    }
+    return null;
+  };
+
+  // 当选中目录变化时，更新切片配置为目录的配置
+  useEffect(() => {
+    if (categoryId && !isEdit) {
+      const category = findCategoryById(categories, categoryId);
+      if (category) {
+        if (category.chunk_method) {
+          setChunkMethod(category.chunk_method);
+        }
+        if (category.chunk_config && Object.keys(category.chunk_config).length > 0) {
+          setChunkConfig(category.chunk_config);
+        }
+      }
+    }
+  }, [categoryId, categories, isEdit]);
+
   useEffect(() => {
     if (isEdit && doc) {
       const docSourceType = doc.source_type || 'local_document';

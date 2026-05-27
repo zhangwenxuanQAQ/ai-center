@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Modal, Form, Input, Button, Upload, message, Select, Radio, Checkbox, DatePicker, Tooltip } from 'antd';
-import { UploadOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { UploadOutlined, InfoCircleOutlined, InboxOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import TagsInput from '../../components/TagsInput';
 import ChapterEditor from '../../components/ChapterEditor';
 import { Chapter } from './folder_modal/AddChapterModal';
 import { SimpleTableRow } from '../../components/SimpleEditableTable';
-import { KnowledgebaseDocumentCategory } from '../../services/knowledgebase';
+import { KnowledgebaseDocument, KnowledgebaseDocumentCategory, knowledgebaseService } from '../../services/knowledgebase';
 
 interface DocumentConfig {
   tags: string[];
@@ -20,6 +21,7 @@ interface KnowledgeModalProps {
   visible: boolean;
   knowledgebaseId: string;
   selectedCategory: KnowledgebaseDocumentCategory | null;
+  document?: KnowledgebaseDocument | undefined;
   onCancel: () => void;
   onSuccess: () => void;
 }
@@ -28,6 +30,7 @@ const KnowledgeModal: React.FC<KnowledgeModalProps> = ({
   visible,
   knowledgebaseId,
   selectedCategory,
+  document,
   onCancel,
   onSuccess,
 }) => {
@@ -35,7 +38,7 @@ const KnowledgeModal: React.FC<KnowledgeModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [title, setTitle] = useState('');
   const [tags, setTags] = useState<string[]>([]);
-  const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
+  const [fileList, setFileList] = useState<any[]>([]);
   const [richTextContent, setRichTextContent] = useState('');
   const [customFormValues, setCustomFormValues] = useState<Record<string, any>>({});
   const [chapters, setChapters] = useState<Chapter[]>([]);
@@ -47,6 +50,11 @@ const KnowledgeModal: React.FC<KnowledgeModalProps> = ({
     chapter_type: 'rich_text_only',
     chapters: [],
   });
+
+  // 文件映射，用于保存实际的 File 对象
+  const fileMapRef = useRef<Map<string, File>>(new Map());
+
+  const isEditMode = !!document;
 
   // 获取目录配置（document_config是JSON对象，不是字符串）
   const getDocumentConfigFromCategory = (category: KnowledgebaseDocumentCategory | null): DocumentConfig => {
@@ -76,30 +84,79 @@ const KnowledgeModal: React.FC<KnowledgeModalProps> = ({
   useEffect(() => {
     if (visible) {
       form.resetFields();
-      setTitle('');
-      setTags([]);
-      setUploadedFiles([]);
-      setRichTextContent('');
+      setFileList([]);
+      fileMapRef.current.clear();
       setCustomFormValues({});
-      // 获取目录配置并更新状态
-      const config = getDocumentConfigFromCategory(selectedCategory);
-      setDocumentConfig(config);
-      setChapters(config.chapters || []);
       setSelectedChapterId(null);
-    }
-  }, [visible, selectedCategory]);
 
-  const handleFileChange = (info: any) => {
-    if (info.file.status === 'done') {
-      setUploadedFiles([...uploadedFiles, info.file]);
-      message.success('文件上传成功');
-    } else if (info.file.status === 'error') {
-      message.error('文件上传失败');
+      if (isEditMode && document) {
+        // 编辑模式：加载现有文档数据
+        
+        // 先解析 document_config
+        let docConfig: Record<string, any> = {};
+        if (document.document_config) {
+          try {
+            docConfig = typeof document.document_config === 'string' 
+              ? JSON.parse(document.document_config) 
+              : document.document_config;
+          } catch (e) {
+            console.error('Failed to parse document_config:', e);
+          }
+        }
+        
+        // 优先从 document_config 中获取标题
+        setTitle(docConfig.title || document.title || document.file_name || '');
+        setTags(Array.isArray(document.tags) ? document.tags : []);
+        setRichTextContent(document.content || '');
+        
+        setChapters(docConfig.chapters || []);
+        
+        // 如果是文件类型，设置已上传的文件列表
+        if (document.source_type === 'local_document' && document.file_name) {
+          setFileList([{
+            uid: document.id || document.file_name,
+            name: document.file_name,
+            size: document.file_size || 0,
+            status: 'done',
+          }]);
+        }
+        setCustomFormValues(docConfig.custom_fields || {});
+        
+        // 获取目录配置作为基础，然后用文档自己的配置覆盖（但保留目录的字段定义）
+        const categoryConfig = getDocumentConfigFromCategory(selectedCategory);
+        // 删除 docConfig 中的 custom_fields，避免覆盖目录的字段定义
+        const { custom_fields: _docCustomFields, ...restDocConfig } = docConfig;
+        setDocumentConfig({
+          ...categoryConfig,
+          ...restDocConfig,
+          chapters: docConfig.chapters || categoryConfig.chapters,
+        });
+      } else {
+        // 新增模式：使用目录配置
+        setTitle('');
+        setTags([]);
+        setRichTextContent('');
+        const config = getDocumentConfigFromCategory(selectedCategory);
+        setDocumentConfig(config);
+        setChapters(config.chapters || []);
+      }
     }
+  }, [visible, selectedCategory, document, isEditMode]);
+
+  const handleFileChange = (file: File) => {
+    const isExe = file.name.toLowerCase().endsWith('.exe');
+    if (isExe) {
+      message.error('不支持上传可执行文件（.exe）');
+      return false;
+    }
+    fileMapRef.current.set(file.uid, file);
+    setFileList(prev => [...prev, { uid: file.uid, name: file.name, size: file.size }]);
+    return false;
   };
 
   const handleRemoveFile = (file: any) => {
-    setUploadedFiles(uploadedFiles.filter(f => f.uid !== file.uid));
+    fileMapRef.current.delete(file.uid);
+    setFileList(prev => prev.filter(f => f.uid !== file.uid));
   };
 
   const handleCustomFieldChange = (fieldCode: string, value: any) => {
@@ -121,51 +178,167 @@ const KnowledgeModal: React.FC<KnowledgeModalProps> = ({
         return;
       }
 
-      if (documentConfig.template_type === 'file' && uploadedFiles.length === 0) {
+      if (documentConfig.template_type === 'file' && fileList.length === 0) {
         message.error('请上传文件');
         return;
       }
 
       setLoading(true);
 
-      const knowledgeData: any = {
-        title: title.trim(),
-        tags,
-        category_id: selectedCategory.id,
-      };
+      // 构建 document_config（自定义字段和章节目录信息）
+      let documentConfigData: Record<string, any> = {};
+      
+      if (isEditMode && document?.document_config) {
+        // 编辑模式：先获取原有的 document_config，然后合并新数据
+        try {
+          const existingConfig = typeof document.document_config === 'string' 
+            ? JSON.parse(document.document_config) 
+            : document.document_config;
+          documentConfigData = { ...existingConfig };
+        } catch (e) {
+          console.error('Failed to parse existing document_config:', e);
+        }
+      }
+      
+      // 更新自定义字段
+      documentConfigData.custom_fields = customFormValues;
+      // 更新知识标题
+      documentConfigData.title = title.trim();
+      // 更新章节目录信息
+      if (documentConfig.has_knowledge_content && chapters.length > 0) {
+        documentConfigData.chapters = chapters;
+        documentConfigData.chapter_type = documentConfig.chapter_type;
+      } else {
+        // 如果没有章节目录，删除相关字段
+        delete documentConfigData.chapters;
+        delete documentConfigData.chapter_type;
+      }
 
       switch (documentConfig.template_type) {
         case 'file':
-          knowledgeData.source_type = 'local_document';
-          knowledgeData.files = uploadedFiles.map(f => f.response?.url || f.name);
+          // 文件类型：使用 uploadDocuments 接口上传文件
+          const files = fileList.map(f => fileMapRef.current.get(f.uid)).filter(Boolean) as File[];
+          
+          if (!isEditMode && files.length === 0) {
+            // 新增模式需要上传文件，编辑模式不需要
+            message.error('请先上传文件');
+            setLoading(false);
+            return;
+          }
+          
+          if (isEditMode && document) {
+            const editFiles = fileList.map(f => fileMapRef.current.get(f.uid)).filter(Boolean) as File[];
+            
+            if (editFiles.length > 0) {
+              // 如果上传了新文件，先删除旧文档，然后上传新文件
+              await knowledgebaseService.deleteDocument(knowledgebaseId, document.id);
+              
+              const result = await knowledgebaseService.uploadDocuments(
+                knowledgebaseId,
+                editFiles,
+                'local_document',
+                selectedCategory.id,
+                selectedCategory.chunk_method || 'default',
+                selectedCategory.chunk_config || {},
+                tags,
+                true
+              );
+              
+              // 更新新文档的配置
+              const uploadedDocs = Array.isArray(result) ? result : (result.data || result.documents || []);
+              if (uploadedDocs.length > 0) {
+                await knowledgebaseService.updateDocument(knowledgebaseId, uploadedDocs[0].id, {
+                  title: title.trim(),
+                  document_config: documentConfigData,
+                } as any);
+              }
+            } else {
+              // 如果没有上传新文件，只更新文档配置
+              await knowledgebaseService.updateDocument(knowledgebaseId, document.id, {
+                kb_id: knowledgebaseId,
+                title: title.trim(),
+                tags,
+                category_id: selectedCategory.id,
+                source_type: 'local_document',
+                chunk_method: selectedCategory.chunk_method || 'default',
+                chunk_config: selectedCategory.chunk_config || {},
+                document_config: documentConfigData,
+              } as any);
+            }
+          } else {
+            // 新增模式：使用 uploadDocuments 接口
+            const result = await knowledgebaseService.uploadDocuments(
+              knowledgebaseId,
+              files,
+              'local_document',
+              selectedCategory.id,
+              selectedCategory.chunk_method || 'default',
+              selectedCategory.chunk_config || {},
+              tags,
+              true
+            );
+            
+            if (result.errors && result.errors.length > 0) {
+              message.warning(`${result.errors.length}个文件上传失败`);
+            }
+            
+            // 如果有文档创建成功，更新文档配置
+            // result 直接就是文档数组，因为 request.ts 已经提取了 result.data
+            const uploadedDocs = Array.isArray(result) ? result : (result.data || result.documents || []);
+            if (Array.isArray(uploadedDocs) && uploadedDocs.length > 0) {
+              for (const doc of uploadedDocs) {
+                await knowledgebaseService.updateDocument(knowledgebaseId, doc.id, {
+                  title: title.trim(),
+                  document_config: documentConfigData,
+                } as any);
+              }
+            } else {
+              // 所有文件都上传失败，显示错误并保持弹窗打开
+              message.error('文件上传失败，请检查文件内容是否为空或格式是否正确');
+              setLoading(false);
+              return;
+            }
+          }
           break;
         case 'rich_text':
-          knowledgeData.content = richTextContent;
-          break;
         case 'custom':
-          knowledgeData.custom_fields = customFormValues;
-          break;
         default:
+          // 其他类型：使用 createDocument 或 updateDocument 接口
+          if (isEditMode && document) {
+            await knowledgebaseService.updateDocument(knowledgebaseId, document.id, {
+              kb_id: knowledgebaseId,
+              title: title.trim(),
+              tags,
+              category_id: selectedCategory.id,
+              source_type: 'rich_text',
+              chunk_method: selectedCategory.chunk_method || 'default',
+              chunk_config: selectedCategory.chunk_config || {},
+              content: richTextContent,
+              document_config: documentConfigData,  // 直接传递对象，不是字符串
+            } as any);
+          } else {
+            await knowledgebaseService.createDocument(knowledgebaseId, {
+              kb_id: knowledgebaseId,
+              title: title.trim(),
+              tags,
+              category_id: selectedCategory.id,
+              source_type: 'rich_text',
+              chunk_method: selectedCategory.chunk_method || 'default',
+              chunk_config: selectedCategory.chunk_config || {},
+              content: richTextContent,
+              document_config: documentConfigData,  // 直接传递对象，不是字符串
+            } as any);
+          }
           break;
       }
 
-      if (documentConfig.has_knowledge_content) {
-        knowledgeData.chapter_type = documentConfig.chapter_type;
-        knowledgeData.chapters = chapters;
-        if (documentConfig.chapter_type === 'rich_text_only') {
-          knowledgeData.chapter_content = richTextContent;
-        }
-      }
-
-      console.log('Knowledge data:', knowledgeData);
-
-      message.success('知识添加成功');
+      message.success(isEditMode ? '知识更新成功' : '知识添加成功');
       setLoading(false);
       onSuccess();
       onCancel();
     } catch (error) {
-      console.error('Failed to create knowledge:', error);
-      message.error('添加知识失败: ' + (error as Error).message);
+      console.error('Failed to save knowledge:', error);
+      message.error((isEditMode ? '更新' : '添加') + '知识失败: ' + (error as Error).message);
       setLoading(false);
     }
   };
@@ -174,7 +347,8 @@ const KnowledgeModal: React.FC<KnowledgeModalProps> = ({
     form.resetFields();
     setTitle('');
     setTags([]);
-    setUploadedFiles([]);
+    setFileList([]);
+    fileMapRef.current.clear();
     setRichTextContent('');
     setCustomFormValues({});
     onCancel();
@@ -189,19 +363,32 @@ const KnowledgeModal: React.FC<KnowledgeModalProps> = ({
             <InfoCircleOutlined style={{ marginLeft: 8, color: '#999', fontSize: 14 }} />
           </Tooltip>
         </div>
-        <Upload
+        <Upload.Dragger
           multiple
-          showUploadList={{
-            showPreviewIcon: false,
-            removeIcon: <Button size="small">删除</Button>,
-          }}
-          action="/api/upload"
-          onChange={handleFileChange}
-          fileList={uploadedFiles}
+          beforeUpload={handleFileChange}
           onRemove={handleRemoveFile}
+          showUploadList={true}
+          fileList={fileList.map(f => ({
+            uid: f.uid,
+            name: f.name,
+            status: 'done',
+            size: f.size
+          }))}
+          style={{
+            background: '#fafafa',
+            border: '1px dashed #d9d9d9',
+          }}
         >
-          <Button icon={<UploadOutlined />}>点击上传文件</Button>
-        </Upload>
+          <p className="ant-upload-drag-icon">
+            <InboxOutlined style={{ color: '#667eea', fontSize: 40 }} />
+          </p>
+          <p style={{ color: '#666' }}>
+            点击或拖拽文件到此区域上传
+          </p>
+          <p style={{ color: '#999', fontSize: 12 }}>
+            支持上传文档、图片或音频文件
+          </p>
+        </Upload.Dragger>
       </div>
     );
   };
@@ -302,8 +489,8 @@ const KnowledgeModal: React.FC<KnowledgeModalProps> = ({
               )}
               {field.fieldType === 'date' && (
                 <DatePicker
-                  value={customFormValues[field.fieldCode] ? new Date(customFormValues[field.fieldCode]) : null}
-                  onChange={(date) => handleCustomFieldChange(field.fieldCode, date?.format('YYYY-MM-DD') || '')}
+                  value={customFormValues[field.fieldCode] ? dayjs(customFormValues[field.fieldCode]) : undefined}
+                  onChange={(date, dateString) => handleCustomFieldChange(field.fieldCode, dateString || '')}
                   style={{ width: '100%' }}
                 />
               )}
@@ -386,7 +573,7 @@ const KnowledgeModal: React.FC<KnowledgeModalProps> = ({
 
   return (
     <Modal
-      title="新增知识"
+      title={isEditMode ? '编辑知识' : '新增知识'}
       open={visible}
       onCancel={handleCancel}
       footer={null}

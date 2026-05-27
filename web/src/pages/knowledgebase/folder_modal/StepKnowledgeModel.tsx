@@ -4,7 +4,7 @@ import TagsInput from '../../../components/TagsInput';
 import DynamicTable, { DynamicTableRow } from '../../../components/DynamicTable';
 import ChapterList from '../../../components/ChapterList';
 import { Chapter } from './AddChapterModal';
-import { UploadOutlined, FileTextOutlined, BookOutlined, SettingOutlined } from '@ant-design/icons';
+import { UploadOutlined, FileTextOutlined, BookOutlined, SettingOutlined, IconType } from '@ant-design/icons';
 
 interface StepKnowledgeModelProps {
   knowledgeTags: string[];
@@ -21,7 +21,21 @@ interface StepKnowledgeModelProps {
   setChapters: (chapters: Chapter[]) => void;
   editingRequirements: string;
   setEditingRequirements: (value: string) => void;
+  knowledgeTemplates: Array<{
+    key: string;
+    title: string;
+    description: string;
+    icon: string;
+  }>;
 }
+
+// 图标映射
+const iconMap: Record<string, IconType> = {
+  'UploadOutlined': UploadOutlined,
+  'FileTextOutlined': FileTextOutlined,
+  'BookOutlined': BookOutlined,
+  'SettingOutlined': SettingOutlined,
+};
 
 const StepKnowledgeModel: React.FC<StepKnowledgeModelProps> = ({
   knowledgeTags,
@@ -38,33 +52,41 @@ const StepKnowledgeModel: React.FC<StepKnowledgeModelProps> = ({
   setChapters,
   editingRequirements,
   setEditingRequirements,
+  knowledgeTemplates,
 }) => {
-  const templateCards = [
+  // 使用从后端获取的模板数据，如果没有则使用默认数据
+  const templateCards = knowledgeTemplates.length > 0 ? knowledgeTemplates : [
     {
       key: 'file',
       title: '文件',
       description: '上传本地文件快速录入知识',
-      icon: <UploadOutlined style={{ fontSize: 24 }} />,
+      icon: 'UploadOutlined',
     },
     {
       key: 'rich_text',
       title: '富文本',
       description: '富文本框录入知识',
-      icon: <FileTextOutlined style={{ fontSize: 24 }} />,
+      icon: 'FileTextOutlined',
     },
     {
       key: 'template',
       title: '从模版库选择',
       description: '选择模版快速新建',
-      icon: <BookOutlined style={{ fontSize: 24 }} />,
+      icon: 'BookOutlined',
     },
     {
       key: 'custom',
       title: '自定义模版',
       description: '根据业务自定义模版采编知识',
-      icon: <SettingOutlined style={{ fontSize: 24 }} />,
+      icon: 'SettingOutlined',
     },
   ];
+
+  // 获取图标组件
+  const getIcon = (iconName: string) => {
+    const IconComponent = iconMap[iconName];
+    return IconComponent ? <IconComponent style={{ fontSize: 24 }} /> : null;
+  };
 
   return (
     <div>
@@ -99,7 +121,7 @@ const StepKnowledgeModel: React.FC<StepKnowledgeModelProps> = ({
             >
               <div style={{ textAlign: 'center' }}>
                 <div style={{ marginBottom: 4, color: selectedTemplate === card.key ? '#667eea' : '#999' }}>
-                  {card.icon}
+                  {getIcon(card.icon)}
                 </div>
                 <div style={{ fontWeight: 500, fontSize: 12 }}>{card.title}</div>
                 <div style={{ fontSize: 10, color: '#999', marginTop: 2 }}>{card.description}</div>

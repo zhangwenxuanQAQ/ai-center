@@ -1,8 +1,32 @@
-import React from 'react';
-import { Checkbox, Select, Switch, Input, Tooltip, Button, InputNumber } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Checkbox, Select, Switch, Input, Tooltip, Button, InputNumber, Slider, Spin, message } from 'antd';
 import { QuestionCircleOutlined } from '@ant-design/icons';
 import SliderInput from '../../../components/SliderInput';
 import TagsInput from '../../../components/TagsInput';
+import { knowledgebaseService } from '../../../services/knowledgebase';
+
+const getTheme = () => {
+  return document.body.getAttribute('data-theme') || 'dark';
+};
+
+interface ChunkConfigFieldDef {
+  key: string;
+  label: string;
+  field_type: string;
+  default: unknown;
+  description: string;
+  required: boolean;
+  options?: Array<{ label: string; value: string }>;
+  min_value?: number;
+  max_value?: number;
+  step?: number;
+  sub_configs?: Record<string, ChunkConfigFieldDef[]>;
+}
+
+interface DocumentConstants {
+  chunk_methods: Array<{ key: string; label: string }>;
+  chunk_configs: Record<string, ChunkConfigFieldDef[]>;
+}
 
 interface StepOtherConfigProps {
   vectorRetrieval: boolean;
@@ -89,6 +113,247 @@ const StepOtherConfig: React.FC<StepOtherConfigProps> = ({
   blockAggregation,
   setBlockAggregation,
 }) => {
+  // 新增状态用于动态获取配置
+  const [constants, setConstants] = useState<DocumentConstants | null>(null);
+  const [availableMethods, setAvailableMethods] = useState<Array<{ key: string; label: string; is_default: boolean }>>([]);
+  const [initLoading, setInitLoading] = useState(false);
+  const [theme, setTheme] = useState<string>(getTheme());
+  // 布局识别相关状态
+  const [layoutRecognize, setLayoutRecognize] = useState<string>('DeepDOC');
+  const [needImage, setNeedImage] = useState<boolean>(true);
+  const [returnHtml, setReturnHtml] = useState<boolean>(true);
+
+  useEffect(() => {
+    setTheme(getTheme());
+  }, []);
+
+  useEffect(() => {
+    initConfig();
+  }, []);
+
+  const initConfig = async () => {
+    setInitLoading(true);
+    try {
+      const [constantsData, methodsData] = await Promise.all([
+        knowledgebaseService.getDocumentConstants(),
+        knowledgebaseService.getAvailableChunkMethods('other', ''),
+      ]);
+
+      setConstants(constantsData);
+      setAvailableMethods(methodsData.available_methods);
+    } catch (error) {
+      console.error('Failed to init chunk config:', error);
+      message.error('初始化切片配置失败');
+    } finally {
+      setInitLoading(false);
+    }
+  };
+
+  // 初始化切片方法的默认配置
+  const initDefaultChunkConfig = (method: string) => {
+    if (!constants) return;
+    const fields = constants.chunk_configs[method] || [];
+    fields.forEach(field => {
+      handleConfigChange(field.key, field.default);
+      if (field.sub_configs) {
+        Object.values(field.sub_configs).forEach(subFields => {
+          subFields.forEach(subField => {
+            handleConfigChange(subField.key, subField.default);
+          });
+        });
+      }
+    });
+  };
+
+  // 处理切片方法变更
+  const handleChunkMethodChange = (value: string) => {
+    setChunkMethod(value);
+    // 初始化新方法的默认配置
+    initDefaultChunkConfig(value);
+  };
+
+  const renderConfigField = (field: ChunkConfigFieldDef) => {
+    const fieldValue = getFieldValue(field.key);
+
+    switch (field.field_type) {
+      case 'slider':
+        return (
+          <SliderInput
+            label={field.label}
+            tooltip={field.description}
+            value={fieldValue as number}
+            onChange={(v) => handleConfigChange(field.key, v)}
+            min={field.min_value}
+            max={field.max_value}
+            step={field.step || 1}
+          />
+        );
+      case 'number':
+        return (
+          <InputNumber
+            min={field.min_value}
+            max={field.max_value}
+            step={field.step || 1}
+            value={fieldValue as number}
+            onChange={v => handleConfigChange(field.key, v)}
+            style={{ width: '100%' }}
+          />
+        );
+      case 'select':
+        return (
+          <Select
+            value={fieldValue as string}
+            onChange={v => handleConfigChange(field.key, v)}
+            style={{ width: '100%' }}
+          >
+            {field.options?.map(opt => (
+              <Select.Option key={opt.value} value={opt.value}>{opt.label}</Select.Option>
+            ))}
+          </Select>
+        );
+      case 'switch':
+        return (
+          <Switch
+            checked={fieldValue as boolean}
+            onChange={v => handleConfigChange(field.key, v)}
+            checkedChildren="是"
+            unCheckedChildren="否"
+          />
+        );
+      case 'input':
+      default:
+        return (
+          <Input
+            value={fieldValue as string}
+            onChange={e => handleConfigChange(field.key, e.target.value)}
+            placeholder={field.description || `请输入${field.label}`}
+          />
+        );
+    }
+  };
+
+  const getFieldValue = (key: string): unknown => {
+    switch (key) {
+      case 'text_block_size': return textBlockSize;
+      case 'segment_identifiers': return segmentIdentifiers;
+      case 'page_rank': return pageRank;
+      case 'auto_keywords': return autoKeywords;
+      case 'auto_questions': return autoQuestions;
+      case 'use_raptor': return useRaptor;
+      case 'max_tokens': return maxTokens;
+      case 'threshold': return threshold;
+      case 'max_clusters': return maxClusters;
+      case 'random_seed': return randomSeed;
+      case 'convert_table_to_html': return convertTableToHtml;
+      case 'prompt': return prompt;
+      // 布局识别相关字段
+      case 'layout_recognize': return layoutRecognize;
+      case 'need_image': return needImage;
+      case 'return_html': return returnHtml;
+      default: return undefined;
+    }
+  };
+
+  const handleConfigChange = (key: string, value: unknown) => {
+    switch (key) {
+      case 'text_block_size': setTextBlockSize(value as number); break;
+      case 'segment_identifiers': setSegmentIdentifiers(value as string); break;
+      case 'page_rank': setPageRank(value as number); break;
+      case 'auto_keywords': setAutoKeywords(value as number); break;
+      case 'auto_questions': setAutoQuestions(value as number); break;
+      case 'use_raptor': setUseRaptor(value as boolean); break;
+      case 'max_tokens': setMaxTokens(value as number); break;
+      case 'threshold': setThreshold(value as number); break;
+      case 'max_clusters': setMaxClusters(value as number); break;
+      case 'random_seed': setRandomSeed(value as number | null); break;
+      case 'convert_table_to_html': setConvertTableToHtml(value as boolean); break;
+      case 'prompt': setPrompt(value as string); break;
+      // 布局识别相关字段
+      case 'layout_recognize': setLayoutRecognize(value as string); break;
+      case 'need_image': setNeedImage(value as boolean); break;
+      case 'return_html': setReturnHtml(value as boolean); break;
+    }
+  };
+
+  const renderChunkConfig = () => {
+    if (!constants || !chunkMethod) return null;
+    const fields = constants.chunk_configs[chunkMethod] || [];
+    if (fields.length === 0) {
+      return null;
+    }
+
+    return (
+      <div style={{ marginTop: 16 }}>
+        <div style={{ marginBottom: 12, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333' }}>
+          切片配置
+        </div>
+        <div style={{
+          padding: 16,
+          borderRadius: 8,
+          background: theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#fafafa',
+          border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}`,
+        }}>
+          {fields.map(field => (
+            <div key={field.key} style={{ marginBottom: 16 }}>
+              {/* SliderInput 组件已经包含 label 和 tooltip，不需要单独渲染 */}
+              {field.field_type !== 'slider' && (
+                <div style={{
+                  marginBottom: 4,
+                  fontSize: 13,
+                  color: theme === 'dark' ? '#ccc' : '#666',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}>
+                  {field.label}
+                  {field.description && (
+                    <Tooltip title={field.description}>
+                      <span style={{ color: theme === 'dark' ? '#666' : '#999', fontSize: 12, cursor: 'help' }}>[?]</span>
+                    </Tooltip>
+                  )}
+                </div>
+              )}
+              <div style={{ width: '100%' }}>
+                {renderConfigField(field)}
+              </div>
+              {field.sub_configs && field.field_type === 'select' && (
+                <div style={{ marginTop: 12, marginLeft: 12, paddingLeft: 12, borderLeft: `2px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}` }}>
+                  {field.sub_configs[getFieldValue(field.key) as string]?.map(subField => (
+                    <div key={subField.key} style={{ marginBottom: 12 }}>
+                      {/* SliderInput 组件已经包含 label 和 tooltip，不需要单独渲染 */}
+                      {subField.field_type !== 'slider' && (
+                        <div style={{
+                          marginBottom: 4,
+                          fontSize: 13,
+                          color: theme === 'dark' ? '#ccc' : '#666',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                        }}>
+                          {subField.label}
+                          {subField.description && (
+                            <Tooltip title={subField.description}>
+                              <span style={{ color: theme === 'dark' ? '#666' : '#999', fontSize: 12, cursor: 'help' }}>[?]</span>
+                            </Tooltip>
+                          )}
+                        </div>
+                      )}
+                      <div style={{ width: '100%' }}>
+                        {renderConfigField(subField)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // ========== 以下是原有代码，已注释 ==========
+  /*
   const chunkMethodOptions = [
     { value: 'general', label: 'General' },
     { value: 'qa', label: 'Q&A' },
@@ -529,6 +794,19 @@ const StepOtherConfig: React.FC<StepOtherConfigProps> = ({
         return null;
     }
   };
+  */
+  // ========== 以上是原有代码，已注释 ==========
+
+  const tagSetOptions = [
+    { value: 'tag1', label: '标签集1' },
+    { value: 'tag2', label: '标签集2' },
+    { value: 'tag3', label: '标签集3' },
+  ];
+
+  const graphMethodOptions = [
+    { value: 'lightrag', label: 'LightRAG' },
+    { value: 'general', label: 'General' },
+  ];
 
   return (
     <div style={{ textAlign: 'left' }}>
@@ -557,20 +835,27 @@ const StepOtherConfig: React.FC<StepOtherConfigProps> = ({
                   <span style={{ fontWeight: 500 }}>切片方法</span>
                   <span style={{ color: '#ff4d4f', marginLeft: 4 }}>*</span>
                 </div>
-                <Select
-                  value={chunkMethod}
-                  onChange={setChunkMethod}
-                  style={{ width: '100%' }}
-                  placeholder="请选择切片方法"
-                >
-                  {chunkMethodOptions.map((option) => (
-                    <Select.Option key={option.value} value={option.value}>
-                      {option.label}
-                    </Select.Option>
-                  ))}
-                </Select>
+                {initLoading ? (
+                  <div style={{ textAlign: 'center', padding: '20px' }}>
+                    <Spin size="small" />
+                  </div>
+                ) : (
+                  <Select
+                    value={chunkMethod}
+                    onChange={handleChunkMethodChange}
+                    style={{ width: '100%' }}
+                    placeholder="请选择切片方法"
+                  >
+                    {/* 使用 constants.chunk_methods 获取所有切片方法，而不是根据文件类型过滤 */}
+                    {constants?.chunk_methods?.map((method) => (
+                      <Select.Option key={method.key} value={method.key}>
+                        {method.label}
+                      </Select.Option>
+                    ))}
+                  </Select>
+                )}
               </div>
-              {chunkMethod && renderChunkMethodContent()}
+              {chunkMethod && renderChunkConfig()}
             </div>
           )}
         </div>

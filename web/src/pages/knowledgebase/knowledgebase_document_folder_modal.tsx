@@ -45,6 +45,12 @@ const KnowledgebaseDocumentFolderModal: React.FC<KnowledgebaseDocumentFolderModa
   const [chapterType, setChapterType] = useState<string>('fixed');
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [editingRequirements, setEditingRequirements] = useState('');
+  const [knowledgeTemplates, setKnowledgeTemplates] = useState<Array<{
+    key: string;
+    title: string;
+    description: string;
+    icon: string;
+  }>>([]);
 
   // 第三步其他配置状态
   const [vectorRetrieval, setVectorRetrieval] = useState(false);
@@ -237,6 +243,7 @@ const KnowledgebaseDocumentFolderModal: React.FC<KnowledgebaseDocumentFolderModa
   const resetForm = () => {
     form.resetFields();
     setCurrentStep(0);
+    setEditingId(null); // 重置编辑ID
     // 重置基本信息
     setName('');
     setDescription('');
@@ -354,6 +361,19 @@ const KnowledgebaseDocumentFolderModal: React.FC<KnowledgebaseDocumentFolderModa
     }
   }, [visible]);
 
+  // 获取知识模板数据
+  React.useEffect(() => {
+    if (visible && knowledgeTemplates.length === 0) {
+      knowledgebaseService.getDocumentConstants().then((data) => {
+        if (data.knowledge_templates) {
+          setKnowledgeTemplates(data.knowledge_templates);
+        }
+      }).catch((error) => {
+        console.error('Failed to fetch knowledge templates:', error);
+      });
+    }
+  }, [visible, knowledgeTemplates.length]);
+
   const renderStepContent = () => {
     switch (currentStep) {
       case 0:
@@ -387,6 +407,7 @@ const KnowledgebaseDocumentFolderModal: React.FC<KnowledgebaseDocumentFolderModa
             setChapters={setChapters}
             editingRequirements={editingRequirements}
             setEditingRequirements={setEditingRequirements}
+            knowledgeTemplates={knowledgeTemplates}
           />
         );
       case 2:

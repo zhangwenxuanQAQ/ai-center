@@ -7,7 +7,6 @@ import { SearchOutlined, PlusOutlined, FolderOutlined, FileTextOutlined, PlayCir
 import type { TreeDataNode, TreeProps } from 'antd';
 import { knowledgebaseService, Knowledgebase, KnowledgebaseDocument, KnowledgebaseDocumentCategory } from '../../services/knowledgebase';
 import { DOCUMENT_CHUNK_METHOD } from '../../constants/knowledgebase';
-import KnowledgebaseDocumentSetting from './knowledgebase_document_setting';
 import ChunkMethodModal from './chunk-method-modal';
 import ChunksView from './chunks_view';
 import KnowledgebaseDocumentFolderModal from './knowledgebase_document_folder_modal';
@@ -33,6 +32,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedKeys, setSelectedKeys] = useState<string[]>(['all']);
   const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
+  const [categorySearchValue, setCategorySearchValue] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [totalDocs, setTotalDocs] = useState(0);
@@ -40,7 +40,6 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
   const [filterFileType, setFilterFileType] = useState<string[]>([]);
   const [filterStatus, setFilterStatus] = useState<string[]>([]);
   const [filterNewStatus, setFilterNewStatus] = useState<boolean | null>(null);
-  const [showSetting, setShowSetting] = useState(false);
   const [editingDocument, setEditingDocument] = useState<KnowledgebaseDocument | undefined>(undefined);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [documentConstants, setDocumentConstants] = useState<any>(null);
@@ -60,6 +59,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
   const [isCategoryEditModalVisible, setIsCategoryEditModalVisible] = useState(false);
   const [isFolderModalVisible, setIsFolderModalVisible] = useState(false);
   const [isDatasetModalVisible, setIsDatasetModalVisible] = useState(false);
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [categoryForm] = Form.useForm();
   const [categoryEditForm] = Form.useForm();
   const [editingCategory, setEditingCategory] = useState<any>(null);
@@ -94,15 +94,8 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
           if (view === 'chunks' && !viewingChunks) {
             setSelectedDocumentForChunks(doc);
             setViewingChunks(true);
-          } else if (view === 'edit' && !showSetting) {
-            setEditingDocument(doc);
-            setShowSetting(true);
           }
         }
-      } else if (view === 'edit' && !showSetting && !viewingChunks) {
-        // 新增模式
-        setEditingDocument(undefined);
-        setShowSetting(true);
       }
     }
   }, [searchParams, knowledgebase.id, documents]);
@@ -233,6 +226,29 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       key: 'all',
     };
 
+    // 过滤目录（支持搜索）
+    const filterCategories = (cats: KnowledgebaseDocumentCategory[]): KnowledgebaseDocumentCategory[] => {
+      if (!categorySearchValue.trim()) {
+        return cats;
+      }
+      const searchLower = categorySearchValue.toLowerCase();
+      return cats.filter(category => {
+        const matches = category.name.toLowerCase().includes(searchLower);
+        if (matches) {
+          return true;
+        }
+        // 检查子目录
+        if (category.children && Array.isArray(category.children) && category.children.length > 0) {
+          const filteredChildren = filterCategories(category.children);
+          if (filteredChildren.length > 0) {
+            category.children = filteredChildren;
+            return true;
+          }
+        }
+        return false;
+      });
+    };
+
     const buildCategoryNode = (category: any): TreeDataNode => {
       return {
         title: (
@@ -301,8 +317,10 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
 
     const categoryNodes: TreeDataNode[] = [];
 
-    const defaultCategories = categories.filter(category => category.is_default);
-    const normalCategories = categories.filter(category => !category.is_default);
+    // 使用过滤后的目录
+    const filteredCategories = filterCategories([...categories]);
+    const defaultCategories = filteredCategories.filter(category => category.is_default);
+    const normalCategories = filteredCategories.filter(category => !category.is_default);
 
     defaultCategories.forEach(category => {
       categoryNodes.push({
@@ -678,35 +696,70 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
 
   const columns = useMemo(() => [
     {
-      title: '文档名称',
-      dataIndex: 'file_name',
-      key: 'file_name',
+      title: '知识标题',
+      dataIndex: 'title',
+      key: 'title',
       width: 250,
-      render: (text: string, record: KnowledgebaseDocument) => (
-        <Tooltip title={text || '未命名文档'}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
-            {record.thumbnail ? (
-              <img 
-                src={record.thumbnail} 
-                alt={text}
-                style={{ width: 20, height: 20, objectFit: 'contain' }}
-              />
-            ) : (
-              <FileTextOutlined />
-            )}
-            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {text || '未命名文档'}
-            </span>
-          </div>
-        </Tooltip>
+      render: (text: string, record: KnowledgebaseDocument) => {
+        // 优先从 document_config 中获取标题
+        let docConfigTitle = '';
+        if (record.document_config) {
+          const config = typeof record.document_config === 'string' 
+            ? JSON.parse(record.document_config) 
+            : record.document_config;
+          docConfigTitle = config?.title || '';
+        }
+        const displayTitle = docConfigTitle || text || record.file_name || '未命名知识';
+        return (
+          <Tooltip title={displayTitle}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
+              {record.thumbnail ? (
+                <img 
+                  src={record.thumbnail} 
+                  alt={displayTitle}
+                  style={{ width: 20, height: 20, objectFit: 'contain' }}
+                />
+              ) : (
+                <FileTextOutlined />
+              )}
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {displayTitle}
+              </span>
+            </div>
+          </Tooltip>
+        );
+      },
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      key: 'updated_at',
+      width: 150,
+      render: (updatedAt: string) => (
+        <span>{updatedAt ? new Date(updatedAt).toLocaleString() : '-'}</span>
       ),
     },
     {
-      title: '文件大小',
-      dataIndex: 'file_size',
-      key: 'file_size',
+      title: '更新人',
+      dataIndex: 'updated_by',
+      key: 'updated_by',
+      width: 100,
+      render: (updatedBy: string) => (
+        <span>{updatedBy || '-'}</span>
+      ),
+    },
+    {
+      title: '切片方法',
+      dataIndex: 'chunk_method',
+      key: 'chunk_method',
       width: 120,
-      render: (size: number) => formatFileSize(size),
+      render: (method: string) => {
+        if (documentConstants?.chunk_methods) {
+          const chunkMethod = documentConstants.chunk_methods.find((cm: any) => cm.key === method);
+          return chunkMethod?.label || method;
+        }
+        return DOCUMENT_CHUNK_METHOD[method as keyof typeof DOCUMENT_CHUNK_METHOD] || method;
+      },
     },
     {
       title: '解析状态',
@@ -724,7 +777,6 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
           </Tag>
         );
         
-        // 格式化耗时（毫秒转秒）
         const formatDuration = (ms: number) => {
           if (ms < 1000) {
             return `${ms}毫秒`;
@@ -732,7 +784,6 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
           return `${(ms / 1000).toFixed(2)}秒`;
         };
         
-        // 使用 Popover 显示详细信息
         const popoverContent = (
           <div style={{ maxHeight: '450px', overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
             <Descriptions size="small" column={1} style={{ width: '400px' }}>
@@ -780,50 +831,6 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
           </Popover>
         );
       },
-    },
-    {
-      title: '切片方法',
-      dataIndex: 'chunk_method',
-      key: 'chunk_method',
-      width: 120,
-      render: (method: string) => {
-        if (documentConstants?.chunk_methods) {
-          const chunkMethod = documentConstants.chunk_methods.find((cm: any) => cm.key === method);
-          return chunkMethod?.label || method;
-        }
-        return DOCUMENT_CHUNK_METHOD[method as keyof typeof DOCUMENT_CHUNK_METHOD] || method;
-      },
-    },
-    {
-      title: '标签',
-      dataIndex: 'tags',
-      key: 'tags',
-      width: 100,
-      render: (tags: string[] | string | undefined) => (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-          {Array.isArray(tags) && tags.length > 0 ? tags.map((tag, index) => (
-            <Tag key={index} size="small">{tag}</Tag>
-          )) : '-'}
-        </div>
-      ),
-    },
-    {
-      title: '所属分类',
-      dataIndex: 'category_name',
-      key: 'category_name',
-      width: 100,
-      render: (categoryName: string) => (
-        <span>{categoryName || '-'}</span>
-      ),
-    },
-    {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      width: 150,
-      render: (createdAt: string) => (
-        <span>{createdAt ? new Date(createdAt).toLocaleString() : '-'}</span>
-      ),
     },
     {
       title: '状态',
@@ -940,8 +947,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
                 icon={<EditOutlined />}
                 onClick={() => { 
                   setEditingDocument(record); 
-                  setShowSetting(true); 
-                  setSearchParams({ view: 'edit', documentId: record.id });
+                  setIsEditModalVisible(true);
                 }}
               />
             </Tooltip>
@@ -984,19 +990,22 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
 
   return (
     <Layout className="knowledgebase-layout" style={{ height: '100%' }}>
-      {!showSetting && !viewingChunks && (
+      {!viewingChunks && (
         <LeftSider
           width={260}
           className={`category-sider ${theme === 'dark' ? 'dark' : 'light'}`}
           style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
         >
           <div className={`sider-header ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>文档分类</span>
+            <span>知识目录</span>
             <Button
               type="primary"
               icon={<PlusOutlined />}
               size="small"
-              onClick={() => setIsFolderModalVisible(true)}
+              onClick={() => {
+                setEditingCategory(null); // 重置编辑状态
+                setIsFolderModalVisible(true);
+              }}
               style={{
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 border: 'none',
@@ -1009,6 +1018,17 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
               新增
             </Button>
           </div>
+          {/* 搜索框 */}
+          <Input
+            placeholder="搜索目录名称"
+            value={categorySearchValue}
+            onChange={(e) => setCategorySearchValue(e.target.value)}
+            prefix={<SearchOutlined />}
+            style={{
+              marginBottom: '12px',
+              borderRadius: '8px',
+            }}
+          />
           <Tree
             showIcon
             selectedKeys={selectedKeys}
@@ -1023,25 +1043,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       )}
 
       <Content className={`knowledgebase-content ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        {showSetting ? (
-          <KnowledgebaseDocumentSetting
-            knowledgebase={knowledgebase}
-            document={editingDocument}
-            onBack={() => { 
-              setShowSetting(false); 
-              setEditingDocument(undefined); 
-              fetchCategories(); 
-              setSearchParams();
-            }}
-            onSave={() => { 
-              setShowSetting(false); 
-              setEditingDocument(undefined); 
-              fetchDocuments(); 
-              fetchCategories(); 
-              setSearchParams();
-            }}
-          />
-        ) : viewingChunks ? (
+        {viewingChunks ? (
           <div style={{ height: '100%', padding: 12 }}>
             <ChunksView 
               document={selectedDocumentForChunks!} 
@@ -1359,6 +1361,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
           }}
           document={chunkModalDocument}
           knowledgebaseId={knowledgebase.id}
+          category={chunkModalDocument?.category_id ? findCategoryById(categories, chunkModalDocument.category_id) : (selectedCategory ? findCategoryById(categories, selectedCategory) : null)}
         />
       )}
 
@@ -1380,6 +1383,20 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
         onCancel={() => setIsDatasetModalVisible(false)}
         onSuccess={() => {
           setIsDatasetModalVisible(false);
+          fetchDocuments();
+        }}
+      />
+
+      {/* 编辑知识弹窗 */}
+      <KnowledgeModal
+        visible={isEditModalVisible}
+        knowledgebaseId={knowledgebase.id}
+        selectedCategory={editingDocument?.category_id ? findCategoryById(categories, editingDocument.category_id) : (selectedCategory ? findCategoryById(categories, selectedCategory) : null)}
+        document={editingDocument}
+        onCancel={() => setIsEditModalVisible(false)}
+        onSuccess={() => {
+          setIsEditModalVisible(false);
+          setEditingDocument(undefined);
           fetchDocuments();
         }}
       />

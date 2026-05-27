@@ -5,4 +5,5 @@ web/dist/
 web/node_modules/
 .vscode/
 .venv/
-build/
+build/lib/api/datasource.py
+build/lib/
