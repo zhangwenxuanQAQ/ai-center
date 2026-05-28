@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Button, Table, Input, Select, Form, Popconfirm } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, SaveOutlined, CancelOutlined } from '@ant-design/icons';
+import MDEditorTheme from './MDEditorTheme';
 import { AddChapterModal, Chapter } from '../pages/knowledgebase/folder_modal/AddChapterModal';
 import { SimpleTableRow } from './SimpleEditableTable';
 
@@ -397,15 +398,14 @@ const ChapterEditor: React.FC<ChapterEditorProps> = ({
   const renderRichTextEditor = (chapterId: string) => {
     return (
       <div style={{ padding: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
+        {/* <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
           <span style={{ fontWeight: 500 }}>富文本内容</span>
-        </div>
-        <Input.TextArea
-          rows={12}
-          placeholder="请输入富文本内容..."
-          style={{ width: '100%', fontFamily: 'monospace' }}
+        </div> */}
+        <MDEditorTheme
+          height={300}
+          placeholder="请输入内容..."
           value={chapterContents[chapterId] || ''}
-          onChange={(e) => handleContentChange(chapterId, e.target.value)}
+          onChange={(value) => handleContentChange(chapterId, value)}
         />
       </div>
     );

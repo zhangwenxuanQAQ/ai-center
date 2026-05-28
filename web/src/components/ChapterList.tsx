@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Button, Table, Input, Select, Switch, Form } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import MDEditorTheme from './MDEditorTheme';
 import { AddChapterModal, Chapter } from '../pages/knowledgebase/folder_modal/AddChapterModal';
 import { SimpleTableRow } from './SimpleEditableTable';
 
@@ -168,19 +169,14 @@ const ChapterList: React.FC<ChapterListProps> = ({
   const renderRichTextEditor = (editableField = false) => {
     return (
       <div style={{ padding: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
+        {/* <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
           <span style={{ fontWeight: 500, marginRight: 8 }}>富文本内容</span>
           {!editableField && <span style={{ color: '#999', fontSize: 12 }}>（只读模式）</span>}
-        </div>
-        <Input.TextArea
+        </div> */}
+        <MDEditorTheme
+          height={300}
+          placeholder={editableField ? '请输入内容...' : '该区域为只读模式'}
           disabled={!editableField}
-          rows={12}
-          placeholder={editableField ? '请输入富文本内容...' : '该区域为只读模式'}
-          style={{ 
-            width: '100%', 
-            fontFamily: 'monospace',
-            background: editableField ? '#fff' : '#f5f5f5'
-          }}
         />
       </div>
     );

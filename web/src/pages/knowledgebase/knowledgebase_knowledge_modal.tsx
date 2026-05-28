@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Modal, Form, Input, Button, Upload, message, Select, Radio, Checkbox, DatePicker, Tooltip } from 'antd';
 import { UploadOutlined, InfoCircleOutlined, InboxOutlined } from '@ant-design/icons';
+import MDEditorTheme from '../../components/MDEditorTheme';
 import dayjs from 'dayjs';
 import TagsInput from '../../components/TagsInput';
 import ChapterEditor from '../../components/ChapterEditor';
@@ -396,18 +397,17 @@ const KnowledgeModal: React.FC<KnowledgeModalProps> = ({
   const renderRichTextContent = () => {
     return (
       <div style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+        {/* <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
           <span style={{ fontWeight: 500 }}>富文本内容</span>
           <Tooltip title="使用富文本框录入知识">
             <InfoCircleOutlined style={{ marginLeft: 8, color: '#999', fontSize: 14 }} />
           </Tooltip>
-        </div>
-        <Input.TextArea
-          rows={8}
+        </div> */}
+        <MDEditorTheme
+          height={250}
           value={richTextContent}
-          onChange={(e) => setRichTextContent(e.target.value)}
-          placeholder="请输入富文本内容..."
-          style={{ width: '100%', fontFamily: 'monospace' }}
+          onChange={setRichTextContent}
+          placeholder="请输入内容..."
         />
       </div>
     );
@@ -553,18 +553,17 @@ const KnowledgeModal: React.FC<KnowledgeModalProps> = ({
         // 如果没有配置模板类型，显示默认的富文本编辑器
         return (
           <div style={{ marginBottom: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+            {/* <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
               <span style={{ fontWeight: 500 }}>富文本内容</span>
               <Tooltip title="目录未配置模板类型，显示默认富文本编辑器">
                 <InfoCircleOutlined style={{ marginLeft: 8, color: '#999', fontSize: 14 }} />
               </Tooltip>
-            </div>
-            <Input.TextArea
-              rows={8}
+            </div> */}
+            <MDEditorTheme
+              height={250}
               value={richTextContent}
-              onChange={(e) => setRichTextContent(e.target.value)}
-              placeholder="请输入富文本内容..."
-              style={{ width: '100%', fontFamily: 'monospace' }}
+              onChange={setRichTextContent}
+              placeholder="请输入内容..."
             />
           </div>
         );
