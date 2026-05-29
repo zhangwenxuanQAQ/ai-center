@@ -25,6 +25,18 @@ from app.core.knowledgebase.rag.prompts.generator import message_fit_in
 from app.core.llm_model.utils.model_caller import ModelCaller
 import time
 
+class GenerateFrontEndField(ComponentBaseFrontEndField):
+    """
+    生成组件参数前端控件
+    """
+
+    llm_id = {
+        "key": "llm_id",
+        "label": "模型",
+        "type": "select",
+        "description": "指定要使用的LLM模型",
+    }
+
 
 class GenerateParam(ComponentParamBase):
     """

@@ -244,7 +244,7 @@ class AgentComponentService:
         """
         获取智能体组件列表
         """
-        query = AgentComponent.select()
+        query = AgentComponent.select().where(AgentComponent.deleted == False).order_by(AgentComponent.sort_order.asc())
         if component_type:
             query = query.where(AgentComponent.component_type == component_type)
         if category:
@@ -258,7 +258,7 @@ class AgentComponentService:
         """
         获取所有智能体组件（不分页）
         """
-        query = AgentComponent.select().order_by(AgentComponent.sort_order.asc(), AgentComponent.created_at.asc())
+        query = AgentComponent.select().where(AgentComponent.deleted == False).order_by(AgentComponent.sort_order.asc())
         if component_type:
             query = query.where(AgentComponent.component_type == component_type)
         if category:

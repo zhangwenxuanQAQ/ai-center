@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Layout, Button, message, Spin, Popconfirm } from 'antd';
-import { SaveOutlined, PlayCircleOutlined, DeleteOutlined, CloudUploadOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import { SaveOutlined, PlayCircleOutlined, DeleteOutlined, CloudUploadOutlined, ArrowLeftOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons';
 import { Node, ReactFlowProvider } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import AgentComponents from './agent_components';
@@ -44,8 +44,10 @@ const AgentSetting: React.FC = () => {
   const [isDrawerVisible, setIsDrawerVisible] = useState(false);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [runResults, setRunResults] = useState<any[]>([]);
+  const [siderCollapsed, setSiderCollapsed] = useState(false);
 
   const canvasRef = useRef<AgentCanvasRef>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const currentTheme = document.body.getAttribute('data-theme') || 'dark';
@@ -78,8 +80,44 @@ const AgentSetting: React.FC = () => {
         if (result.data.dsl) {
           const dsl = result.data.dsl;
           if (dsl.graph) {
-            setInitialNodes(dsl.graph.nodes || []);
-            setInitialEdges(dsl.graph.edges || []);
+            const getNodeType = (node: any): string => {
+              if (node.type) return node.type;
+              const label = node.data?.label || '';
+              const typeMap: Record<string, string> = {
+                'Begin': 'beginNode',
+                'Answer': 'answerNode',
+                'Generate': 'generateNode',
+                'KeywordExtract': 'keywordNode',
+                'Note': 'noteNode',
+                'Message': 'messageNode',
+                'Retrieval': 'retrievalNode',
+                'Categorize': 'categorizeNode',
+                'Relevant': 'relevantNode',
+                'Rewrite': 'rewriteNode',
+                'Switch': 'switchNode',
+                'Invoke': 'invokeNode',
+                'Template': 'templateNode',
+                'Iteration': 'iterationNode',
+                'Email': 'emailNode',
+                'IntentDetectionV2': 'intentDetectionV2Node',
+                'GlobalMemory': 'globalMemoryNode',
+              };
+              if (typeMap[label]) return typeMap[label];
+              const ragComponents = ['WenCai', 'AkShare', 'Baidu', 'DuckDuckGo', 'Tavily', 'QWeather', 'Crawler'];
+              if (ragComponents.includes(label)) return 'ragNode';
+              return 'default';
+            };
+            
+            const nodes = (dsl.graph.nodes || []).map((node: any) => ({
+              ...node,
+              type: getNodeType(node)
+            }));
+            const edges = (dsl.graph.edges || []).map((edge: any) => ({
+              ...edge,
+              type: 'buttonEdge',
+            }));
+            setInitialNodes(nodes);
+            setInitialEdges(edges);
           }
         } else {
           initializeDefaultCanvas();
@@ -138,16 +176,50 @@ const AgentSetting: React.FC = () => {
       const nodes = canvasRef.current?.getNodes() || [];
       const edges = canvasRef.current?.getEdges() || [];
       
+      const existingComponents = agent?.dsl?.components || {};
+      
+      const newComponents: Record<string, any> = {};
+      
+      nodes.forEach(node => {
+        const nodeId = node.id;
+        const component_name = node.data?.label || 'Unknown';
+        const existingComponent = existingComponents[nodeId];
+        
+        const upstream: string[] = [];
+        const downstream: string[] = [];
+        
+        edges.forEach(edge => {
+          if (edge.source === nodeId) {
+            downstream.push(edge.target);
+          }
+          if (edge.target === nodeId) {
+            upstream.push(edge.source);
+          }
+        });
+        
+        newComponents[nodeId] = {
+          downstream,
+          obj: existingComponent?.obj || {
+            component_name,
+            inputs: [],
+            output: null,
+            params: node.data?.form || {}
+          },
+          upstream
+        };
+      });
+      
       const dsl = {
         graph: {
           nodes,
           edges
         },
-        components: {},
-        history: [],
-        messages: [],
-        path: [],
-        answer: []
+        components: newComponents,
+        history: agent?.dsl?.history || [],
+        messages: agent?.dsl?.messages || [],
+        path: agent?.dsl?.path || [],
+        answer: agent?.dsl?.answer || [],
+        reference: agent?.dsl?.reference || []
       };
 
       const url = id 
@@ -299,15 +371,47 @@ const AgentSetting: React.FC = () => {
         </div>
       </div>
 
-      <div className="agent-setting-content" style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        <Sider width={240} style={{ 
-          background: theme === 'dark' ? '#1a1a1a' : '#fff', 
-          borderRight: `1px solid ${theme === 'dark' ? '#333' : '#e8e8e8'}` 
-        }}>
+      <div className="agent-setting-content" style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
+        <Sider 
+          width={240} 
+          collapsedWidth={0}
+          collapsed={siderCollapsed}
+          trigger={null}
+          style={{ 
+            background: theme === 'dark' ? '#1a1a1a' : '#fff', 
+            borderRight: `1px solid ${theme === 'dark' ? '#333' : '#e8e8e8'}` 
+          }}
+        >
           <AgentComponents onDragStart={onDragStart} />
         </Sider>
-
         <Content style={{ flex: 1, position: 'relative' }}>
+          <div ref={contentRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
+          <div 
+            style={{ 
+              position: 'absolute',
+              top: '12px',
+              left: '12px',
+              width: '28px',
+              height: '28px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              zIndex: 100,
+              background: theme === 'dark' ? '#2a2a2a' : '#fff',
+              borderRadius: '4px',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+              border: `1px solid ${theme === 'dark' ? '#444' : '#e8e8e8'}`,
+              transition: 'all 0.3s'
+            }}
+            onClick={() => setSiderCollapsed(!siderCollapsed)}
+          >
+            {siderCollapsed ? (
+              <MenuUnfoldOutlined style={{ fontSize: '14px', color: theme === 'dark' ? '#aaa' : '#666' }} />
+            ) : (
+              <MenuFoldOutlined style={{ fontSize: '14px', color: theme === 'dark' ? '#aaa' : '#666' }} />
+            )}
+          </div>
           <AgentCanvas
             ref={canvasRef}
             initialNodes={initialNodes}
@@ -315,16 +419,18 @@ const AgentSetting: React.FC = () => {
             colorMode={theme}
             onNodeClick={onNodeClick}
           />
+
+          <AgentDrawer
+            visible={isDrawerVisible}
+            onClose={handleDrawerClose}
+            selectedNode={selectedNode}
+            onFormSubmit={handleFormSubmit}
+            runResults={runResults}
+            container={contentRef.current}
+          />
+          </div>
         </Content>
       </div>
-
-      <AgentDrawer
-        visible={isDrawerVisible}
-        onClose={handleDrawerClose}
-        selectedNode={selectedNode}
-        onFormSubmit={handleFormSubmit}
-        runResults={runResults}
-      />
     </div>
   );
 };

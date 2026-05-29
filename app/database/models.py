@@ -544,14 +544,13 @@ class AgentComponent(SoftDeleteModel):
     
     存储智能体组件信息
     """
-    name = CharField(max_length=255, index=True, verbose_name="组件名称")
-    code = CharField(max_length=100, index=True, verbose_name="组件编码")
+    component_name = CharField(max_length=255, index=True, verbose_name="组件名称")
     component_title = CharField(max_length=255, null=True, verbose_name="组件标题")
     description = TextField(null=True, verbose_name="组件描述")
-    component_type = CharField(max_length=50, index=True, verbose_name="组件类型")
     category = CharField(max_length=100, null=True, index=True, verbose_name="组件分类")
     icon = TextField(null=True, verbose_name="组件图标")
-    config = TextField(null=True, verbose_name="组件配置JSON")
+    default_params = TextField(null=True, verbose_name="组件配置JSON")
+    css = TextField(null=True, verbose_name="CSS样式")
     status = IntegerField(default=1, verbose_name="状态：0停用，1启用")
     sort_order = IntegerField(default=0, verbose_name="排序顺序")
     

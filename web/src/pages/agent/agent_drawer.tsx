@@ -1,6 +1,8 @@
-import React from 'react';
-import { Drawer, Tabs, Form, Input, Button, Divider, Empty, Spin, Timeline } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Drawer, Tabs, Form, Input, Divider, Empty, Spin, Timeline } from 'antd';
 import { PlayCircleOutlined, FileTextOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import { getComponentIcon, getDefaultComponentIcon } from '../../utils/component_icon';
+import { agentService, AgentComponent } from '../../services/agent';
 
 const { TextArea } = Input;
 const { TabPane } = Tabs;
@@ -11,6 +13,7 @@ interface AgentDrawerProps {
   selectedNode: any;
   onFormSubmit: (values: any) => void;
   runResults?: RunResult[];
+  container?: HTMLElement | null;
 }
 
 interface RunResult {
@@ -25,8 +28,17 @@ const AgentDrawer: React.FC<AgentDrawerProps> = ({
   selectedNode,
   onFormSubmit,
   runResults = [],
+  container,
 }) => {
   const [form] = Form.useForm();
+  const [drawerContainer, setDrawerContainer] = React.useState<HTMLElement | null>(null);
+  const [components, setComponents] = useState<AgentComponent[]>([]);
+
+  React.useEffect(() => {
+    if (container) {
+      setDrawerContainer(container);
+    }
+  }, [container]);
 
   React.useEffect(() => {
     if (selectedNode && visible) {
@@ -38,11 +50,17 @@ const AgentDrawer: React.FC<AgentDrawerProps> = ({
     }
   }, [selectedNode, visible, form]);
 
-  const handleOk = () => {
-    form.validateFields().then(values => {
-      onFormSubmit(values);
-    });
-  };
+  useEffect(() => {
+    const fetchComponents = async () => {
+      try {
+        const data = await agentService.getComponents();
+        setComponents(data);
+      } catch (error) {
+        console.error('Failed to fetch components:', error);
+      }
+    };
+    fetchComponents();
+  }, []);
 
   const renderRunResults = () => {
     if (runResults.length === 0) {
@@ -137,32 +155,78 @@ const AgentDrawer: React.FC<AgentDrawerProps> = ({
     );
   };
 
+  const renderDrawerTitle = () => {
+    if (!selectedNode) {
+      return <span>节点配置</span>;
+    }
+    
+    const nodeLabel = selectedNode.data?.label || selectedNode.type || 'Node';
+    const rawName = selectedNode.data?.name || nodeLabel;
+    const displayName = rawName === 'begin' ? '开始' : rawName;
+    
+    const nodeDescription = selectedNode.data?.description || '';
+    const componentInfo = components.find(
+      c => c.component_name === nodeLabel || c.component_title === nodeLabel
+    );
+    const displayDescription = nodeDescription || componentInfo?.description || '';
+    
+    const iconSrc = getComponentIcon(nodeLabel);
+    
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingBottom: '4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <img
+            src={iconSrc}
+            alt={displayName}
+            style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 4 }}
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              if (target.src !== getDefaultComponentIcon()) {
+                target.src = getDefaultComponentIcon();
+              }
+            }}
+          />
+          <span style={{ fontSize: '15px', fontWeight: 600 }}>{displayName}</span>
+        </div>
+        {displayDescription && (
+          <div style={{ fontSize: '12px', color: '#8c8c8c', lineHeight: 1.4, textAlign: 'left' }}>
+            {displayDescription}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <Drawer
-      title={
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span>节点配置</span>
-          {selectedNode && (
-            <span style={{ fontSize: '12px', color: '#999' }}>
-              ({selectedNode.data?.label || selectedNode.type})
-            </span>
-          )}
-        </div>
-      }
+      title={renderDrawerTitle()}
       placement="right"
       width={500}
       open={visible}
       onClose={onClose}
-      footer={
-        <div style={{ textAlign: 'right' }}>
-          <Button onClick={onClose} style={{ marginRight: 8 }}>
-            取消
-          </Button>
-          <Button type="primary" onClick={handleOk}>
-            确定
-          </Button>
-        </div>
-      }
+      mask={false}
+      getContainer={false}
+      style={{
+        position: 'absolute',
+        right: 0,
+        top: 0,
+        bottom: 0,
+        overflow: 'hidden'
+      }}
+      styles={{
+        wrapper: {
+          borderRadius: '12px',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)'
+        },
+        body: {
+          borderRadius: '12px',
+          padding: '12px'
+        },
+        header: {
+          position: 'relative',
+          paddingRight: '40px'
+        }
+      }}
     >
       <Tabs defaultActiveKey="1">
         <TabPane tab="节点配置" key="1">

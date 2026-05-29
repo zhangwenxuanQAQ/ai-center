@@ -6,13 +6,10 @@ import {
   MiniMap,
   Background,
   BackgroundVariant,
-  useNodesState,
-  useEdgesState,
-  addEdge,
-  Connection,
   NodeTypes,
   ReactFlowInstance,
   useReactFlow,
+  ConnectionMode,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { message } from 'antd';
@@ -28,6 +25,26 @@ import {
   DownloadOutlined, 
   UploadOutlined 
 } from '@ant-design/icons';
+import ButtonEdge from './edge/button_edge';
+import { BeginNode } from './node/begin_node';
+import { RagNode } from './node/default_node';
+import { GenerateNode } from './node/generate_node';
+import { LogicNode } from './node/logic_node';
+import { KeywordNode } from './node/keyword_node';
+import { NoteNode } from './node/note_node';
+import { MessageNode } from './node/message_node';
+import { RetrievalNode } from './node/retrieval_node';
+import { CategorizeNode } from './node/categorize_node';
+import { RelevantNode } from './node/relevant_node';
+import { RewriteNode } from './node/rewrite_node';
+import { SwitchNode } from './node/switch_node';
+import { InvokeNode } from './node/invoke_node';
+import { TemplateNode } from './node/template_node';
+import { IterationNode } from './node/iteration_node';
+import { EmailNode } from './node/email_node';
+import { IntentDetectionV2Node } from './node/intent_detection_v2_node';
+import { GlobalMemoryNode } from './node/global_memory_node';
+import useGraphStore, { AgentNodeType } from './store';
 
 interface AgentCanvasProps {
   initialNodes?: Node[];
@@ -54,37 +71,44 @@ const AgentCanvas = React.forwardRef<AgentCanvasRef, AgentCanvasProps>(({
 }, ref) => {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
-  const [zoom, setZoom] = useState(100);
-  const [isLocked, setIsLocked] = useState(false);
-
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
   const [history, setHistory] = useState<HistoryState[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
 
   const reactFlow = useReactFlow();
 
+  const {
+    nodes,
+    edges,
+    isLocked,
+    zoom,
+    onNodesChange,
+    onEdgesChange,
+    onConnect,
+    setNodes,
+    setEdges,
+    addNode,
+    setLocked,
+    setZoom,
+    getNodes,
+    getEdges,
+  } = useGraphStore();
+
   useEffect(() => {
-    if (initialNodes.length > 0) {
-      setNodes(initialNodes);
+    if (initialNodes.length > 0 || initialEdges.length > 0) {
+      setNodes(initialNodes as AgentNodeType[]);
+      setEdges(initialEdges);
       setHistory([{ nodes: initialNodes, edges: initialEdges }]);
       setHistoryIndex(0);
     }
-  }, [initialNodes, initialEdges, setNodes]);
-
-  useEffect(() => {
-    if (initialEdges.length > 0) {
-      setEdges(initialEdges);
-    }
-  }, [initialEdges, setEdges]);
+  }, [initialNodes, initialEdges, setNodes, setEdges]);
 
   const updateZoom = useCallback(() => {
     if (reactFlowInstance) {
       const currentZoom = reactFlowInstance.getZoom();
       setZoom(Math.round(currentZoom * 100));
     }
-  }, [reactFlowInstance]);
+  }, [reactFlowInstance, setZoom]);
 
   useEffect(() => {
     if (reactFlowInstance) {
@@ -101,93 +125,46 @@ const AgentCanvas = React.forwardRef<AgentCanvasRef, AgentCanvasProps>(({
   }, [nodes, edges, history, historyIndex]);
 
   React.useImperativeHandle(ref, () => ({
-    getNodes: () => nodes,
-    getEdges: () => edges,
+    getNodes,
+    getEdges,
   }));
 
   const nodeTypes: NodeTypes = {
-    beginNode: ({ data }) => (
-      <div style={{
-        padding: '10px 20px',
-        borderRadius: '8px',
-        background: '#52c41a',
-        color: '#fff',
-        fontWeight: 500,
-        border: '2px solid #389e0d'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span>▶</span>
-          <span>{data.name || 'Begin'}</span>
-        </div>
-      </div>
-    ),
-    answerNode: ({ data }) => (
-      <div style={{
-        padding: '10px 20px',
-        borderRadius: '8px',
-        background: '#1890ff',
-        color: '#fff',
-        fontWeight: 500,
-        border: '2px solid #096dd9'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span>💬</span>
-          <span>{data.name || 'Answer'}</span>
-        </div>
-      </div>
-    ),
-    generateNode: ({ data }) => (
-      <div style={{
-        padding: '10px 20px',
-        borderRadius: '8px',
-        background: '#722ed1',
-        color: '#fff',
-        fontWeight: 500,
-        border: '2px solid #531dab'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span>⚡</span>
-          <span>{data.name || 'Generate'}</span>
-        </div>
-      </div>
-    ),
-    ragNode: ({ data }) => (
-      <div style={{
-        padding: '10px 20px',
-        borderRadius: '8px',
-        background: '#13c2c2',
-        color: '#fff',
-        fontWeight: 500,
-        border: '2px solid #08979c'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span>🔍</span>
-          <span>{data.name || 'Retrieval'}</span>
-        </div>
-      </div>
-    ),
-    default: ({ data }) => (
-      <div style={{
-        padding: '10px 20px',
-        borderRadius: '8px',
-        background: colorMode === 'dark' ? '#2a2a2a' : '#fff',
-        border: `2px solid ${colorMode === 'dark' ? '#444' : '#d9d9d9'}`,
-        fontWeight: 500,
-        color: colorMode === 'dark' ? '#fff' : '#000'
-      }}>
-        {data.name || data.label || 'Node'}
-      </div>
-    ),
+    beginNode: BeginNode,
+    answerNode: LogicNode,
+    logicNode: LogicNode,
+    generateNode: GenerateNode,
+    ragNode: RagNode,
+    keywordNode: KeywordNode,
+    noteNode: NoteNode,
+    messageNode: MessageNode,
+    retrievalNode: RetrievalNode,
+    categorizeNode: CategorizeNode,
+    relevantNode: RelevantNode,
+    rewriteNode: RewriteNode,
+    switchNode: SwitchNode,
+    invokeNode: InvokeNode,
+    templateNode: TemplateNode,
+    iterationNode: IterationNode,
+    emailNode: EmailNode,
+    intentDetectionV2Node: IntentDetectionV2Node,
+    globalMemoryNode: GlobalMemoryNode,
+    default: RagNode,
   };
 
-  const onConnect = useCallback((params: Connection) => {
+  const edgeTypes = {
+    buttonEdge: ButtonEdge,
+    default: ButtonEdge,
+  };
+
+  const handleConnect = useCallback((params: any) => {
     if (params.source === params.target) {
       message.warning('不能创建自连接');
       return;
     }
     saveToHistory();
-    setEdges((eds) => addEdge(params, eds));
-  }, [setEdges, saveToHistory]);
+    onConnect(params);
+  }, [onConnect, saveToHistory]);
 
   const handleNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
     if (onNodeClick) {
@@ -218,17 +195,50 @@ const AgentCanvas = React.forwardRef<AgentCanvasRef, AgentCanvasProps>(({
         y: event.clientY - bounds.top - 50,
       };
 
-      const newNode: Node = {
-        id: `${type}-${Date.now()}`,
-        type: type === 'Begin' ? 'beginNode' : type === 'Answer' ? 'answerNode' : type === 'Generate' ? 'generateNode' : 'ragNode',
+      const getNodeType = (componentName: string): string => {
+        const typeMap: Record<string, string> = {
+          'Begin': 'beginNode',
+          'Answer': 'answerNode',
+          'Generate': 'generateNode',
+          'KeywordExtract': 'keywordNode',
+          'Note': 'noteNode',
+          'Message': 'messageNode',
+          'Retrieval': 'retrievalNode',
+          'Categorize': 'categorizeNode',
+          'Relevant': 'relevantNode',
+          'Rewrite': 'rewriteNode',
+          'Switch': 'switchNode',
+          'Invoke': 'invokeNode',
+          'Template': 'templateNode',
+          'Iteration': 'iterationNode',
+          'Email': 'emailNode',
+          'IntentDetectionV2': 'intentDetectionV2Node',
+          'GlobalMemory': 'globalMemoryNode',
+        };
+        
+        if (typeMap[componentName]) {
+          return typeMap[componentName];
+        }
+        
+        const ragComponents = ['WenCai', 'AkShare', 'Baidu', 'DuckDuckGo', 'Tavily', 'QWeather', 'Crawler'];
+        if (ragComponents.includes(componentName)) {
+          return 'ragNode';
+        }
+        
+        return 'default';
+      };
+
+      const newNode: AgentNodeType = {
+        id: `${type}:${Math.random().toString(36).substring(2, 12)}`,
+        type: getNodeType(type),
         position,
-        data: { ...nodeData, form: {} },
+        data: { ...nodeData, label: type, form: {} },
       };
 
       saveToHistory();
-      setNodes((nds) => nds.concat(newNode));
+      addNode(newNode);
     },
-    [setNodes, saveToHistory]
+    [addNode, saveToHistory]
   );
 
   const handleExport = useCallback(() => {
@@ -281,7 +291,7 @@ const AgentCanvas = React.forwardRef<AgentCanvasRef, AgentCanvasProps>(({
   const handleUndo = useCallback(() => {
     if (historyIndex > 0) {
       const prevState = history[historyIndex - 1];
-      setNodes(prevState.nodes);
+      setNodes(prevState.nodes as AgentNodeType[]);
       setEdges(prevState.edges);
       setHistoryIndex(historyIndex - 1);
     }
@@ -290,7 +300,7 @@ const AgentCanvas = React.forwardRef<AgentCanvasRef, AgentCanvasProps>(({
   const handleRedo = useCallback(() => {
     if (historyIndex < history.length - 1) {
       const nextState = history[historyIndex + 1];
-      setNodes(nextState.nodes);
+      setNodes(nextState.nodes as AgentNodeType[]);
       setEdges(nextState.edges);
       setHistoryIndex(historyIndex + 1);
     }
@@ -299,7 +309,7 @@ const AgentCanvas = React.forwardRef<AgentCanvasRef, AgentCanvasProps>(({
   const handleReset = useCallback(() => {
     if (history.length > 0) {
       const initialState = history[0];
-      setNodes(initialState.nodes);
+      setNodes(initialState.nodes as AgentNodeType[]);
       setEdges(initialState.edges);
       setHistoryIndex(0);
       message.info('已重置到初始状态');
@@ -322,8 +332,22 @@ const AgentCanvas = React.forwardRef<AgentCanvasRef, AgentCanvasProps>(({
   }, [reactFlow, updateZoom]);
 
   const handleLock = useCallback(() => {
-    setIsLocked(!isLocked);
-  }, [isLocked]);
+    setLocked(!isLocked);
+  }, [isLocked, setLocked]);
+
+  const handleNodesChange = useCallback((changes: any) => {
+    if (!isLocked) {
+      saveToHistory();
+    }
+    onNodesChange(changes);
+  }, [isLocked, onNodesChange, saveToHistory]);
+
+  const handleEdgesChange = useCallback((changes: any) => {
+    if (!isLocked) {
+      saveToHistory();
+    }
+    onEdgesChange(changes);
+  }, [isLocked, onEdgesChange, saveToHistory]);
 
   return (
     <div
@@ -335,23 +359,18 @@ const AgentCanvas = React.forwardRef<AgentCanvasRef, AgentCanvasProps>(({
       <ReactFlow
         nodes={nodes}
         edges={edges}
-        onNodesChange={(changes) => {
-          if (!isLocked) {
-            saveToHistory();
-          }
-          onNodesChange(changes);
-        }}
-        onEdgesChange={(changes) => {
-          if (!isLocked) {
-            saveToHistory();
-          }
-          onEdgesChange(changes);
-        }}
-        onConnect={onConnect}
+        onNodesChange={handleNodesChange}
+        onEdgesChange={handleEdgesChange}
+        onConnect={handleConnect}
         onNodeClick={handleNodeClick}
         onInit={setReactFlowInstance}
         onMoveEnd={updateZoom}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        defaultEdgeOptions={{
+          type: 'buttonEdge',
+          style: { stroke: colorMode === 'dark' ? '#888' : '#555', strokeWidth: 2 },
+        }}
         fitView
         attributionEnabled={false}
         deleteKeyCode={isLocked ? null : 'Delete'}
@@ -366,6 +385,7 @@ const AgentCanvas = React.forwardRef<AgentCanvasRef, AgentCanvasProps>(({
         zoomOnScroll={!isLocked}
         zoomOnPinch={!isLocked}
         selectNodesOnDrag={!isLocked}
+        connectionMode={ConnectionMode.Loose}
       >
         <MiniMap 
           position="bottom-right"
@@ -374,9 +394,11 @@ const AgentCanvas = React.forwardRef<AgentCanvasRef, AgentCanvasProps>(({
           style={{ marginBottom: 60, marginRight: 10 }}
           nodeColor={(node) => {
             if (node.type === 'beginNode') return '#52c41a';
-            if (node.type === 'answerNode') return '#1890ff';
+            if (node.type === 'answerNode' || node.type === 'logicNode') return '#1890ff';
             if (node.type === 'generateNode') return '#722ed1';
             if (node.type === 'ragNode') return '#13c2c2';
+            if (node.type === 'keywordNode') return '#fa8c16';
+            if (node.type === 'noteNode') return colorMode === 'dark' ? '#444' : '#ddd';
             return colorMode === 'dark' ? '#555' : '#eee';
           }}
         />

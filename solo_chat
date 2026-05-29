@@ -1022,3 +1022,9 @@ default_params字段是json对象字符串，来自 "组件Param"类的所有属
 - 修改embedding模型获取以及调用以及rerank模型获取以及调用
 - 修改知识检索逻辑，改成使用es的hybrid_search方法。
 - run方法最终返回格式需要保持不变
+
+
+
+
+我在base.py定义了ComponentBaseFrontEndField类，用于定义组件参数对应的前端节点配置渲染组件，帮我实现其他智能体组件组件前端控件定义类，需要根据组件继承的类来实现组件前端控件类继承的父类。
+比如

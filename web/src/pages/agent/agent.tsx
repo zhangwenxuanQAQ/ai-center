@@ -675,7 +675,7 @@ const AgentManagement: React.FC = () => {
   };
 
   const getDefaultAvatar = () => {
-    return '/assets/agent/default_workflow.svg';
+    return '../../assets/agent/default_workflow.svg';
   };
 
   return (

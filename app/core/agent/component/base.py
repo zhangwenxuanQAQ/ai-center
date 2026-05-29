@@ -39,6 +39,19 @@ _DEPRECATED_PARAMS = "_deprecated_params"
 _USER_FEEDED_PARAMS = "_user_feeded_params"
 _IS_RAW_CONF = "_is_raw_conf"
 
+class ComponentBaseFrontEndField(ABC):
+    """
+    组件参数前端控件
+    """
+    inputs ={
+        "key": "inputs",
+        "label": "输入来源",
+        "type": "custom",
+        "description": "指定节点输入来源，不配置则来自上一个节点的输出",
+        "default": [],
+    }
+
+
 
 class ComponentParamBase(ABC):
     def __init__(self):

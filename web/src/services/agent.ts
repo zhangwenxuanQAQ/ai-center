@@ -18,6 +18,22 @@ export interface AgentCategory {
   children?: AgentCategory[];
 }
 
+export interface AgentComponent {
+  id: string;
+  name: string;
+  code: string;
+  component_title: string;
+  description?: string;
+  component_type: string;
+  category: string;
+  icon?: string;
+  config?: string;
+  status: number;
+  sort_order: number;
+  created_at: string;
+  updated_at?: string;
+}
+
 export interface AgentInstance {
   id: string;
   name: string;
@@ -131,5 +147,14 @@ export const agentService = {
     return http.post<AgentInstance>(
       `/aicenter/v1/agent/instances/${id}/delete`
     );
+  },
+
+  /**
+   * 获取所有启用的组件列表
+   */
+  getComponents: async (): Promise<AgentComponent[]> => {
+    return http.get<AgentComponent[]>(
+      '/aicenter/v1/agent/components/all?status=1'
+    ) || [];
   },
 };

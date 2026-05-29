@@ -2,6 +2,7 @@
 智能体控制器，提供智能体相关的API接口
 """
 
+import json
 from fastapi import APIRouter, Query
 from app.services.agent.service import (
     AgentCategoryService, AgentComponentService, AgentInstanceService
@@ -122,7 +123,12 @@ def get_all_components(component_type: str = None, category: str = None, status:
     获取所有智能体组件（不分页）
     """
     components = AgentComponentService.get_all_components(component_type, category, status)
-    components_data = [component.__data__ for component in components]
+    components_data = []
+    for component in components:
+        data = component.__data__
+        data['css'] = json.loads(data.get('css') or '{}')
+        data['default_params'] = json.loads(data.get('default_params') or '{}')
+        components_data.append(data)
     return ResponseUtil.success(data=components_data, message="获取所有智能体组件成功")
 
 
