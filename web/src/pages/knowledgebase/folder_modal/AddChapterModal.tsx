@@ -19,6 +19,8 @@ interface AddChapterModalProps {
   onAdd: (chapter: Chapter) => void;
   // 新增属性：是否仅显示富文本类型（用于动态章节）
   richTextOnly?: boolean;
+  // 新增属性：要编辑的章节（编辑模式）
+  editingChapter?: Chapter | null;
 }
 
 const AddChapterModal: React.FC<AddChapterModalProps> = ({
@@ -27,6 +29,7 @@ const AddChapterModal: React.FC<AddChapterModalProps> = ({
   onCancel,
   onAdd,
   richTextOnly = false,
+  editingChapter = null,
 }) => {
   const [form] = Form.useForm();
   const [chapterType, setChapterType] = useState<'form' | 'list' | 'rich_text'>('form');
@@ -34,26 +37,37 @@ const AddChapterModal: React.FC<AddChapterModalProps> = ({
 
   useEffect(() => {
     if (visible) {
-      form.resetFields();
-      setChapterType(richTextOnly ? 'rich_text' : 'form');
-      setFields([]);
+      if (editingChapter) {
+        // 编辑模式：回填数据
+        form.setFieldsValue({
+          name: editingChapter.name,
+          parentId: editingChapter.parentId,
+        });
+        setChapterType(editingChapter.type);
+        setFields(editingChapter.fields || []);
+      } else {
+        // 添加模式：重置表单
+        form.resetFields();
+        setChapterType(richTextOnly ? 'rich_text' : 'form');
+        setFields([]);
+      }
     }
-  }, [visible, form, richTextOnly]);
+  }, [visible, form, richTextOnly, editingChapter]);
 
   const handleOk = async () => {
     try {
       const values = await form.validateFields();
       
-      const newChapter: Chapter = {
-        id: `chapter_${Date.now()}`,
+      const chapter: Chapter = {
+        id: editingChapter?.id || `chapter_${Date.now()}`,
         name: values.name,
         parentId: values.parentId,
         type: chapterType,
         fields: (chapterType === 'form' || chapterType === 'list') ? fields : undefined,
       };
 
-      onAdd(newChapter);
-      message.success('章节添加成功');
+      onAdd(chapter);
+      message.success(editingChapter ? '章节编辑成功' : '章节添加成功');
       form.resetFields();
       setChapterType(richTextOnly ? 'rich_text' : 'form');
       setFields([]);
@@ -72,7 +86,7 @@ const AddChapterModal: React.FC<AddChapterModalProps> = ({
 
   return (
     <Modal
-      title="添加章节"
+      title={editingChapter ? "编辑章节" : "添加章节"}
       open={visible}
       onCancel={handleCancel}
       onOk={handleOk}

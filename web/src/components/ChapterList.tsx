@@ -215,7 +215,7 @@ const ChapterList: React.FC<ChapterListProps> = ({
 
       <div style={{ display: 'flex', gap: 16 }}>
         <div style={{ width: 200, borderRight: '1px solid #e8e8e8', paddingRight: 16 }}>
-          <div style={{ fontWeight: 500, marginBottom: 12 }}>章节列表</div>
+          {/* <div style={{ fontWeight: 500, marginBottom: 12 }}>章节列表</div> */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {chapters.length > 0 ? chapters.map((chapter, index) => (
               <div

@@ -615,12 +615,12 @@ const KnowledgeModal: React.FC<KnowledgeModalProps> = ({
         {/* 如果知识正文开启，显示章节编辑器 */}
         {selectedCategory && documentConfig.has_knowledge_content && (
           <div style={{ marginBottom: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+            {/* <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
               <span style={{ fontWeight: 500 }}>章节目录</span>
               <Tooltip title="根据章节目录显示信息">
                 <InfoCircleOutlined style={{ marginLeft: 8, color: '#999', fontSize: 14 }} />
               </Tooltip>
-            </div>
+            </div> */}
             <ChapterEditor
               chapterType={documentConfig.chapter_type || 'fixed'}
               chapters={chapters}

@@ -432,81 +432,85 @@ const ChapterEditor: React.FC<ChapterEditorProps> = ({
 
   return (
     <div>
-      {/* 只有动态章节模式下可以添加章节 */}
-      {isEditable && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => setShowAddModal(true)}
-            style={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              border: 'none',
-            }}
-          >
-            添加章节
-          </Button>
-        </div>
-      )}
-
-      <div style={{ display: 'flex', gap: 16 }}>
-        <div style={{ width: 200, borderRight: '1px solid #e8e8e8', paddingRight: 16 }}>
-          <div style={{ fontWeight: 500, marginBottom: 12 }}>章节列表</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {chapters.length > 0 ? chapters.map((chapter) => (
-              <div
-                key={chapter.id}
-                onClick={() => handleSelect(chapter.id)}
-                style={{
-                  padding: '8px 12px',
-                  background: localSelectedId === chapter.id ? '#667eea' : undefined,
-                  color: localSelectedId === chapter.id ? '#fff' : undefined,
-                  border: localSelectedId === chapter.id ? '1px solid #fff' : undefined,
-                  borderRadius: 4,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 8,
-                }}
-              >
-                <span>{chapter.name}</span>
-                {isEditable && (
-                  <span style={{ display: 'flex', gap: 4 }}>
-                    <EditOutlined
-                      style={{ fontSize: 12 }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingChapter(chapter);
-                        setShowEditModal(true);
-                      }}
-                    />
-                    <DeleteOutlined
-                      style={{ fontSize: 12 }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteChapter(chapter.id);
-                      }}
-                    />
-                  </span>
-                )}
+      <div style={{ border: '1px dashed #d9d9d9', borderRadius: 8, padding: 16 }}>
+        <div style={{ fontSize: 16, fontWeight: 600, paddingBottom: 12, borderBottom: '1px solid #f0f0f0', marginBottom: 16 }}>章节目录</div>
+        
+        <div style={{ display: 'flex', gap: 16 }}>
+          <div style={{ width: 200, borderRight: '1px solid #e8e8e8', paddingRight: 16 }}>
+            {/* 只有动态章节模式下可以添加章节 */}
+            {isEditable && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={() => setShowAddModal(true)}
+                  style={{
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    border: 'none',
+                    fontSize: 12,
+                    padding: '4px 12px',
+                  }}
+                >
+                  添加章节
+                </Button>
               </div>
-            )) : (
-              <div style={{ color: '#999', padding: '8px 12px' }}>暂无章节</div>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {chapters.length > 0 ? chapters.map((chapter) => (
+                <div
+                  key={chapter.id}
+                  onClick={() => handleSelect(chapter.id)}
+                  style={{
+                    padding: '8px 12px',
+                    background: localSelectedId === chapter.id ? '#667eea' : undefined,
+                    color: localSelectedId === chapter.id ? '#fff' : undefined,
+                    border: localSelectedId === chapter.id ? '1px solid #fff' : undefined,
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 8,
+                  }}
+                >
+                  <span>{chapter.name}</span>
+                  {isEditable && (
+                    <span style={{ display: 'flex', gap: 4 }}>
+                      <EditOutlined
+                        style={{ fontSize: 12 }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingChapter(chapter);
+                          setShowEditModal(true);
+                        }}
+                      />
+                      <DeleteOutlined
+                        style={{ fontSize: 12 }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteChapter(chapter.id);
+                        }}
+                      />
+                    </span>
+                  )}
+                </div>
+              )) : (
+                <div style={{ color: '#999', padding: '8px 12px' }}>暂无章节</div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ flex: 1 }}>
+            {selectedChapter ? (
+              <div key={selectedChapter.id}>
+                {renderChapterContent(selectedChapter)}
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', color: '#999', padding: 40 }}>
+                {chapters.length > 0 ? '请选择一个章节' : '暂无章节内容'}
+              </div>
             )}
           </div>
-        </div>
-
-        <div style={{ flex: 1 }}>
-          {selectedChapter ? (
-            <div key={selectedChapter.id}>
-              {renderChapterContent(selectedChapter)}
-            </div>
-          ) : (
-            <div style={{ textAlign: 'center', color: '#999', padding: 40 }}>
-              {chapters.length > 0 ? '请选择一个章节' : '暂无章节内容'}
-            </div>
-          )}
         </div>
       </div>
 
@@ -515,7 +519,6 @@ const ChapterEditor: React.FC<ChapterEditorProps> = ({
         chapters={chapters}
         onCancel={() => setShowAddModal(false)}
         onAdd={handleAddChapter}
-        // 动态章节模式下仅显示富文本类型，固定章节模式下可以选择所有类型
         richTextOnly={chapterType === 'dynamic'}
       />
 
@@ -529,6 +532,7 @@ const ChapterEditor: React.FC<ChapterEditorProps> = ({
           }}
           onAdd={handleUpdateChapter}
           richTextOnly={chapterType === 'dynamic'}
+          editingChapter={editingChapter}
         />
       )}
     </div>
