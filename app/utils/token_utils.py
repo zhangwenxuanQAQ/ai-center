@@ -17,22 +17,32 @@
 
 import os
 import tiktoken
+import logging
 
 from app.utils.file_utils import get_project_base_directory
 
+logger = logging.getLogger(__name__)
+
 tiktoken_cache_dir = get_project_base_directory()
 os.environ["TIKTOKEN_CACHE_DIR"] = tiktoken_cache_dir
-# encoder = tiktoken.encoding_for_model("gpt-3.5-turbo")
-encoder = tiktoken.get_encoding("cl100k_base")
+
+try:
+    encoder = tiktoken.get_encoding("cl100k_base")
+    logger.info("Successfully loaded tiktoken encoder")
+except Exception as e:
+    logger.warning(f"Failed to load tiktoken encoder: {e}")
+    encoder = None
 
 
 def num_tokens_from_string(string: str) -> int:
     """Returns the number of tokens in a text string."""
+    if encoder is None:
+        return len(string) // 4
     try:
         code_list = encoder.encode(string)
         return len(code_list)
     except Exception:
-        return 0
+        return len(string) // 4
 
 def total_token_count_from_response(resp):
     """
@@ -84,4 +94,9 @@ def total_token_count_from_response(resp):
 
 def truncate(string: str, max_len: int) -> str:
     """Returns truncated text if the length of text exceed max_len."""
-    return encoder.decode(encoder.encode(string)[:max_len])
+    if encoder is None:
+        return string[:max_len * 4]
+    try:
+        return encoder.decode(encoder.encode(string)[:max_len])
+    except Exception:
+        return string[:max_len * 4]

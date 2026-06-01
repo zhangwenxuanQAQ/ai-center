@@ -212,6 +212,7 @@ class KnowledgebaseDocumentBase(BaseModel):
         kb_id: 知识库ID
         category_id: 文档分类ID
         tags: 文档标签JSON数组
+        document_config: 知识配置JSON对象
         chunk_method: 文档Chunk方法
         chunk_config: 文档Chunk配置JSON
         token_num: 文档Token数
@@ -233,6 +234,7 @@ class KnowledgebaseDocumentBase(BaseModel):
     kb_id: str = Field(..., description="知识库ID，UUID格式")
     category_id: Optional[str] = Field(None, description="文档分类ID，UUID格式")
     tags: Optional[list] = Field(None, description="文档标签JSON数组")
+    document_config: Optional[dict] = Field(None, description="知识配置JSON对象")
     chunk_method: str = Field(..., min_length=1, max_length=50, description="文档Chunk方法")
     chunk_config: Optional[dict] = Field(None, description="文档Chunk配置JSON对象")
     token_num: int = Field(default=0, description="文档Token数")
@@ -300,6 +302,7 @@ class KnowledgebaseDocumentUpdate(BaseModel):
     mime_type: Optional[str] = Field(None, max_length=100, description="文件MIME类型")
     source_type: Optional[str] = Field(None, max_length=50, description="来源类型")
     source_config: Optional[dict] = Field(None, description="来源配置JSON对象")
+    document_config: Optional[dict] = Field(None, description="知识配置JSON对象")
     thumbnail: Optional[str] = Field(None, description="文件缩略图")
     running_status: Optional[str] = Field(None, max_length=50, description="文档解析状态")
     status: Optional[bool] = Field(None, description="文档状态")

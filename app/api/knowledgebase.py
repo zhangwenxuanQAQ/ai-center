@@ -27,7 +27,8 @@ from app.utils.response import ResponseUtil, ApiResponse
 from app.constants.knowledgebase_constants import FILE_NAME_LEN_LIMIT, RETRIEVAL_CONFIGS
 from app.constants.knowledgebase_document_constants import (
     CHUNK_METHOD_LABELS, CHUNK_METHOD_CONFIGS, SOURCE_TYPE_LABELS, SourceType, SourceConfigDefinition,
-    get_available_chunk_methods, get_default_chunk_method, DOCUMENT_RUNNING_STATUS, METADATA_FIELD_TYPES
+    get_available_chunk_methods, get_default_chunk_method, DOCUMENT_RUNNING_STATUS, METADATA_FIELD_TYPES,
+    KNOWLEDGE_TEMPLATES
 )
 
 logger = logging.getLogger(__name__)
@@ -70,6 +71,7 @@ def get_document_constants():
         "source_configs": source_configs,
         "running_status": DOCUMENT_RUNNING_STATUS,
         "metadata_field_types": METADATA_FIELD_TYPES,
+        "knowledge_templates": KNOWLEDGE_TEMPLATES,
     })
 
 

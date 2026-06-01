@@ -43,6 +43,7 @@ export interface KnowledgebaseDocumentCategory {
   description?: string;
   parent_id?: string;
   sort_order: number;
+  document_config?: string | Record<string, any>;
   created_at: string;
   updated_at?: string;
   children?: KnowledgebaseDocumentCategory[];
@@ -52,6 +53,7 @@ export interface KnowledgebaseDocument {
   id: string;
   kb_id: string;
   category_id?: string;
+  title?: string;
   tags?: string[];
   chunk_method: string;
   chunk_config?: Record<string, unknown>;
@@ -72,8 +74,11 @@ export interface KnowledgebaseDocument {
   task_duration: number;
   task_progress_message?: string;
   metadatas?: string | Record<string, any>;
+  document_config?: string | Record<string, any>;
+  content?: string;
   created_at: string;
   updated_at?: string;
+  updated_by?: string;
 }
 
 export const knowledgebaseService = {
@@ -344,6 +349,12 @@ export const knowledgebaseService = {
       step?: number;
     }>>;
     running_status: Record<string, string>;
+    knowledge_templates: Array<{
+      key: string;
+      title: string;
+      description: string;
+      icon: string;
+    }>;
   }> => {
     return http.get('/aicenter/v1/knowledgebase/document_constants');
   },

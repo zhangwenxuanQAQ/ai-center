@@ -31,7 +31,8 @@ interface ChunkMethodModalProps {
   onSuccess: (updatedDoc?: KnowledgebaseDocument) => void;
   document: KnowledgebaseDocument;
   knowledgebaseId: string;
-}
+  category?: any; // 新增：目录信息，用于回显默认配置
+} 
 
 const ChunkMethodModal: React.FC<ChunkMethodModalProps> = ({
   visible,
@@ -39,16 +40,41 @@ const ChunkMethodModal: React.FC<ChunkMethodModalProps> = ({
   onSuccess,
   document,
   knowledgebaseId,
+  category,
 }) => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [initLoading, setInitLoading] = useState(false);
   const [constants, setConstants] = useState<DocumentConstants | null>(null);
   const [availableMethods, setAvailableMethods] = useState<Array<{ key: string; label: string; is_default: boolean }>>([]);
-  const [selectedMethod, setSelectedMethod] = useState<string>(document.chunk_method);
-  const [chunkConfig, setChunkConfig] = useState<Record<string, unknown>>(
-    document.chunk_config || {}
-  );
+  
+  // 优先级回显逻辑：优先使用文档的切片配置，若无则使用目录的切片配置
+  const getDefaultChunkMethod = () => {
+    // 如果文档有切片方法，使用文档的
+    if (document.chunk_method) {
+      return document.chunk_method;
+    }
+    // 否则使用目录的切片方法
+    if (category?.chunk_method) {
+      return category.chunk_method;
+    }
+    return '';
+  };
+  
+  const getDefaultChunkConfig = () => {
+    // 如果文档有切片配置，使用文档的
+    if (document.chunk_config && Object.keys(document.chunk_config).length > 0) {
+      return document.chunk_config;
+    }
+    // 否则使用目录的切片配置
+    if (category?.chunk_config) {
+      return category.chunk_config;
+    }
+    return {};
+  };
+  
+  const [selectedMethod, setSelectedMethod] = useState<string>(getDefaultChunkMethod());
+  const [chunkConfig, setChunkConfig] = useState<Record<string, unknown>>(getDefaultChunkConfig());
   const [theme, setTheme] = useState<string>(getTheme());
 
   useEffect(() => {
@@ -56,7 +82,7 @@ const ChunkMethodModal: React.FC<ChunkMethodModalProps> = ({
       initModal();
       setTheme(getTheme());
     }
-  }, [visible]);
+  }, [visible, category]);
 
   useEffect(() => {
     if (!document.body) return;
@@ -81,12 +107,21 @@ const ChunkMethodModal: React.FC<ChunkMethodModalProps> = ({
 
       setConstants(constantsData);
       setAvailableMethods(methodsData.available_methods);
-      setSelectedMethod(document.chunk_method);
-      setChunkConfig(document.chunk_config || {});
+      
+      // 优先级回显逻辑：优先使用文档的切片配置，若无则使用目录的切片配置
+      const defaultMethod = getDefaultChunkMethod();
+      const defaultConfig = getDefaultChunkConfig();
+      
+      // 合并默认配置和文档/目录配置，确保所有字段都有值
+      const methodConfig = initDefaultChunkConfig(defaultMethod);
+      const mergedConfig = { ...methodConfig, ...defaultConfig };
+      
+      setSelectedMethod(defaultMethod);
+      setChunkConfig(mergedConfig);
 
       form.resetFields();
       form.setFieldsValue({
-        chunk_method: document.chunk_method,
+        chunk_method: defaultMethod,
       });
     } catch (error) {
       console.error('Failed to init chunk method modal:', error);
@@ -314,10 +349,10 @@ const ChunkMethodModal: React.FC<ChunkMethodModalProps> = ({
               placeholder="请选择切片方法"
               value={selectedMethod}
               onChange={handleMethodChange}
-              options={availableMethods.map(method => ({
+              options={constants?.chunk_methods?.map(method => ({
                 value: method.key,
                 label: method.label,
-              }))}
+              })) || []}
               style={{ width: '100%' }}
             />
           </Form.Item>

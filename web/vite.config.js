@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     server: {
-      host: '10.9.44.5',
+      host: 'localhost',
       port: 8000,
       proxy: {
         '/aicenter': {

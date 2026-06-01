@@ -30,6 +30,44 @@ SOURCE_TYPE_LABELS: Dict[str, str] = {
 }
 
 
+class KnowledgeTemplateType:
+    """知识模板类型枚举"""
+    FILE = 'file'
+    RICH_TEXT = 'rich_text'
+    CHAPTER = 'chapter'
+    STRUCTURED_DATA = 'structured_data'
+
+
+KNOWLEDGE_TEMPLATE_LABELS: Dict[str, str] = {
+    KnowledgeTemplateType.FILE: '文件',
+    KnowledgeTemplateType.RICH_TEXT: '富文本',
+    KnowledgeTemplateType.CHAPTER: '章节',
+    KnowledgeTemplateType.STRUCTURED_DATA: '结构化数据',
+}
+
+
+KNOWLEDGE_TEMPLATES: List[Dict[str, Any]] = [
+    {
+        "key": KnowledgeTemplateType.FILE,
+        "title": '文件',
+        "description": '上传本地文件快速录入知识',
+        "icon": 'UploadOutlined',
+    },
+    {
+        "key": KnowledgeTemplateType.RICH_TEXT,
+        "title": '富文本',
+        "description": '富文本框录入知识',
+        "icon": 'FileTextOutlined',
+    },
+    {
+        "key": 'custom',
+        "title": '自定义模版',
+        "description": '根据业务自定义模版采编知识',
+        "icon": 'SettingOutlined',
+    },
+]
+
+
 class ChunkMethod:
     """切片方法枚举"""
     NAIVE = "naive"

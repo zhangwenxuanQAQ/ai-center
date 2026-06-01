@@ -648,6 +648,401 @@ body[data-theme="dark"] span.ant-checkbox-checked span.ant-checkbox-inner {
   border-color: #667eea !important;
 }
 
+/* MDEditor 样式 - 深色主题 - 增强版 */
+body[data-theme="dark"] .md-editor-container .md-editor,
+body[data-theme="dark"] .md-editor-container .w-md-editor,
+body[data-theme="dark"] .w-md-editor,
+body[data-theme="dark"] [class*="md-editor"],
+body[data-theme="dark"] [class*="w-md-editor"] {
+  background: #1a1a1a !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+body[data-theme="dark"] .md-editor-container .md-editor-toolbar,
+body[data-theme="dark"] .md-editor-container .w-md-editor-toolbar,
+body[data-theme="dark"] .w-md-editor-toolbar,
+body[data-theme="dark"] .md-editor-container [class*="toolbar"],
+body[data-theme="dark"] [class*="toolbar"][class*="md"] {
+  background: #1a1a1a !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+body[data-theme="dark"] .md-editor-container .md-editor-toolbar *,
+body[data-theme="dark"] .md-editor-container .w-md-editor-toolbar *,
+body[data-theme="dark"] .w-md-editor-toolbar * {
+  background: transparent !important;
+}
+
+body[data-theme="dark"] .md-editor-container .md-editor-toolbar button,
+body[data-theme="dark"] .md-editor-container .w-md-editor-toolbar button,
+body[data-theme="dark"] .w-md-editor-toolbar button,
+body[data-theme="dark"] .md-editor-container [class*="toolbar"] button,
+body[data-theme="dark"] .md-editor-container [class*="bar"] button {
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.7) !important;
+  border: none !important;
+}
+
+body[data-theme="dark"] .md-editor-container .md-editor-toolbar button:hover,
+body[data-theme="dark"] .md-editor-container .w-md-editor-toolbar button:hover,
+body[data-theme="dark"] .w-md-editor-toolbar button:hover,
+body[data-theme="dark"] .md-editor-container [class*="toolbar"] button:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #fff !important;
+}
+
+body[data-theme="dark"] .md-editor-container .md-editor-toolbar button.active,
+body[data-theme="dark"] .md-editor-container .w-md-editor-toolbar button.active,
+body[data-theme="dark"] .w-md-editor-toolbar button.active {
+  background: rgba(102, 126, 234, 0.3) !important;
+  color: #667eea !important;
+}
+
+body[data-theme="dark"] .md-editor-container .md-editor-content textarea,
+body[data-theme="dark"] .md-editor-container .w-md-editor-content textarea,
+body[data-theme="dark"] .w-md-editor-content textarea,
+body[data-theme="dark"] .md-editor-container [class*="content"] textarea,
+body[data-theme="dark"] textarea[class*="editor"] {
+  background: #1a1a1a !important;
+  color: #fff !important;
+}
+
+body[data-theme="dark"] .md-editor-container .md-editor-preview,
+body[data-theme="dark"] .md-editor-container .w-md-editor-preview,
+body[data-theme="dark"] .w-md-editor-preview,
+body[data-theme="dark"] .md-editor-container [class*="preview"] {
+  background: #1a1a1a !important;
+  color: #fff !important;
+}
+
+body[data-theme="dark"] .md-editor-container .wmde-markdown,
+body[data-theme="dark"] .w-md-editor .wmde-markdown,
+body[data-theme="dark"] [class*="markdown"] {
+  color: #fff !important;
+  background: #1a1a1a !important;
+}
+
+body[data-theme="dark"] .md-editor-container .wmde-markdown strong,
+body[data-theme="dark"] .md-editor-container .wmde-markdown b,
+body[data-theme="dark"] .w-md-editor .wmde-markdown strong,
+body[data-theme="dark"] .w-md-editor .wmde-markdown b,
+body[data-theme="dark"] [class*="markdown"] strong,
+body[data-theme="dark"] [class*="markdown"] b {
+  color: #fff !important;
+}
+
+body[data-theme="dark"] .md-editor-container .wmde-markdown em,
+body[data-theme="dark"] .md-editor-container .wmde-markdown i,
+body[data-theme="dark"] .w-md-editor .wmde-markdown em,
+body[data-theme="dark"] .w-md-editor .wmde-markdown i,
+body[data-theme="dark"] [class*="markdown"] em,
+body[data-theme="dark"] [class*="markdown"] i {
+  color: #fff !important;
+}
+
+body[data-theme="dark"] .md-editor-container .wmde-markdown code,
+body[data-theme="dark"] .w-md-editor .wmde-markdown code,
+body[data-theme="dark"] [class*="markdown"] code {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #fff !important;
+}
+
+body[data-theme="dark"] .md-editor-container .wmde-markdown pre,
+body[data-theme="dark"] .w-md-editor .wmde-markdown pre,
+body[data-theme="dark"] [class*="markdown"] pre {
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+
+body[data-theme="dark"] .md-editor-container .wmde-markdown blockquote,
+body[data-theme="dark"] .w-md-editor .wmde-markdown blockquote,
+body[data-theme="dark"] [class*="markdown"] blockquote {
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+body[data-theme="dark"] .md-editor-container .wmde-markdown hr,
+body[data-theme="dark"] .w-md-editor .wmde-markdown hr,
+body[data-theme="dark"] [class*="markdown"] hr {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* 覆盖 MDEditor 默认白色样式 - 增强版 */
+body[data-theme="dark"] .w-md-editor-bar,
+body[data-theme="dark"] [class*="editor-bar"],
+body[data-theme="dark"] [class*="toolbar-bar"] {
+  background: #1a1a1a !important;
+}
+
+body[data-theme="dark"] .w-md-editor-bar *,
+body[data-theme="dark"] [class*="editor-bar"] * {
+  background: transparent !important;
+}
+
+body[data-theme="dark"] .w-md-editor-bar svg,
+body[data-theme="dark"] [class*="editor-bar"] svg {
+  fill: rgba(255, 255, 255, 0.7) !important;
+}
+
+body[data-theme="dark"] .w-md-editor-bar button:hover svg,
+body[data-theme="dark"] [class*="editor-bar"] button:hover svg {
+  fill: #fff !important;
+}
+
+body[data-theme="dark"] .w-md-editor-text-input,
+body[data-theme="dark"] textarea[class*="md-editor"],
+body[data-theme="dark"] textarea[class*="w-md"] {
+  background: #1a1a1a !important;
+  color: #fff !important;
+}
+
+/* 全局覆盖 MDEditor 样式 */
+body[data-theme="dark"] div[class*="w-md-editor"],
+body[data-theme="dark"] div[class*="md-editor"] {
+  background: #1a1a1a !important;
+}
+
+body[data-theme="dark"] div[class*="w-md-editor"] *,
+body[data-theme="dark"] div[class*="md-editor"] * {
+  background-color: transparent !important;
+}
+
+/* CodeMirror 编辑器深色主题样式 - 增强版 */
+body[data-theme="dark"] .md-editor-wrapper {
+  --md-editor-bg: #1a1a1a;
+  --md-editor-text: #ffffff;
+  --md-editor-border: rgba(255, 255, 255, 0.1);
+}
+
+body[data-theme="dark"] .md-editor-wrapper * {
+  color: var(--md-editor-text) !important;
+}
+
+/* 编辑器主容器 */
+body[data-theme="dark"] .md-editor-wrapper .w-md-editor,
+body[data-theme="dark"] .md-editor-wrapper .md-editor,
+body[data-theme="dark"] .md-editor-wrapper div[class*="editor"] {
+  background: var(--md-editor-bg) !important;
+  border-color: var(--md-editor-border) !important;
+}
+
+/* 编辑区域 */
+body[data-theme="dark"] .md-editor-wrapper .w-md-editor-content,
+body[data-theme="dark"] .md-editor-wrapper .md-editor-content,
+body[data-theme="dark"] .md-editor-wrapper [class*="editor-content"] {
+  background: var(--md-editor-bg) !important;
+}
+
+/* 编辑区域内的所有元素 */
+body[data-theme="dark"] .md-editor-wrapper .w-md-editor-content *,
+body[data-theme="dark"] .md-editor-wrapper .md-editor-content *,
+body[data-theme="dark"] .md-editor-wrapper [class*="editor-content"] * {
+  color: var(--md-editor-text) !important;
+  background: transparent !important;
+}
+
+/* textarea 输入框 - 只设置文字颜色，不强制背景色 */
+body[data-theme="dark"] .md-editor-wrapper textarea,
+body[data-theme="dark"] .md-editor-wrapper .w-md-editor-text-input,
+body[data-theme="dark"] .md-editor-wrapper [class*="text-input"],
+body[data-theme="dark"] .md-editor-wrapper [class*="textarea"] {
+  color: var(--md-editor-text) !important;
+  caret-color: var(--md-editor-text) !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper textarea::placeholder,
+body[data-theme="dark"] .md-editor-wrapper .w-md-editor-text-input::placeholder {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+/* CodeMirror 6 样式 */
+body[data-theme="dark"] .md-editor-wrapper .cm-editor,
+body[data-theme="dark"] .md-editor-wrapper .cm-editor * {
+  background: var(--md-editor-bg) !important;
+  color: var(--md-editor-text) !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-content {
+  caret-color: var(--md-editor-text) !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-activeLine {
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-line {
+  color: var(--md-editor-text) !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-cursor {
+  border-left-color: var(--md-editor-text) !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-selectionBackground {
+  background: rgba(102, 126, 234, 0.3) !important;
+}
+
+/* CodeMirror 6 语法高亮 */
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-keyword {
+  color: #c792ea !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-string {
+  color: #c3e88d !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-comment {
+  color: #546e7a !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-number {
+  color: #f78c6c !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-property {
+  color: #82aaff !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-operator {
+  color: #89ddff !important;
+}
+
+/* CodeMirror 5 样式（备用） */
+body[data-theme="dark"] .md-editor-wrapper .CodeMirror,
+body[data-theme="dark"] .md-editor-wrapper .CodeMirror * {
+  background: var(--md-editor-bg) !important;
+  color: var(--md-editor-text) !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .CodeMirror-cursor {
+  border-left: 2px solid var(--md-editor-text) !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .CodeMirror-gutters {
+  background: var(--md-editor-bg) !important;
+  border-right: 1px solid var(--md-editor-border) !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .CodeMirror-linenumber {
+  color: rgba(255, 255, 255, 0.3) !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .CodeMirror-selected {
+  background: rgba(102, 126, 234, 0.3) !important;
+}
+
+/* 预览区域 */
+body[data-theme="dark"] .md-editor-wrapper .w-md-editor-preview,
+body[data-theme="dark"] .md-editor-wrapper .md-editor-preview,
+body[data-theme="dark"] .md-editor-wrapper [class*="preview"] {
+  background: var(--md-editor-bg) !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .w-md-editor-preview *,
+body[data-theme="dark"] .md-editor-wrapper .md-editor-preview *,
+body[data-theme="dark"] .md-editor-wrapper [class*="preview"] * {
+  color: var(--md-editor-text) !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .wmde-markdown {
+  color: var(--md-editor-text) !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .wmde-markdown code {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #c792ea !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .wmde-markdown pre {
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .wmde-markdown blockquote {
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* 工具栏 */
+body[data-theme="dark"] .md-editor-wrapper .w-md-editor-toolbar,
+body[data-theme="dark"] .md-editor-wrapper .md-editor-toolbar {
+  background: var(--md-editor-bg) !important;
+  border-bottom: 1px solid var(--md-editor-border) !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .w-md-editor-toolbar button,
+body[data-theme="dark"] .md-editor-wrapper .md-editor-toolbar button {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .w-md-editor-toolbar button:hover,
+body[data-theme="dark"] .md-editor-wrapper .md-editor-toolbar button:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: var(--md-editor-text) !important;
+}
+
+/* 滚动条 */
+body[data-theme="dark"] .md-editor-wrapper ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+body[data-theme="dark"] .md-editor-wrapper ::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+body[data-theme="dark"] .md-editor-wrapper ::-webkit-scrollbar-thumb {
+  background: rgba(102, 126, 234, 0.6);
+  border-radius: 4px;
+}
+
+body[data-theme="dark"] .md-editor-wrapper ::-webkit-scrollbar-thumb:hover {
+  background: rgba(102, 126, 234, 0.8);
+}
+
+/* 额外的强制样式 - 确保编辑器输入文字颜色正确 */
+body[data-theme="dark"] .md-editor-wrapper textarea {
+  color: #ffffff !important;
+  background-color: #1a1a1a !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .w-md-editor-textarea {
+  color: #ffffff !important;
+  background-color: #1a1a1a !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .w-md-editor-textarea textarea {
+  color: #ffffff !important;
+  background-color: #1a1a1a !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .w-md-editor-textarea pre {
+  color: #ffffff !important;
+  background-color: #1a1a1a !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .w-md-editor-textarea pre code {
+  color: #ffffff !important;
+  background-color: #1a1a1a !important;
+}
+
+/* CodeMirror 强制样式 */
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-scroller {
+  background-color: #1a1a1a !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-content {
+  background-color: #1a1a1a !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-content > div {
+  color: #ffffff !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-line {
+  color: #ffffff !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-line span {
+  color: #ffffff !important;
+}
+
 body[data-theme="dark"] .ant-checkbox-indeterminate .ant-checkbox-inner::after,
 body[data-theme="dark"] span.ant-checkbox-indeterminate span.ant-checkbox-inner::after {
   background: #667eea !important;
