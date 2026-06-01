@@ -53,8 +53,9 @@ app/  #主应用包
 ├── api/            # controller层
 ├── test/          # 单元测试，集成测试，验证脚本
 ├── docs/          # 文档
-├──server_run.py  #开发环境入口
-├──server_wsgi.py  #生成环境入口
+├──server_run.py  #服务定义文件
+├──server_wsgi.py  #生产环境服务入口
+├──start_server.py  #启动后端服务入口
 ├── README.md
 ├── CHANGELOG.md
 ```

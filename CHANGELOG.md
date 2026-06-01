@@ -7,6 +7,30 @@
 
 ## [Unreleased]
 
+### 新增
+- 添加多worker模式启动脚本 `app/start_server.py`
+  - 支持根据CPU核心数自动设置workers数量（最多8个）
+  - 确保MCP服务和文档切片任务执行器只启动一次
+  - 避免多进程模式下的端口冲突问题
+
+### 变更
+- 更新后端服务启动方式
+  - 启动命令从 `python -m app.server_run` 改为 `python -m app.start_server`
+  - FastAPI应用使用导入字符串格式，支持多worker模式
+  - 优化服务启动流程，提升并发处理能力
+- 更新Docker部署配置
+  - `docker/entrypoint.sh` 使用统一的启动脚本
+  - 移除单独启动MCP服务的代码，由start_server统一管理
+- 更新项目文档
+  - README.md 更新启动命令说明
+  - app/core/mcp/README.md 更新启动方式
+
+### 优化
+- 后端服务性能提升
+  - 支持多worker进程并行处理请求
+  - 根据CPU核心数自动调整worker数量
+  - 设置keep-alive超时优化连接管理
+
 ## [aihub_v2_beta_0.1] - 2026-05-21
 
 ### 新增

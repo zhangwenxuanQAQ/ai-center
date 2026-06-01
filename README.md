@@ -98,8 +98,9 @@ ai-center/
 │   │   ├── datasource/            # 数据源服务
 │   │   └── user/                  # 用户服务
 │   ├── test/                      # 测试和验证脚本
-│   ├── server_run.py              # 开发环境入口
+│   ├── server_run.py              # 服务定义
 │   ├── server_wsgi.py             # 生产环境入口
+│   ├── start_server.py            # 启动后端服务入口
 │   └── mcp_server.py              # MCP服务器入口
 │
 ├── web/                           # 前端应用
@@ -195,9 +196,14 @@ ai-center/
 
 3. 启动服务
    ```bash
-   python -m app.server_run
+   python -m app.start_server
    ```
    后端服务将运行在 http://0.0.0.0:8081
+   
+   **说明**：
+   - 新版本使用 `app.start_server` 作为启动入口
+   - 支持多worker模式，根据CPU核心数自动调整（最多8个worker）
+   - MCP服务和文档切片任务执行器只启动一次，避免端口冲突
 
 ### 前端服务
 

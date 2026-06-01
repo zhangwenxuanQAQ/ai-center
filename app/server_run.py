@@ -9,6 +9,15 @@ import os
 import logging
 from contextlib import asynccontextmanager
 
+# 主进程检测机制
+# 使用环境变量来标识主进程，确保MCP服务和任务执行器只在主进程启动
+def is_main_process():
+    """
+    检测当前进程是否为主进程
+    通过环境变量MAIN_PROCESS来标识
+    """
+    return os.environ.get("MAIN_PROCESS", "0") == "1"
+
 # 添加项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -1492,63 +1501,9 @@ try:
 except Exception as e:
     logger.error(f"[COMPONENT] ❌ 智能体组件注册失败: {e}")
 
-logger.info("\n" + "=" * 80)
-logger.info("[阶段4/5] 启动MCP服务")
-logger.info("=" * 80)
-
+# MCP服务和文档切片任务执行器将由启动脚本启动
 mcp_enabled = config.config.get('mcp', {}).get('enabled', False)
 mcp_process = None
-
-if mcp_enabled:
-    logger.info("\n[MCP] 正在启动MCP服务...")
-    mcp_host = config.config.get('mcp', {}).get('host', '127.0.0.1')
-    mcp_port = config.config.get('mcp', {}).get('port', 8082)
-    
-    logger.info(f"[MCP] 配置信息:")
-    logger.info(f"  - 主机: {mcp_host}")
-    logger.info(f"  - 端口: {mcp_port}")
-    
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    mcp_process = subprocess.Popen(
-        [sys.executable, "-m", "app.mcp_server"],
-        cwd=project_root
-    )
-    logger.info(f"[MCP] ✅ MCP服务已启动: http://{mcp_host}:{mcp_port}/mcp")
-else:
-    logger.info("[MCP] ⚠️ MCP服务未启用（配置文件中mcp.enabled=false）")
-
-logger.info("\n" + "=" * 80)
-logger.info("[阶段5/5] 启动文档切片任务执行器")
-logger.info("=" * 80)
-
-logger.info("\n[TASK] 正在启动文档切片任务执行器...")
-try:
-    from app.core.knowledgebase.server import task_executor
-    task_executor.start()
-    logger.info("[TASK] ✅ 文档切片任务执行器已启动")
-except Exception as e:
-    logger.error(f"[TASK] ❌ 文档切片任务执行器启动失败: {e}")
-
-logger.info("\n" + "=" * 80)
-logger.info("AI Center 服务启动成功！")
-logger.info("=" * 80)
-logger.info(f"\n服务地址:")
-logger.info(f"  - 后端API:     http://{config.server['host']}:{config.server['http_port']}")
-logger.info(f"  - Swagger文档: http://{config.server['host']}:{config.server['http_port']}/docs")
-logger.info(f"  - ReDoc文档:   http://{config.server['host']}:{config.server['http_port']}/redoc")
-
-if mcp_enabled:
-    mcp_host = config.config.get('mcp', {}).get('host', '127.0.0.1')
-    mcp_port = config.config.get('mcp', {}).get('port', 8082)
-    logger.info(f"  - MCP服务:     http://{mcp_host}:{mcp_port}/mcp")
-else:
-    logger.info(f"  - MCP服务:     未启用")
-
-logger.info(f"\n数据库连接:")
-logger.info(f"  - 主机: {config.mysql['host']}:{config.mysql['port']}")
-logger.info(f"  - 数据库: {config.mysql['name']}")
-logger.info(f"  - 用户: {config.mysql['user']}")
-logger.info("\n" + "=" * 80)
 
 app = FastAPI(
     title="AI Center API",
@@ -1679,14 +1634,9 @@ app.add_exception_handler(Exception, general_exception_handler)
 app.include_router(router, prefix="/aicenter/v1")
 
 if __name__ == "__main__":
-    import uvicorn
-    try:
-        uvicorn.run(
-            app,
-            host=config.server['host'],
-            port=config.server['http_port']
-        )
-    finally:
-        if mcp_process:
-            mcp_process.terminate()
-            mcp_process.wait()
+    # 此文件不再直接启动服务
+    # 请使用 python -m app.start_server 来启动服务
+    print("请使用以下命令启动服务:")
+    print("  python -m app.start_server")
+    print("或:")
+    print("  .venv\\Scripts\\python.exe -m app.start_server")
