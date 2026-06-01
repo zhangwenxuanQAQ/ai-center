@@ -607,7 +607,9 @@ class KnowledgebaseDocumentService:
             else:
                 query = query.where(KnowledgebaseDocument.running_status == running_status)
 
-        if status:
+        if status is not None:
+            if isinstance(status, str):
+                status = status.lower() == 'true'
             query = query.where(KnowledgebaseDocument.status == status)
 
         if chunk_method:
@@ -715,7 +717,9 @@ class KnowledgebaseDocumentService:
             else:
                 query = query.where(KnowledgebaseDocument.running_status == running_status)
 
-        if status:
+        if status is not None:
+            if isinstance(status, str):
+                status = status.lower() == 'true'
             query = query.where(KnowledgebaseDocument.status == status)
 
         if chunk_method:

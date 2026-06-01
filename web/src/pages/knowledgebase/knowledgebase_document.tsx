@@ -201,9 +201,9 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
         pageSize,
         selectedCategory || undefined,
         searchName || undefined,
-        filterFileType.length > 0 ? filterFileType : undefined,
-        filterStatus.length > 0 ? filterStatus : undefined,
-        filterNewStatus !== null ? filterNewStatus : undefined
+        undefined,  // chunkMethod - 文件类型过滤暂不支持
+        filterStatus.length > 0 ? filterStatus : undefined,  // runningStatus - 解析状态
+        filterNewStatus !== null ? String(filterNewStatus) : undefined  // status - 文档状态（转换为字符串）
       );
       setDocuments(response.data || []);
       setTotalDocs(response.total || 0);
