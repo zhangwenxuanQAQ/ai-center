@@ -10,13 +10,39 @@ from functools import partial
 
 from pandas import DataFrame
 
-from .. import GenerateParam, Generate
+from .. import GenerateParam, Generate, GenerateParamFrontEndField
 from app.constants.knowledgebase_document_constants import FileType
 from app.core.knowledgebase.utils.file_utils import filename_type
 from app.core.knowledgebase.rag.app import CHUNK_STRATEGIES
 from app.core.knowledgebase.rag.app.picture import chunk as picture_chunk, chunk_streamly as picture_chunk_streamly
 from app.core.knowledgebase.rag.app.audio import chunk as audio_chunk, chunk_streamly as audio_chunk_streamly
 
+
+class FileParseParamFrontEndField(GenerateParamFrontEndField):
+    """
+    文件识别组件参数前端控件
+    """
+
+    file_params = {
+        "key": "file_params",
+        "label": "文件参数",
+        "type": "custom",
+        "description": "配置文件来源和参数映射",
+    }
+
+    vision_llm_id = {
+        "key": "vision_llm_id",
+        "label": "视觉模型",
+        "type": "select",
+        "description": "用于图像/文档识别的视觉大模型",
+    }
+
+    audio_llm_id = {
+        "key": "audio_llm_id",
+        "label": "语音模型",
+        "type": "select",
+        "description": "用于音频识别的语音大模型",
+    }
 
 
 class FileParseParam(GenerateParam):

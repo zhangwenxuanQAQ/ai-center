@@ -15,7 +15,14 @@
 #
 from abc import ABC
 import pandas as pd
-from .base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
+
+
+class AkShareParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    AkShare组件参数前端控件
+    """
+    pass
 
 
 class AkShareParam(ComponentParamBase):

@@ -15,8 +15,21 @@
 #
 import logging
 from abc import ABC
-from .generate import GenerateParam, Generate
+from .generate import GenerateParam, Generate, GenerateParamFrontEndField
 from app.core.llm_model.utils.model_caller import ModelCaller
+
+
+class CategorizeParamFrontEndField(GenerateParamFrontEndField):
+    """
+    问题分类组件参数前端控件
+    """
+
+    category_description = {
+        "key": "category_description",
+        "label": "分类配置",
+        "type": "custom",
+        "description": "配置问题分类规则和对应下游节点",
+    }
 
 
 class CategorizeParam(GenerateParam):

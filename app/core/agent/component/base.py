@@ -43,12 +43,12 @@ class ComponentBaseFrontEndField(ABC):
     """
     组件参数前端控件
     """
-    inputs ={
-        "key": "inputs",
+    query ={
+        "key": "query",
         "label": "输入来源",
         "type": "custom",
         "description": "指定节点输入来源，不配置则来自上一个节点的输出",
-        "default": [],
+        "defaultValue": [],
     }
 
 

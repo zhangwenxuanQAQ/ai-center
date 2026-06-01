@@ -9,9 +9,16 @@ import time
 from abc import ABC
 from typing import List
 
-from .. import GenerateParam, Generate
+from .. import GenerateParam, Generate, GenerateParamFrontEndField
 from app.core.llm_model.utils.llm_util import get_output_json_content
 from app.core.llm_model.utils.model_caller import ModelCaller
+
+
+class MultiTurnQueryRewriteParamFrontEndField(GenerateParamFrontEndField):
+    """
+    多轮对话问题改写组件参数前端控件
+    """
+    pass
 
 
 class MultiTurnQueryRewriteParam(GenerateParam):

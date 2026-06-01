@@ -8,10 +8,17 @@ from functools import partial
 
 import pandas as pd
 
-from .. import GenerateParam, Generate
+from .. import GenerateParam, Generate, GenerateParamFrontEndField
 from agent.prompt_template import markdown_ui_system_prompt_template
 from app.core.knowledgebase.rag.prompts.generator import message_fit_in
 from app.core.llm_model.utils.model_caller import ModelCaller
+
+
+class MarkdownUIParamFrontEndField(GenerateParamFrontEndField):
+    """
+    Markdown UI组件参数前端控件
+    """
+    pass
 
 
 class MarkdownUIParam(GenerateParam):

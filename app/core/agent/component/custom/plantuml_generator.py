@@ -11,11 +11,18 @@ import json
 import requests
 from plantuml import PlantUML
 
-from .. import GenerateParam, Generate
+from .. import GenerateParam, Generate, GenerateParamFrontEndField
 from api import settings
 from app.core.knowledgebase.rag.prompts.generator import message_fit_in
 from app.core.llm_model.utils.llm_util import get_output_json_content
 from app.core.llm_model.utils.model_caller import ModelCaller
+
+
+class PlantUMLGeneratorParamFrontEndField(GenerateParamFrontEndField):
+    """
+    PlantUML组件参数前端控件
+    """
+    pass
 
 
 class PlantUMLGeneratorParam(GenerateParam):

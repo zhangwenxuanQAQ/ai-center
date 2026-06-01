@@ -3,6 +3,7 @@
 """
 
 import json
+import inspect
 from fastapi import APIRouter, Query
 from app.services.agent.service import (
     AgentCategoryService, AgentComponentService, AgentInstanceService
@@ -13,8 +14,60 @@ from app.services.agent.dto import (
     AgentInstanceCreate, AgentInstanceUpdate, AgentInstance as AgentInstanceSchema
 )
 from app.utils.response import ResponseUtil, ApiResponse
+from app.core.agent.component import component_class
 
 router = APIRouter()
+
+
+def get_component_param_field(component_name: str) -> dict:
+    """
+    根据组件名称获取组件前端参数字段配置
+    
+    Args:
+        component_name: 组件名称
+        
+    Returns:
+        dict: 组件前端参数字段配置
+    """
+    component_cls = component_class(component_name)
+    if not component_cls:
+        return {}
+    
+    param_field_class_name = f"{component_name}ParamFrontEndField"
+    
+    try:
+        module = inspect.getmodule(component_cls)
+        if hasattr(module, param_field_class_name):
+            param_field_class = getattr(module, param_field_class_name)
+            if inspect.isclass(param_field_class):
+                result = {}
+                for name, value in inspect.getmembers(param_field_class):
+                    if not name.startswith('_') and isinstance(value, dict):
+                        result[name] = value
+                return result
+    except Exception as e:
+        pass
+    
+    return {}
+
+
+def format_component_data(component) -> dict:
+    """
+    格式化组件数据，解析JSON字段并添加component_param_field
+    
+    Args:
+        component: 组件对象
+        
+    Returns:
+        dict: 格式化后的组件数据
+    """
+    data = component.__data__.copy()
+    
+    data['css'] = json.loads(data.get('css') or '{}')
+    data['default_params'] = json.loads(data.get('default_params') or '{}')
+    data['component_param_field'] = get_component_param_field(data.get('component_name', ''))
+    
+    return data
 
 
 def format_category_data(data: dict) -> dict:
@@ -130,6 +183,16 @@ def get_all_components(component_type: str = None, category: str = None, status:
         data['default_params'] = json.loads(data.get('default_params') or '{}')
         components_data.append(data)
     return ResponseUtil.success(data=components_data, message="获取所有智能体组件成功")
+
+
+@router.get("/components/name/{component_name}", response_model=ApiResponse)
+def get_component_by_name(component_name: str):
+    """
+    根据组件名称获取单个智能体组件
+    """
+    component = AgentComponentService.get_component_by_name(component_name)
+    data = format_component_data(component)
+    return ResponseUtil.success(data=data, message="获取智能体组件成功")
 
 
 @router.get("/components/{component_id}", response_model=ApiResponse)

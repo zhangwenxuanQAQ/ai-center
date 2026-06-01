@@ -19,7 +19,27 @@ import re
 from jinja2 import StrictUndefined
 from jinja2.sandbox import SandboxedEnvironment
 
-from .base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
+
+
+class TemplateParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    模板转换组件参数前端控件
+    """
+
+    content = {
+        "key": "content",
+        "label": "模板内容",
+        "type": "textarea",
+        "description": "Jinja2模板内容，支持变量引用如{component_id}",
+    }
+
+    parameters = {
+        "key": "parameters",
+        "label": "参数列表",
+        "type": "custom",
+        "description": "模板中使用的参数定义",
+    }
 
 
 class TemplateParam(ComponentParamBase):

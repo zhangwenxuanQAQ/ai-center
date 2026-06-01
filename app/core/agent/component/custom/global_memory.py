@@ -8,8 +8,21 @@ from abc import ABC
 
 from pandas import DataFrame
 
-from ..base import ComponentBase, ComponentParamBase
+from ..base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
 from agent.util.global_memory_util import init_single_memory_config, get_memory_result
+
+
+class GlobalMemoryParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    全局记忆组件参数前端控件
+    """
+
+    memory_configs = {
+        "key": "memory_configs",
+        "label": "记忆配置",
+        "type": "custom",
+        "description": "配置需要获取的全局记忆字段",
+    }
 
 
 class GlobalMemoryParam(ComponentParamBase):

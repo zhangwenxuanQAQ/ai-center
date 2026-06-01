@@ -18,7 +18,14 @@ from abc import ABC
 import pandas as pd
 import requests
 import re
-from .base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
+
+
+class BaiduParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    百度搜索组件参数前端控件
+    """
+    pass
 
 
 class BaiduParam(ComponentParamBase):

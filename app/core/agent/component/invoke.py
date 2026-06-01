@@ -18,7 +18,73 @@ import re
 from abc import ABC
 import requests
 from app.core.knowledgebase.deepdoc.parser import HtmlParser
-from .base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
+
+
+class InvokeParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    接口调用组件参数前端控件
+    """
+
+    url = {
+        "key": "url",
+        "label": "接口地址",
+        "type": "text",
+        "description": "API接口URL地址",
+    }
+
+    method = {
+        "key": "method",
+        "label": "请求方法",
+        "type": "select",
+        "description": "HTTP请求方法：get、post、put",
+        "defaultValue": "get",
+    }
+
+    headers = {
+        "key": "headers",
+        "label": "请求头",
+        "type": "textarea",
+        "description": "HTTP请求头JSON格式",
+    }
+
+    variables = {
+        "key": "variables",
+        "label": "请求参数",
+        "type": "custom",
+        "description": "接口请求参数配置",
+    }
+
+    timeout = {
+        "key": "timeout",
+        "label": "超时时间(秒)",
+        "type": "number",
+        "description": "请求超时时间",
+        "defaultValue": 60,
+    }
+
+    clean_html = {
+        "key": "clean_html",
+        "label": "清理HTML",
+        "type": "boolean",
+        "description": "是否清理HTML标签只保留正文",
+        "defaultValue": False,
+    }
+
+    datatype = {
+        "key": "datatype",
+        "label": "数据类型",
+        "type": "select",
+        "description": "POST/PUT请求数据格式：json或formdata",
+        "defaultValue": "json",
+    }
+
+    proxy = {
+        "key": "proxy",
+        "label": "代理地址",
+        "type": "text",
+        "description": "HTTP代理服务器地址",
+    }
 
 
 class InvokeParam(ComponentParamBase):

@@ -16,7 +16,14 @@
 from abc import ABC
 import pandas as pd
 import requests
-from .base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
+
+
+class QWeatherParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    和风天气组件参数前端控件
+    """
+    pass
 
 
 class QWeatherParam(ComponentParamBase):

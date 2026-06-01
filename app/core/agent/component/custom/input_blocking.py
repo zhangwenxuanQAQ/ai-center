@@ -9,9 +9,16 @@ from typing import List
 
 import pandas as pd
 
-from ..base import ComponentBase, ComponentParamBase
+from ..base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
 from api.db.services.bot_service import BotConfigInputLimitService, BotConfigStatusService, \
     BotConfigSensitiveWordService, BotConfigSensitiveWordReplyService, BotConfigRepeatQuestionReplyService
+
+
+class InputBlockingParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    输入阻断组件参数前端控件
+    """
+    pass
 
 
 class InputBlockingParam(ComponentParamBase):

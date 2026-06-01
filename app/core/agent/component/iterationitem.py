@@ -16,8 +16,15 @@
 import json
 from abc import ABC
 import pandas as pd
-from .base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
 import logging
+
+
+class IterationItemParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    循环项节点参数前端控件
+    """
+    pass
 
 
 class IterationItemParam(ComponentParamBase):

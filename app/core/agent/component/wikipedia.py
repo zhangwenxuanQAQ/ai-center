@@ -17,7 +17,14 @@ import logging
 from abc import ABC
 import wikipedia
 import pandas as pd
-from .base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
+
+
+class WikipediaParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    维基百科组件参数前端控件
+    """
+    pass
 
 
 class WikipediaParam(ComponentParamBase):

@@ -21,10 +21,108 @@ from copy import deepcopy
 
 import pandas as pd
 
-from .base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
 from app.services.knowledgebase.service import KnowledgebaseService
 from app.core.datasource.tavily_datasource import TavilyDatasource
 from app.core.knowledgebase.retrieval_service import RetrievalService
+
+
+class RetrievalParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    知识检索组件参数前端控件
+    """
+
+    kb_ids = {
+        "key": "kb_ids",
+        "label": "知识库",
+        "type": "select-multiple",
+        "description": "选择要检索的知识库",
+        "defaultValue": [],
+    }
+
+    kb_vars = {
+        "key": "kb_vars",
+        "label": "动态知识库变量",
+        "type": "custom",
+        "description": "从上游节点获取知识库ID的变量配置",
+    }
+
+    similarity_threshold = {
+        "key": "similarity_threshold",
+        "label": "相似度阈值",
+        "type": "number",
+        "description": "向量检索相似度阈值，范围0-1",
+        "defaultValue": 0.2,
+    }
+
+    keywords_similarity_weight = {
+        "key": "keywords_similarity_weight",
+        "label": "关键词权重",
+        "type": "number",
+        "description": "关键词检索权重，与向量检索互补",
+        "defaultValue": 0.5,
+    }
+
+    top_n = {
+        "key": "top_n",
+        "label": "返回数量",
+        "type": "number",
+        "description": "返回检索结果的最大数量",
+        "defaultValue": 8,
+    }
+
+    top_k = {
+        "key": "top_k",
+        "label": "Top K",
+        "type": "number",
+        "description": "向量检索候选集大小",
+        "defaultValue": 1024,
+    }
+
+    rerank_id = {
+        "key": "rerank_id",
+        "label": "重排序模型",
+        "type": "select",
+        "description": "用于结果重排序的Rerank模型",
+    }
+
+    empty_response = {
+        "key": "empty_response",
+        "label": "空结果响应",
+        "type": "text",
+        "description": "无检索结果时的默认回复内容",
+    }
+
+    tavily_api_key = {
+        "key": "tavily_api_key",
+        "label": "Tavily API Key",
+        "type": "password",
+        "description": "Tavily搜索引擎API密钥",
+    }
+
+    use_kg = {
+        "key": "use_kg",
+        "label": "使用知识图谱",
+        "type": "boolean",
+        "description": "是否启用知识图谱增强检索",
+        "defaultValue": False,
+    }
+
+    sort_by = {
+        "key": "sort_by",
+        "label": "排序方式",
+        "type": "select",
+        "description": "结果排序方式：sim（相似度）或weight（权重）",
+        "defaultValue": "sim",
+    }
+
+    return_as_chunks = {
+        "key": "return_as_chunks",
+        "label": "返回分块格式",
+        "type": "boolean",
+        "description": "是否以分块格式返回结果",
+        "defaultValue": False,
+    }
 
 
 class RetrievalParam(ComponentParamBase):

@@ -21,13 +21,20 @@ import time
 
 import pandas as pd
 
-from ..base import ComponentBase, ComponentParamBase
+from ..base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
 
 try:
     from api.model.agent_output import AgentOutput
 except ImportError:
     class AgentOutput:
         pass
+
+
+class AnswerParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    回答节点参数前端控件
+    """
+    pass
 
 
 class AnswerParam(ComponentParamBase):

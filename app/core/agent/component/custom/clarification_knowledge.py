@@ -12,7 +12,7 @@ from typing import Dict, List
 import requests
 from pydantic import BaseModel
 
-from ..base import ComponentParamBase, ComponentBase
+from ..base import ComponentParamBase, ComponentBase, ComponentBaseFrontEndField
 from agent.util.es_util import generate_ablility_openness_request_headers
 from api.db.services.topic_service import TopicWordApproveRelationService, TopicWordInfoService
 from api.utils.neo4j_utils import Neo4jConnection, APPROVE_LABELS
@@ -654,6 +654,13 @@ class ClarificationService:
             tmp_next_words.append({"id": row.get("word_id"), "name": row.get("name")})
             tmp_next_word_names.append(row.get("name"))
         return tmp_next_words
+
+
+class ClarificationKnowledgeParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    澄清知识组件参数前端控件
+    """
+    pass
 
 
 class ClarificationKnowledgeParam(ComponentParamBase):

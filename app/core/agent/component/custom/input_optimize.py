@@ -7,9 +7,16 @@ import time
 from abc import ABC
 from typing import List
 
-from ..base import ComponentBase, ComponentParamBase
+from ..base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
 from api.db.services.bot_service import BotConfigStatusService, BotConfigStopWordService, \
     BotConfigSpecialCharacterService, BotConfigSpecialCharacterExcludeService, BotConfigRepetitiveWordService
+
+
+class InputOptimizeParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    输入优化组件参数前端控件
+    """
+    pass
 
 
 class InputOptimizeParam(ComponentParamBase):

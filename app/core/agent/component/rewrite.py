@@ -14,8 +14,21 @@
 #  limitations under the License.
 #
 from abc import ABC
-from .generate import GenerateParam, Generate
+from .generate import GenerateParam, Generate, GenerateParamFrontEndField
 from app.core.knowledgebase.rag.prompts.generator import full_question
+
+
+class RewriteQuestionParamFrontEndField(GenerateParamFrontEndField):
+    """
+    问题改写组件参数前端控件
+    """
+
+    language = {
+        "key": "language",
+        "label": "语言",
+        "type": "select",
+        "description": "指定问题的语言类型",
+    }
 
 
 class RewriteQuestionParam(GenerateParam):

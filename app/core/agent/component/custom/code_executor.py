@@ -12,7 +12,50 @@ import pandas as pd
 from pandas import DataFrame
 import jsonpath
 
-from ..base import ComponentBase, ComponentParamBase
+from ..base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
+
+
+class CodeExecutorParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    代码执行组件参数前端控件
+    """
+
+    language = {
+        "key": "language",
+        "label": "编程语言",
+        "type": "select",
+        "description": "选择代码执行语言：python、javascript",
+        "defaultValue": "python",
+    }
+
+    code = {
+        "key": "code",
+        "label": "执行代码",
+        "type": "code-editor",
+        "description": "要执行的代码，需包含main函数",
+    }
+
+    input_params = {
+        "key": "input_params",
+        "label": "输入参数",
+        "type": "custom",
+        "description": "代码执行所需的输入参数配置",
+    }
+
+    output_params = {
+        "key": "output_params",
+        "label": "输出参数",
+        "type": "custom",
+        "description": "代码输出的参数定义",
+    }
+
+    error_handle = {
+        "key": "error_handle",
+        "label": "错误处理",
+        "type": "select",
+        "description": "代码执行出错时的处理方式",
+        "defaultValue": "throw_exception",
+    }
 
 
 class CodeExecutorParam(ComponentParamBase):

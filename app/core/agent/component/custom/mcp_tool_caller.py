@@ -11,11 +11,18 @@ from abc import ABC
 
 from pandas import DataFrame
 
-from .. import GenerateParam, Generate
+from .. import GenerateParam, Generate, GenerateParamFrontEndField
 from api.utils.mcp_utils import mcp_server_test_connection, mcp_server_list_tools, mcp_server_call_tool
 from app.core.knowledgebase.rag.prompts.generator import message_fit_in
 from app.core.llm_model.utils.llm_util import get_output_json_content
 from app.core.llm_model.utils.model_caller import ModelCaller
+
+
+class MCPToolCallerParamFrontEndField(GenerateParamFrontEndField):
+    """
+    MCP工具调用组件参数前端控件
+    """
+    pass
 
 
 class MCPToolCallerParam(GenerateParam):

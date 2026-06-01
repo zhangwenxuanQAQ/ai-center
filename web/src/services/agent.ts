@@ -22,6 +22,7 @@ export interface AgentComponent {
   id: string;
   name: string;
   code: string;
+  component_name: string;
   component_title: string;
   description?: string;
   component_type: string;
@@ -32,6 +33,15 @@ export interface AgentComponent {
   sort_order: number;
   created_at: string;
   updated_at?: string;
+  css?: Record<string, any>;
+  default_params?: Record<string, any>;
+  component_param_field?: Record<string, {
+    key: string;
+    label: string;
+    type: string;
+    description?: string;
+    defaultValue?: any;
+  }>;
 }
 
 export interface AgentInstance {
@@ -156,5 +166,14 @@ export const agentService = {
     return http.get<AgentComponent[]>(
       '/aicenter/v1/agent/components/all?status=1'
     ) || [];
+  },
+
+  /**
+   * 根据组件名称获取单个组件
+   */
+  getComponentByName: async (componentName: string): Promise<AgentComponent> => {
+    return http.get<AgentComponent>(
+      `/aicenter/v1/agent/components/name/${componentName}`
+    );
   },
 };

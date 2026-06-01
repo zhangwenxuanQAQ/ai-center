@@ -15,7 +15,28 @@
 #
 from functools import partial
 import pandas as pd
-from ..base import ComponentBase, ComponentParamBase
+from ..base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
+
+
+class BeginParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    开始节点参数前端控件
+    """
+    prologue = {
+        "key": "prologue",
+        "label": "欢迎语",
+        "type": "textarea",
+        "description": "用户进入对话时显示的欢迎消息",
+        "defaultValue": "你好！ 我是你的助理，有什么可以帮到你的吗？",
+    }
+    query ={
+        "key": "query",
+        "label": "用户变量",
+        "type": "custom",
+        "description": "用户变量（可上传文件，设置固定值等）",
+        "defaultValue": [],
+    }
+
 
 
 class BeginParam(ComponentParamBase):
@@ -25,7 +46,7 @@ class BeginParam(ComponentParamBase):
 
     def __init__(self):
         super().__init__()
-        self.prologue = "Hi! I'm your smart assistant. What can I do for you?"
+        self.prologue = "你好！ 我是你的助理，有什么可以帮到你的吗？"
         self.query = []
         # 默认系统变量
         # "sys.user_id": self._tenant_id,

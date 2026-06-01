@@ -17,7 +17,15 @@ import logging
 from abc import ABC
 import requests
 import pandas as pd
-from .base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
+
+
+class BingParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    Bing搜索组件参数前端控件
+    """
+    pass
+
 
 class BingParam(ComponentParamBase):
     """

@@ -15,8 +15,29 @@
 #
 import json
 from abc import ABC
-from .base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
 from agent.util.global_memory_util import get_memory_result_by_config_ids
+
+
+class SwitchParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    条件判断组件参数前端控件
+    """
+
+    conditions = {
+        "key": "conditions",
+        "label": "条件配置",
+        "type": "custom",
+        "description": "配置条件分支规则和对应跳转目标",
+    }
+
+    end_cpn_id = {
+        "key": "end_cpn_id",
+        "label": "默认目标",
+        "type": "text",
+        "description": "所有条件不满足时的默认跳转目标节点",
+        "defaultValue": "answer:0",
+    }
 
 
 class SwitchParam(ComponentParamBase):

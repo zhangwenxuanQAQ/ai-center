@@ -14,7 +14,14 @@
 #  limitations under the License.
 #
 from abc import ABC
-from .base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
+
+
+class ConcentratorParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    集线器节点参数前端控件
+    """
+    pass
 
 
 class ConcentratorParam(ComponentParamBase):

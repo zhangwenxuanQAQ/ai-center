@@ -18,7 +18,14 @@ from abc import ABC
 import pandas as pd
 import time
 import requests
-from .base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
+
+
+class TuShareParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    TuShare组件参数前端控件
+    """
+    pass
 
 
 class TuShareParam(ComponentParamBase):

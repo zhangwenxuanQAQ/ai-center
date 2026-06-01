@@ -308,6 +308,19 @@ class AgentComponentService:
         
         db_component.delete_instance()
         return db_component
+    
+    @staticmethod
+    def get_component_by_name(component_name: str):
+        """
+        根据组件名称获取组件信息
+        """
+        try:
+            db_component = AgentComponent.get(
+                AgentComponent.component_name == component_name
+            )
+            return db_component
+        except AgentComponent.DoesNotExist:
+            raise ResourceNotFoundError(message=f"智能体组件 {component_name} 不存在")
 
 
 class AgentInstanceService:

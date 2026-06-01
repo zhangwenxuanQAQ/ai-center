@@ -16,8 +16,15 @@
 import logging
 from abc import ABC
 import pandas as pd
-from .base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
 import yfinance as yf
+
+
+class YahooFinanceParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    Yahoo财经组件参数前端控件
+    """
+    pass
 
 
 class YahooFinanceParam(ComponentParamBase):

@@ -19,7 +19,14 @@ from Bio import Entrez
 import re
 import pandas as pd
 import xml.etree.ElementTree as ET
-from .base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
+
+
+class PubMedParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    PubMed组件参数前端控件
+    """
+    pass
 
 
 class PubMedParam(ComponentParamBase):

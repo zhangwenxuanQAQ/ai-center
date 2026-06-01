@@ -21,7 +21,7 @@ import inspect
 import json
 from pathlib import Path
 
-from .generate import Generate, GenerateParam
+from .generate import Generate, GenerateParam, GenerateParamFrontEndField
 
 _component_registry = {}
 
@@ -215,4 +215,5 @@ __all__ = [
     "register_components",
     "Generate",
     "GenerateParam",
+    "GenerateParamFrontEndField",
 ]

@@ -5,11 +5,24 @@ import json
 import time
 from functools import partial
 
-from .. import GenerateParam, Generate
+from .. import GenerateParam, Generate, GenerateParamFrontEndField
 from agent.prompt_template import intent_detection_v2_system_prompt_template
 from app.core.knowledgebase.rag.prompts.generator import message_fit_in
 from app.core.llm_model.utils.llm_util import get_output_json_content, get_output_tag_content
 from app.core.llm_model.utils.model_caller import ModelCaller
+
+
+class IntentDetectionV2ParamFrontEndField(GenerateParamFrontEndField):
+    """
+    意图识别组件参数前端控件
+    """
+
+    configs = {
+        "key": "configs",
+        "label": "意图配置",
+        "type": "custom",
+        "description": "配置意图分类规则和对应动作",
+    }
 
 
 class IntentDetectionV2Param(GenerateParam):

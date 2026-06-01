@@ -16,8 +16,22 @@
 import logging
 import re
 from abc import ABC
-from .generate import GenerateParam, Generate
+from .generate import GenerateParam, Generate, GenerateParamFrontEndField
 from app.core.llm_model.utils.model_caller import ModelCaller
+
+
+class KeywordExtractParamFrontEndField(GenerateParamFrontEndField):
+    """
+    关键词提取组件参数前端控件
+    """
+
+    top_n = {
+        "key": "top_n",
+        "label": "提取数量",
+        "type": "number",
+        "description": "提取关键词的最大数量",
+        "defaultValue": 1,
+    }
 
 
 class KeywordExtractParam(GenerateParam):

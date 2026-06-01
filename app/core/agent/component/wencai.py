@@ -16,7 +16,14 @@
 from abc import ABC
 import pandas as pd
 import pywencai
-from .base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
+
+
+class WenCaiParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    问财组件参数前端控件
+    """
+    pass
 
 
 class WenCaiParam(ComponentParamBase):

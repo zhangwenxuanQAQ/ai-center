@@ -22,12 +22,19 @@ from functools import partial
 
 import pandas as pd
 
-from ..base import ComponentBase, ComponentParamBase
+from ..base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
 try:
     from api.model.agent_output import AgentOutput
 except ImportError:
     class AgentOutput:
         pass
+
+
+class ComponentAnswerParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    组件结果输出参数前端控件
+    """
+    pass
 
 
 class ComponentAnswerParam(ComponentParamBase):

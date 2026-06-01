@@ -12,7 +12,7 @@ import time
 from abc import ABC
 
 from agent.agent import Agent
-from .. import GenerateParam, Generate
+from .. import GenerateParam, Generate, GenerateParamFrontEndField
 from api.utils.llm_util import format_prompt_template
 from api.db.services.agent_service import AgentService
 
@@ -24,6 +24,13 @@ from api.model.component_output import MessageType, ComponentStatus
 from api.model.mcp_output import MCPOutput, MCPStatus
 from api.utils.mcp_utils import mcp_server_list_tools
 from app.core.llm_model.utils.model_caller import ModelCaller
+
+
+class IntentionRecognitionParamFrontEndField(GenerateParamFrontEndField):
+    """
+    任务分发组件参数前端控件
+    """
+    pass
 
 
 class IntentionRecognitionParam(GenerateParam):

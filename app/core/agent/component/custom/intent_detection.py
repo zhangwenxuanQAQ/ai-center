@@ -3,9 +3,16 @@
 # Description: 意图识别组件（用户输入 -> 解析用户意图 -> 选择动作 -> 用户确认 ->执行动作 -> 最终结果）
 import copy
 
-from .. import GenerateParam, Generate
+from .. import GenerateParam, Generate, GenerateParamFrontEndField
 from agent.prompt_template import intent_detection_system_prompt_template
 import json
+
+
+class IntentDetectionParamFrontEndField(GenerateParamFrontEndField):
+    """
+    意图识别组件参数前端控件
+    """
+    pass
 
 
 class IntentDetectionParam(GenerateParam):

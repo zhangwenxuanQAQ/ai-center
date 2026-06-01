@@ -16,8 +16,15 @@
 import random
 from abc import ABC
 import requests
-from .base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
 from hashlib import md5
+
+
+class BaiduFanyiParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    百度翻译组件参数前端控件
+    """
+    pass
 
 
 class BaiduFanyiParam(ComponentParamBase):

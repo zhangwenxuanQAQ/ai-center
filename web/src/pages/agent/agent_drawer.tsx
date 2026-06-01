@@ -1,11 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Drawer, Tabs, Form, Input, Divider, Empty, Spin, Timeline } from 'antd';
-import { PlayCircleOutlined, FileTextOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import { Drawer, Tabs, Form, Input, Divider, Empty, Spin, Timeline, Select, InputNumber, Switch, Tooltip } from 'antd';
+import { PlayCircleOutlined, FileTextOutlined, ClockCircleOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { getComponentIcon, getDefaultComponentIcon } from '../../utils/component_icon';
 import { agentService, AgentComponent } from '../../services/agent';
 
 const { TextArea } = Input;
 const { TabPane } = Tabs;
+
+interface ComponentParamField {
+  key: string;
+  label: string;
+  type: string;
+  description?: string;
+  defaultValue?: any;
+}
 
 interface AgentDrawerProps {
   visible: boolean;
@@ -32,7 +40,7 @@ const AgentDrawer: React.FC<AgentDrawerProps> = ({
 }) => {
   const [form] = Form.useForm();
   const [drawerContainer, setDrawerContainer] = React.useState<HTMLElement | null>(null);
-  const [components, setComponents] = useState<AgentComponent[]>([]);
+  const [component, setComponent] = useState<AgentComponent | null>(null);
 
   React.useEffect(() => {
     if (container) {
@@ -42,25 +50,90 @@ const AgentDrawer: React.FC<AgentDrawerProps> = ({
 
   React.useEffect(() => {
     if (selectedNode && visible) {
-      form.setFieldsValue({
-        name: selectedNode.data?.name || '',
-        description: selectedNode.data?.description || '',
-        ...selectedNode.data?.form,
-      });
+      const fetchComponent = async () => {
+        try {
+          const componentLabel = selectedNode.data?.label;
+          if (componentLabel) {
+            const data = await agentService.getComponentByName(componentLabel);
+            setComponent(data);
+            
+            // 提取默认值：优先从 component_param_field 获取，其次从 default_params 获取
+            const defaultValues: Record<string, any> = {};
+            const paramFields = data?.component_param_field || {};
+            const defaultParams = data?.default_params || {};
+            
+            // 先从 component_param_field 获取默认值
+            Object.values(paramFields).forEach((field: any) => {
+              if (field.defaultValue !== undefined) {
+                defaultValues[field.key] = field.defaultValue;
+              }
+            });
+            
+            // 再从 default_params 补充（未在 component_param_field 中定义的字段）
+            Object.entries(defaultParams).forEach(([key, value]) => {
+              if (!(key in defaultValues) && value !== undefined) {
+                defaultValues[key] = value;
+              }
+            });
+            // 合并已有表单数据和默认值
+            form.setFieldsValue({
+              form: {
+                ...defaultValues,
+                ...selectedNode.data?.form,
+              },
+            });
+          }
+        } catch (error) {
+          console.error('Failed to fetch component:', error);
+        }
+      };
+      fetchComponent();
     }
   }, [selectedNode, visible, form]);
 
-  useEffect(() => {
-    const fetchComponents = async () => {
-      try {
-        const data = await agentService.getComponents();
-        setComponents(data);
-      } catch (error) {
-        console.error('Failed to fetch components:', error);
-      }
-    };
-    fetchComponents();
-  }, []);
+  const renderFieldControl = (field: ComponentParamField) => {
+    const { type, description, defaultValue } = field;
+    
+    switch (type) {
+      case 'text':
+        return <Input placeholder={description} />;
+      case 'textarea':
+        return <TextArea rows={3} placeholder={description} />;
+      case 'number':
+        return <InputNumber style={{ width: '100%' }} placeholder={description} />;
+      case 'boolean':
+        return <Switch defaultChecked={defaultValue === true} />;
+      case 'select':
+        return <Select placeholder={description} style={{ width: '100%' }} />;
+      case 'select-multiple':
+        return <Select mode="multiple" placeholder={description} style={{ width: '100%' }} />;
+      case 'password':
+        return <Input.Password placeholder={description} />;
+      case 'code-editor':
+        return <TextArea rows={10} placeholder={description} style={{ fontFamily: 'monospace' }} />;
+      case 'custom':
+        return <TextArea rows={5} placeholder={description || '自定义配置'} />;
+      default:
+        return <Input placeholder={description} />;
+    }
+  };
+
+  const renderFieldLabel = (field: ComponentParamField) => {
+    const { label, description } = field;
+    
+    if (description) {
+      return (
+        <span>
+          {label}{' '}
+          <Tooltip title={description}>
+            <QuestionCircleOutlined style={{ color: '#999', fontSize: '12px', marginLeft: '4px' }} />
+          </Tooltip>
+        </span>
+      );
+    }
+    
+    return label;
+  };
 
   const renderRunResults = () => {
     if (runResults.length === 0) {
@@ -109,47 +182,23 @@ const AgentDrawer: React.FC<AgentDrawerProps> = ({
 
   const renderNodeConfig = () => {
     const nodeType = selectedNode?.type || selectedNode?.data?.label;
+    const paramFields = component?.component_param_field || {};
     
     return (
       <Form form={form} layout="vertical">
-        <Form.Item name="name" label="节点名称" rules={[{ required: true }]}>
-          <Input placeholder="请输入节点名称" />
-        </Form.Item>
-        <Form.Item name="description" label="节点描述">
-          <TextArea rows={3} placeholder="请输入节点描述" />
-        </Form.Item>
-        
-        <Divider>节点配置</Divider>
-        
-        {nodeType === 'Begin' && (
-          <Form.Item name={['form', 'prologue']} label="欢迎语">
-            <TextArea rows={3} placeholder="请输入欢迎语" />
-          </Form.Item>
-        )}
-        
-        {nodeType === 'Generate' && (
-          <>
-            <Form.Item name={['form', 'llm_id']} label="LLM模型">
-              <Input placeholder="请选择LLM模型" />
+        {Object.keys(paramFields).length > 0 ? (
+          Object.entries(paramFields).map(([fieldName, field]: [string, any]) => (
+            <Form.Item
+              key={fieldName}
+              name={['form', field.key]}
+              label={renderFieldLabel(field)}
+              valuePropName={field.type === 'boolean' ? 'checked' : 'value'}
+            >
+              {renderFieldControl(field)}
             </Form.Item>
-            <Form.Item name={['form', 'prompt']} label="提示词">
-              <TextArea rows={6} placeholder="请输入提示词" />
-            </Form.Item>
-            <Form.Item name={['form', 'temperature']} label="Temperature">
-              <Input type="number" step="0.1" placeholder="0.0 - 2.0" />
-            </Form.Item>
-          </>
-        )}
-        
-        {nodeType === 'Retrieval' && (
-          <>
-            <Form.Item name={['form', 'kb_ids']} label="知识库">
-              <Input placeholder="请选择知识库" />
-            </Form.Item>
-            <Form.Item name={['form', 'top_n']} label="返回数量">
-              <Input type="number" placeholder="Top N" />
-            </Form.Item>
-          </>
+          ))
+        ) : (
+          <Empty description="该节点没有配置项" />
         )}
       </Form>
     );
@@ -165,10 +214,7 @@ const AgentDrawer: React.FC<AgentDrawerProps> = ({
     const displayName = rawName === 'begin' ? '开始' : rawName;
     
     const nodeDescription = selectedNode.data?.description || '';
-    const componentInfo = components.find(
-      c => c.component_name === nodeLabel || c.component_title === nodeLabel
-    );
-    const displayDescription = nodeDescription || componentInfo?.description || '';
+    const displayDescription = nodeDescription || component?.description || '';
     
     const iconSrc = getComponentIcon(nodeLabel);
     

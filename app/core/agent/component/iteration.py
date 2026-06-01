@@ -14,7 +14,38 @@
 #  limitations under the License.
 #
 from abc import ABC
-from .base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
+
+
+class IterationParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    循环节点参数前端控件
+    """
+
+    delimiter = {
+        "key": "delimiter",
+        "label": "分隔符",
+        "type": "text",
+        "description": "用于分割输入数据的分隔符",
+        "defaultValue": ",",
+    }
+
+    parallel = {
+        "key": "parallel",
+        "label": "并行执行",
+        "type": "boolean",
+        "description": "是否并行执行循环体",
+        "defaultValue": True,
+    }
+
+    thread_max = {
+        "key": "thread_max",
+        "label": "最大线程数",
+        "type": "number",
+        "description": "并行执行时的最大线程数",
+        "defaultValue": 5,
+    }
+
 
 class IterationParam(ComponentParamBase):
     """

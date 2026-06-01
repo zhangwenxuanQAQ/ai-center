@@ -20,12 +20,12 @@ from functools import partial
 from typing import Any
 import pandas as pd
 
-from .base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
 from app.core.knowledgebase.rag.prompts.generator import message_fit_in
 from app.core.llm_model.utils.model_caller import ModelCaller
 import time
 
-class GenerateFrontEndField(ComponentBaseFrontEndField):
+class GenerateParamFrontEndField(ComponentBaseFrontEndField):
     """
     生成组件参数前端控件
     """
@@ -35,6 +35,77 @@ class GenerateFrontEndField(ComponentBaseFrontEndField):
         "label": "模型",
         "type": "select",
         "description": "指定要使用的LLM模型",
+    }
+
+    prompt = {
+        "key": "prompt",
+        "label": "提示词",
+        "type": "textarea",
+        "description": "LLM系统提示词模板，支持变量引用如{input}",
+    }
+
+    temperature = {
+        "key": "temperature",
+        "label": "Temperature",
+        "type": "number",
+        "description": "控制生成文本的随机性，范围0-2",
+        "defaultValue": 0,
+    }
+
+    top_p = {
+        "key": "top_p",
+        "label": "Top P",
+        "type": "number",
+        "description": "核采样参数，控制生成词汇的概率阈值",
+        "defaultValue": 0,
+    }
+
+    max_tokens = {
+        "key": "max_tokens",
+        "label": "Max Tokens",
+        "type": "number",
+        "description": "最大生成token数，0表示不限制",
+        "defaultValue": 0,
+    }
+
+    presence_penalty = {
+        "key": "presence_penalty",
+        "label": "Presence Penalty",
+        "type": "number",
+        "description": "存在惩罚系数，鼓励模型讨论新话题",
+        "defaultValue": 0,
+    }
+
+    frequency_penalty = {
+        "key": "frequency_penalty",
+        "label": "Frequency Penalty",
+        "type": "number",
+        "description": "频率惩罚系数，减少重复内容",
+        "defaultValue": 0,
+    }
+
+    deep_thinking = {
+        "key": "deep_thinking",
+        "label": "深度思考",
+        "type": "boolean",
+        "description": "启用深度思考模式",
+        "defaultValue": True,
+    }
+
+    stream = {
+        "key": "stream",
+        "label": "流式输出",
+        "type": "boolean",
+        "description": "启用流式输出模式",
+        "defaultValue": True,
+    }
+
+    only_use_user_message = {
+        "key": "only_use_user_message",
+        "label": "仅使用用户消息",
+        "type": "boolean",
+        "description": "是否只使用用户消息作为上下文",
+        "defaultValue": False,
     }
 
 

@@ -11,11 +11,38 @@ import pandas as pd
 from pandas import DataFrame
 
 from agent.agent import Agent
-from ..base import ComponentParamBase, ComponentBase
+from ..base import ComponentParamBase, ComponentBase, ComponentBaseFrontEndField
 from api.db.services.agent_service import AgentService
 from api.service.agent_run_service import AgentRunService
 from api.utils.agent_utils import parse_begin_param_file, parse_begin_param
 from app.core.llm_model.utils.llm_util import get_output_tag_content
+
+
+class AgentInstanceParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    智能体组件参数前端控件
+    """
+
+    agent_id = {
+        "key": "agent_id",
+        "label": "智能体ID",
+        "type": "select",
+        "description": "选择要调用的子智能体",
+    }
+
+    version_id = {
+        "key": "version_id",
+        "label": "版本ID",
+        "type": "text",
+        "description": "智能体版本ID，为空则使用最新版本",
+    }
+
+    begin_params = {
+        "key": "begin_params",
+        "label": "开始参数",
+        "type": "custom",
+        "description": "传递给子智能体的开始节点参数配置",
+    }
 
 
 class AgentInstanceParam(ComponentParamBase):

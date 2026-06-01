@@ -22,7 +22,50 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.header import Header
 from email.utils import formataddr
-from .base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
+
+
+class EmailParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    邮件发送组件参数前端控件
+    """
+
+    smtp_server = {
+        "key": "smtp_server",
+        "label": "SMTP服务器",
+        "type": "text",
+        "description": "SMTP邮件服务器地址",
+    }
+
+    smtp_port = {
+        "key": "smtp_port",
+        "label": "SMTP端口",
+        "type": "number",
+        "description": "SMTP服务端口",
+        "defaultValue": 465,
+    }
+
+    email = {
+        "key": "email",
+        "label": "发件人邮箱",
+        "type": "text",
+        "description": "发件人邮箱地址",
+    }
+
+    password = {
+        "key": "password",
+        "label": "授权码",
+        "type": "password",
+        "description": "邮箱SMTP授权码或密码",
+    }
+
+    sender_name = {
+        "key": "sender_name",
+        "label": "发件人名称",
+        "type": "text",
+        "description": "邮件显示的发件人名称",
+    }
+
 
 class EmailParam(ComponentParamBase):
     """

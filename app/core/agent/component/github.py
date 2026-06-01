@@ -17,7 +17,14 @@ import logging
 from abc import ABC
 import pandas as pd
 import requests
-from .base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
+
+
+class GitHubParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    GitHub组件参数前端控件
+    """
+    pass
 
 
 class GitHubParam(ComponentParamBase):

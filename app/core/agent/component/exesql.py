@@ -20,9 +20,75 @@ from copy import deepcopy
 import pandas as pd
 import pymysql
 import psycopg2
-from .generate import GenerateParam, Generate
+from .generate import GenerateParam, Generate, GenerateParamFrontEndField
 #import pyodbc
 import logging
+
+
+class ExeSQLParamFrontEndField(GenerateParamFrontEndField):
+    """
+    SQL执行器组件参数前端控件
+    """
+
+    db_type = {
+        "key": "db_type",
+        "label": "数据库类型",
+        "type": "select",
+        "description": "选择数据库类型：mysql、postgresql、mariadb、mssql",
+        "defaultValue": "mysql",
+    }
+
+    database = {
+        "key": "database",
+        "label": "数据库名称",
+        "type": "text",
+        "description": "数据库名称",
+    }
+
+    username = {
+        "key": "username",
+        "label": "用户名",
+        "type": "text",
+        "description": "数据库连接用户名",
+    }
+
+    host = {
+        "key": "host",
+        "label": "主机地址",
+        "type": "text",
+        "description": "数据库服务器IP地址或域名",
+    }
+
+    port = {
+        "key": "port",
+        "label": "端口",
+        "type": "number",
+        "description": "数据库连接端口",
+        "defaultValue": 3306,
+    }
+
+    password = {
+        "key": "password",
+        "label": "密码",
+        "type": "password",
+        "description": "数据库连接密码",
+    }
+
+    loop = {
+        "key": "loop",
+        "label": "重试次数",
+        "type": "number",
+        "description": "SQL执行失败时的重试次数",
+        "defaultValue": 3,
+    }
+
+    top_n = {
+        "key": "top_n",
+        "label": "返回记录数",
+        "type": "number",
+        "description": "查询结果返回的最大记录数",
+        "defaultValue": 30,
+    }
 
 
 class ExeSQLParam(GenerateParam):

@@ -17,7 +17,14 @@ import json
 from abc import ABC
 import pandas as pd
 import requests
-from .base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
+
+
+class Jin10ParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    金十数据组件参数前端控件
+    """
+    pass
 
 
 class Jin10Param(ComponentParamBase):

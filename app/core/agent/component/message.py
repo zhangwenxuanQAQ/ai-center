@@ -16,7 +16,20 @@
 import random
 from abc import ABC
 from functools import partial
-from .base import ComponentBase, ComponentParamBase
+from .base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
+
+
+class MessageParamFrontEndField(ComponentBaseFrontEndField):
+    """
+    静态消息组件参数前端控件
+    """
+
+    messages = {
+        "key": "messages",
+        "label": "消息列表",
+        "type": "custom",
+        "description": "静态消息列表，随机返回其中一条",
+    }
 
 
 class MessageParam(ComponentParamBase):
