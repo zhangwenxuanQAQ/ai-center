@@ -175,7 +175,7 @@ def build_user_prompt_with_documents(query: List[QueryItem], original_text: str)
             extracted_text = _extract_text_from_file(file_name, base64_content, chunk_method)
 
             if extracted_text:
-                file_text = _get_chunk_method_for_file(file_name, file_size, extracted_text, file_index)
+                file_text = _build_file_content_text(file_name, file_size, extracted_text, file_index)
                 # 每个文件内容用 ``` 包裹
                 document_texts.append(f"```\n{file_text}\n```")
                 file_index += 1
