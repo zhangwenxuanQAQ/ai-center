@@ -1519,6 +1519,48 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.middleware("http")
+async def performance_monitoring_middleware(request: Request, call_next):
+    """
+    请求性能监控中间件
+    
+    Args:
+        request: 请求对象
+        call_next: 下一个中间件或路由处理函数
+        
+    Returns:
+        Response: 响应对象
+    """
+    import time
+    
+    start_time = time.time()
+    
+    response = await call_next(request)
+    
+    process_time = time.time() - start_time
+    process_time_ms = process_time * 1000
+    
+    response.headers["X-Process-Time"] = f"{process_time_ms:.2f}ms"
+    
+    if process_time > 1.0:
+        logger.warning(
+            f"[慢请求] {request.method} {request.url.path} "
+            f"耗时: {process_time:.2f}s ({process_time_ms:.2f}ms) "
+            f"客户端: {request.client.host if request.client else 'unknown'}"
+        )
+    elif process_time > 0.5:
+        logger.info(
+            f"[中等请求] {request.method} {request.url.path} "
+            f"耗时: {process_time:.2f}s ({process_time_ms:.2f}ms)"
+        )
+    else:
+        logger.debug(
+            f"[正常请求] {request.method} {request.url.path} "
+            f"耗时: {process_time_ms:.2f}ms"
+        )
+    
+    return response
+
 async def base_service_error_handler(request: Request, exc: BaseServiceError):
     """
     处理所有Service层异常

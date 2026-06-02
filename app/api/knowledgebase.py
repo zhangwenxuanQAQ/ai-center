@@ -1274,7 +1274,7 @@ def get_task_executor_status(kb_id: str):
 @router.get("/document_events/{kb_id}")
 async def document_events(kb_id: str):
     """
-    SSE端点：推送文档任务状态更新事件
+    SSE端点：推送文档任务状态更新事件（使用异步Redis客户端）
     
     Args:
         kb_id: 知识库ID
@@ -1283,37 +1283,62 @@ async def document_events(kb_id: str):
         StreamingResponse: SSE事件流
     """
     import asyncio
-    from app.database.redis_utils import redis_utils as ru
+    from redis.asyncio import Redis
+    from app.configs.config import config as app_config
     
     async def event_generator():
-        channel = f"kb:{kb_id}:doc_events"
+        redis_client = None
         pubsub = None
+        channel = f"kb:{kb_id}:doc_events"
         
         try:
-            if ru.is_available:
-                pubsub = ru.subscribe(channel)
+            redis_config = app_config.config.get('redis', {})
+            host = redis_config.get('host', '127.0.0.1')
+            port = redis_config.get('port', 6379)
+            db = redis_config.get('db', 1)
+            username = redis_config.get('username', '')
+            password = redis_config.get('password', '')
+            
+            conn_params = {
+                'host': host,
+                'port': port,
+                'db': db,
+                'decode_responses': True,
+            }
+            
+            if username:
+                conn_params['username'] = username
+            if password:
+                conn_params['password'] = password
+            
+            redis_client = Redis(**conn_params)
+            
+            await redis_client.ping()
+            
+            pubsub = redis_client.pubsub()
+            await pubsub.subscribe(channel)
             
             yield f"event: connected\ndata: {{\"message\": \"Connected to knowledgebase {kb_id}\"}}\n\n"
             
-            while True:
-                if pubsub:
-                    try:
-                        message = pubsub.get_message(timeout=1)
-                        if message and message["type"] == "message":
-                            data = message["data"]
-                            yield f"event: update\ndata: {data}\n\n"
-                    except Exception as e:
-                        logger.warning(f"获取Redis消息失败: {e}")
-                
-                await asyncio.sleep(0.5)
-                
+            async for message in pubsub.listen():
+                if message["type"] == "message":
+                    data = message["data"]
+                    yield f"event: update\ndata: {data}\n\n"
+                    
         except asyncio.CancelledError:
             logger.info(f"SSE连接关闭: {kb_id}")
+        except Exception as e:
+            logger.error(f"SSE事件流异常: {e}")
         finally:
             if pubsub:
                 try:
-                    pubsub.unsubscribe()
-                    pubsub.close()
+                    await pubsub.unsubscribe(channel)
+                    await pubsub.close()
+                except Exception:
+                    pass
+            if redis_client:
+                try:
+                    await redis_client.close()
                 except Exception:
                     pass
     
