@@ -1,4 +1,5 @@
 from peewee import MySQLDatabase
+from playhouse.pool import PooledMySQLDatabase
 import yaml
 import os
 import logging
@@ -9,13 +10,18 @@ config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__fil
 with open(config_path, 'r', encoding='utf-8') as f:
     config = yaml.safe_load(f)
 
-db = MySQLDatabase(
+# 使用连接池，自动管理数据库连接
+# stale_timeout: 空闲连接超时时间（秒），设置为3600秒（1小时），小于MySQL默认的wait_timeout（8小时）
+# max_connections: 最大连接数，根据并发量设置
+db = PooledMySQLDatabase(
     config['mysql']['name'],
     user=config['mysql']['user'],
     password=config['mysql']['password'],
     host=config['mysql']['host'],
     port=config['mysql']['port'],
-    charset='utf8mb4'
+    charset='utf8mb4',
+    max_connections=20,  # 最大连接数
+    stale_timeout=3600,  # 空闲连接超时时间（1小时）
 )
 
 def get_db_connection():
