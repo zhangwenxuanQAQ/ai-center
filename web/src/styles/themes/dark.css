@@ -65,7 +65,7 @@ body[data-theme="dark"] .ant-card {
 }
 
 body[data-theme="dark"] .ant-card-body {
-  background-color: #000000 !important;
+  /* background-color: #000000 !important; */
   color: #ffffff !important;
 }
 

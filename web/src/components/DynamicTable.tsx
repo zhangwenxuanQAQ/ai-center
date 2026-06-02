@@ -209,13 +209,13 @@ const DynamicTable: React.FC<DynamicTableProps> = ({ value = [], onChange, label
           {label}
         </div>
       )}
-      <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'flex-end' }}>
+      <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'flex-start' }}>
         <Button
           type="dashed"
           icon={<PlusOutlined />}
           onClick={handleAddRow}
         >
-          添加行
+          添加字段
         </Button>
       </div>
       <Table

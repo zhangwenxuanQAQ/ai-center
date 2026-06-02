@@ -523,15 +523,22 @@ export const knowledgebaseService = {
   },
 
   getAvailableChunkMethods: async (
-    fileType: string,
-    fileName?: string
+    fileType?: string,
+    fileName?: string,
+    sourceType?: string
   ): Promise<{
     available_methods: Array<{ key: string; label: string; is_default: boolean }>;
     default_method: string;
   }> => {
-    const params = [`file_type=${fileType}`];
+    const params = [];
+    if (fileType) {
+      params.push(`file_type=${fileType}`);
+    }
     if (fileName) {
       params.push(`file_name=${encodeURIComponent(fileName)}`);
+    }
+    if (sourceType) {
+      params.push(`source_type=${encodeURIComponent(sourceType)}`);
     }
     const queryString = params.length > 0 ? `?${params.join('&')}` : '';
     return http.get(`/aicenter/v1/knowledgebase/chunk_methods/available${queryString}`);

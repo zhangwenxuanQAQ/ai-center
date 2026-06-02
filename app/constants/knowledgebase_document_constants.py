@@ -21,11 +21,13 @@ class SourceType:
     LOCAL_DOCUMENT = 'local_document'
     DATASOURCE = 'datasource'
     CUSTOM_TEMPLATE = 'custom_template'
+    RICH_TEXT = 'rich_text'
 
 
 SOURCE_TYPE_LABELS: Dict[str, str] = {
     SourceType.LOCAL_DOCUMENT: '本地文档',
     SourceType.DATASOURCE: '数据源',
+    SourceType.RICH_TEXT: '富文本',
     SourceType.CUSTOM_TEMPLATE: '自定义模板',
 }
 
@@ -36,6 +38,7 @@ class KnowledgeTemplateType:
     RICH_TEXT = 'rich_text'
     CHAPTER = 'chapter'
     STRUCTURED_DATA = 'structured_data'
+    CUSTOM_TEMPLATE = 'custom_template'
 
 
 KNOWLEDGE_TEMPLATE_LABELS: Dict[str, str] = {
@@ -50,8 +53,8 @@ KNOWLEDGE_TEMPLATES: List[Dict[str, Any]] = [
     {
         "key": KnowledgeTemplateType.FILE,
         "title": '文件',
-        "description": '上传本地文件快速录入知识',
-        "icon": 'UploadOutlined',
+        "description": '上传本地文件/选择文件数据源快速录入知识',
+        "icon": 'FileOutlined',
     },
     {
         "key": KnowledgeTemplateType.RICH_TEXT,
@@ -60,7 +63,7 @@ KNOWLEDGE_TEMPLATES: List[Dict[str, Any]] = [
         "icon": 'FileTextOutlined',
     },
     {
-        "key": 'custom',
+        "key": KnowledgeTemplateType.CUSTOM_TEMPLATE,
         "title": '自定义模版',
         "description": '根据业务自定义模版采编知识',
         "icon": 'SettingOutlined',
@@ -406,25 +409,43 @@ EXTENSION_CHUNK_METHODS: Dict[str, List[str]] = {
     "xlsx": [ChunkMethod.NAIVE, ChunkMethod.QA, ChunkMethod.TABLE, ChunkMethod.ONE],
 }
 
+# 数据来源类型对应的可选切片方法配置
+SOURCE_TYPE_CHUNK_METHODS: Dict[str, List[str]] = {
+    SourceType.RICH_TEXT: [
+        ChunkMethod.NAIVE, ChunkMethod.QA, ChunkMethod.RESUME, 
+        ChunkMethod.MANUAL, ChunkMethod.BOOK, ChunkMethod.LAWS, 
+        ChunkMethod.ONE
+    ],
+    SourceType.CUSTOM_TEMPLATE: [ChunkMethod.TABLE,ChunkMethod.ONE],
+    KnowledgeTemplateType.FILE: [ChunkMethod.NAIVE, ChunkMethod.QA, ChunkMethod.RESUME, 
+        ChunkMethod.MANUAL, ChunkMethod.BOOK, ChunkMethod.LAWS, ChunkMethod.PAPER,ChunkMethod.PRESENTATION,
+        ChunkMethod.ONE],
+}
 
-def get_available_chunk_methods(file_type: str, filename: str = None) -> List[str]:
+
+def get_available_chunk_methods(file_type: str, filename: str = None, source_type: str = None) -> List[str]:
     """
-    根据文件类型和文件名获取可用的切片方法列表
+    根据文件类型、文件名和数据来源类型获取可用的切片方法列表
     
     Args:
         file_type: 文件类型（FileType枚举值）
         filename: 文件名（可选，用于检查后缀名）
+        source_type: 数据来源类型（SourceType枚举值，可选）
     
     Returns:
         List[str]: 可用的切片方法列表
     """
-    # 首先检查是否有特定的后缀名规则
+    # 优先检查数据来源类型规则
+    if source_type and source_type in SOURCE_TYPE_CHUNK_METHODS:
+        return SOURCE_TYPE_CHUNK_METHODS[source_type]
+    
+    # 然后检查是否有特定的后缀名规则
     if filename:
         ext = filename.split('.')[-1].lower() if '.' in filename else ''
         if ext in EXTENSION_CHUNK_METHODS:
             return EXTENSION_CHUNK_METHODS[ext]
     
-    # 然后检查文件类型规则
+    # 最后检查文件类型规则
     if file_type in FILE_TYPE_CHUNK_METHODS:
         return FILE_TYPE_CHUNK_METHODS[file_type]
     
@@ -432,24 +453,25 @@ def get_available_chunk_methods(file_type: str, filename: str = None) -> List[st
     return [ChunkMethod.ONE]
 
 
-def get_default_chunk_method(file_type: str, filename: str = None) -> str:
+def get_default_chunk_method(file_type: str, filename: str = None, source_type: str = None) -> str:
     """
-    根据文件类型和文件名获取默认的切片方法
+    根据文件类型、文件名和数据来源类型获取默认的切片方法
     
     Args:
         file_type: 文件类型（FileType枚举值）
         filename: 文件名（可选，用于检查后缀名）
+        source_type: 数据来源类型（SourceType枚举值，可选）
     
     Returns:
         str: 默认的切片方法
     """
-    available_methods = get_available_chunk_methods(file_type, filename)
+    available_methods = get_available_chunk_methods(file_type, filename, source_type)
     if available_methods:
         return available_methods[0]
     return ChunkMethod.ONE
 
 
-def validate_chunk_method(chunk_method: str, file_type: str, filename: str = None) -> Tuple[bool, str]:
+def validate_chunk_method(chunk_method: str, file_type: str, filename: str = None, source_type: str = None) -> Tuple[bool, str]:
     """
     验证切片方法是否有效
     
@@ -457,11 +479,12 @@ def validate_chunk_method(chunk_method: str, file_type: str, filename: str = Non
         chunk_method: 要验证的切片方法
         file_type: 文件类型（FileType枚举值）
         filename: 文件名（可选，用于检查后缀名）
+        source_type: 数据来源类型（SourceType枚举值，可选）
     
     Returns:
         tuple[bool, str]: (是否有效, 提示信息)
     """
-    available_methods = get_available_chunk_methods(file_type, filename)
+    available_methods = get_available_chunk_methods(file_type, filename, source_type)
     
     if chunk_method in available_methods:
         return True, ""
@@ -608,7 +631,10 @@ class SourceConfigDefinition:
     
     # 自定义模板配置字段（空）
     CUSTOM_TEMPLATE_CONFIG: List[SourceConfigField] = []
-    
+
+    # 富文本配置字段（空）
+    RICH_TEXT_CONFIG: List[SourceConfigField] = []
+
     # 根据数据源类型获取配置字段
     @classmethod
     def get_config_fields(cls, source_type: str, datasource_type: str = None) -> List[SourceConfigField]:
@@ -634,6 +660,8 @@ class SourceConfigDefinition:
                 return []
         elif source_type == SourceType.CUSTOM_TEMPLATE:
             return cls.CUSTOM_TEMPLATE_CONFIG
+        elif source_type == SourceType.RICH_TEXT:
+            return cls.RICH_TEXT_CONFIG
         else:
             return []
 

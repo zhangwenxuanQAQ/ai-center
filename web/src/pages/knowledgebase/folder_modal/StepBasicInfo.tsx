@@ -1,5 +1,5 @@
 import React from 'react';
-import { Form, Input, TreeSelect } from 'antd';
+import { Form, Input, TreeSelect, InputNumber } from 'antd';
 
 interface StepBasicInfoProps {
   name: string;
@@ -63,15 +63,17 @@ const StepBasicInfo: React.FC<StepBasicInfoProps> = ({
           treeDefaultExpandAll
           value={parentId}
           onChange={(value) => setParentId(value || undefined)}
+          style={{ width: '50%' }}
         />
       </div>
       <div style={{ marginBottom: '16px' }}>
         <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>排序顺序 <span style={{ color: '#ff4d4f' }}>*</span></label>
-        <Input 
-          type="number" 
-          placeholder="请输入排序顺序（大于0）"
+        <InputNumber 
+          min={1}
+          placeholder="请输入排序顺序（最小为1）"
           value={sortOrder}
-          onChange={(e) => setSortOrder(Number(e.target.value) || 0)}
+          onChange={(value) => setSortOrder(value || 1)}
+          style={{ width: '100%' }}
         />
       </div>
     </div>

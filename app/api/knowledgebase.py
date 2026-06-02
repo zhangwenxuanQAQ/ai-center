@@ -88,21 +88,23 @@ def get_retrieval_configs():
 
 @router.get("/chunk_methods/available", response_model=ApiResponse)
 def get_available_chunk_methods_api(
-    file_type: str = Query(..., description="文件类型"),
-    filename: str = Query(None, description="文件名（可选，用于检查后缀名）")
+    file_type: str = Query(None, description="文件类型（可选）"),
+    filename: str = Query(None, description="文件名（可选，用于检查后缀名）"),
+    source_type: str = Query(None, description="数据来源类型（可选，用于根据来源类型过滤切片方法）")
 ):
     """
-    获取特定文件类型可用的切片方法
+    获取特定文件类型和数据来源类型可用的切片方法
     
     Args:
         file_type: 文件类型
         filename: 文件名（可选，用于检查后缀名）
+        source_type: 数据来源类型（可选，用于根据来源类型过滤切片方法）
     
     Returns:
         ApiResponse: 包含可用切片方法和默认切片方法的响应
     """
-    available_methods = get_available_chunk_methods(file_type, filename)
-    default_method = get_default_chunk_method(file_type, filename)
+    available_methods = get_available_chunk_methods(file_type, filename, source_type)
+    default_method = get_default_chunk_method(file_type, filename, source_type)
     
     method_list = []
     for method in available_methods:

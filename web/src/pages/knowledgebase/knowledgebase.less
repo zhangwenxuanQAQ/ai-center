@@ -1257,6 +1257,121 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
   }
 }
 
+.knowledge-template-card {
+  flex: 1;
+  min-width: auto;
+  padding: 8px;
+  cursor: pointer;
+  border-width: 1px !important;
+  transition: all 0.3s ease;
+
+  &:hover {
+    border-color: rgba(102, 126, 234, 0.3) !important;
+  }
+
+  .knowledge-template-card-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .knowledge-template-icon {
+    font-size: 24px;
+    color: #999;
+    margin-bottom: 4px;
+    transition: color 0.3s ease;
+  }
+
+  .knowledge-template-title {
+    font-weight: 500;
+    font-size: 13px;
+    transition: color 0.3s ease;
+  }
+
+  .knowledge-template-description {
+    font-size: 11px;
+    color: #999;
+    margin-top: 2px;
+    transition: color 0.3s ease;
+  }
+
+  &.selected {
+    border-color: #667eea !important;
+    border-width: 2px !important;
+    background: rgba(102, 126, 234, 0.12) !important;
+    box-shadow: 0 0 0 1px rgba(102, 126, 234, 0.3), 0 4px 12px rgba(102, 126, 234, 0.2) !important;
+
+    .knowledge-template-icon {
+      color: #667eea;
+    }
+
+    .knowledge-template-title {
+      color: #667eea;
+      font-weight: 600;
+    }
+
+    .knowledge-template-description {
+      color: #667eea;
+    }
+  }
+
+  :global {
+    .ant-card-body {
+      padding: 8px !important;
+    }
+  }
+}
+
+body[data-theme="light"] {
+  .knowledge-template-card {
+    &.selected {
+      border-color: #667eea !important;
+      border-width: 2px !important;
+      box-shadow: 0 0 0 1px rgba(102, 126, 234, 0.3), 0 4px 12px rgba(102, 126, 234, 0.2) !important;
+
+      .knowledge-template-icon {
+        color: #667eea;
+      }
+
+      .knowledge-template-title {
+        color: #667eea;
+        font-weight: 600;
+      }
+
+      .knowledge-template-description {
+        color: #667eea;
+      }
+    }
+  }
+}
+
+body[data-theme="dark"] {
+  .knowledge-template-card {
+    border-color: rgba(255, 255, 255, 0.1) !important;
+    background: rgba(255, 255, 255, 0.02) !important;
+
+    .knowledge-template-title {
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    &:hover {
+      border-color: rgba(102, 126, 234, 0.5) !important;
+    }
+
+    &.selected {
+      border-color: #667eea !important;
+      border-width: 2px !important;
+      box-shadow: 0 0 0 1px rgba(102, 126, 234, 0.5), 0 4px 16px rgba(102, 126, 234, 0.3) !important;
+
+      .knowledge-template-title {
+        color: #667eea;
+        font-weight: 600;
+      }
+    }
+  }
+}
+
 .knowledgebase-detail-tabs {
   display: flex;
   flex-direction: column;

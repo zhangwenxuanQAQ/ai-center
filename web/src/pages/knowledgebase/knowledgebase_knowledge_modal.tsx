@@ -302,7 +302,7 @@ const KnowledgeModal: React.FC<KnowledgeModalProps> = ({
           }
           break;
         case 'rich_text':
-        case 'custom':
+        case 'custom_template':
         default:
           // 其他类型：使用 createDocument 或 updateDocument 接口
           if (isEditMode && document) {
@@ -547,7 +547,7 @@ const KnowledgeModal: React.FC<KnowledgeModalProps> = ({
         return renderFileUploadContent();
       case 'rich_text':
         return renderRichTextContent();
-      case 'custom':
+      case 'custom_template':
         return renderCustomFormContent();
       default:
         // 如果没有配置模板类型，显示默认的富文本编辑器

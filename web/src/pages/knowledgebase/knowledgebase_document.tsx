@@ -174,7 +174,6 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
   const fetchCategories = async () => {
     try {
       const data = await knowledgebaseService.getDocumentCategoryTree(knowledgebase.id);
-      console.log("data：",JSON.stringify(data))
       setCategories(data);
       const allKeys = getAllCategoryKeys(data);
       setExpandedKeys(allKeys);
