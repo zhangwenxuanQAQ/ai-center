@@ -3,6 +3,7 @@ from playhouse.pool import PooledMySQLDatabase
 import yaml
 import os
 import logging
+import pymysql
 
 logger = logging.getLogger(__name__)
 
@@ -10,18 +11,58 @@ config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__fil
 with open(config_path, 'r', encoding='utf-8') as f:
     config = yaml.safe_load(f)
 
-# 使用连接池，自动管理数据库连接
-# stale_timeout: 空闲连接超时时间（秒），设置为3600秒（1小时），小于MySQL默认的wait_timeout（8小时）
-# max_connections: 最大连接数，根据并发量设置
-db = PooledMySQLDatabase(
+
+class RetryPooledMySQLDatabase(PooledMySQLDatabase):
+    """
+    支持自动重连的MySQL连接池数据库
+    
+    当连接失效时自动重连并重试SQL执行
+    """
+    
+    def execute_sql(self, *args, **kwargs):
+        """
+        执行SQL语句，支持自动重连
+        
+        Args:
+            *args: 位置参数
+            **kwargs: 关键字参数
+            
+        Returns:
+            游标对象
+        """
+        retries = 2
+        last_error = None
+        
+        for attempt in range(retries):
+            try:
+                return super().execute_sql(*args, **kwargs)
+            except (pymysql.err.InterfaceError, pymysql.err.OperationalError) as e:
+                last_error = e
+                logger.warning(f"数据库连接错误 (尝试 {attempt + 1}/{retries}): {e}")
+                
+                try:
+                    self.close()
+                    self.connect()
+                except Exception as reconnect_error:
+                    logger.error(f"数据库重连失败: {reconnect_error}")
+                    
+                if attempt == retries - 1:
+                    sql = args[0] if args else 'unknown'
+                    logger.error(f"数据库执行SQL失败，已重试{retries}次: {sql}")
+                    raise last_error
+                    
+        raise last_error
+
+
+db = RetryPooledMySQLDatabase(
     config['mysql']['name'],
     user=config['mysql']['user'],
     password=config['mysql']['password'],
     host=config['mysql']['host'],
     port=config['mysql']['port'],
     charset='utf8mb4',
-    max_connections=20,  # 最大连接数
-    stale_timeout=3600,  # 空闲连接超时时间（1小时）
+    max_connections=20,
+    stale_timeout=3600,
 )
 
 def get_db_connection():
@@ -65,8 +106,6 @@ def create_database_if_not_exists():
     检查数据库是否存在，如果不存在则创建
     """
     try:
-        import pymysql
-
         db_name = config['mysql']['name']
         db_user = config['mysql']['user']
         db_password = config['mysql']['password']
