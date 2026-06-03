@@ -1,10 +1,10 @@
 import React, { useRef, forwardRef, useImperativeHandle } from 'react';
-import { Card, Switch, Radio, Input } from 'antd';
+import { Card, Switch, Radio, Input, Tooltip } from 'antd';
 import TagsInput from '../../../components/TagsInput';
 import DynamicTable, { DynamicTableRow, DynamicTableRef } from '../../../components/DynamicTable';
 import ChapterList from '../../../components/ChapterList';
 import { Chapter } from './AddChapterModal';
-import { FileOutlined, UploadOutlined, FileTextOutlined, BookOutlined, SettingOutlined, IconType } from '@ant-design/icons';
+import { FileOutlined, UploadOutlined, FileTextOutlined, BookOutlined, SettingOutlined, IconType, QuestionCircleOutlined } from '@ant-design/icons';
 
 interface StepKnowledgeModelProps {
   knowledgeTags: string[];
@@ -43,24 +43,26 @@ const iconMap: Record<string, IconType> = {
   'FileOutlined': FileOutlined,
 };
 
-const StepKnowledgeModel = forwardRef<StepKnowledgeModelRef, StepKnowledgeModelProps>(({
-  knowledgeTags,
-  setKnowledgeTags,
-  selectedTemplate,
-  setSelectedTemplate,
-  customFields,
-  setCustomFields,
-  hasKnowledgeContent,
-  setHasKnowledgeContent,
-  chapterType,
-  setChapterType,
-  chapters,
-  setChapters,
-  editingRequirements,
-  setEditingRequirements,
-  knowledgeTemplates,
-  documentConstants,
-}, ref) => {
+const StepKnowledgeModelComponent = (props: StepKnowledgeModelProps, ref: React.Ref<StepKnowledgeModelRef>) => {
+  const {
+    knowledgeTags,
+    setKnowledgeTags,
+    selectedTemplate,
+    setSelectedTemplate,
+    customFields,
+    setCustomFields,
+    hasKnowledgeContent,
+    setHasKnowledgeContent,
+    chapterType,
+    setChapterType,
+    chapters,
+    setChapters,
+    editingRequirements,
+    setEditingRequirements,
+    knowledgeTemplates,
+    documentConstants,
+  } = props;
+
   const dynamicTableRef = useRef<DynamicTableRef>(null);
 
   useImperativeHandle(ref, () => ({
@@ -71,6 +73,7 @@ const StepKnowledgeModel = forwardRef<StepKnowledgeModelRef, StepKnowledgeModelP
       return dynamicTableRef.current?.validate() ?? true;
     }
   }));
+
   // 使用从后端获取的模板数据，如果没有则使用默认数据
   const templateCards = knowledgeTemplates.length > 0 ? knowledgeTemplates : [
     {
@@ -181,8 +184,18 @@ const StepKnowledgeModel = forwardRef<StepKnowledgeModelRef, StepKnowledgeModelP
                       onChange={e => setChapterType(e.target.value)}
                       style={{ display: 'flex', gap: 24 }}
                     >
-                      <Radio value="fixed">固定章节</Radio>
-                      <Radio value="dynamic">动态章节</Radio>
+                      <Radio value="fixed">
+                        固定章节
+                        <Tooltip title="添加固定的章节目录">
+                          <QuestionCircleOutlined style={{ marginLeft: 4, color: '#999', fontSize: 14 }} />
+                        </Tooltip>
+                      </Radio>
+                      <Radio value="dynamic">
+                        动态章节
+                        <Tooltip title="新增知识时用户手动添加章节目录">
+                          <QuestionCircleOutlined style={{ marginLeft: 4, color: '#999', fontSize: 14 }} />
+                        </Tooltip>
+                      </Radio>
                       <Radio value="rich_text">仅正文(富文本)</Radio>
                     </Radio.Group>
                   </div>
@@ -218,5 +231,7 @@ const StepKnowledgeModel = forwardRef<StepKnowledgeModelRef, StepKnowledgeModelP
     </div>
   );
 };
+
+const StepKnowledgeModel = forwardRef<StepKnowledgeModelRef, StepKnowledgeModelProps>(StepKnowledgeModelComponent);
 
 export default StepKnowledgeModel;

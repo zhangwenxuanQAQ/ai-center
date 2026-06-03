@@ -1,10 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Button, Table, Input, Select, Switch, Form, Tree } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Button, Table, Input, Select, Tree, Tooltip, InputNumber, DatePicker, Space } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import type { TreeDataNode, TreeProps } from 'antd';
 import MDEditorTheme from './MDEditorTheme';
 import { AddChapterModal, Chapter } from '../pages/knowledgebase/folder_modal/AddChapterModal';
 import { SimpleTableRow } from './SimpleEditableTable';
+import dayjs from 'dayjs';
+import 'dayjs/locale/zh-cn';
+import zhCN from 'antd/es/date-picker/locale/zh_CN';
 
 interface ChapterListProps {
   chapters: Chapter[];
@@ -137,74 +140,90 @@ const ChapterList: React.FC<ChapterListProps> = ({
     setExpandedKeys(keys as string[]);
   };
 
+  const renderFieldValueControl = (field: SimpleTableRow) => {
+    const inputHeight = 32;
+    
+    switch (field.fieldType) {
+      case 'boolean':
+        return (
+          <Select disabled style={{ width: '100%', height: inputHeight }}>
+            <Select.Option value={true}>true</Select.Option>
+            <Select.Option value={false}>false</Select.Option>
+          </Select>
+        );
+      case 'long':
+      case 'integer':
+        return (
+          <InputNumber disabled style={{ width: '100%', height: inputHeight }} precision={0} />
+        );
+      case 'float':
+      case 'double':
+        return (
+          <InputNumber disabled style={{ width: '100%', height: inputHeight }} step={0.01} />
+        );
+      case 'date':
+        return (
+          <DatePicker disabled style={{ width: '100%', height: inputHeight }} showTime locale={zhCN} />
+        );
+      case 'integer_range':
+      case 'long_range':
+        return (
+          <Space style={{ width: '100%' }}>
+            <InputNumber disabled precision={0} placeholder="最小值" style={{ height: inputHeight, flex: 1 }} />
+            <span style={{ color: '#999', alignSelf: 'center' }}>~</span>
+            <InputNumber disabled precision={0} placeholder="最大值" style={{ height: inputHeight, flex: 1 }} />
+          </Space>
+        );
+      case 'float_range':
+        return (
+          <Space style={{ width: '100%' }}>
+            <InputNumber disabled step={0.01} placeholder="最小值" style={{ height: inputHeight, flex: 1 }} />
+            <span style={{ color: '#999', alignSelf: 'center' }}>~</span>
+            <InputNumber disabled step={0.01} placeholder="最大值" style={{ height: inputHeight, flex: 1 }} />
+          </Space>
+        );
+      case 'text':
+      case 'keyword':
+      default:
+        return (
+          <Input disabled style={{ width: '100%', height: inputHeight }} />
+        );
+    }
+  };
+
   const renderFormFields = (fields?: SimpleTableRow[], editableField = false) => {
     if (!fields || fields.length === 0) return null;
 
     return (
       <div style={{ padding: 16 }}>
-        <Form layout="vertical">
-          {fields.map(field => (
-            <Form.Item
-              key={field.id}
-              label={field.fieldName}
-              required={field.isRequired}
-            >
-              {field.fieldType === 'text' && (
-                <Input 
-                  disabled={!editableField}
-                  placeholder={field.description || `请输入${field.fieldName}`} 
-                />
+        {fields.map(field => (
+          <div 
+            key={field.id} 
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              marginBottom: 16,
+              gap: 16 
+            }}
+          >
+            <span style={{ 
+              fontWeight: 500, 
+              minWidth: 150,
+              textAlign: 'left',
+            }}>
+              {field.fieldName}{field.fieldCode ? `（${field.fieldCode}）` : ''}
+              {field.isRequired && <span style={{ color: '#ff4d4f', marginLeft: 4 }}>*</span>}
+              {field.description && (
+                <Tooltip title={field.description}>
+                  <QuestionCircleOutlined style={{ marginLeft: 4, color: '#999', fontSize: 14 }} />
+                </Tooltip>
               )}
-              {field.fieldType === 'textarea' && (
-                <Input.TextArea 
-                  disabled={!editableField}
-                  rows={3} 
-                  placeholder={field.description || `请输入${field.fieldName}`} 
-                />
-              )}
-              {field.fieldType === 'number' && (
-                <Input 
-                  type="number" 
-                  disabled={!editableField}
-                  placeholder={field.description || `请输入${field.fieldName}`} 
-                />
-              )}
-              {field.fieldType === 'select' && (
-                <Select 
-                  disabled={!editableField}
-                  placeholder={field.description || `请选择${field.fieldName}`}
-                >
-                  {field.fieldDict?.split(',').map(item => (
-                    <Select.Option key={item} value={item}>{item}</Select.Option>
-                  ))}
-                </Select>
-              )}
-              {field.fieldType === 'date' && (
-                <Input type="date" disabled={!editableField} />
-              )}
-              {field.fieldType === 'radio' && (
-                <div style={{ color: editableField ? '#666' : '#999' }}>单选框</div>
-              )}
-              {field.fieldType === 'checkbox' && (
-                <div style={{ color: editableField ? '#666' : '#999' }}>多选框</div>
-              )}
-              {field.fieldType === 'file' && (
-                <div style={{ color: editableField ? '#666' : '#999' }}>文件上传框</div>
-              )}
-              {field.fieldType === 'select_multiple' && (
-                <Select 
-                  disabled={!editableField}
-                  mode="multiple" 
-                  placeholder={field.description || `请选择${field.fieldName}`}
-                >
-                  {field.fieldDict?.split(',').map(item => (
-                    <Select.Option key={item} value={item}>{item}</Select.Option>
-                  ))}
-                </Select>
-              )}
-            </Form.Item>
-          ))}
-        </Form>
+            </span>
+            <div style={{ flex: 1 }}>
+              {renderFieldValueControl(field)}
+            </div>
+          </div>
+        ))}
       </div>
     );
   };
@@ -213,37 +232,29 @@ const ChapterList: React.FC<ChapterListProps> = ({
     if (!fields || fields.length === 0) return null;
 
     const columns = fields.map(field => ({
-      title: field.fieldName,
+      title: (
+        <span>
+          {field.fieldCode ? `${field.fieldName}（${field.fieldCode}）` : field.fieldName}
+          {field.description && (
+            <Tooltip title={field.description}>
+              <QuestionCircleOutlined style={{ marginLeft: 4, color: '#999', fontSize: 14 }} />
+            </Tooltip>
+          )}
+        </span>
+      ),
       dataIndex: field.fieldCode,
       key: field.fieldCode,
-      render: () => <span style={{ color: editableField ? '#666' : '#999' }}>-</span>,
     }));
 
-    columns.push({
-      title: '操作',
-      key: 'actions',
-      width: 100,
-      render: () => (
-        <div style={{ display: 'flex', gap: 4 }}>
-          <Button size="small" disabled={!editableField}>编辑</Button>
-          <Button size="small" disabled={!editableField} danger>删除</Button>
-        </div>
-      ),
-    });
-
     return (
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-          <Button type="dashed" disabled={!editableField} style={{ opacity: editableField ? 1 : 0.5 }}>
-            +添加
-          </Button>
-        </div>
+      <div style={{ padding: 16 }}>
         <Table
-          dataSource={[{}]}
+          dataSource={[]}
           columns={columns}
           pagination={false}
           size="small"
           bordered
+          locale={{ emptyText: '暂无数据' }}
         />
       </div>
     );
@@ -252,14 +263,10 @@ const ChapterList: React.FC<ChapterListProps> = ({
   const renderRichTextEditor = (editableField = false) => {
     return (
       <div style={{ padding: 16 }}>
-        {/* <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
-          <span style={{ fontWeight: 500, marginRight: 8 }}>富文本内容</span>
-          {!editableField && <span style={{ color: '#999', fontSize: 12 }}>（只读模式）</span>}
-        </div> */}
         <MDEditorTheme
           height={300}
-          placeholder={editableField ? '请输入内容...' : '该区域为只读模式'}
-          disabled={!editableField}
+          placeholder="该区域为只读模式"
+          disabled={true}
         />
       </div>
     );

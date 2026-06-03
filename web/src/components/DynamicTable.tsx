@@ -29,7 +29,8 @@ interface DynamicTableProps {
   fieldTypes?: FieldTypeOption[];
 }
 
-const DynamicTable = forwardRef<DynamicTableRef, DynamicTableProps>(({ value = [], onChange, label, fieldTypes }, ref) => {
+const DynamicTableComponent = (props: DynamicTableProps, ref: React.Ref<DynamicTableRef>) => {
+  const { value = [], onChange, label, fieldTypes } = props;
   const [editingRow, setEditingRow] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<Record<string, { fieldName?: boolean; fieldCode?: boolean }>>({});
 
@@ -289,5 +290,7 @@ const DynamicTable = forwardRef<DynamicTableRef, DynamicTableProps>(({ value = [
     </div>
   );
 };
+
+const DynamicTable = forwardRef<DynamicTableRef, DynamicTableProps>(DynamicTableComponent);
 
 export default DynamicTable;

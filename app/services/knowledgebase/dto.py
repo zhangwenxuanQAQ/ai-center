@@ -211,6 +211,7 @@ class KnowledgebaseDocumentBase(BaseModel):
     Attributes:
         kb_id: 知识库ID
         category_id: 文档分类ID
+        title: 知识标题
         tags: 文档标签JSON数组
         document_config: 知识配置JSON对象
         chunk_method: 文档Chunk方法
@@ -233,6 +234,7 @@ class KnowledgebaseDocumentBase(BaseModel):
     """
     kb_id: str = Field(..., description="知识库ID，UUID格式")
     category_id: Optional[str] = Field(None, description="文档分类ID，UUID格式")
+    title: Optional[str] = Field(None, max_length=255, description="知识标题")
     tags: Optional[list] = Field(None, description="文档标签JSON数组")
     document_config: Optional[dict] = Field(None, description="知识配置JSON对象")
     chunk_method: str = Field(..., min_length=1, max_length=50, description="文档Chunk方法")
@@ -269,6 +271,7 @@ class KnowledgebaseDocumentUpdate(BaseModel):
     Attributes:
         kb_id: 知识库ID
         category_id: 文档分类ID
+        title: 知识标题
         tags: 文档标签JSON数组
         chunk_method: 文档Chunk方法
         chunk_config: 文档Chunk配置JSON
@@ -290,6 +293,7 @@ class KnowledgebaseDocumentUpdate(BaseModel):
     """
     kb_id: Optional[str] = Field(None, description="知识库ID，UUID格式")
     category_id: Optional[str] = Field(None, description="文档分类ID，UUID格式")
+    title: Optional[str] = Field(None, max_length=255, description="知识标题")
     tags: Optional[list] = Field(None, description="文档标签JSON数组")
     chunk_method: Optional[str] = Field(None, min_length=1, max_length=50, description="文档Chunk方法")
     chunk_config: Optional[dict] = Field(None, description="文档Chunk配置JSON对象")

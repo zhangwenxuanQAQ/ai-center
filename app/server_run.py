@@ -1478,6 +1478,29 @@ try:
     except Exception as e:
         logger.error(f"[MIGRATION]   更新 agent_component 表失败: {e}")
 
+    # 更新 knowledgebase_document 表中 title 为空的记录
+    try:
+        logger.info("\n[MIGRATION] 检查 knowledgebase_document 表 title 字段...")
+        cursor = db.execute_sql("""
+            SELECT COLUMN_NAME 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = 'knowledgebase_document' 
+            AND COLUMN_NAME = 'title';
+        """)
+        if cursor.fetchone():
+            cursor = db.execute_sql("""
+                UPDATE knowledgebase_document 
+                SET title = file_name 
+                WHERE title IS NULL OR title = '';
+            """)
+            affected_rows = cursor.rowcount
+            logger.info(f"[MIGRATION]   成功更新 {affected_rows} 条记录的 title 字段")
+        else:
+            logger.info("[MIGRATION]   title 字段不存在，跳过")
+    except Exception as e:
+        logger.error(f"[MIGRATION]   更新 knowledgebase_document 表 title 字段失败: {e}")
+
     logger.info("\n[MIGRATION] ✅ 数据库迁移完成")
 except Exception as e:
     logger.error(f"\n[MIGRATION] ❌ 数据库迁移失败: {e}")

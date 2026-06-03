@@ -476,6 +476,7 @@ def get_documents(
     page_size: int = Query(20, description="每页数量"),
     category_id: str = Query(None, description="文档分类ID"),
     name: str = Query(None, description="文档名称（模糊查询）"),
+    title: str = Query(None, description="知识标题（模糊查询）"),
     file_type: str = Query(None, description="文件类型"),
     running_status: List[str] = Query(None, description="解析状态"),
     status: bool = Query(None, description="文档状态"),
@@ -490,6 +491,7 @@ def get_documents(
         page_size: 每页数量，默认20
         category_id: 文档分类ID（可选）
         name: 文档名称（模糊查询，可选）
+        title: 知识标题（模糊查询，可选）
         file_type: 文件类型（可选）
         running_status: 解析状态列表（可选）
         status: 文档状态（可选）
@@ -504,6 +506,7 @@ def get_documents(
         category_id=category_id, 
         tags=None, 
         name=name, 
+        title=title,
         file_type=file_type, 
         running_status=running_status, 
         status=status, 
@@ -516,6 +519,7 @@ def get_documents(
         category_id=category_id, 
         tags=None, 
         name=name, 
+        title=title,
         file_type=file_type, 
         running_status=running_status, 
         status=status, 

@@ -37,9 +37,13 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
   const [pageSize, setPageSize] = useState(20);
   const [totalDocs, setTotalDocs] = useState(0);
   const [searchName, setSearchName] = useState<string>('');
+  const prevSearchName = React.useRef<string>('');
   const [filterFileType, setFilterFileType] = useState<string[]>([]);
   const [filterStatus, setFilterStatus] = useState<string[]>([]);
   const [filterNewStatus, setFilterNewStatus] = useState<boolean | null>(null);
+  const prevFilterNewStatus = React.useRef<boolean | null>(null);
+  const prevFilterFileType = React.useRef<string[]>([]);
+  const prevFilterStatus = React.useRef<string[]>([]);
   const [editingDocument, setEditingDocument] = useState<KnowledgebaseDocument | undefined>(undefined);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [documentConstants, setDocumentConstants] = useState<any>(null);
@@ -102,7 +106,31 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
 
   useEffect(() => {
     fetchDocuments();
-  }, [selectedCategory, searchName, filterFileType, filterStatus, filterNewStatus, currentPage, pageSize]);
+  }, [selectedCategory, currentPage, pageSize]);
+
+  const handleSearchNameBlur = () => {
+    if (searchName !== prevSearchName.current) {
+      prevSearchName.current = searchName;
+      setCurrentPage(1);
+      fetchDocuments();
+    }
+  };
+
+  const handleFilterBlur = () => {
+    const fileTypeChanged = 
+      filterFileType.length !== prevFilterFileType.current.length ||
+      filterFileType.some((v, i) => v !== prevFilterFileType.current[i]);
+    const statusChanged = 
+      filterStatus.length !== prevFilterStatus.current.length ||
+      filterStatus.some((v, i) => v !== prevFilterStatus.current[i]);
+    
+    if (fileTypeChanged || statusChanged) {
+      prevFilterFileType.current = [...filterFileType];
+      prevFilterStatus.current = [...filterStatus];
+      setCurrentPage(1);
+      fetchDocuments();
+    }
+  };
 
   useEffect(() => {
     setSelectedRowKeys([]);
@@ -191,18 +219,30 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
     }
   };
 
-  const fetchDocuments = async () => {
+  const fetchDocuments = async (
+    overrideParams?: {
+      searchName?: string;
+      filterFileType?: string[];
+      filterStatus?: string[];
+      filterNewStatus?: boolean | null;
+    }
+  ) => {
     setLoading(true);
     try {
+      const effectiveSearchName = overrideParams !== undefined && 'searchName' in overrideParams ? overrideParams.searchName : searchName;
+      const effectiveFilterFileType = overrideParams !== undefined && 'filterFileType' in overrideParams ? overrideParams.filterFileType : filterFileType;
+      const effectiveFilterStatus = overrideParams !== undefined && 'filterStatus' in overrideParams ? overrideParams.filterStatus : filterStatus;
+      const effectiveFilterNewStatus = overrideParams !== undefined && 'filterNewStatus' in overrideParams ? overrideParams.filterNewStatus : filterNewStatus;
+
       const response = await knowledgebaseService.getDocuments(
         knowledgebase.id,
         currentPage,
         pageSize,
         selectedCategory || undefined,
-        searchName || undefined,
-        undefined,  // chunkMethod - 文件类型过滤暂不支持
-        filterStatus.length > 0 ? filterStatus : undefined,  // runningStatus - 解析状态
-        filterNewStatus !== null ? String(filterNewStatus) : undefined  // status - 文档状态（转换为字符串）
+        effectiveSearchName || undefined,
+        effectiveFilterFileType.length > 0 ? effectiveFilterFileType : undefined,
+        effectiveFilterStatus.length > 0 ? effectiveFilterStatus : undefined,
+        effectiveFilterNewStatus !== null ? String(effectiveFilterNewStatus) : undefined
       );
       setDocuments(response.data || []);
       setTotalDocs(response.total || 0);
@@ -700,15 +740,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       key: 'title',
       width: 250,
       render: (text: string, record: KnowledgebaseDocument) => {
-        // 优先从 document_config 中获取标题
-        let docConfigTitle = '';
-        if (record.document_config) {
-          const config = typeof record.document_config === 'string' 
-            ? JSON.parse(record.document_config) 
-            : record.document_config;
-          docConfigTitle = config?.title || '';
-        }
-        const displayTitle = docConfigTitle || text || record.file_name || '未命名知识';
+        const displayTitle = text || record.file_name || '未命名知识';
         return (
           <Tooltip title={displayTitle}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
@@ -730,21 +762,25 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       },
     },
     {
+      title: '文档名称',
+      dataIndex: 'file_name',
+      key: 'file_name',
+      width: 200,
+      render: (text: string) => (
+        <Tooltip title={text}>
+          <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {text || '-'}
+          </span>
+        </Tooltip>
+      ),
+    },
+    {
       title: '更新时间',
       dataIndex: 'updated_at',
       key: 'updated_at',
       width: 150,
       render: (updatedAt: string) => (
         <span>{updatedAt ? new Date(updatedAt).toLocaleString() : '-'}</span>
-      ),
-    },
-    {
-      title: '更新人',
-      dataIndex: 'updated_by',
-      key: 'updated_by',
-      width: 100,
-      render: (updatedBy: string) => (
-        <span>{updatedBy || '-'}</span>
       ),
     },
     {
@@ -1084,9 +1120,20 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
             </Button>
           </Dropdown>
           <Input
-            placeholder="搜索文档名称"
+            placeholder="搜索知识标题"
             value={searchName}
             onChange={(e) => setSearchName(e.target.value)}
+            onBlur={handleSearchNameBlur}
+            onPressEnter={handleSearchNameBlur}
+            onClear={() => {
+              const wasSearching = prevSearchName.current !== '' || searchName !== '';
+              setSearchName('');
+              prevSearchName.current = '';
+              if (wasSearching) {
+                setCurrentPage(1);
+                fetchDocuments({ searchName: '' });
+              }
+            }}
             prefix={<SearchOutlined />}
             allowClear
             style={{
@@ -1104,7 +1151,22 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
           <Select
             placeholder="请选择切片方法"
             value={filterFileType}
-            onChange={setFilterFileType}
+            onChange={(value) => {
+              setFilterFileType(value);
+              if (JSON.stringify(value) !== JSON.stringify(prevFilterFileType.current)) {
+                prevFilterFileType.current = [...value];
+                setCurrentPage(1);
+                fetchDocuments({ filterFileType: value });
+              }
+            }}
+            onClear={() => {
+              setFilterFileType([]);
+              if (prevFilterFileType.current.length > 0) {
+                prevFilterFileType.current = [];
+                setCurrentPage(1);
+                fetchDocuments({ filterFileType: [] });
+              }
+            }}
             mode="multiple"
             allowClear
             style={{
@@ -1118,14 +1180,35 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
             maxTagCount={1}
             maxTagTextLength={10}
           >
-            {Object.entries(DOCUMENT_CHUNK_METHOD).map(([key, label]) => (
-              <Option key={key} value={key}>{label}</Option>
-            ))}
+            {documentConstants?.chunk_methods ? (
+              documentConstants.chunk_methods.map((cm: any) => (
+                <Option key={cm.key} value={cm.key}>{cm.label}</Option>
+              ))
+            ) : (
+              Object.entries(DOCUMENT_CHUNK_METHOD).map(([key, label]) => (
+                <Option key={key} value={key}>{label}</Option>
+              ))
+            )}
           </Select>
           <Select
             placeholder="请选择解析状态"
             value={filterStatus}
-            onChange={setFilterStatus}
+            onChange={(value) => {
+              setFilterStatus(value);
+              if (JSON.stringify(value) !== JSON.stringify(prevFilterStatus.current)) {
+                prevFilterStatus.current = [...value];
+                setCurrentPage(1);
+                fetchDocuments({ filterStatus: value });
+              }
+            }}
+            onClear={() => {
+              setFilterStatus([]);
+              if (prevFilterStatus.current.length > 0) {
+                prevFilterStatus.current = [];
+                setCurrentPage(1);
+                fetchDocuments({ filterStatus: [] });
+              }
+            }}
             mode="multiple"
             allowClear
             style={{
@@ -1150,7 +1233,23 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
           <Select
             placeholder="请选择状态"
             value={filterNewStatus === true ? 'true' : filterNewStatus === false ? 'false' : null}
-            onChange={(value) => setFilterNewStatus(value === 'true' ? true : value === 'false' ? false : null)}
+            onChange={(value) => {
+              const newValue = value === 'true' ? true : value === 'false' ? false : null;
+              setFilterNewStatus(newValue);
+              if (newValue !== prevFilterNewStatus.current) {
+                prevFilterNewStatus.current = newValue;
+                setCurrentPage(1);
+                fetchDocuments({ filterNewStatus: newValue });
+              }
+            }}
+            onClear={() => {
+              setFilterNewStatus(null);
+              if (prevFilterNewStatus.current !== null) {
+                prevFilterNewStatus.current = null;
+                setCurrentPage(1);
+                fetchDocuments({ filterNewStatus: null });
+              }
+            }}
             allowClear
             style={{
               width: '150px',
@@ -1173,8 +1272,19 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
               setFilterNewStatus(null);
               setSelectedRowKeys([]);
               setCurrentPage(1);
+              prevSearchName.current = '';
+              prevFilterFileType.current = [];
+              prevFilterStatus.current = [];
+              prevFilterNewStatus.current = null;
+              fetchDocuments({
+                searchName: '',
+                filterFileType: [],
+                filterStatus: [],
+                filterNewStatus: null
+              });
             }}
             style={{ height: '36px' }}
+            className="clear-filter-btn"
           >
             清空
           </Button>
@@ -1189,32 +1299,27 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
           msOverflowStyle: 'none'
         }} className="hide-scrollbar">
           <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; }`}</style>
-          {loading ? (
-            <div className="loading-container">
-              <Spin size="large" />
-            </div>
-          ) : (
-            <Table
-              columns={columns}
-              dataSource={documents}
-              rowKey="id"
-              pagination={false}
-              className={`knowledgebase-document-table ${theme === 'dark' ? 'dark' : 'light'}`}
-              scroll={{ x: 1200, y: 'calc(100vh - 300px)' }}
-              rowSelection={{
-                selectedRowKeys,
-                onChange: (selectedKeys) => setSelectedRowKeys(selectedKeys),
-                preserveSelectedRowKeys: true,
-              }}
-              size="small"
-              locale={{
-                emptyText: <Empty 
-                  description="暂无文档" 
-                  className={`empty-container ${theme === 'dark' ? 'dark' : 'light'}`} 
-                />
-              }}
-            />
-          )}
+          <Table
+            columns={columns}
+            dataSource={documents}
+            rowKey="id"
+            pagination={false}
+            loading={loading}
+            className={`knowledgebase-document-table ${theme === 'dark' ? 'dark' : 'light'}`}
+            scroll={{ x: 1200, y: 'calc(100vh - 300px)' }}
+            rowSelection={{
+              selectedRowKeys,
+              onChange: (selectedKeys) => setSelectedRowKeys(selectedKeys),
+              preserveSelectedRowKeys: true,
+            }}
+            size="small"
+            locale={{
+              emptyText: <Empty 
+                description="暂无文档" 
+                className={`empty-container ${theme === 'dark' ? 'dark' : 'light'}`} 
+              />
+            }}
+          />
         </div>
 
         <div style={{ paddingTop: '24px', borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(0, 0, 0, 0.1)', display: 'flex', justifyContent: 'center' }}>

@@ -167,6 +167,7 @@ class KnowledgebaseDocument(SoftDeleteModel):
     """
     kb_id = CharField(max_length=40, index=True, verbose_name="知识库ID")
     category_id = CharField(max_length=40, null=True, index=True, verbose_name="文档分类ID")
+    title = CharField(max_length=255, null=True, verbose_name="知识标题")
     tags = TextField(null=True, verbose_name="文档标签JSON数组")
     document_config = TextField(null=True, verbose_name="知识配置JSON")
     chunk_method = CharField(max_length=50, verbose_name="文档Chunk方法")

@@ -562,6 +562,7 @@ class KnowledgebaseDocumentService:
         category_id: str = None,
         tags: list = None,
         name: str = None,
+        title: str = None,
         file_type: str = None,
         running_status: list = None,
         status: str = None,
@@ -577,6 +578,7 @@ class KnowledgebaseDocumentService:
             category_id: 文档分类ID（可选）
             tags: 标签列表（可选）
             name: 文档名称（模糊查询，可选）
+            title: 知识标题（模糊查询，可选）
             file_type: 文件类型（可选）
             running_status: 解析状态列表（可选）
             status: 文档状态（可选）
@@ -597,6 +599,10 @@ class KnowledgebaseDocumentService:
 
         if name:
             query = query.where(KnowledgebaseDocument.file_name.contains(name))
+
+        if title:
+            from peewee import fn
+            query = query.where(fn.LOWER(KnowledgebaseDocument.title).contains(title.lower()))
 
         if file_type:
             query = query.where(KnowledgebaseDocument.file_type == file_type)
@@ -676,6 +682,7 @@ class KnowledgebaseDocumentService:
         category_id: str = None,
         tags: list = None,
         name: str = None,
+        title: str = None,
         file_type: str = None,
         running_status: list = None,
         status: str = None,
@@ -689,6 +696,7 @@ class KnowledgebaseDocumentService:
             category_id: 文档分类ID（可选）
             tags: 标签列表（可选）
             name: 文档名称（模糊查询，可选）
+            title: 知识标题（模糊查询，可选）
             file_type: 文件类型（可选）
             running_status: 解析状态列表（可选）
             status: 文档状态（可选）
@@ -707,6 +715,10 @@ class KnowledgebaseDocumentService:
 
         if name:
             query = query.where(KnowledgebaseDocument.file_name.contains(name))
+
+        if title:
+            from peewee import fn
+            query = query.where(fn.LOWER(KnowledgebaseDocument.title).contains(title.lower()))
 
         if file_type:
             query = query.where(KnowledgebaseDocument.file_type == file_type)

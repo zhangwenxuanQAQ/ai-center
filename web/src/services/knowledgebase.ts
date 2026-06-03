@@ -241,7 +241,7 @@ export const knowledgebaseService = {
     page: number = 1,
     pageSize: number = 20,
     categoryId?: string,
-    name?: string,
+    title?: string,
     chunkMethod?: string[],
     runningStatus?: string[],
     status?: string
@@ -250,8 +250,8 @@ export const knowledgebaseService = {
     if (categoryId) {
       params.push(`category_id=${categoryId}`);
     }
-    if (name) {
-      params.push(`name=${encodeURIComponent(name)}`);
+    if (title) {
+      params.push(`title=${encodeURIComponent(title)}`);
     }
     if (chunkMethod && chunkMethod.length > 0) {
       chunkMethod.forEach(method => {

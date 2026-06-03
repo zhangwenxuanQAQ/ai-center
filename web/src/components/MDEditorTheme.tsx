@@ -72,6 +72,14 @@ const MDEditorTheme: React.FC<MDEditorThemeProps> = ({
         .md-editor-wrapper[data-color-mode="dark"] .w-md-editor-toolbar button {
           color: rgba(255, 255, 255, 0.7) !important;
         }
+
+        ${disabled ? `
+        .md-editor-wrapper .w-md-editor-toolbar button[title="全屏"],
+        .md-editor-wrapper .w-md-editor-toolbar button[aria-label="全屏"],
+        .md-editor-wrapper .w-md-editor-toolbar li:last-child {
+          display: none !important;
+        }
+        ` : ''}
       `}</style>
       <div className={`md-editor-inner ${isDark ? 'dark' : ''}`}>
         <MDEditor
