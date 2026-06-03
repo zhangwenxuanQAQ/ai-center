@@ -83,14 +83,14 @@ def load_model(model_dir, nm, device_id: int | None = None):
             model_file_path))
 
     def cuda_is_available():
-        try:
-            pip_install_torch()
-            import torch
-            target_id = 0 if device_id is None else device_id
-            if torch.cuda.is_available() and torch.cuda.device_count() > target_id:
-                return True
-        except Exception:
-            return False
+        # try:
+        #     pip_install_torch()
+        #     import torch
+        #     target_id = 0 if device_id is None else device_id
+        #     if torch.cuda.is_available() and torch.cuda.device_count() > target_id:
+        #         return True
+        # except Exception:
+        #     return False
         return False
 
     options = ort.SessionOptions()
