@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Modal, Form, Input, Select, Radio, Button, message } from 'antd';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Modal, Form, Input, TreeSelect, Radio, Button, message } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import SimpleEditableTable, { SimpleTableRow } from '../../../components/SimpleEditableTable';
 
@@ -17,10 +17,9 @@ interface AddChapterModalProps {
   chapters: Chapter[];
   onCancel: () => void;
   onAdd: (chapter: Chapter) => void;
-  // 新增属性：是否仅显示富文本类型（用于动态章节）
   richTextOnly?: boolean;
-  // 新增属性：要编辑的章节（编辑模式）
   editingChapter?: Chapter | null;
+  documentConstants?: any;
 }
 
 const AddChapterModal: React.FC<AddChapterModalProps> = ({
@@ -30,10 +29,25 @@ const AddChapterModal: React.FC<AddChapterModalProps> = ({
   onAdd,
   richTextOnly = false,
   editingChapter = null,
+  documentConstants,
 }) => {
   const [form] = Form.useForm();
   const [chapterType, setChapterType] = useState<'form' | 'list' | 'rich_text'>('form');
   const [fields, setFields] = useState<SimpleTableRow[]>([]);
+
+  const treeData = useMemo(() => {
+    const buildNode = (chapter: Chapter): any => {
+      const children = chapters.filter(ch => ch.parentId === chapter.id);
+      return {
+        title: chapter.name,
+        value: chapter.id,
+        key: chapter.id,
+        children: children.length > 0 ? children.map(buildNode) : undefined,
+      };
+    };
+    const rootChapters = chapters.filter(ch => !ch.parentId);
+    return rootChapters.map(buildNode);
+  }, [chapters]);
 
   useEffect(() => {
     if (visible) {
@@ -107,13 +121,14 @@ const AddChapterModal: React.FC<AddChapterModalProps> = ({
           name="parentId"
           label="上级章节"
         >
-          <Select placeholder="请选择上级章节" allowClear>
-            {chapters.map(chapter => (
-              <Select.Option key={chapter.id} value={chapter.id}>
-                {chapter.name}
-              </Select.Option>
-            ))}
-          </Select>
+          <TreeSelect 
+            placeholder="请选择上级章节" 
+            allowClear
+            treeData={treeData}
+            treeDefaultExpandAll
+            showSearch
+            treeNodeFilterProp="title"
+          />
         </Form.Item>
 
         {!richTextOnly && (
@@ -146,6 +161,7 @@ const AddChapterModal: React.FC<AddChapterModalProps> = ({
             <SimpleEditableTable
               value={fields}
               onChange={setFields}
+              fieldTypes={documentConstants?.metadata_field_types || []}
             />
           </Form.Item>
         )}

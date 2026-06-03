@@ -1026,18 +1026,20 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
             style={{
               marginBottom: '12px',
               borderRadius: '8px',
+              flexShrink: 0,
             }}
           />
-          <Tree
-            showIcon
-            selectedKeys={selectedKeys}
-            expandedKeys={expandedKeys}
-            onSelect={handleTreeSelect}
-            onExpand={handleTreeExpand}
-            treeData={buildTreeData()}
-            className={`category-tree ${theme === 'dark' ? 'dark' : 'light'}`}
-            style={{ flex: 1, overflow: 'auto' }}
-          />
+          <div style={{ height: '80%', overflowY: 'auto', overflowX: 'hidden' }} className="category-tree-container">
+            <Tree
+              showIcon
+              selectedKeys={selectedKeys}
+              expandedKeys={expandedKeys}
+              onSelect={handleTreeSelect}
+              onExpand={handleTreeExpand}
+              treeData={buildTreeData()}
+              className={`category-tree ${theme === 'dark' ? 'dark' : 'light'}`}
+            />
+          </div>
         </LeftSider>
       )}
 

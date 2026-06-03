@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Modal, Steps, Button, message, Form } from 'antd';
 import { knowledgebaseService } from '../../services/knowledgebase';
 import StepBasicInfo from './folder_modal/StepBasicInfo';
-import StepKnowledgeModel from './folder_modal/StepKnowledgeModel';
+import StepKnowledgeModel, { StepKnowledgeModelRef } from './folder_modal/StepKnowledgeModel';
 import StepOtherConfig from './folder_modal/StepOtherConfig';
 import { DynamicTableRow } from '../../components/DynamicTable';
 import { Chapter } from './folder_modal/AddChapterModal';
@@ -52,6 +52,8 @@ const KnowledgebaseDocumentFolderModal: React.FC<KnowledgebaseDocumentFolderModa
     icon: string;
   }>>([]);
 
+  const stepKnowledgeModelRef = useRef<StepKnowledgeModelRef>(null);
+
   // 第三步其他配置状态
   const [chunkMethod, setChunkMethod] = useState('');
   const [chunkConfig, setChunkConfig] = useState<Record<string, unknown>>({});
@@ -86,6 +88,14 @@ const KnowledgebaseDocumentFolderModal: React.FC<KnowledgebaseDocumentFolderModa
         if (selectedTemplate === 'custom_template' && (!customFields || customFields.length === 0)) {
           message.error('请添加自定义字段');
           return false;
+        }
+        // 校验基础属性的字段中文名和编码是否填写
+        if (selectedTemplate === 'custom_template') {
+          const isValid = stepKnowledgeModelRef.current?.validateCustomFields();
+          if (!isValid) {
+            message.error('请填写基础属性的字段中文名和编码');
+            return false;
+          }
         }
         // 只有自定义模板才需要验证知识正文配置
         if (selectedTemplate === 'custom_template' && hasKnowledgeContent && chapterType === 'fixed' && (!chapters || chapters.length === 0)) {
@@ -351,6 +361,7 @@ const KnowledgebaseDocumentFolderModal: React.FC<KnowledgebaseDocumentFolderModa
       case 1:
         return (
           <StepKnowledgeModel
+            ref={stepKnowledgeModelRef}
             knowledgeTags={knowledgeTags}
             setKnowledgeTags={setKnowledgeTags}
             selectedTemplate={selectedTemplate}
@@ -366,6 +377,7 @@ const KnowledgebaseDocumentFolderModal: React.FC<KnowledgebaseDocumentFolderModa
             editingRequirements={editingRequirements}
             setEditingRequirements={setEditingRequirements}
             knowledgeTemplates={knowledgeTemplates}
+            documentConstants={documentConstants}
           />
         );
       case 2:

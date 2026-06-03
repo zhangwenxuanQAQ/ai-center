@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useRef, forwardRef, useImperativeHandle } from 'react';
 import { Card, Switch, Radio, Input } from 'antd';
 import TagsInput from '../../../components/TagsInput';
-import DynamicTable, { DynamicTableRow } from '../../../components/DynamicTable';
+import DynamicTable, { DynamicTableRow, DynamicTableRef } from '../../../components/DynamicTable';
 import ChapterList from '../../../components/ChapterList';
 import { Chapter } from './AddChapterModal';
 import { FileOutlined, UploadOutlined, FileTextOutlined, BookOutlined, SettingOutlined, IconType } from '@ant-design/icons';
@@ -27,6 +27,11 @@ interface StepKnowledgeModelProps {
     description: string;
     icon: string;
   }>;
+  documentConstants?: any;
+}
+
+export interface StepKnowledgeModelRef {
+  validateCustomFields: () => boolean;
 }
 
 // 图标映射
@@ -38,7 +43,7 @@ const iconMap: Record<string, IconType> = {
   'FileOutlined': FileOutlined,
 };
 
-const StepKnowledgeModel: React.FC<StepKnowledgeModelProps> = ({
+const StepKnowledgeModel = forwardRef<StepKnowledgeModelRef, StepKnowledgeModelProps>(({
   knowledgeTags,
   setKnowledgeTags,
   selectedTemplate,
@@ -54,7 +59,18 @@ const StepKnowledgeModel: React.FC<StepKnowledgeModelProps> = ({
   editingRequirements,
   setEditingRequirements,
   knowledgeTemplates,
-}) => {
+  documentConstants,
+}, ref) => {
+  const dynamicTableRef = useRef<DynamicTableRef>(null);
+
+  useImperativeHandle(ref, () => ({
+    validateCustomFields: () => {
+      if (selectedTemplate !== 'custom_template') {
+        return true;
+      }
+      return dynamicTableRef.current?.validate() ?? true;
+    }
+  }));
   // 使用从后端获取的模板数据，如果没有则使用默认数据
   const templateCards = knowledgeTemplates.length > 0 ? knowledgeTemplates : [
     {
@@ -136,9 +152,11 @@ const StepKnowledgeModel: React.FC<StepKnowledgeModelProps> = ({
             border: '1px solid rgba(255,255,255,0.1)',
           }}>
             <DynamicTable
+              ref={dynamicTableRef}
               value={customFields}
               onChange={setCustomFields}
               label="基础属性"
+              fieldTypes={documentConstants?.metadata_field_types || []}
             />
 
             <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
@@ -171,7 +189,12 @@ const StepKnowledgeModel: React.FC<StepKnowledgeModelProps> = ({
 
                   {chapterType === 'fixed' && (
                     <div style={{ marginBottom: 16 }}>
-                      <ChapterList chapters={chapters} onChange={setChapters} editable={true} />
+                      <ChapterList 
+                        chapters={chapters} 
+                        onChange={setChapters} 
+                        editable={true}
+                        documentConstants={documentConstants}
+                      />
                     </div>
                   )}
                 </div>

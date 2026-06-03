@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useImperativeHandle, forwardRef } from 'react';
 import { Table, Input, Select, Switch, Button } from 'antd';
 import { PlusOutlined, UpOutlined, DownOutlined, DeleteOutlined } from '@ant-design/icons';
 
@@ -13,26 +13,50 @@ export interface DynamicTableRow {
   isRequired: boolean;
 }
 
+export interface DynamicTableRef {
+  validate: () => boolean;
+}
+
+interface FieldTypeOption {
+  key: string;
+  label: string;
+}
+
 interface DynamicTableProps {
   value: DynamicTableRow[];
   onChange: (rows: DynamicTableRow[]) => void;
   label?: string;
+  fieldTypes?: FieldTypeOption[];
 }
 
-const FIELD_TYPE_OPTIONS = [
-  { value: 'text', label: '文本框' },
-  { value: 'select', label: '下拉单选' },
-  { value: 'select_multiple', label: '下拉多选' },
-  { value: 'radio', label: '单选' },
-  { value: 'checkbox', label: '多选' },
-  { value: 'textarea', label: '文本域' },
-  { value: 'number', label: '数字输入框' },
-  { value: 'date', label: '时间选择框' },
-  { value: 'file', label: '文件上传框' },
-];
-
-const DynamicTable: React.FC<DynamicTableProps> = ({ value = [], onChange, label }) => {
+const DynamicTable = forwardRef<DynamicTableRef, DynamicTableProps>(({ value = [], onChange, label, fieldTypes }, ref) => {
   const [editingRow, setEditingRow] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<Record<string, { fieldName?: boolean; fieldCode?: boolean }>>({});
+
+  useImperativeHandle(ref, () => ({
+    validate: () => {
+      const errors: Record<string, { fieldName?: boolean; fieldCode?: boolean }> = {};
+      let isValid = true;
+
+      value.forEach(row => {
+        const rowErrors: { fieldName?: boolean; fieldCode?: boolean } = {};
+        if (!row.fieldName || !row.fieldName.trim()) {
+          rowErrors.fieldName = true;
+          isValid = false;
+        }
+        if (!row.fieldCode || !row.fieldCode.trim()) {
+          rowErrors.fieldCode = true;
+          isValid = false;
+        }
+        if (Object.keys(rowErrors).length > 0) {
+          errors[row.id] = rowErrors;
+        }
+      });
+
+      setValidationErrors(errors);
+      return isValid;
+    }
+  }));
 
   const handleAddRow = () => {
     const newRow: DynamicTableRow = {
@@ -74,32 +98,68 @@ const DynamicTable: React.FC<DynamicTableProps> = ({ value = [], onChange, label
 
   const columns = [
     {
-      title: '字段中文名',
+      title: <span>字段中文名 <span style={{ color: '#ff4d4f' }}>*</span></span>,
       dataIndex: 'fieldName',
       key: 'fieldName',
       width: 120,
-      render: (text: string, record: DynamicTableRow) => (
-        <Input
-          size="small"
-          value={text}
-          onChange={e => handleUpdateRow(record.id, 'fieldName', e.target.value)}
-          placeholder="请输入字段中文名"
-        />
-      ),
+      render: (text: string, record: DynamicTableRow) => {
+        const hasError = validationErrors[record.id]?.fieldName;
+        return (
+          <Input
+            size="small"
+            value={text}
+            onChange={e => {
+              handleUpdateRow(record.id, 'fieldName', e.target.value);
+              if (e.target.value.trim()) {
+                setValidationErrors(prev => {
+                  const newErrors = { ...prev };
+                  if (newErrors[record.id]) {
+                    delete newErrors[record.id].fieldName;
+                    if (Object.keys(newErrors[record.id]).length === 0) {
+                      delete newErrors[record.id];
+                    }
+                  }
+                  return newErrors;
+                });
+              }
+            }}
+            placeholder="请输入字段中文名"
+            status={hasError ? 'error' : undefined}
+          />
+        );
+      },
     },
     {
-      title: '字段编码',
+      title: <span>字段编码 <span style={{ color: '#ff4d4f' }}>*</span></span>,
       dataIndex: 'fieldCode',
       key: 'fieldCode',
       width: 120,
-      render: (text: string, record: DynamicTableRow) => (
-        <Input
-          size="small"
-          value={text}
-          onChange={e => handleUpdateRow(record.id, 'fieldCode', e.target.value)}
-          placeholder="请输入字段编码"
-        />
-      ),
+      render: (text: string, record: DynamicTableRow) => {
+        const hasError = validationErrors[record.id]?.fieldCode;
+        return (
+          <Input
+            size="small"
+            value={text}
+            onChange={e => {
+              handleUpdateRow(record.id, 'fieldCode', e.target.value);
+              if (e.target.value.trim()) {
+                setValidationErrors(prev => {
+                  const newErrors = { ...prev };
+                  if (newErrors[record.id]) {
+                    delete newErrors[record.id].fieldCode;
+                    if (Object.keys(newErrors[record.id]).length === 0) {
+                      delete newErrors[record.id];
+                    }
+                  }
+                  return newErrors;
+                });
+              }
+            }}
+            placeholder="请输入字段编码"
+            status={hasError ? 'error' : undefined}
+          />
+        );
+      },
     },
     {
       title: '属性类型',
@@ -113,8 +173,8 @@ const DynamicTable: React.FC<DynamicTableProps> = ({ value = [], onChange, label
           onChange={(value) => handleUpdateRow(record.id, 'fieldType', value)}
           style={{ width: '100%' }}
         >
-          {FIELD_TYPE_OPTIONS.map(option => (
-            <Select.Option key={option.value} value={option.value}>
+          {(fieldTypes || []).map(option => (
+            <Select.Option key={option.key} value={option.key}>
               {option.label}
             </Select.Option>
           ))}
@@ -193,7 +253,7 @@ const DynamicTable: React.FC<DynamicTableProps> = ({ value = [], onChange, label
           />
           <Button
             size="small"
-            icon={<DeleteOutlined />}
+            icon={<DeleteOutlined style={{ color: '#ff4d4f' }} />}
             danger
             onClick={() => handleDeleteRow(record.id)}
           />

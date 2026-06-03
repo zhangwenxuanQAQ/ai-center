@@ -12,24 +12,18 @@ export interface SimpleTableRow {
   isRequired: boolean;
 }
 
+interface FieldTypeOption {
+  key: string;
+  label: string;
+}
+
 interface SimpleEditableTableProps {
   value: SimpleTableRow[];
   onChange: (rows: SimpleTableRow[]) => void;
+  fieldTypes?: FieldTypeOption[];
 }
 
-const FIELD_TYPE_OPTIONS = [
-  { value: 'text', label: '文本框' },
-  { value: 'select', label: '下拉单选' },
-  { value: 'select_multiple', label: '下拉多选' },
-  { value: 'radio', label: '单选' },
-  { value: 'checkbox', label: '多选' },
-  { value: 'textarea', label: '文本域' },
-  { value: 'number', label: '数字输入框' },
-  { value: 'date', label: '时间选择框' },
-  { value: 'file', label: '文件上传框' },
-];
-
-const SimpleEditableTable: React.FC<SimpleEditableTableProps> = ({ value = [], onChange }) => {
+const SimpleEditableTable: React.FC<SimpleEditableTableProps> = ({ value = [], onChange, fieldTypes }) => {
   const handleAddRow = () => {
     const newRow: SimpleTableRow = {
       id: `row_${Date.now()}`,
@@ -108,8 +102,8 @@ const SimpleEditableTable: React.FC<SimpleEditableTableProps> = ({ value = [], o
           onChange={(value) => handleUpdateRow(record.id, 'fieldType', value)}
           style={{ width: '100%' }}
         >
-          {FIELD_TYPE_OPTIONS.map(option => (
-            <Select.Option key={option.value} value={option.value}>
+          {(fieldTypes || []).map(option => (
+            <Select.Option key={option.key} value={option.key}>
               {option.label}
             </Select.Option>
           ))}

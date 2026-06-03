@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Button, Table, Input, Select, Switch, Form } from 'antd';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Button, Table, Input, Select, Switch, Form, Tree } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import type { TreeDataNode, TreeProps } from 'antd';
 import MDEditorTheme from './MDEditorTheme';
 import { AddChapterModal, Chapter } from '../pages/knowledgebase/folder_modal/AddChapterModal';
 import { SimpleTableRow } from './SimpleEditableTable';
@@ -8,11 +9,10 @@ import { SimpleTableRow } from './SimpleEditableTable';
 interface ChapterListProps {
   chapters: Chapter[];
   onChange: (chapters: Chapter[]) => void;
-  // 是否可编辑（用于新增目录时）
   editable?: boolean;
-  // 当前选中的章节ID
   selectedChapterId?: string;
   onSelectChapter?: (chapterId: string | null) => void;
+  documentConstants?: any;
 }
 
 const ChapterList: React.FC<ChapterListProps> = ({ 
@@ -20,12 +20,22 @@ const ChapterList: React.FC<ChapterListProps> = ({
   onChange, 
   editable = false,
   selectedChapterId,
-  onSelectChapter 
+  onSelectChapter,
+  documentConstants,
 }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingChapter, setEditingChapter] = useState<Chapter | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [localSelectedId, setLocalSelectedId] = useState<string | null>(selectedChapterId || null);
+  const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
+
+  const allChapterIds = useMemo(() => chapters.map(ch => ch.id), [chapters]);
+
+  useEffect(() => {
+    if (chapters.length > 0 && expandedKeys.length === 0) {
+      setExpandedKeys(allChapterIds);
+    }
+  }, [chapters, allChapterIds]);
 
   const handleSelect = (chapterId: string) => {
     setLocalSelectedId(chapterId);
@@ -36,6 +46,9 @@ const ChapterList: React.FC<ChapterListProps> = ({
     onChange([...chapters, chapter]);
     setLocalSelectedId(chapter.id);
     onSelectChapter?.(chapter.id);
+    if (chapter.parentId && !expandedKeys.includes(chapter.parentId)) {
+      setExpandedKeys([...expandedKeys, chapter.parentId]);
+    }
   };
 
   const handleUpdateChapter = (updatedChapter: Chapter) => {
@@ -45,14 +58,84 @@ const ChapterList: React.FC<ChapterListProps> = ({
   };
 
   const handleDeleteChapter = (chapterId: string) => {
-    onChange(chapters.filter(ch => ch.id !== chapterId));
-    if (localSelectedId === chapterId) {
+    const deleteRecursive = (id: string): string[] => {
+      const children = chapters.filter(ch => ch.parentId === id);
+      let idsToDelete = [id];
+      children.forEach(child => {
+        idsToDelete = idsToDelete.concat(deleteRecursive(child.id));
+      });
+      return idsToDelete;
+    };
+    
+    const idsToDelete = deleteRecursive(chapterId);
+    onChange(chapters.filter(ch => !idsToDelete.includes(ch.id)));
+    
+    if (localSelectedId && idsToDelete.includes(localSelectedId)) {
       setLocalSelectedId(null);
       onSelectChapter?.(null);
     }
   };
 
   const selectedChapter = chapters.find(chapter => chapter.id === localSelectedId);
+
+  const buildTreeData = useMemo(() => {
+    const buildNode = (chapter: Chapter): TreeDataNode => {
+      const children = chapters.filter(ch => ch.parentId === chapter.id);
+      return {
+        title: (
+          <div 
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between',
+              width: '100%',
+              paddingRight: 8,
+            }}
+          >
+            <span>{chapter.name}</span>
+            {editable && (
+              <span 
+                style={{ display: 'flex', gap: 4 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <EditOutlined 
+                  style={{ fontSize: 12, color: '#667eea' }} 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditingChapter(chapter);
+                    setShowEditModal(true);
+                  }}
+                />
+                <DeleteOutlined 
+                  style={{ fontSize: 12, color: '#ff4d4f' }} 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteChapter(chapter.id);
+                  }}
+                />
+              </span>
+            )}
+          </div>
+        ),
+        key: chapter.id,
+        children: children.length > 0 ? children.map(buildNode) : undefined,
+      };
+    };
+
+    const rootChapters = chapters.filter(ch => !ch.parentId);
+    return rootChapters.map(buildNode);
+  }, [chapters, editable]);
+
+  const handleTreeSelect: TreeProps['onSelect'] = (keys) => {
+    if (keys.length > 0) {
+      const key = keys[0] as string;
+      handleSelect(key);
+    }
+  };
+
+  const handleTreeExpand: TreeProps['onExpand'] = (keys) => {
+    setExpandedKeys(keys as string[]);
+  };
 
   const renderFormFields = (fields?: SimpleTableRow[], editableField = false) => {
     if (!fields || fields.length === 0) return null;
@@ -214,51 +297,23 @@ const ChapterList: React.FC<ChapterListProps> = ({
       )}
 
       <div style={{ display: 'flex', gap: 16 }}>
-        <div style={{ width: 200, borderRight: '1px solid #e8e8e8', paddingRight: 16 }}>
-          {/* <div style={{ fontWeight: 500, marginBottom: 12 }}>章节列表</div> */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {chapters.length > 0 ? chapters.map((chapter, index) => (
-              <div
-                key={chapter.id}
-                onClick={() => handleSelect(chapter.id)}
-                style={{
-                  padding: '8px 12px',
-                  background: localSelectedId === chapter.id ? '#667eea' : undefined,
-                  color: localSelectedId === chapter.id ? '#fff' : undefined,
-                  border: localSelectedId === chapter.id ? '1px solid #fff' : undefined,
-                  borderRadius: 4,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 8,
-                }}
-              >
-                <span>{chapter.name}</span>
-                {editable && (
-                  <span style={{ display: 'flex', gap: 4 }}>
-                    <EditOutlined 
-                      style={{ fontSize: 12 }} 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingChapter(chapter);
-                        setShowEditModal(true);
-                      }}
-                    />
-                    <DeleteOutlined 
-                      style={{ fontSize: 12 }} 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteChapter(chapter.id);
-                      }}
-                    />
-                  </span>
-                )}
-              </div>
-            )) : (
-              <div style={{ color: '#999', padding: '8px 12px' }}>暂无章节</div>
-            )}
-          </div>
+        <div style={{ width: 240, borderRight: '1px solid #e8e8e8', paddingRight: 16 }}>
+          {chapters.length > 0 ? (
+            <Tree
+              showLine
+              selectedKeys={localSelectedId ? [localSelectedId] : []}
+              expandedKeys={expandedKeys}
+              onSelect={handleTreeSelect}
+              onExpand={handleTreeExpand}
+              treeData={buildTreeData}
+              style={{
+                background: 'transparent',
+                fontSize: 13,
+              }}
+            />
+          ) : (
+            <div style={{ color: '#999', padding: '8px 12px' }}>暂无章节</div>
+          )}
         </div>
 
         <div style={{ flex: 1 }}>
@@ -279,6 +334,7 @@ const ChapterList: React.FC<ChapterListProps> = ({
         chapters={chapters}
         onCancel={() => setShowAddModal(false)}
         onAdd={handleAddChapter}
+        documentConstants={documentConstants}
       />
 
       {editingChapter && (
@@ -290,6 +346,8 @@ const ChapterList: React.FC<ChapterListProps> = ({
             setEditingChapter(null);
           }}
           onAdd={handleUpdateChapter}
+          editingChapter={editingChapter}
+          documentConstants={documentConstants}
         />
       )}
     </div>
