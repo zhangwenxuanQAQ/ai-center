@@ -87,22 +87,11 @@
       overflow-y: auto;
       overflow-x: hidden;
       min-height: 0;
+      -ms-overflow-style: none;
+      scrollbar-width: none;
 
       &::-webkit-scrollbar {
-        width: 6px;
-      }
-      
-      &::-webkit-scrollbar-track {
-        background: transparent;
-      }
-      
-      &::-webkit-scrollbar-thumb {
-        background: rgba(102, 126, 234, 0.3);
-        border-radius: 3px;
-      }
-      
-      &::-webkit-scrollbar-thumb:hover {
-        background: rgba(102, 126, 234, 0.5);
+        display: none;
       }
 
       &.dark {
