@@ -61,7 +61,7 @@ db = RetryPooledMySQLDatabase(
     host=config['mysql']['host'],
     port=config['mysql']['port'],
     charset='utf8mb4',
-    max_connections=20,
+    max_connections=config['mysql'].get('max_connections', 20),
     stale_timeout=3600,
 )
 
