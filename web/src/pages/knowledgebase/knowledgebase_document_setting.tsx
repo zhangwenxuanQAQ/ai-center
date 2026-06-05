@@ -663,12 +663,50 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
             ? JSON.parse(doc.document_config) 
             : doc.document_config;
           
-          if (documentConfig.content) {
-            initRichTextContent = documentConfig.content;
-          }
-          
+          // 兼容旧格式：custom_fields_values
           if (documentConfig.custom_fields_values) {
             initCustomFieldValues = documentConfig.custom_fields_values;
+          }
+          
+          // 新格式：从custom_fields中读取value
+          if (documentConfig.custom_fields && Array.isArray(documentConfig.custom_fields)) {
+            for (const field of documentConfig.custom_fields) {
+              if (field.id && field.value !== undefined) {
+                initCustomFieldValues[field.id] = field.value;
+              }
+            }
+          }
+          
+          // 新格式：从chapters中读取value
+          if (documentConfig.chapters && Array.isArray(documentConfig.chapters)) {
+            const chapterFieldsValues: Record<string, any> = {};
+            
+            for (const chapter of documentConfig.chapters) {
+              if (chapter.id && chapter.value !== undefined) {
+                switch (chapter.type) {
+                  case 'form':
+                    // 表单类型：value是对象 {"字段id":"字段值"}
+                    chapterFieldsValues[chapter.id] = chapter.value;
+                    break;
+                  case 'list':
+                    // 列表类型：value是数组 [{"字段id":"字段值"}]
+                    chapterFieldsValues[chapter.id] = { list_data: chapter.value };
+                    break;
+                  case 'rich_text':
+                    // 富文本类型：value是字符串
+                    chapterFieldsValues[chapter.id] = { rich_text_content: chapter.value };
+                    break;
+                }
+              }
+            }
+            
+            if (Object.keys(chapterFieldsValues).length > 0) {
+              initCustomFieldValues.chapter_fields_values = chapterFieldsValues;
+            }
+          }
+          
+          if (documentConfig.content) {
+            initRichTextContent = documentConfig.content;
           }
         } catch (e) {
           console.error('Failed to parse document_config:', e);
@@ -701,6 +739,8 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         customFieldValues: initCustomFieldValues,
       };
       setOriginalData(initData);
+      setCustomFieldValues(initCustomFieldValues);
+      setRichTextContent(initRichTextContent);
     } else if (constants) {
       initDefaultChunkConfig('naive');
     }
@@ -875,7 +915,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         const customFields = category.document_config.custom_fields || [];
         for (const field of customFields) {
           if (field.is_required) {
-            const fieldValue = customFieldValues[field.field_code];
+            const fieldValue = customFieldValues[field.id];
             if (fieldValue === undefined || fieldValue === null || fieldValue === '') {
               message.error(`请填写必填字段：${field.field_name}`);
               return;
@@ -949,11 +989,54 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     // 构建document_config对象
     const documentConfig: Record<string, any> = {};
     
-    // 如果是自定义模版类型，添加自定义字段值
+    // 如果是自定义模版类型，按照知识目录的document_config格式构建
     if (categoryId) {
       const category = findCategoryById(categories, categoryId);
       if (category && category.document_config?.template_type === 'custom_template') {
-        documentConfig.custom_fields_values = customFieldValues;
+        const categoryDocConfig = category.document_config;
+        
+        // 复制custom_fields，并为每个字段添加value属性
+        if (categoryDocConfig.custom_fields && categoryDocConfig.custom_fields.length > 0) {
+          documentConfig.custom_fields = categoryDocConfig.custom_fields.map((field: any) => ({
+            ...field,
+            value: customFieldValues[field.id] !== undefined ? customFieldValues[field.id] : null,
+          }));
+        }
+        
+        // 复制chapters，并为每个章节添加value属性
+        if (categoryDocConfig.chapters && categoryDocConfig.chapters.length > 0) {
+          const chapterFieldsValues = customFieldValues.chapter_fields_values || {};
+          
+          documentConfig.chapters = categoryDocConfig.chapters.map((chapter: any) => {
+            const chapterValue = chapterFieldsValues[chapter.id] || {};
+            let value: any = null;
+            
+            switch (chapter.type) {
+              case 'form':
+                // 表单类型：value是对象 {"字段id":"字段值"}
+                value = {};
+                if (chapter.fields && chapter.fields.length > 0) {
+                  for (const field of chapter.fields) {
+                    value[field.id] = chapterValue[field.id] !== undefined ? chapterValue[field.id] : null;
+                  }
+                }
+                break;
+              case 'list':
+                // 列表类型：value是数组 [{"字段id":"字段值"}]
+                value = chapterValue.list_data || [];
+                break;
+              case 'rich_text':
+                // 富文本类型：value是字符串
+                value = chapterValue.rich_text_content || '';
+                break;
+            }
+            
+            return {
+              ...chapter,
+              value,
+            };
+          });
+        }
       }
     }
     
@@ -2252,15 +2335,15 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       };
       
       // 使用customFieldValues中的值，如果没有则使用default_value
-      const fieldValue = customFieldValues[field.field_code] !== undefined 
-        ? customFieldValues[field.field_code] 
+      const fieldValue = customFieldValues[field.id] !== undefined 
+        ? customFieldValues[field.id] 
         : field.default_value;
       
       // 更新字段值的处理函数
       const handleValueChange = (value: any) => {
         setCustomFieldValues(prev => ({
           ...prev,
-          [field.field_code]: value
+          [field.id]: value
         }));
       };
       
