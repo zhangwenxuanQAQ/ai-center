@@ -1,4 +1,4 @@
-from peewee import MySQLDatabase
+from peewee import MySQLDatabase, InterfaceError as PeeweeInterfaceError, OperationalError as PeeweeOperationalError
 from playhouse.pool import PooledMySQLDatabase
 import yaml
 import os
@@ -30,13 +30,14 @@ class RetryPooledMySQLDatabase(PooledMySQLDatabase):
         Returns:
             游标对象
         """
-        retries = 2
+        retries = 3
         last_error = None
         
         for attempt in range(retries):
             try:
                 return super().execute_sql(*args, **kwargs)
-            except (pymysql.err.InterfaceError, pymysql.err.OperationalError) as e:
+            except (PeeweeInterfaceError, PeeweeOperationalError, 
+                    pymysql.err.InterfaceError, pymysql.err.OperationalError) as e:
                 last_error = e
                 logger.warning(f"数据库连接错误 (尝试 {attempt + 1}/{retries}): {e}")
                 
@@ -62,7 +63,7 @@ db = RetryPooledMySQLDatabase(
     port=config['mysql']['port'],
     charset='utf8mb4',
     max_connections=config['mysql'].get('max_connections', 20),
-    stale_timeout=3600,
+    stale_timeout=1800,
 )
 
 def get_db_connection():

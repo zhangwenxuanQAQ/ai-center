@@ -33,7 +33,7 @@ SOURCE_TYPE_LABELS: Dict[str, str] = {
 
 
 class KnowledgeTemplateType:
-    """知识模板类型枚举"""
+    """知识模版类型枚举"""
     FILE = 'file'
     RICH_TEXT = 'rich_text'
     CHAPTER = 'chapter'
