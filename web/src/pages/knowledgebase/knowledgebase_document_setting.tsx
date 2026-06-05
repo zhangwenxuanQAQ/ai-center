@@ -1,10 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Button, Input, Select, Tag, Upload, message, Slider, InputNumber, Tooltip, Form, Switch, TreeSelect, Spin, Empty, Row, Col, List, DatePicker, Space } from 'antd';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Button, Input, Select, Tag, Upload, message, Slider, InputNumber, Tooltip, Form, Switch, TreeSelect, Spin, Empty, Row, Col, List, DatePicker, Space, Descriptions } from 'antd';
 const { RangePicker } = DatePicker;
 import type { RangePickerProps } from 'antd/es/date-picker';
 import dayjs from 'dayjs';
 import zhCN from 'antd/es/date-picker/locale/zh_CN';
+import MDEditor from '@uiw/react-md-editor';
 import PageHeader from '../../components/page-header';
+import ChapterList from '../../components/ChapterList';
+import { Chapter } from './folder_modal/AddChapterModal';
 import {
   UploadOutlined,
   PlusOutlined,
@@ -23,6 +26,7 @@ import {
   InboxOutlined,
   FolderOutlined,
   TableOutlined,
+  QuestionCircleOutlined,
 } from '@ant-design/icons';
 import { knowledgebaseService, KnowledgebaseDocument, KnowledgebaseCategory, KnowledgebaseDocumentCategory } from '../../services/knowledgebase';
 import { datasourceService, Datasource } from '../../services/datasource';
@@ -60,12 +64,14 @@ interface KnowledgebaseDocumentSettingProps {
   document?: KnowledgebaseDocument;
   onBack: () => void;
   onSave: () => void;
+  selectedCategoryId?: string;
 }
 
 const SOURCE_TYPE_ICONS: Record<string, React.ReactNode> = {
   local_document: <FileOutlined style={{ fontSize: 24 }} />,
   datasource: <DatabaseOutlined style={{ fontSize: 24 }} />,
   custom_template: <FormOutlined style={{ fontSize: 24 }} />,
+  rich_text: <FileTextOutlined style={{ fontSize: 24 }} />,
 };
 
 const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> = ({
@@ -73,6 +79,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
   document: doc,
   onBack,
   onSave,
+  selectedCategoryId,
 }) => {
   const isEdit = !!doc;
   const [theme, setTheme] = useState<string>('dark');
@@ -83,18 +90,44 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
   const [sourceType, setSourceType] = useState<string>('local_document');
   const [chunkMethod, setChunkMethod] = useState<string>('naive');
   const [chunkConfig, setChunkConfig] = useState<Record<string, unknown>>({});
-  const [tags, setTags] = useState<string[]>([]);
+  const [userTags, setUserTags] = useState<string[]>([]);
+  const [categoryTags, setCategoryTags] = useState<string[]>([]);
   const [metadatas, setMetadatas] = useState<Array<{ field_name: string; field_label: string; field_type: string; field_value: any }>>([]);
   const [metadataFieldTypes, setMetadataFieldTypes] = useState<Array<{ key: string; label: string; es_type: string; type: string }>>([]);
   const [fileList, setFileList] = useState<Array<{ uid: string; name: string; size: number }>>([]);
   const [status, setStatus] = useState<boolean>(true);
   const [categoryId, setCategoryId] = useState<string>('');
+  const [title, setTitle] = useState<string>('');
+  const [previousTemplateType, setPreviousTemplateType] = useState<string>('');
+  const [availableChunkMethods, setAvailableChunkMethods] = useState<Array<{ key: string; label: string; is_default: boolean }>>([]);
+  
+  // 左右宽度比例状态（百分比）
+  const [leftWidth, setLeftWidth] = useState<number>(65); // 默认左侧50%
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   
   // 数据源相关状态
   const [datasources, setDatasources] = useState<Datasource[]>([]);
   const [selectedDatasourceId, setSelectedDatasourceId] = useState<string>('');
   const [selectedDatasource, setSelectedDatasource] = useState<Datasource | null>(null);
   const [datasourceLoading, setDatasourceLoading] = useState(false);
+  
+  // 富文本内容状态
+  const [richTextContent, setRichTextContent] = useState<string>('');
+  
+  // 自定义字段值状态
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, any>>({});
+  
+  // 合并用户标签和知识目录标签
+  const tags = useMemo(() => {
+    const allTags = [...categoryTags];
+    userTags.forEach(tag => {
+      if (!allTags.includes(tag)) {
+        allTags.push(tag);
+      }
+    });
+    return allTags;
+  }, [userTags, categoryTags]);
   
   // 文件浏览器相关状态
   const [fileBrowserLoading, setFileBrowserLoading] = useState(false);
@@ -215,6 +248,9 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     fileList: [] as Array<{ uid: string; name: string; size: number }>,
     categoryId: '',
     metadatas: [] as Array<{ field_name: string; field_label: string; field_type: string; field_value: any }>,
+    richTextContent: '',
+    title: '',
+    customFieldValues: {} as Record<string, any>,
   });
 
   useEffect(() => {
@@ -234,6 +270,13 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     fetchCategories();
     fetchDatasources();
   }, []);
+  
+  // 初始化时设置默认选中的知识目录
+  useEffect(() => {
+    if (!isEdit && selectedCategoryId && !categoryId) {
+      setCategoryId(selectedCategoryId);
+    }
+  }, [isEdit, selectedCategoryId, categoryId]);
 
   const fetchCategories = async () => {
     try {
@@ -411,18 +454,88 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
 
   // 当选中目录变化时，更新切片配置为目录的配置
   useEffect(() => {
-    if (categoryId && !isEdit) {
+    if (categoryId) {
       const category = findCategoryById(categories, categoryId);
       if (category) {
-        if (category.chunk_method) {
-          setChunkMethod(category.chunk_method);
+        const templateType = category.document_config?.template_type || 'file';
+        const defaultSourceType = getDefaultSourceType(templateType);
+        
+        // 检查知识模版是否有变动（包括第一次选择）
+        // 编辑模式下，只有在切换知识目录时才更新sourceType
+        if (!isEdit || (isEdit && previousTemplateType && previousTemplateType !== templateType)) {
+          // 第一次选择或模版类型发生变化，需要设置数据来源
+          setSourceType(defaultSourceType);
+          
+          // 获取可用的切片方法
+          const fetchAvailableMethods = async () => {
+            try {
+              const methodsData = await knowledgebaseService.getAvailableChunkMethods(undefined, '', templateType);
+              setAvailableChunkMethods(methodsData.available_methods);
+              
+              // 优先使用知识目录的切片方法，否则使用第一个可用方法
+              if (category.chunk_method) {
+                // 检查知识目录的切片方法是否在可用列表中
+                const isCategoryMethodAvailable = methodsData.available_methods.some(
+                  (method: any) => method.key === category.chunk_method
+                );
+                if (isCategoryMethodAvailable) {
+                  setChunkMethod(category.chunk_method);
+                  // 使用知识目录的切片配置
+                  if (category.chunk_config && Object.keys(category.chunk_config).length > 0) {
+                    setChunkConfig(category.chunk_config);
+                  } else {
+                    initDefaultChunkConfig(category.chunk_method);
+                  }
+                } else {
+                  // 知识目录的切片方法不可用，使用第一个可用方法
+                  const defaultMethod = methodsData.available_methods[0].key;
+                  setChunkMethod(defaultMethod);
+                  initDefaultChunkConfig(defaultMethod);
+                }
+              } else {
+                // 知识目录没有切片方法，使用第一个可用方法
+                const defaultMethod = methodsData.available_methods[0].key;
+                setChunkMethod(defaultMethod);
+                initDefaultChunkConfig(defaultMethod);
+              }
+            } catch (error) {
+              console.error('Failed to fetch available chunk methods:', error);
+            }
+          };
+          
+          fetchAvailableMethods();
+        } else if (!isEdit) {
+          // 非编辑模式下，模版类型没有变化，直接使用知识目录的切片方法和配置
+          if (category.chunk_method) {
+            setChunkMethod(category.chunk_method);
+          }
+          if (category.chunk_config && Object.keys(category.chunk_config).length > 0) {
+            setChunkConfig(category.chunk_config);
+          }
         }
-        if (category.chunk_config && Object.keys(category.chunk_config).length > 0) {
-          setChunkConfig(category.chunk_config);
+        
+        setPreviousTemplateType(templateType);
+        
+        // 更新知识目录的标签配置
+        if (category.document_config?.tags && Array.isArray(category.document_config.tags)) {
+          setCategoryTags(category.document_config.tags);
+        } else {
+          setCategoryTags([]);
         }
       }
     }
   }, [categoryId, categories, isEdit]);
+
+  const getDefaultSourceType = (templateType: string): string => {
+    switch (templateType) {
+      case 'rich_text':
+        return 'rich_text';
+      case 'custom_template':
+        return 'custom_template';
+      default:
+        return 'local_document';
+    }
+  };
 
   useEffect(() => {
     if (isEdit && doc) {
@@ -459,10 +572,71 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       setSourceType(docSourceType);
       setChunkMethod(docChunkMethod);
       setChunkConfig(docChunkConfig as Record<string, unknown>);
-      setTags(docTags);
       setStatus(docStatus);
       setCategoryId(docCategoryId);
       setMetadatas([...initMetadatas]);
+      setTitle(doc.title || '');
+      
+      // 加载document_config中的数据
+      if (doc.document_config) {
+        try {
+          const documentConfig = typeof doc.document_config === 'string' 
+            ? JSON.parse(doc.document_config) 
+            : doc.document_config;
+          
+          // 加载自定义字段值
+          if (documentConfig.custom_fields_values) {
+            setCustomFieldValues(documentConfig.custom_fields_values);
+          }
+          
+          // 加载富文本内容（从document_config.content）
+          if (documentConfig.content) {
+            setRichTextContent(documentConfig.content);
+          }
+        } catch (e) {
+          console.error('Failed to parse document_config:', e);
+        }
+      }
+      
+      // 兼容旧数据：如果document_config中没有content，则从source_config加载
+      if (docSourceType === 'rich_text' && doc.source_config && !richTextContent) {
+        try {
+          const sourceConfig = typeof doc.source_config === 'string' ? JSON.parse(doc.source_config) : doc.source_config;
+          if (sourceConfig && sourceConfig.content) {
+            setRichTextContent(sourceConfig.content);
+          }
+        } catch (e) {
+          console.error('Failed to parse rich text content:', e);
+        }
+      }
+      
+      // 编辑模式下获取可用的切片方法
+      if (docCategoryId) {
+        const category = findCategoryById(categories, docCategoryId);
+        if (category) {
+          const templateType = category.document_config?.template_type || 'file';
+          
+          // 设置知识目录的标签
+          const categoryTagList = category.document_config?.tags && Array.isArray(category.document_config.tags) 
+            ? category.document_config.tags 
+            : [];
+          setCategoryTags(categoryTagList);
+          
+          // 设置用户标签（文档标签中不属于知识目录的部分）
+          const userTagList = docTags.filter(tag => !categoryTagList.includes(tag));
+          setUserTags(userTagList);
+          
+          const fetchAvailableMethods = async () => {
+            try {
+              const methodsData = await knowledgebaseService.getAvailableChunkMethods(undefined, '', templateType);
+              setAvailableChunkMethods(methodsData.available_methods);
+            } catch (error) {
+              console.error('Failed to fetch available chunk methods:', error);
+            }
+          };
+          fetchAvailableMethods();
+        }
+      }
 
       // 从 source_config 中提取数据源ID和桶名（如果是数据源类型）
       if (docSourceType === 'datasource' && doc.source_config) {
@@ -478,6 +652,40 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
           console.error('Failed to parse source_config:', error);
         }
       }
+      
+      // 从document_config中读取richTextContent和customFieldValues
+      let initRichTextContent = '';
+      let initCustomFieldValues: Record<string, any> = {};
+      
+      if (doc.document_config) {
+        try {
+          const documentConfig = typeof doc.document_config === 'string' 
+            ? JSON.parse(doc.document_config) 
+            : doc.document_config;
+          
+          if (documentConfig.content) {
+            initRichTextContent = documentConfig.content;
+          }
+          
+          if (documentConfig.custom_fields_values) {
+            initCustomFieldValues = documentConfig.custom_fields_values;
+          }
+        } catch (e) {
+          console.error('Failed to parse document_config:', e);
+        }
+      }
+      
+      // 兼容旧数据：如果document_config中没有content，则从source_config加载
+      if (docSourceType === 'rich_text' && !initRichTextContent && doc.source_config) {
+        try {
+          const sourceConfig = typeof doc.source_config === 'string' ? JSON.parse(doc.source_config) : doc.source_config;
+          if (sourceConfig && sourceConfig.content) {
+            initRichTextContent = sourceConfig.content;
+          }
+        } catch (e) {
+          console.error('Failed to parse rich text content:', e);
+        }
+      }
 
       const initData = {
         sourceType: docSourceType,
@@ -488,6 +696,9 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         fileList: [], // 文件列表在编辑模式下不会重新初始化，因为文件已上传
         categoryId: docCategoryId,
         metadatas: initMetadatas,
+        richTextContent: initRichTextContent,
+        title: doc.title || '',
+        customFieldValues: initCustomFieldValues,
       };
       setOriginalData(initData);
     } else if (constants) {
@@ -506,6 +717,9 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       fileList: [...fileList],
       categoryId,
       metadatas: [...metadatas],
+      richTextContent,
+      title,
+      customFieldValues,
     };
     const changed =
       current.sourceType !== originalData.sourceType ||
@@ -515,9 +729,12 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       current.status !== originalData.status ||
       JSON.stringify(current.fileList) !== JSON.stringify(originalData.fileList) ||
       current.categoryId !== originalData.categoryId ||
-      JSON.stringify(current.metadatas) !== JSON.stringify(originalData.metadatas);
+      JSON.stringify(current.metadatas) !== JSON.stringify(originalData.metadatas) ||
+      current.richTextContent !== originalData.richTextContent ||
+      current.title !== originalData.title ||
+      JSON.stringify(current.customFieldValues) !== JSON.stringify(originalData.customFieldValues);
     setHasChanges(changed);
-  }, [sourceType, chunkMethod, chunkConfig, tags, status, fileList, categoryId, metadatas, originalData, constants]);
+    }, [sourceType, chunkMethod, chunkConfig, tags, status, fileList, categoryId, metadatas, richTextContent, title, customFieldValues, originalData, constants]);
 
   // 当数据源列表和选中的数据源ID都有值时，设置selectedDatasource
   useEffect(() => {
@@ -572,17 +789,61 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
 
   const handleAddTag = () => {
     if (newTag.trim() && !tags.includes(newTag.trim())) {
-      setTags([...tags, newTag.trim()]);
+      // 添加到用户标签
+      setUserTags([...userTags, newTag.trim()]);
       setNewTag('');
       setShowTagInput(false);
     }
   };
 
   const handleTagClose = (removedTag: string) => {
-    setTags(tags.filter(tag => tag !== removedTag));
+    // 判断是从用户标签还是知识目录标签中删除
+    if (userTags.includes(removedTag)) {
+      setUserTags(userTags.filter(tag => tag !== removedTag));
+    } else if (categoryTags.includes(removedTag)) {
+      setCategoryTags(categoryTags.filter(tag => tag !== removedTag));
+    }
   };
 
+  // 拖拽分隔线处理
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!isDragging || !containerRef.current) return;
+    
+    const container = containerRef.current;
+    const containerRect = container.getBoundingClientRect();
+    const newLeftWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100;
+    
+    // 限制左右宽度在 20% - 80% 之间
+    const clampedWidth = Math.max(20, Math.min(80, newLeftWidth));
+    setLeftWidth(clampedWidth);
+  }, [isDragging]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  // 添加和移除鼠标事件监听
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging, handleMouseMove, handleMouseUp]);
+
   const handleSave = async () => {
+    if (!title.trim()) {
+      message.error('请输入知识标题');
+      return;
+    }
     if (!sourceType) {
       message.error('请选择数据来源');
       return;
@@ -595,12 +856,110 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       message.error('请上传文档');
       return;
     }
+    if (!isEdit && sourceType === 'rich_text' && !richTextContent.trim()) {
+      message.error('请输入知识内容');
+      return;
+    }
     if (!isEdit && sourceType === 'datasource') {
       const isFileStorage = selectedDatasource && ['s3', 'minio', 'rustfs'].includes(selectedDatasource.type);
       if (isFileStorage && selectedFiles.length === 0) {
         message.error('请至少选择一个文件');
         return;
       }
+    }
+    
+    // 校验自定义字段必填项
+    if (categoryId) {
+      const category = findCategoryById(categories, categoryId);
+      if (category && category.document_config?.template_type === 'custom_template') {
+        const customFields = category.document_config.custom_fields || [];
+        for (const field of customFields) {
+          if (field.is_required) {
+            const fieldValue = customFieldValues[field.field_code];
+            if (fieldValue === undefined || fieldValue === null || fieldValue === '') {
+              message.error(`请填写必填字段：${field.field_name}`);
+              return;
+            }
+          }
+        }
+        
+        // 校验章节目录必填字段
+        const chapters = category.document_config.chapters || [];
+        const chapterFieldsValues = customFieldValues.chapter_fields_values || {};
+        
+        // 递归校验章节字段
+        const validateChapterFields = (chapterList: any[], parentPath: string = ''): boolean => {
+          for (const chapter of chapterList) {
+            const chapterPath = parentPath ? `${parentPath} > ${chapter.name}` : chapter.name;
+            
+            // 如果章节有字段（form或list类型）
+            if (chapter.fields && chapter.fields.length > 0) {
+              const chapterValues = chapterFieldsValues[chapter.id] || {};
+              
+              // 表单类型：校验字段值
+              if (chapter.type === 'form') {
+                for (const field of chapter.fields) {
+                  if (field.is_required) {
+                    const fieldValue = chapterValues[field.id];
+                    if (fieldValue === undefined || fieldValue === null || fieldValue === '') {
+                      message.error(`请填写章节"${chapterPath}"的必填字段：${field.field_name}`);
+                      return false;
+                    }
+                  }
+                }
+              }
+              
+              // 列表类型：校验每一行的字段值
+              if (chapter.type === 'list') {
+                const listData = chapterValues.list_data || [];
+                for (let rowIndex = 0; rowIndex < listData.length; rowIndex++) {
+                  const rowData = listData[rowIndex];
+                  for (const field of chapter.fields) {
+                    if (field.is_required) {
+                      const fieldValue = rowData[field.id];
+                      if (fieldValue === undefined || fieldValue === null || fieldValue === '') {
+                        message.error(`请填写章节"${chapterPath}"第${rowIndex + 1}行的必填字段：${field.field_name}`);
+                        return false;
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            
+            // 递归校验子章节
+            const childChapters = chapters.filter((ch: any) => ch.parentId === chapter.id);
+            if (childChapters.length > 0) {
+              if (!validateChapterFields(childChapters, chapterPath)) {
+                return false;
+              }
+            }
+          }
+          return true;
+        };
+        
+        // 获取根章节（没有parentId的章节）
+        const rootChapters = chapters.filter((ch: any) => !ch.parentId);
+        if (!validateChapterFields(rootChapters)) {
+          return;
+        }
+      }
+    }
+    
+    // 构建document_config对象
+    const documentConfig: Record<string, any> = {};
+    
+    // 如果是自定义模版类型，添加自定义字段值
+    if (categoryId) {
+      const category = findCategoryById(categories, categoryId);
+      if (category && category.document_config?.template_type === 'custom_template') {
+        documentConfig.custom_fields_values = customFieldValues;
+      }
+    }
+    
+    // 如果是富文本类型，添加content字段
+    if (sourceType === 'rich_text') {
+      documentConfig.content = richTextContent;
     }
 
     setSaving(true);
@@ -633,6 +992,8 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
             tags,
             status: status,
             category_id: categoryId || undefined,
+            title: title.trim(),
+            document_config: Object.keys(documentConfig).length > 0 ? documentConfig : undefined,
           });
           message.success('保存成功');
         } else {
@@ -660,9 +1021,42 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
                 tags,
                 status: status,
                 category_id: categoryId || undefined,
+                title: title.trim(),
               });
             }
           }
+          message.success('创建成功');
+        } else if (sourceType === 'rich_text') {
+          // 富文本类型：创建单个数据集记录
+          
+          await knowledgebaseService.createDocument(knowledgebase.id, {
+            kb_id: knowledgebase.id,
+            chunk_method: chunkMethod,
+            chunk_config: chunkConfig,
+            tags,
+            source_type: 'rich_text',
+            status: status,
+            category_id: categoryId || undefined,
+            title: title.trim(),
+            document_config: documentConfig,
+          } as Partial<KnowledgebaseDocument>);
+          
+          message.success('创建成功');
+        } else if (sourceType === 'custom_template') {
+          // 自定义模版类型：创建单个数据集记录
+          
+          await knowledgebaseService.createDocument(knowledgebase.id, {
+            kb_id: knowledgebase.id,
+            chunk_method: chunkMethod,
+            chunk_config: chunkConfig,
+            tags,
+            source_type: 'custom_template',
+            status: status,
+            category_id: categoryId || undefined,
+            title: title.trim(),
+            document_config: documentConfig,
+          } as Partial<KnowledgebaseDocument>);
+          
           message.success('创建成功');
         } else if (sourceType === 'datasource') {
           if (selectedDatasource) {
@@ -789,15 +1183,55 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     setSourceType(originalData.sourceType);
     setChunkMethod(originalData.chunkMethod);
     setChunkConfig(originalData.chunkConfig);
-    setTags(originalData.tags);
+    // 恢复时，将 originalData.tags 中不属于 categoryTags 的部分作为 userTags
+    const restoredUserTags = originalData.tags.filter(tag => !categoryTags.includes(tag));
+    setUserTags(restoredUserTags);
     setStatus(originalData.status);
     setCategoryId(originalData.categoryId);
     setFileList([]);
     setMetadatas([...originalData.metadatas]);
+    setRichTextContent(originalData.richTextContent);
+    setTitle(originalData.title);
+    setCustomFieldValues(originalData.customFieldValues);
   };
 
   const renderSourceTypes = () => {
     if (!constants) return null;
+    
+    // 获取当前分类的知识模版类型
+    const getCurrentTemplateType = () => {
+      if (!categoryId) return 'file';
+      const category = findCategoryById(categories, categoryId);
+      return category?.document_config?.template_type || 'file';
+    };
+    
+    const templateType = getCurrentTemplateType();
+    
+    // 富文本或自定义模版时隐藏数据来源配置项
+    if (templateType === 'rich_text' || templateType === 'custom_template') {
+      return null;
+    }
+    
+    // 根据知识模版类型过滤数据来源
+    const filterSourceTypes = (st: any) => {
+      // 编辑模式下只显示当前数据源
+      if (isEdit) {
+        return st.key === sourceType;
+      }
+      
+      // 根据知识模版类型过滤
+      switch (templateType) {
+        case 'rich_text':
+          return st.key === 'rich_text';
+        case 'custom_template':
+          return st.key === 'custom_template';
+        case 'chapter':
+          return ['local_document', 'datasource'].includes(st.key);
+        default: // file
+          return ['local_document', 'datasource'].includes(st.key);
+      }
+    };
+    
     return (
       <div>
         <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
@@ -805,16 +1239,25 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         </div>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           {constants.source_types
-            .filter(st => !isEdit || st.key === sourceType) // 编辑模式下只显示当前数据源
+            .filter(filterSourceTypes)
             .map(st => {
-              const isSelected = sourceType === st.key;
+              // 根据分类的模板类型确定应该选中的数据来源
+              const effectiveSourceType = categoryId && !isEdit ? getDefaultSourceType(templateType) : sourceType;
+              const isSelected = effectiveSourceType === st.key;
               const isDisabled = isEdit; // 编辑模式下禁用修改
+              
+              // 计算卡片宽度：文件类型时占满一行，其他类型固定宽度
+              const filteredCount = constants.source_types.filter(filterSourceTypes).length;
+              const cardWidth = (templateType === 'file' || templateType === 'chapter') && filteredCount <= 2
+                ? 'calc(50% - 8px)'
+                : 140;
+              
               return (
                 <Tooltip key={st.key} title={isDisabled ? (isEdit ? '编辑模式下不可修改' : st.label) : st.label}>
                   <div
                     onClick={() => !isDisabled && handleSourceTypeChange(st.key)}
                     style={{
-                      width: 140,
+                      width: cardWidth,
                       padding: '16px 12px',
                       borderRadius: 8,
                       border: `2px solid ${isSelected ? '#667eea' : theme === 'dark' ? 'rgba(255,255,255,0.15)' : '#e8e8e8'}`,
@@ -856,7 +1299,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
           上传文档 <span style={{ color: '#ff4d4f' }}>*</span>
         </div>
-        <div style={{ width: '50%' }}>
+        <div style={{ width: '100%' }}>
           {!isEdit ? (
             <Upload.Dragger
               multiple
@@ -938,7 +1381,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
           选择数据源 <span style={{ color: '#ff4d4f' }}>*</span>
         </div>
-        <div style={{ width: '50%' }}>
+        <div style={{ width: '100%' }}>
           <Select
             value={selectedDatasourceId}
             onChange={handleDatasourceSelect}
@@ -961,6 +1404,25 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
               </Select.Option>
             ))}
           </Select>
+        </div>
+      </div>
+    );
+  };
+
+  const renderRichTextEditor = () => {
+    if (sourceType !== 'rich_text') return null;
+    return (
+      <div style={{ width: '100%' }}>
+        <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
+          知识内容 <span style={{ color: '#ff4d4f' }}>*</span>
+        </div>
+        <div style={{ width: '100%' }}>
+          <MDEditor
+            value={richTextContent}
+            onChange={(val) => setRichTextContent(val || '')}
+            height={250}
+            preview="edit"
+          />
         </div>
       </div>
     );
@@ -989,7 +1451,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
           <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
             文件信息
           </div>
-          <div style={{ width: '50%' }}>
+          <div style={{ width: '100%' }}>
             <div style={{
               padding: '12px 16px',
               borderRadius: 8,
@@ -1052,7 +1514,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
           文件浏览
         </div>
-        <div style={{ width: '50%' }}>
+        <div style={{ width: '100%' }}>
           {/* 搜索框 */}
           <div style={{ marginBottom: 8 }}>
             <Input
@@ -1408,6 +1870,9 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
   };
 
   const renderChunkMethodSelect = () => {
+    // 如果有可用的切片方法列表，则使用它；否则使用全部切片方法
+    const displayMethods = availableChunkMethods.length > 0 ? availableChunkMethods : constants?.chunk_methods || [];
+    
     return (
       <div style={{ width: '100%' }}>
         <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
@@ -1416,12 +1881,12 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         <Select
           value={chunkMethod}
           onChange={handleChunkMethodChange}
-          style={{ width: '50%', float: 'left' }}
+          style={{ width: '100%', background: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff' }}
           placeholder="请选择切片方法"
         >
-          {constants?.chunk_methods?.map(cm => (
+          {displayMethods.map(cm => (
             <Select.Option key={cm.key} value={cm.key}>{cm.label}</Select.Option>
-          )) || []}
+          ))}
         </Select>
       </div>
     );
@@ -1437,10 +1902,10 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
           切片配置
         </div>
         <div style={{ 
-          width: '50%',
+          width: '100%',
           padding: 16,
           borderRadius: 8,
-          background: theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#fafafa',
+          background: theme === 'dark' ? 'rgba(255,255,255,0.04)' : 'transparent',
           border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}`,
         }}>
           {fields.map(field => (
@@ -1568,18 +2033,34 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     }
   };
 
+  const renderTitle = () => {
+    return (
+      <div style={{ width: '100%' }}>
+        <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
+          知识标题 <span style={{ color: '#ff4d4f' }}>*</span>
+        </div>
+        <Input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="请输入知识标题"
+          style={{ width: '100%', background: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff', color: theme === 'dark' ? '#fff' : '#000' }}
+        />
+      </div>
+    );
+  };
+
   const renderCategory = () => {
     return (
       <div style={{ width: '100%' }}>
         <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
-          分类
+          知识目录
         </div>
         <TreeSelect
           value={categoryId || undefined}
           onChange={setCategoryId}
-          placeholder="请选择分类"
+          placeholder="请选择知识目录"
           treeData={buildCategoryTreeSelectData()}
-          style={{ width: '50%', float: 'left' }}
+          style={{ width: '100%', background: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff' }}
           allowClear
           treeDefaultExpandAll
         />
@@ -1699,7 +2180,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
           元数据
         </div>
-        <div style={{ width: '70%' }}>
+        <div style={{ width: '100%' }}>
           {metadatas.length > 0 && (
             <div style={{ display: 'flex', gap: 8, marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#aaa' : '#666', fontSize: 12 }}>
               <div style={{ width: 120 }}>字段名称</div>
@@ -1749,6 +2230,225 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     );
   };
 
+  const renderCustomTemplateConfig = () => {
+    // 获取当前知识目录的配置
+    if (!categoryId) return null;
+    const category = findCategoryById(categories, categoryId);
+    if (!category || category.document_config?.template_type !== 'custom_template') return null;
+    
+    const docConfig = category.document_config || {};
+    const customFields = docConfig.custom_fields || [];
+    const hasKnowledgeContent = docConfig.has_knowledge_content || false;
+    const chapterType = docConfig.chapter_type || 'fixed';
+    const chapters = docConfig.chapters || [];
+    
+    // 渲染字段值控件
+    const renderFieldValue = (field: any) => {
+      const inputStyle = { 
+        background: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff', 
+        color: theme === 'dark' ? '#fff' : '#000',
+        width: '100%',
+        height: 32
+      };
+      
+      // 使用customFieldValues中的值，如果没有则使用default_value
+      const fieldValue = customFieldValues[field.field_code] !== undefined 
+        ? customFieldValues[field.field_code] 
+        : field.default_value;
+      
+      // 更新字段值的处理函数
+      const handleValueChange = (value: any) => {
+        setCustomFieldValues(prev => ({
+          ...prev,
+          [field.field_code]: value
+        }));
+      };
+      
+      switch (field.field_type) {
+        case 'boolean':
+          return (
+            <Select 
+              value={fieldValue !== undefined ? fieldValue : undefined}
+              style={inputStyle}
+              onChange={handleValueChange}
+              allowClear
+            >
+              <Option value={true}>true</Option>
+              <Option value={false}>false</Option>
+            </Select>
+          );
+        case 'long':
+        case 'integer':
+          return (
+            <InputNumber 
+              value={fieldValue || 0} 
+              style={inputStyle} 
+              precision={0}
+              onChange={handleValueChange}
+            />
+          );
+        case 'float':
+        case 'double':
+          return (
+            <InputNumber 
+              value={fieldValue || 0} 
+              style={inputStyle} 
+              step={0.01}
+              onChange={handleValueChange}
+            />
+          );
+        case 'date':
+          return (
+            <DatePicker 
+              value={fieldValue ? dayjs(fieldValue) : null} 
+              style={inputStyle} 
+              showTime 
+              locale={zhCN}
+              onChange={(_, dateString) => handleValueChange(dateString)}
+            />
+          );
+        case 'integer_range':
+        case 'long_range':
+          return (
+            <Space style={{ width: '100%' }}>
+              <InputNumber 
+                value={Array.isArray(fieldValue) ? fieldValue[0] : 0}
+                precision={0} 
+                placeholder="最小值" 
+                style={{ height: 32, flex: 1 }}
+                onChange={(v) => handleValueChange([v || 0, Array.isArray(fieldValue) ? fieldValue[1] : 0])}
+              />
+              <span style={{ color: '#999', alignSelf: 'center' }}>~</span>
+              <InputNumber 
+                value={Array.isArray(fieldValue) ? fieldValue[1] : 0}
+                precision={0} 
+                placeholder="最大值" 
+                style={{ height: 32, flex: 1 }}
+                onChange={(v) => handleValueChange([Array.isArray(fieldValue) ? fieldValue[0] : 0, v || 0])}
+              />
+            </Space>
+          );
+        case 'float_range':
+          return (
+            <Space style={{ width: '100%' }}>
+              <InputNumber 
+                value={Array.isArray(fieldValue) ? fieldValue[0] : 0}
+                step={0.01} 
+                placeholder="最小值" 
+                style={{ height: 32, flex: 1 }}
+                onChange={(v) => handleValueChange([v || 0, Array.isArray(fieldValue) ? fieldValue[1] : 0])}
+              />
+              <span style={{ color: '#999', alignSelf: 'center' }}>~</span>
+              <InputNumber 
+                value={Array.isArray(fieldValue) ? fieldValue[1] : 0}
+                step={0.01} 
+                placeholder="最大值" 
+                style={{ height: 32, flex: 1 }}
+                onChange={(v) => handleValueChange([Array.isArray(fieldValue) ? fieldValue[0] : 0, v || 0])}
+              />
+            </Space>
+          );
+        case 'date_range':
+          return (
+            <RangePicker
+              value={fieldValue && Array.isArray(fieldValue) && fieldValue[0] && fieldValue[1] ? [dayjs(fieldValue[0]), dayjs(fieldValue[1])] : null}
+              onChange={(_, dateStrings) => handleValueChange(dateStrings)}
+              style={inputStyle}
+              showTime
+              locale={zhCN}
+            />
+          );
+        case 'object':
+          return (
+            <Input 
+              value={typeof fieldValue === 'string' ? fieldValue : JSON.stringify(fieldValue || {})}
+              style={inputStyle}
+              onChange={(e) => handleValueChange(e.target.value)}
+              placeholder='{"key": "value"}'
+            />
+          );
+        case 'array':
+          return (
+            <Input 
+              value={typeof fieldValue === 'string' ? fieldValue : JSON.stringify(fieldValue || [])}
+              style={inputStyle}
+              onChange={(e) => handleValueChange(e.target.value)}
+              placeholder='["item1", "item2"]'
+            />
+          );
+        case 'text':
+        default:
+          return (
+            <Input 
+              value={fieldValue || ''} 
+              style={inputStyle}
+              onChange={(e) => handleValueChange(e.target.value)}
+            />
+          );
+      }
+    };
+    
+    return (
+      <div style={{ width: '100%' }}>
+        <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
+          知识配置
+        </div>
+        <div style={{ 
+          padding: 16, 
+          borderRadius: 8,
+          background: theme === 'dark' ? 'rgba(255,255,255,0.04)' : 'transparent',
+          border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}`,
+        }}>
+          {/* 基础属性字段 */}
+          {customFields.length > 0 && (
+            <Row gutter={[16, 12]}>
+              {customFields.map((field: any, index: number) => (
+                <Col key={index} span={12}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div style={{ fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
+                      {field.field_name}
+                      {field.is_required && <span style={{ color: '#ff4d4f' }}> *</span>}
+                      {field.description && (
+                        <Tooltip title={field.description}>
+                          <QuestionCircleOutlined style={{ marginLeft: 4, color: '#999', fontSize: 14 }} />
+                        </Tooltip>
+                      )}
+                    </div>
+                    <div style={{ width: '100%' }}>
+                      {renderFieldValue(field)}
+                    </div>
+                  </div>
+                </Col>
+              ))}
+            </Row>
+          )}
+          
+          {/* 章节目录配置 */}
+          {hasKnowledgeContent && chapterType === 'fixed' && chapters.length > 0 && (
+            <div style={{ marginTop: customFields.length > 0 ? 16 : 0, paddingTop: customFields.length > 0 ? 16 : 0, borderTop: customFields.length > 0 ? `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}` : 'none' }}>
+              <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
+                章节目录
+              </div>
+              <ChapterList 
+                chapters={chapters} 
+                onChange={() => {}} 
+                editable={false}
+                documentConstants={constants}
+                chapterFieldsValues={customFieldValues.chapter_fields_values || {}}
+                onChapterFieldsValuesChange={(values) => {
+                  setCustomFieldValues(prev => ({
+                    ...prev,
+                    chapter_fields_values: values,
+                  }));
+                }}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const renderStatus = () => {
     return (
       <div style={{ width: '100%' }}>
@@ -1777,6 +2477,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         padding: '16px 0 8px 0',
         borderTop: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}`,
         marginTop: 16,
+        backgroundColor: theme === 'dark' ? '#1e1e1e' : '#ffffff',
       }}>
         {isEdit && hasChanges && (
           <span style={{ color: '#faad14', fontSize: 12 }}>
@@ -1802,7 +2503,6 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
           icon={<SaveOutlined />}
           onClick={handleSave}
           loading={saving}
-          disabled={!hasChanges && isEdit}
         >
           保存
         </Button>
@@ -1816,11 +2516,12 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       display: 'flex',
       flexDirection: 'column',
       overflowY: 'hidden',
+      backgroundColor: theme === 'dark' ? '#1e1e1e' : '#ffffff',
     }}>
       <PageHeader
         items={[
           {
-            title: isEdit ? '编辑数据集' : '新增数据集'
+            title: isEdit ? '编辑知识' : '新增知识'
           }
         ]}
         backButton={
@@ -1840,21 +2541,82 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         overflowY: 'auto', 
         padding: '24px',
         scrollbarWidth: 'none',
-        msOverflowStyle: 'none'
+        msOverflowStyle: 'none',
+        backgroundColor: theme === 'dark' ? '#1e1e1e' : '#ffffff'
       }} className="hide-scrollbar">
         <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; }`}</style>
-        <Form layout="vertical" style={{ display: 'flex', flexDirection: 'column', gap: 24, flex: 1, alignItems: 'flex-start' }}>
-          {renderSourceTypes()}
-          {renderUploadArea()}
-          {renderDatasourceSelector()}
-          {renderFileBrowser()}
-          {renderTableBrowser()}
-          {renderCategory()}
-          {renderChunkMethodSelect()}
-          {renderChunkConfigFields()}
-          {renderTags()}
-          {renderMetadatas()}
-          {renderStatus()}
+        <Form layout="vertical" style={{ width: '100%' }}>
+          <div 
+            ref={containerRef}
+            style={{ 
+              display: 'flex', 
+              width: '100%',
+              position: 'relative'
+            }}
+          >
+            {/* 左侧配置区域 */}
+            <div style={{ 
+              width: `${leftWidth}%`, 
+              paddingRight: 12,
+              transition: isDragging ? 'none' : 'width 0.1s'
+            }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                {renderTitle()}
+                {renderCategory()}
+                {renderCustomTemplateConfig()}
+                {renderSourceTypes()}
+                {renderUploadArea()}
+                {renderDatasourceSelector()}
+                {renderRichTextEditor()}
+                {renderFileBrowser()}
+                {renderTableBrowser()}
+                {renderTags()}
+                {renderMetadatas()}
+                {renderStatus()}
+              </div>
+            </div>
+            
+            {/* 可拖拽分隔线 */}
+            <div
+              onMouseDown={handleMouseDown}
+              style={{
+                width: 1,
+                background: theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8',
+                cursor: 'col-resize',
+                position: 'relative',
+                zIndex: 10,
+                transition: isDragging ? 'none' : 'background 0.2s',
+              }}
+            >
+              {/* 拖拽手柄 */}
+              <div style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                width: 8,
+                height: 40,
+                background: isDragging 
+                  ? '#667eea' 
+                  : theme === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)',
+                borderRadius: 4,
+                cursor: 'col-resize',
+                transition: isDragging ? 'none' : 'background 0.2s',
+              }} />
+            </div>
+            
+            {/* 右侧配置区域 */}
+            <div style={{ 
+              width: `${100 - leftWidth}%`, 
+              paddingLeft: 12,
+              transition: isDragging ? 'none' : 'width 0.1s'
+            }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                {renderChunkMethodSelect()}
+                {renderChunkConfigFields()}
+              </div>
+            </div>
+          </div>
         </Form>
       </div>
       {renderBottomButtons()}

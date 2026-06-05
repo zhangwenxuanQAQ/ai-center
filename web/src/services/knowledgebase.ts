@@ -205,6 +205,15 @@ export const knowledgebaseService = {
   },
 
   /**
+   * 获取单个知识库文档分类
+   */
+  getDocumentCategory: async (kbId: string, categoryId: string): Promise<KnowledgebaseDocumentCategory> => {
+    return http.get<KnowledgebaseDocumentCategory>(
+      `/aicenter/v1/knowledgebase/${kbId}/document_category/${categoryId}`
+    );
+  },
+
+  /**
    * 创建文档分类
    */
   createDocumentCategory: async (kbId: string, data: Partial<KnowledgebaseDocumentCategory>): Promise<KnowledgebaseDocumentCategory> => {

@@ -81,7 +81,7 @@ const KnowledgebaseDocumentFolderModal: React.FC<KnowledgebaseDocumentFolderModa
         return true;
       case 1:
         if (!selectedTemplate) {
-          message.error('请选择知识模板');
+          message.error('请选择知识模版');
           return false;
         }
         // 只有自定义模板才需要验证基础属性
@@ -91,7 +91,11 @@ const KnowledgebaseDocumentFolderModal: React.FC<KnowledgebaseDocumentFolderModa
         }
         // 校验基础属性的字段中文名和编码是否填写
         if (selectedTemplate === 'custom_template') {
-          const isValid = stepKnowledgeModelRef.current?.validateCustomFields();
+          // 直接验证 customFields 数据，而不是通过 ref
+          const isValid = customFields.every(field => 
+            field.field_name && field.field_name.trim() && 
+            field.field_code && field.field_code.trim()
+          );
           if (!isValid) {
             message.error('请填写基础属性的字段中文名和编码');
             return false;
@@ -117,6 +121,26 @@ const KnowledgebaseDocumentFolderModal: React.FC<KnowledgebaseDocumentFolderModa
       for (let i = 0; i < steps.length; i++) {
         if (!validateStep(i)) {
           setCurrentStep(i);  // 跳转到验证失败的步骤
+          return;
+        }
+      }
+
+      // 校验基础属性字段中文名和编码是否重复
+      if (selectedTemplate === 'custom_template' && customFields && customFields.length > 0) {
+        const fieldNames = customFields.map(f => f.field_name).filter(name => name);
+        const fieldCodes = customFields.map(f => f.field_code).filter(code => code);
+        
+        // 检查中文名重复
+        const duplicateNames = fieldNames.filter((name, index) => fieldNames.indexOf(name) !== index);
+        if (duplicateNames.length > 0) {
+          message.error(`基础属性字段中文名重复：${[...new Set(duplicateNames)].join('、')}`);
+          return;
+        }
+        
+        // 检查编码重复
+        const duplicateCodes = fieldCodes.filter((code, index) => fieldCodes.indexOf(code) !== index);
+        if (duplicateCodes.length > 0) {
+          message.error(`基础属性字段编码重复：${[...new Set(duplicateCodes)].join('、')}`);
           return;
         }
       }
@@ -210,7 +234,7 @@ const KnowledgebaseDocumentFolderModal: React.FC<KnowledgebaseDocumentFolderModa
     setSortOrder(1);
     // 重置知识模型状态
     setKnowledgeTags([]);
-    setSelectedTemplate('file'); // 默认选中"文件"知识模板
+    setSelectedTemplate('file'); // 默认选中"文件"知识模版
     setCustomFields([]);
     setHasKnowledgeContent(false);
     setChapterType('fixed');
@@ -227,48 +251,63 @@ const KnowledgebaseDocumentFolderModal: React.FC<KnowledgebaseDocumentFolderModa
   };
 
   React.useEffect(() => {
-    if (visible && editData) {
-      // 设置编辑模式的ID
-      setEditingId(editData.id);
-      
-      // 回填基本信息
-      setName(editData.name || '');
-      setDescription(editData.description || '');
-      setParentId(editData.parent_id || undefined);
-      setSortOrder(Math.max(editData.sort_order || 1, 1));
-      
-      // 回填知识模型配置
-      if (editData.document_config) {
-        const docConfig = typeof editData.document_config === 'string' 
-          ? JSON.parse(editData.document_config) 
-          : editData.document_config;
-        setKnowledgeTags(docConfig.tags || []);
-        setSelectedTemplate(docConfig.template_type || '');
-        setCustomFields(docConfig.custom_fields || []);
-        setHasKnowledgeContent(docConfig.has_knowledge_content || false);
-        setChapterType(docConfig.chapter_type || 'fixed');
-        setChapters(docConfig.chapters || []);
-        setEditingRequirements(docConfig.editing_requirements || '');
+    const loadEditData = async () => {
+      if (visible && editData) {
+        try {
+          setLoading(true);
+          // 调用后端接口获取最新的知识目录数据
+          const categoryData = await knowledgebaseService.getDocumentCategory(knowledgebaseId, editData.id);
+          
+          // 设置编辑模式的ID
+          setEditingId(categoryData.id);
+          
+          // 回填基本信息
+          setName(categoryData.name || '');
+          setDescription(categoryData.description || '');
+          setParentId(categoryData.parent_id || undefined);
+          setSortOrder(Math.max(categoryData.sort_order || 1, 1));
+          
+          // 回填切片配置
+          if (categoryData.chunk_method) {
+            setChunkMethod(categoryData.chunk_method);
+          }
+          if (categoryData.chunk_config) {
+            const chunkCfg = typeof categoryData.chunk_config === 'string' 
+              ? JSON.parse(categoryData.chunk_config) 
+              : categoryData.chunk_config;
+            setChunkConfig(chunkCfg);
+          }
+          
+          // 回填知识模型配置
+          if (categoryData.document_config) {
+            const docConfig = typeof categoryData.document_config === 'string' 
+              ? JSON.parse(categoryData.document_config) 
+              : categoryData.document_config;
+            setKnowledgeTags(docConfig.tags || []);
+            setSelectedTemplate(docConfig.template_type || '');
+            setCustomFields(docConfig.custom_fields || []);
+            setHasKnowledgeContent(docConfig.has_knowledge_content || false);
+            setChapterType(docConfig.chapter_type || 'fixed');
+            setChapters(docConfig.chapters || []);
+            setEditingRequirements(docConfig.editing_requirements || '');
+          }
+        } catch (error) {
+          console.error('Failed to load category data:', error);
+          message.error('加载知识目录数据失败');
+        } finally {
+          setLoading(false);
+        }
+      } else if (visible) {
+        // 新增模式：设置默认排序
+        const maxSortOrder = categories.length > 0
+          ? Math.max(...categories.map(c => c.sort_order || 0))
+          : 0;
+        setSortOrder(Math.max(maxSortOrder + 1, 1));
       }
-      
-      // 回填切片配置
-      if (editData.chunk_method) {
-        setChunkMethod(editData.chunk_method);
-      }
-      if (editData.chunk_config) {
-        const chunkCfg = typeof editData.chunk_config === 'string' 
-          ? JSON.parse(editData.chunk_config) 
-          : editData.chunk_config;
-        setChunkConfig(chunkCfg);
-      }
-    } else if (visible) {
-      // 新增模式：设置默认排序
-      const maxSortOrder = categories.length > 0
-        ? Math.max(...categories.map(c => c.sort_order || 0))
-        : 0;
-      setSortOrder(Math.max(maxSortOrder + 1, 1));
-    }
-  }, [visible, editData, categories]);
+    };
+    
+    loadEditData();
+  }, [visible, editData, categories, knowledgebaseId]);
 
   React.useEffect(() => {
     if (!visible) {
@@ -276,7 +315,7 @@ const KnowledgebaseDocumentFolderModal: React.FC<KnowledgebaseDocumentFolderModa
     }
   }, [visible]);
 
-  // 获取知识模板数据
+  // 获取知识模版数据
   React.useEffect(() => {
     if (visible && knowledgeTemplates.length === 0) {
       knowledgebaseService.getDocumentConstants().then((data) => {
@@ -290,7 +329,7 @@ const KnowledgebaseDocumentFolderModal: React.FC<KnowledgebaseDocumentFolderModa
     }
   }, [visible, knowledgeTemplates.length]);
 
-  // 知识模板变化时查询可用切片方法
+  // 知识模版变化时查询可用切片方法
   React.useEffect(() => {
     if (!visible || !selectedTemplate) return;
     
@@ -305,16 +344,18 @@ const KnowledgebaseDocumentFolderModal: React.FC<KnowledgebaseDocumentFolderModa
         const methodsData = await knowledgebaseService.getAvailableChunkMethods(undefined, '', selectedTemplate);
         setAvailableChunkMethods(methodsData.available_methods);
         
+        // 检查当前方法是否在可用方法列表中
         const isCurrentMethodAvailable = methodsData.available_methods.some(
           (method: any) => method.key === chunkMethod
         );
         
-        if ((!isCurrentMethodAvailable || !chunkMethod) && methodsData.available_methods.length > 0) {
+        // 只有在以下情况才设置默认方法：
+        // 1. 当前没有选择方法（新增模式）
+        // 2. 或者当前方法不在可用方法列表中（模板切换导致方法不可用）
+        if ((!chunkMethod || !isCurrentMethodAvailable) && methodsData.available_methods.length > 0) {
           const defaultMethod = methodsData.available_methods[0].key;
           setChunkMethod(defaultMethod);
           initChunkConfig(defaultMethod);
-        } else if (chunkMethod) {
-          initChunkConfig(chunkMethod);
         }
       } catch (error) {
         console.error('Failed to fetch available chunk methods:', error);

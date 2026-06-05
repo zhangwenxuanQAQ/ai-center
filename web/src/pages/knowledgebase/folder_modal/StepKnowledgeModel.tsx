@@ -122,7 +122,7 @@ const StepKnowledgeModelComponent = (props: StepKnowledgeModelProps, ref: React.
 
       <div style={{ marginBottom: 24 }}>
         <label style={{ fontWeight: 500, marginBottom: 8, display: 'block' }}>
-          知识模板 <span style={{ color: '#ff4d4f' }}>*</span>
+          知识模版 <span style={{ color: '#ff4d4f' }}>*</span>
         </label>
         <div style={{ display: 'flex', gap: 12 }}>
           {templateCards.map(card => {
@@ -207,6 +207,7 @@ const StepKnowledgeModelComponent = (props: StepKnowledgeModelProps, ref: React.
                         onChange={setChapters} 
                         editable={true}
                         documentConstants={documentConstants}
+                        disabled={true}
                       />
                     </div>
                   )}

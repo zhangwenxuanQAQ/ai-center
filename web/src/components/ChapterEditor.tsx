@@ -110,40 +110,40 @@ const ChapterEditor: React.FC<ChapterEditorProps> = ({
           {fields.map(field => (
             <Form.Item
               key={field.id}
-              label={field.fieldName}
-              required={field.isRequired}
+              label={field.field_name}
+              required={field.is_required}
             >
-              {field.fieldType === 'text' && (
-                <Input placeholder={field.description || `请输入${field.fieldName}`} />
+              {field.field_type === 'text' && (
+                <Input placeholder={field.description || `请输入${field.field_name}`} />
               )}
-              {field.fieldType === 'textarea' && (
-                <Input.TextArea rows={3} placeholder={field.description || `请输入${field.fieldName}`} />
+              {field.field_type === 'textarea' && (
+                <Input.TextArea rows={3} placeholder={field.description || `请输入${field.field_name}`} />
               )}
-              {field.fieldType === 'number' && (
-                <Input type="number" placeholder={field.description || `请输入${field.fieldName}`} />
+              {field.field_type === 'number' && (
+                <Input type="number" placeholder={field.description || `请输入${field.field_name}`} />
               )}
-              {field.fieldType === 'select' && (
-                <Select placeholder={field.description || `请选择${field.fieldName}`}>
-                  {field.fieldDict?.split(',').map(item => (
+              {field.field_type === 'select' && (
+                <Select placeholder={field.description || `请选择${field.field_name}`}>
+                  {field.field_dict?.split(',').map(item => (
                     <Select.Option key={item} value={item}>{item}</Select.Option>
                   ))}
                 </Select>
               )}
-              {field.fieldType === 'date' && (
+              {field.field_type === 'date' && (
                 <Input type="date" />
               )}
-              {field.fieldType === 'radio' && (
+              {field.field_type === 'radio' && (
                 <div style={{ color: '#666' }}>单选框</div>
               )}
-              {field.fieldType === 'checkbox' && (
+              {field.field_type === 'checkbox' && (
                 <div style={{ color: '#666' }}>多选框</div>
               )}
-              {field.fieldType === 'file' && (
+              {field.field_type === 'file' && (
                 <div style={{ color: '#666' }}>文件上传框</div>
               )}
-              {field.fieldType === 'select_multiple' && (
-                <Select mode="multiple" placeholder={field.description || `请选择${field.fieldName}`}>
-                  {field.fieldDict?.split(',').map(item => (
+              {field.field_type === 'select_multiple' && (
+                <Select mode="multiple" placeholder={field.description || `请选择${field.field_name}`}>
+                  {field.field_dict?.split(',').map(item => (
                     <Select.Option key={item} value={item}>{item}</Select.Option>
                   ))}
                 </Select>
@@ -166,7 +166,7 @@ const ChapterEditor: React.FC<ChapterEditorProps> = ({
     const newRowId = `row_${Date.now()}`;
     const newRow: ListRowData = { id: newRowId };
     fields.forEach(field => {
-      newRow[field.fieldCode] = '';
+      newRow[field.field_code] = '';
     });
     setListData({ ...listData, [chapterId]: [...currentData, newRow] });
   };
@@ -190,19 +190,19 @@ const ChapterEditor: React.FC<ChapterEditorProps> = ({
 
   // 根据字段类型渲染表单组件
   const renderFieldComponent = (field: SimpleTableRow, value: any, onChange: (value: any) => void) => {
-    const { fieldType, fieldCode, fieldDict, description, isRequired } = field;
+    const { field_type, field_code, field_dict, description, is_required } = field;
     
-    const requiredMark = isRequired ? <span style={{ color: '#ff4d4f', marginLeft: 2 }}>*</span> : null;
+    const requiredMark = is_required ? <span style={{ color: '#ff4d4f', marginLeft: 2 }}>*</span> : null;
     
-    switch (fieldType) {
+    switch (field_type) {
       case 'text':
         return (
           <Input
             value={value || ''}
             onChange={(e) => onChange(e.target.value)}
-            placeholder={description || `请输入${field.fieldName}`}
+            placeholder={description || `请输入${field.field_name}`}
             style={{ width: '100%' }}
-            required={isRequired}
+            required={is_required}
           />
         );
       case 'textarea':
@@ -210,10 +210,10 @@ const ChapterEditor: React.FC<ChapterEditorProps> = ({
           <Input.TextArea
             value={value || ''}
             onChange={(e) => onChange(e.target.value)}
-            placeholder={description || `请输入${field.fieldName}`}
+            placeholder={description || `请输入${field.field_name}`}
             rows={2}
             style={{ width: '100%' }}
-            required={isRequired}
+            required={is_required}
           />
         );
       case 'number':
@@ -222,9 +222,9 @@ const ChapterEditor: React.FC<ChapterEditorProps> = ({
             type="number"
             value={value || ''}
             onChange={(e) => onChange(e.target.value)}
-            placeholder={description || `请输入${field.fieldName}`}
+            placeholder={description || `请输入${field.field_name}`}
             style={{ width: '100%' }}
-            required={isRequired}
+            required={is_required}
           />
         );
       case 'select':
@@ -232,11 +232,11 @@ const ChapterEditor: React.FC<ChapterEditorProps> = ({
           <Select
             value={value || undefined}
             onChange={(v) => onChange(v)}
-            placeholder={description || `请选择${field.fieldName}`}
+            placeholder={description || `请选择${field.field_name}`}
             style={{ width: '100%' }}
-            required={isRequired}
+            required={is_required}
           >
-            {fieldDict?.split(',').map(item => (
+            {field_dict?.split(',').map(item => (
               <Select.Option key={item.trim()} value={item.trim()}>{item.trim()}</Select.Option>
             ))}
           </Select>
@@ -247,11 +247,11 @@ const ChapterEditor: React.FC<ChapterEditorProps> = ({
             mode="multiple"
             value={value || []}
             onChange={(v) => onChange(v)}
-            placeholder={description || `请选择${field.fieldName}`}
+            placeholder={description || `请选择${field.field_name}`}
             style={{ width: '100%' }}
-            required={isRequired}
+            required={is_required}
           >
-            {fieldDict?.split(',').map(item => (
+            {field_dict?.split(',').map(item => (
               <Select.Option key={item.trim()} value={item.trim()}>{item.trim()}</Select.Option>
             ))}
           </Select>
@@ -262,13 +262,13 @@ const ChapterEditor: React.FC<ChapterEditorProps> = ({
             value={value ? new Date(value) : null}
             onChange={(date) => onChange(date ? date.format('YYYY-MM-DD') : '')}
             style={{ width: '100%' }}
-            required={isRequired}
+            required={is_required}
           />
         );
       case 'radio':
         return (
           <div>
-            {fieldDict?.split(',').map(item => (
+            {field_dict?.split(',').map(item => (
               <label key={item.trim()} style={{ marginRight: 12, cursor: 'pointer' }}>
                 <input
                   type="radio"
@@ -314,9 +314,9 @@ const ChapterEditor: React.FC<ChapterEditorProps> = ({
           <Input
             value={value || ''}
             onChange={(e) => onChange(e.target.value)}
-            placeholder={description || `请输入${field.fieldName}`}
+            placeholder={description || `请输入${field.field_name}`}
             style={{ width: '100%' }}
-            required={isRequired}
+            required={is_required}
           />
         );
     }
@@ -331,18 +331,18 @@ const ChapterEditor: React.FC<ChapterEditorProps> = ({
     const columns = fields.map(field => ({
       title: (
         <span>
-          {field.fieldName}
-          {field.isRequired && <span style={{ color: '#ff4d4f', marginLeft: 2 }}>*</span>}
+          {field.field_name}
+          {field.is_required && <span style={{ color: '#ff4d4f', marginLeft: 2 }}>*</span>}
         </span>
       ),
-      dataIndex: field.fieldCode,
-      key: field.fieldCode,
+      dataIndex: field.field_code,
+      key: field.field_code,
       width: Math.floor(100 / (fields.length + 1)), // 平均分配宽度
       render: (_: any, record: ListRowData) => {
         return renderFieldComponent(
           field,
-          record[field.fieldCode],
-          (value) => handleEditListCell(chapterId, record.id, field.fieldCode, value)
+          record[field.field_code],
+          (value) => handleEditListCell(chapterId, record.id, field.field_code, value)
         );
       },
     }));

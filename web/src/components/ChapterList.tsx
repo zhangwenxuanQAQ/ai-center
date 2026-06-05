@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Button, Table, Input, Select, Tree, Tooltip, InputNumber, DatePicker, Space } from 'antd';
+const { RangePicker } = DatePicker;
 import { PlusOutlined, EditOutlined, DeleteOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import type { TreeDataNode, TreeProps } from 'antd';
 import MDEditorTheme from './MDEditorTheme';
@@ -16,6 +17,9 @@ interface ChapterListProps {
   selectedChapterId?: string;
   onSelectChapter?: (chapterId: string | null) => void;
   documentConstants?: any;
+  chapterFieldsValues?: Record<string, any>;
+  onChapterFieldsValuesChange?: (values: Record<string, any>) => void;
+  disabled?: boolean;
 }
 
 const ChapterList: React.FC<ChapterListProps> = ({ 
@@ -25,6 +29,9 @@ const ChapterList: React.FC<ChapterListProps> = ({
   selectedChapterId,
   onSelectChapter,
   documentConstants,
+  chapterFieldsValues = {},
+  onChapterFieldsValuesChange,
+  disabled = false,
 }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingChapter, setEditingChapter] = useState<Chapter | null>(null);
@@ -140,13 +147,19 @@ const ChapterList: React.FC<ChapterListProps> = ({
     setExpandedKeys(keys as string[]);
   };
 
-  const renderFieldValueControl = (field: SimpleTableRow) => {
+  const renderFieldValueControl = (field: SimpleTableRow, value: any, onChange: (value: any) => void) => {
     const inputHeight = 32;
     
-    switch (field.fieldType) {
+    switch (field.field_type) {
       case 'boolean':
         return (
-          <Select disabled style={{ width: '100%', height: inputHeight }}>
+          <Select 
+            value={value !== undefined ? value : undefined}
+            style={{ width: '100%', height: inputHeight }}
+            onChange={onChange}
+            allowClear
+            disabled={disabled}
+          >
             <Select.Option value={true}>true</Select.Option>
             <Select.Option value={false}>false</Select.Option>
           </Select>
@@ -154,45 +167,142 @@ const ChapterList: React.FC<ChapterListProps> = ({
       case 'long':
       case 'integer':
         return (
-          <InputNumber disabled style={{ width: '100%', height: inputHeight }} precision={0} />
+          <InputNumber 
+            value={value}
+            style={{ width: '100%', height: inputHeight }} 
+            precision={0}
+            onChange={onChange}
+            disabled={disabled}
+          />
         );
       case 'float':
       case 'double':
         return (
-          <InputNumber disabled style={{ width: '100%', height: inputHeight }} step={0.01} />
+          <InputNumber 
+            value={value}
+            style={{ width: '100%', height: inputHeight }} 
+            step={0.01}
+            onChange={onChange}
+            disabled={disabled}
+          />
         );
       case 'date':
         return (
-          <DatePicker disabled style={{ width: '100%', height: inputHeight }} showTime locale={zhCN} />
+          <DatePicker 
+            value={value ? dayjs(value) : null}
+            style={{ width: '100%', height: inputHeight }} 
+            showTime 
+            locale={zhCN}
+            onChange={(_, dateString) => onChange(dateString)}
+            disabled={disabled}
+          />
         );
       case 'integer_range':
       case 'long_range':
         return (
           <Space style={{ width: '100%' }}>
-            <InputNumber disabled precision={0} placeholder="最小值" style={{ height: inputHeight, flex: 1 }} />
+            <InputNumber 
+              value={Array.isArray(value) ? value[0] : 0}
+              precision={0} 
+              placeholder="最小值" 
+              style={{ height: inputHeight, flex: 1 }}
+              onChange={(v) => onChange([v || 0, Array.isArray(value) ? value[1] : 0])}
+              disabled={disabled}
+            />
             <span style={{ color: '#999', alignSelf: 'center' }}>~</span>
-            <InputNumber disabled precision={0} placeholder="最大值" style={{ height: inputHeight, flex: 1 }} />
+            <InputNumber 
+              value={Array.isArray(value) ? value[1] : 0}
+              precision={0} 
+              placeholder="最大值" 
+              style={{ height: inputHeight, flex: 1 }}
+              onChange={(v) => onChange([Array.isArray(value) ? value[0] : 0, v || 0])}
+              disabled={disabled}
+            />
           </Space>
         );
       case 'float_range':
         return (
           <Space style={{ width: '100%' }}>
-            <InputNumber disabled step={0.01} placeholder="最小值" style={{ height: inputHeight, flex: 1 }} />
+            <InputNumber 
+              value={Array.isArray(value) ? value[0] : 0}
+              step={0.01} 
+              placeholder="最小值" 
+              style={{ height: inputHeight, flex: 1 }}
+              onChange={(v) => onChange([v || 0, Array.isArray(value) ? value[1] : 0])}
+              disabled={disabled}
+            />
             <span style={{ color: '#999', alignSelf: 'center' }}>~</span>
-            <InputNumber disabled step={0.01} placeholder="最大值" style={{ height: inputHeight, flex: 1 }} />
+            <InputNumber 
+              value={Array.isArray(value) ? value[1] : 0}
+              step={0.01} 
+              placeholder="最大值" 
+              style={{ height: inputHeight, flex: 1 }}
+              onChange={(v) => onChange([Array.isArray(value) ? value[0] : 0, v || 0])}
+              disabled={disabled}
+            />
           </Space>
+        );
+      case 'date_range':
+        return (
+          <RangePicker
+            value={value && Array.isArray(value) && value[0] && value[1] ? [dayjs(value[0]), dayjs(value[1])] : null}
+            onChange={(_, dateStrings) => onChange(dateStrings)}
+            style={{ width: '100%', height: inputHeight }}
+            showTime
+            locale={zhCN}
+            disabled={disabled}
+          />
+        );
+      case 'object':
+        return (
+          <Input 
+            value={typeof value === 'string' ? value : JSON.stringify(value || {})}
+            style={{ width: '100%', height: inputHeight }}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder='{"key": "value"}'
+            disabled={disabled}
+          />
+        );
+      case 'array':
+        return (
+          <Input 
+            value={typeof value === 'string' ? value : JSON.stringify(value || [])}
+            style={{ width: '100%', height: inputHeight }}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder='["item1", "item2"]'
+            disabled={disabled}
+          />
         );
       case 'text':
       case 'keyword':
       default:
         return (
-          <Input disabled style={{ width: '100%', height: inputHeight }} />
+          <Input 
+            value={value || ''}
+            style={{ width: '100%', height: inputHeight }}
+            onChange={(e) => onChange(e.target.value)}
+            disabled={disabled}
+          />
         );
     }
   };
 
-  const renderFormFields = (fields?: SimpleTableRow[], editableField = false) => {
+  const renderFormFields = (chapter: Chapter) => {
+    const fields = chapter.fields;
     if (!fields || fields.length === 0) return null;
+    
+    const chapterValues = chapterFieldsValues[chapter.id] || {};
+    
+    const handleFieldChange = (fieldId: string, value: any) => {
+      const newChapterValues = {
+        ...chapterFieldsValues,
+        [chapter.id]: {
+          ...chapterValues,
+          [fieldId]: value,
+        },
+      };
+      onChapterFieldsValuesChange?.(newChapterValues);
+    };
 
     return (
       <div style={{ padding: 16 }}>
@@ -211,8 +321,8 @@ const ChapterList: React.FC<ChapterListProps> = ({
               minWidth: 150,
               textAlign: 'left',
             }}>
-              {field.fieldName}{field.fieldCode ? `（${field.fieldCode}）` : ''}
-              {field.isRequired && <span style={{ color: '#ff4d4f', marginLeft: 4 }}>*</span>}
+              {field.field_name}{field.field_code ? `（${field.field_code}）` : ''}
+              {field.is_required && <span style={{ color: '#ff4d4f', marginLeft: 4 }}>*</span>}
               {field.description && (
                 <Tooltip title={field.description}>
                   <QuestionCircleOutlined style={{ marginLeft: 4, color: '#999', fontSize: 14 }} />
@@ -220,7 +330,7 @@ const ChapterList: React.FC<ChapterListProps> = ({
               )}
             </span>
             <div style={{ flex: 1 }}>
-              {renderFieldValueControl(field)}
+              {renderFieldValueControl(field, chapterValues[field.id], (value) => handleFieldChange(field.id, value))}
             </div>
           </div>
         ))}
@@ -228,13 +338,83 @@ const ChapterList: React.FC<ChapterListProps> = ({
     );
   };
 
-  const renderListFields = (fields?: SimpleTableRow[], editableField = false) => {
+  const renderListFields = (chapter: Chapter) => {
+    const fields = chapter.fields;
     if (!fields || fields.length === 0) return null;
+    
+    const chapterValues = chapterFieldsValues[chapter.id] || {};
+    const listData = chapterValues.list_data || [];
+    
+    const handleAddRow = () => {
+      const newRow: Record<string, any> = {};
+      fields.forEach(field => {
+        const fieldKey = field.id;
+        // 根据字段类型设置初始值
+        switch (field.field_type) {
+          case 'object':
+            newRow[fieldKey] = {};
+            break;
+          case 'array':
+            newRow[fieldKey] = [];
+            break;
+          case 'integer_range':
+          case 'long_range':
+          case 'float_range':
+            newRow[fieldKey] = [0, 0];
+            break;
+          case 'date_range':
+            newRow[fieldKey] = [];
+            break;
+          default:
+            newRow[fieldKey] = undefined;
+        }
+      });
+      
+      const newChapterValues = {
+        ...chapterFieldsValues,
+        [chapter.id]: {
+          ...chapterValues,
+          list_data: [...listData, newRow],
+        },
+      };
+      onChapterFieldsValuesChange?.(newChapterValues);
+    };
+    
+    const handleCellChange = (rowIndex: number, fieldCode: string, value: any) => {
+      const newListData = [...listData];
+      newListData[rowIndex] = {
+        ...newListData[rowIndex],
+        [fieldCode]: value,
+      };
+      
+      const newChapterValues = {
+        ...chapterFieldsValues,
+        [chapter.id]: {
+          ...chapterValues,
+          list_data: newListData,
+        },
+      };
+      onChapterFieldsValuesChange?.(newChapterValues);
+    };
+    
+    const handleDeleteRow = (rowIndex: number) => {
+      const newListData = listData.filter((_: any, index: number) => index !== rowIndex);
+      
+      const newChapterValues = {
+        ...chapterFieldsValues,
+        [chapter.id]: {
+          ...chapterValues,
+          list_data: newListData,
+        },
+      };
+      onChapterFieldsValuesChange?.(newChapterValues);
+    };
 
     const columns = fields.map(field => ({
       title: (
-        <span>
-          {field.fieldCode ? `${field.fieldName}（${field.fieldCode}）` : field.fieldName}
+        <span style={{ whiteSpace: 'nowrap' }}>
+          {field.field_code ? `${field.field_name}（${field.field_code}）` : field.field_name}
+          {field.is_required && <span style={{ color: '#ff4d4f', marginLeft: 4 }}>*</span>}
           {field.description && (
             <Tooltip title={field.description}>
               <QuestionCircleOutlined style={{ marginLeft: 4, color: '#999', fontSize: 14 }} />
@@ -242,31 +422,85 @@ const ChapterList: React.FC<ChapterListProps> = ({
           )}
         </span>
       ),
-      dataIndex: field.fieldCode,
-      key: field.fieldCode,
+      dataIndex: field.id,
+      key: field.id,
+      render: (value: any, record: any, rowIndex: number) => {
+        return renderFieldValueControl(
+          field,
+          value,
+          (newValue) => handleCellChange(rowIndex, field.id, newValue)
+        );
+      },
     }));
+    
+    // 添加操作列
+    columns.push({
+      title: '操作',
+      key: 'action',
+      width: 80,
+      fixed: 'right',
+      render: (_: any, __: any, rowIndex: number) => (
+        <Button
+          type="text"
+          danger
+          size="small"
+          icon={<DeleteOutlined />}
+          onClick={() => handleDeleteRow(rowIndex)}
+          disabled={disabled}
+        />
+      ),
+    });
 
     return (
       <div style={{ padding: 16 }}>
+        {!disabled && (
+          <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'flex-end' }}>
+            <Button
+              type="dashed"
+              icon={<PlusOutlined />}
+              onClick={handleAddRow}
+              size="small"
+            >
+              新增
+            </Button>
+          </div>
+        )}
         <Table
-          dataSource={[]}
+          dataSource={listData}
           columns={columns}
           pagination={false}
           size="small"
           bordered
-          locale={{ emptyText: '暂无数据' }}
+          locale={{ emptyText: disabled ? '' : '暂无数据，请点击"新增"添加数据' }}
+          rowKey={(_, index) => `row_${index}`}
         />
       </div>
     );
   };
 
-  const renderRichTextEditor = (editableField = false) => {
+  const renderRichTextEditor = (chapter: Chapter) => {
+    const chapterValues = chapterFieldsValues[chapter.id] || {};
+    const richTextContent = chapterValues.rich_text_content || '';
+    
+    const handleRichTextChange = (value: string) => {
+      const newChapterValues = {
+        ...chapterFieldsValues,
+        [chapter.id]: {
+          ...chapterValues,
+          rich_text_content: value,
+        },
+      };
+      onChapterFieldsValuesChange?.(newChapterValues);
+    };
+
     return (
       <div style={{ padding: 16 }}>
         <MDEditorTheme
+          value={richTextContent}
+          onChange={handleRichTextChange}
           height={300}
-          placeholder="该区域为只读模式"
-          disabled={true}
+          placeholder={disabled ? "该区域为只读模式" : "请输入内容"}
+          disabled={disabled}
         />
       </div>
     );
@@ -275,11 +509,11 @@ const ChapterList: React.FC<ChapterListProps> = ({
   const renderChapterContent = (chapter: Chapter) => {
     switch (chapter.type) {
       case 'form':
-        return renderFormFields(chapter.fields, editable);
+        return renderFormFields(chapter);
       case 'list':
-        return renderListFields(chapter.fields, editable);
+        return renderListFields(chapter);
       case 'rich_text':
-        return renderRichTextEditor(editable);
+        return renderRichTextEditor(chapter);
       default:
         return null;
     }

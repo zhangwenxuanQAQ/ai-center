@@ -4,13 +4,13 @@ import { PlusOutlined, UpOutlined, DownOutlined, DeleteOutlined } from '@ant-des
 
 export interface DynamicTableRow {
   id: string;
-  fieldName: string;
-  fieldCode: string;
-  fieldType: string;
-  fieldDict: string;
+  field_name: string;
+  field_code: string;
+  field_type: string;
+  field_dict: string;
   description: string;
-  isParamSearch: boolean;
-  isRequired: boolean;
+  is_param_search: boolean;
+  is_required: boolean;
 }
 
 export interface DynamicTableRef {
@@ -32,21 +32,21 @@ interface DynamicTableProps {
 const DynamicTableComponent = (props: DynamicTableProps, ref: React.Ref<DynamicTableRef>) => {
   const { value = [], onChange, label, fieldTypes } = props;
   const [editingRow, setEditingRow] = useState<string | null>(null);
-  const [validationErrors, setValidationErrors] = useState<Record<string, { fieldName?: boolean; fieldCode?: boolean }>>({});
+  const [validationErrors, setValidationErrors] = useState<Record<string, { field_name?: boolean; field_code?: boolean }>>({});
 
   useImperativeHandle(ref, () => ({
     validate: () => {
-      const errors: Record<string, { fieldName?: boolean; fieldCode?: boolean }> = {};
+      const errors: Record<string, { field_name?: boolean; field_code?: boolean }> = {};
       let isValid = true;
 
       value.forEach(row => {
-        const rowErrors: { fieldName?: boolean; fieldCode?: boolean } = {};
-        if (!row.fieldName || !row.fieldName.trim()) {
-          rowErrors.fieldName = true;
+        const rowErrors: { field_name?: boolean; field_code?: boolean } = {};
+        if (!row.field_name || !row.field_name.trim()) {
+          rowErrors.field_name = true;
           isValid = false;
         }
-        if (!row.fieldCode || !row.fieldCode.trim()) {
-          rowErrors.fieldCode = true;
+        if (!row.field_code || !row.field_code.trim()) {
+          rowErrors.field_code = true;
           isValid = false;
         }
         if (Object.keys(rowErrors).length > 0) {
@@ -62,13 +62,13 @@ const DynamicTableComponent = (props: DynamicTableProps, ref: React.Ref<DynamicT
   const handleAddRow = () => {
     const newRow: DynamicTableRow = {
       id: `row_${Date.now()}`,
-      fieldName: '',
-      fieldCode: '',
-      fieldType: 'text',
-      fieldDict: '',
+      field_name: '',
+      field_code: '',
+      field_type: 'text',
+      field_dict: '',
       description: '',
-      isParamSearch: false,
-      isRequired: false,
+      is_param_search: false,
+      is_required: false,
     };
     onChange([...value, newRow]);
   };
@@ -100,22 +100,22 @@ const DynamicTableComponent = (props: DynamicTableProps, ref: React.Ref<DynamicT
   const columns = [
     {
       title: <span>字段中文名 <span style={{ color: '#ff4d4f' }}>*</span></span>,
-      dataIndex: 'fieldName',
-      key: 'fieldName',
+      dataIndex: 'field_name',
+      key: 'field_name',
       width: 120,
       render: (text: string, record: DynamicTableRow) => {
-        const hasError = validationErrors[record.id]?.fieldName;
+        const hasError = validationErrors[record.id]?.field_name;
         return (
           <Input
             size="small"
             value={text}
             onChange={e => {
-              handleUpdateRow(record.id, 'fieldName', e.target.value);
+              handleUpdateRow(record.id, 'field_name', e.target.value);
               if (e.target.value.trim()) {
                 setValidationErrors(prev => {
                   const newErrors = { ...prev };
                   if (newErrors[record.id]) {
-                    delete newErrors[record.id].fieldName;
+                    delete newErrors[record.id].field_name;
                     if (Object.keys(newErrors[record.id]).length === 0) {
                       delete newErrors[record.id];
                     }
@@ -132,22 +132,22 @@ const DynamicTableComponent = (props: DynamicTableProps, ref: React.Ref<DynamicT
     },
     {
       title: <span>字段编码 <span style={{ color: '#ff4d4f' }}>*</span></span>,
-      dataIndex: 'fieldCode',
-      key: 'fieldCode',
+      dataIndex: 'field_code',
+      key: 'field_code',
       width: 120,
       render: (text: string, record: DynamicTableRow) => {
-        const hasError = validationErrors[record.id]?.fieldCode;
+        const hasError = validationErrors[record.id]?.field_code;
         return (
           <Input
             size="small"
             value={text}
             onChange={e => {
-              handleUpdateRow(record.id, 'fieldCode', e.target.value);
+              handleUpdateRow(record.id, 'field_code', e.target.value);
               if (e.target.value.trim()) {
                 setValidationErrors(prev => {
                   const newErrors = { ...prev };
                   if (newErrors[record.id]) {
-                    delete newErrors[record.id].fieldCode;
+                    delete newErrors[record.id].field_code;
                     if (Object.keys(newErrors[record.id]).length === 0) {
                       delete newErrors[record.id];
                     }
@@ -164,14 +164,14 @@ const DynamicTableComponent = (props: DynamicTableProps, ref: React.Ref<DynamicT
     },
     {
       title: '属性类型',
-      dataIndex: 'fieldType',
-      key: 'fieldType',
+      dataIndex: 'field_type',
+      key: 'field_type',
       width: 120,
       render: (text: string, record: DynamicTableRow) => (
         <Select
           size="small"
           value={text}
-          onChange={(value) => handleUpdateRow(record.id, 'fieldType', value)}
+          onChange={(value) => handleUpdateRow(record.id, 'field_type', value)}
           style={{ width: '100%' }}
         >
           {(fieldTypes || []).map(option => (
@@ -184,14 +184,14 @@ const DynamicTableComponent = (props: DynamicTableProps, ref: React.Ref<DynamicT
     },
     {
       title: '值域字典',
-      dataIndex: 'fieldDict',
-      key: 'fieldDict',
+      dataIndex: 'field_dict',
+      key: 'field_dict',
       width: 120,
       render: (text: string, record: DynamicTableRow) => (
         <Input
           size="small"
           value={text}
-          onChange={e => handleUpdateRow(record.id, 'fieldDict', e.target.value)}
+          onChange={e => handleUpdateRow(record.id, 'field_dict', e.target.value)}
           placeholder="请输入值域字典"
         />
       ),
@@ -212,25 +212,25 @@ const DynamicTableComponent = (props: DynamicTableProps, ref: React.Ref<DynamicT
     },
     {
       title: '是否参数检索',
-      dataIndex: 'isParamSearch',
-      key: 'isParamSearch',
+      dataIndex: 'is_param_search',
+      key: 'is_param_search',
       width: 100,
       render: (checked: boolean, record: DynamicTableRow) => (
         <Switch
           checked={checked}
-          onChange={(value) => handleUpdateRow(record.id, 'isParamSearch', value)}
+          onChange={(value) => handleUpdateRow(record.id, 'is_param_search', value)}
         />
       ),
     },
     {
       title: '是否必填',
-      dataIndex: 'isRequired',
-      key: 'isRequired',
+      dataIndex: 'is_required',
+      key: 'is_required',
       width: 80,
       render: (checked: boolean, record: DynamicTableRow) => (
         <Switch
           checked={checked}
-          onChange={(value) => handleUpdateRow(record.id, 'isRequired', value)}
+          onChange={(value) => handleUpdateRow(record.id, 'is_required', value)}
         />
       ),
     },

@@ -12,6 +12,7 @@ import ChunksView from './chunks_view';
 import KnowledgebaseDocumentFolderModal from './knowledgebase_document_folder_modal';
 import KnowledgeModal from './knowledgebase_knowledge_modal';
 import MetadataModal from './knowledgebase_document_metadata';
+import KnowledgebaseDocumentSetting from './knowledgebase_document_setting';
 import '../../styles/common.css';
 import './knowledgebase.less';
 
@@ -64,6 +65,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
   const [isFolderModalVisible, setIsFolderModalVisible] = useState(false);
   const [isDatasetModalVisible, setIsDatasetModalVisible] = useState(false);
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [showDocumentSetting, setShowDocumentSetting] = useState(false);
   const [categoryForm] = Form.useForm();
   const [categoryEditForm] = Form.useForm();
   const [editingCategory, setEditingCategory] = useState<any>(null);
@@ -775,6 +777,19 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       ),
     },
     {
+      title: '数据来源',
+      dataIndex: 'source_type',
+      key: 'source_type',
+      width: 120,
+      render: (sourceType: string) => {
+        if (documentConstants?.source_types) {
+          const sourceTypeItem = documentConstants.source_types.find((st: any) => st.key === sourceType);
+          return sourceTypeItem?.label || sourceType || '-';
+        }
+        return sourceType || '-';
+      },
+    },
+    {
       title: '更新时间',
       dataIndex: 'updated_at',
       key: 'updated_at',
@@ -982,7 +997,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
                 icon={<EditOutlined />}
                 onClick={() => { 
                   setEditingDocument(record); 
-                  setIsEditModalVisible(true);
+                  setShowDocumentSetting(true);
                 }}
               />
             </Tooltip>
@@ -1024,7 +1039,21 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
   ], [documentConstants, handleStatusChange, handleDelete, handleRunTask, handleStopTask, knowledgebase.id, getStatusColor, formatFileSize]);
 
   return (
-    <Layout className="knowledgebase-layout" style={{ height: '100%' }}>
+    <>
+      {showDocumentSetting ? (
+        <KnowledgebaseDocumentSetting
+          knowledgebase={knowledgebase}
+          document={editingDocument}
+          onBack={() => setShowDocumentSetting(false)}
+          onSave={() => {
+            setShowDocumentSetting(false);
+            setEditingDocument(undefined);
+            fetchDocuments();
+          }}
+          selectedCategoryId={selectedCategory || undefined}
+        />
+      ) : (
+        <Layout className="knowledgebase-layout" style={{ height: '100%' }}>
       {!viewingChunks && (
         <LeftSider
           width={260}
@@ -1103,7 +1132,8 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
             type="primary"
             icon={<PlusOutlined />}
             onClick={() => {
-              setIsDatasetModalVisible(true)
+              setEditingDocument(undefined);
+              setShowDocumentSetting(true)
             }}
             style={{
               background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -1113,6 +1143,21 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
             }}
           >
             新增知识
+          </Button>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => {
+              setIsDatasetModalVisible(true)
+            }}
+            style={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              border: 'none',
+              borderRadius: '18px',
+              height: '36px',
+            }}
+          >
+            新增知识-弹窗
           </Button>
           <Dropdown menu={{ items: batchMenuItems }} disabled={selectedRowKeys.length === 0}>
             <Button>
@@ -1521,6 +1566,8 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
         }}
       />
     </Layout>
+      )}
+    </>
   );
 };
 

@@ -4,12 +4,12 @@ import { PlusOutlined, UpOutlined, DownOutlined, DeleteOutlined } from '@ant-des
 
 export interface SimpleTableRow {
   id: string;
-  fieldName: string;
-  fieldCode: string;
-  fieldType: string;
-  fieldDict: string;
+  field_name: string;
+  field_code: string;
+  field_type: string;
+  field_dict: string;
   description: string;
-  isRequired: boolean;
+  is_required: boolean;
 }
 
 interface FieldTypeOption {
@@ -21,18 +21,19 @@ interface SimpleEditableTableProps {
   value: SimpleTableRow[];
   onChange: (rows: SimpleTableRow[]) => void;
   fieldTypes?: FieldTypeOption[];
+  disabled?: boolean;
 }
 
-const SimpleEditableTable: React.FC<SimpleEditableTableProps> = ({ value = [], onChange, fieldTypes }) => {
+const SimpleEditableTable: React.FC<SimpleEditableTableProps> = ({ value = [], onChange, fieldTypes, disabled = false }) => {
   const handleAddRow = () => {
     const newRow: SimpleTableRow = {
       id: `row_${Date.now()}`,
-      fieldName: '',
-      fieldCode: '',
-      fieldType: 'text',
-      fieldDict: '',
+      field_name: '',
+      field_code: '',
+      field_type: 'text',
+      field_dict: '',
       description: '',
-      isRequired: false,
+      is_required: false,
     };
     onChange([...value, newRow]);
   };
@@ -64,43 +65,46 @@ const SimpleEditableTable: React.FC<SimpleEditableTableProps> = ({ value = [], o
   const columns = [
     {
       title: '字段中文名',
-      dataIndex: 'fieldName',
-      key: 'fieldName',
+      dataIndex: 'field_name',
+      key: 'field_name',
       width: 120,
       render: (text: string, record: SimpleTableRow) => (
         <Input
           size="small"
           value={text}
-          onChange={e => handleUpdateRow(record.id, 'fieldName', e.target.value)}
+          onChange={e => handleUpdateRow(record.id, 'field_name', e.target.value)}
           placeholder="请输入字段中文名"
+          disabled={disabled}
         />
       ),
     },
     {
       title: '字段编码',
-      dataIndex: 'fieldCode',
-      key: 'fieldCode',
+      dataIndex: 'field_code',
+      key: 'field_code',
       width: 120,
       render: (text: string, record: SimpleTableRow) => (
         <Input
           size="small"
           value={text}
-          onChange={e => handleUpdateRow(record.id, 'fieldCode', e.target.value)}
+          onChange={e => handleUpdateRow(record.id, 'field_code', e.target.value)}
           placeholder="请输入字段编码"
+          disabled={disabled}
         />
       ),
     },
     {
       title: '属性类型',
-      dataIndex: 'fieldType',
-      key: 'fieldType',
+      dataIndex: 'field_type',
+      key: 'field_type',
       width: 120,
       render: (text: string, record: SimpleTableRow) => (
         <Select
           size="small"
           value={text}
-          onChange={(value) => handleUpdateRow(record.id, 'fieldType', value)}
+          onChange={(value) => handleUpdateRow(record.id, 'field_type', value)}
           style={{ width: '100%' }}
+          disabled={disabled}
         >
           {(fieldTypes || []).map(option => (
             <Select.Option key={option.key} value={option.key}>
@@ -112,15 +116,16 @@ const SimpleEditableTable: React.FC<SimpleEditableTableProps> = ({ value = [], o
     },
     {
       title: '值域字典',
-      dataIndex: 'fieldDict',
-      key: 'fieldDict',
+      dataIndex: 'field_dict',
+      key: 'field_dict',
       width: 120,
       render: (text: string, record: SimpleTableRow) => (
         <Input
           size="small"
           value={text}
-          onChange={e => handleUpdateRow(record.id, 'fieldDict', e.target.value)}
+          onChange={e => handleUpdateRow(record.id, 'field_dict', e.target.value)}
           placeholder="请输入值域字典"
+          disabled={disabled}
         />
       ),
     },
@@ -135,18 +140,20 @@ const SimpleEditableTable: React.FC<SimpleEditableTableProps> = ({ value = [], o
           value={text}
           onChange={e => handleUpdateRow(record.id, 'description', e.target.value)}
           placeholder="请输入说明"
+          disabled={disabled}
         />
       ),
     },
     {
       title: '是否必填',
-      dataIndex: 'isRequired',
-      key: 'isRequired',
+      dataIndex: 'is_required',
+      key: 'is_required',
       width: 80,
       render: (checked: boolean, record: SimpleTableRow) => (
         <Switch
           checked={checked}
-          onChange={(value) => handleUpdateRow(record.id, 'isRequired', value)}
+          onChange={(value) => handleUpdateRow(record.id, 'is_required', value)}
+          disabled={disabled}
         />
       ),
     },
@@ -160,19 +167,20 @@ const SimpleEditableTable: React.FC<SimpleEditableTableProps> = ({ value = [], o
             size="small"
             icon={<UpOutlined />}
             onClick={() => handleMoveUp(index)}
-            disabled={index === 0}
+            disabled={index === 0 || disabled}
           />
           <Button
             size="small"
             icon={<DownOutlined />}
             onClick={() => handleMoveDown(index)}
-            disabled={index === value.length - 1}
+            disabled={index === value.length - 1 || disabled}
           />
           <Button
             size="small"
             icon={<DeleteOutlined />}
             danger
             onClick={() => handleDeleteRow(record.id)}
+            disabled={disabled}
           />
         </div>
       ),
@@ -186,6 +194,7 @@ const SimpleEditableTable: React.FC<SimpleEditableTableProps> = ({ value = [], o
           type="dashed"
           icon={<PlusOutlined />}
           onClick={handleAddRow}
+          disabled={disabled}
         >
           添加行
         </Button>

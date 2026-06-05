@@ -72,6 +72,16 @@ const AddChapterModal: React.FC<AddChapterModalProps> = ({
     try {
       const values = await form.validateFields();
       
+      // 校验字段中文名是否重复
+      if (chapterType === 'form' || chapterType === 'list') {
+        const fieldNames = fields.map(f => f.field_name).filter(name => name);
+        const duplicates = fieldNames.filter((name, index) => fieldNames.indexOf(name) !== index);
+        if (duplicates.length > 0) {
+          message.error(`字段中文名重复：${[...new Set(duplicates)].join('、')}`);
+          return;
+        }
+      }
+      
       const chapter: Chapter = {
         id: editingChapter?.id || `chapter_${Date.now()}`,
         name: values.name,
@@ -162,6 +172,7 @@ const AddChapterModal: React.FC<AddChapterModalProps> = ({
               value={fields}
               onChange={setFields}
               fieldTypes={documentConstants?.metadata_field_types || []}
+              disabled={false}
             />
           </Form.Item>
         )}
