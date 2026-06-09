@@ -38,12 +38,18 @@ class RustFSUtils:
     _instance: Optional['RustFSUtils'] = None
     _s3_client: Optional[Any] = None
     _is_connected: bool = False
+    _initialized: bool = False
 
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance._initialize()
         return cls._instance
+
+    def _ensure_initialized(self):
+        """懒加载初始化，首次使用时才建立连接"""
+        if not self._initialized:
+            self._initialized = True
+            self._initialize()
 
     def _initialize(self):
         """
@@ -112,11 +118,13 @@ class RustFSUtils:
     @property
     def is_available(self) -> bool:
         """检查RustFS功能是否可用"""
+        self._ensure_initialized()
         return BOTO3_AVAILABLE and self._s3_client is not None and self._is_connected
 
     @property
     def client(self) -> Optional[Any]:
         """获取S3客户端实例"""
+        self._ensure_initialized()
         return self._s3_client
 
     # ==================== Bucket操作 ====================
@@ -132,6 +140,7 @@ class RustFSUtils:
         Returns:
             bool: 是否创建成功
         """
+        self._ensure_initialized()
         if not self._s3_client:
             logger.error("RustFS客户端未初始化")
             return False
@@ -168,6 +177,7 @@ class RustFSUtils:
         Returns:
             bool: 是否删除成功
         """
+        self._ensure_initialized()
         if not self._s3_client:
             logger.error("RustFS客户端未初始化")
             return False
@@ -197,6 +207,7 @@ class RustFSUtils:
         Returns:
             bool: 是否存在
         """
+        self._ensure_initialized()
         if not self._s3_client:
             return False
             
@@ -213,6 +224,7 @@ class RustFSUtils:
         Returns:
             List[Dict]: Bucket列表，每个元素包含 'Name' 和 'CreationDate'
         """
+        self._ensure_initialized()
         if not self._s3_client:
             return []
             
@@ -253,6 +265,7 @@ class RustFSUtils:
         Returns:
             bool: 是否上传成功
         """
+        self._ensure_initialized()
         if not self._s3_client:
             logger.error("RustFS客户端未初始化")
             return False
@@ -299,6 +312,7 @@ class RustFSUtils:
         Returns:
             bool: 是否上传成功
         """
+        self._ensure_initialized()
         if not self._s3_client:
             logger.error("RustFS客户端未初始化")
             return False
@@ -339,6 +353,7 @@ class RustFSUtils:
         Returns:
             bytes or None: 对象数据
         """
+        self._ensure_initialized()
         if not self._s3_client:
             logger.error("RustFS客户端未初始化")
             return None
@@ -378,6 +393,7 @@ class RustFSUtils:
         Returns:
             bool: 是否下载成功
         """
+        self._ensure_initialized()
         if not self._s3_client:
             logger.error("RustFS客户端未初始化")
             return False
@@ -407,6 +423,7 @@ class RustFSUtils:
         Returns:
             bool: 是否删除成功
         """
+        self._ensure_initialized()
         if not self._s3_client:
             logger.error("RustFS客户端未初始化")
             return False
@@ -435,6 +452,7 @@ class RustFSUtils:
         Returns:
             int: 成功删除的数量
         """
+        self._ensure_initialized()
         if not self._s3_client or not object_keys:
             return 0
             
@@ -471,6 +489,7 @@ class RustFSUtils:
         Returns:
             bool: 是否存在
         """
+        self._ensure_initialized()
         if not self._s3_client:
             return False
             
@@ -494,6 +513,7 @@ class RustFSUtils:
         Returns:
             Dict or None: 元数据字典
         """
+        self._ensure_initialized()
         if not self._s3_client:
             return None
             
@@ -534,6 +554,7 @@ class RustFSUtils:
         Returns:
             List[Dict]: 对象列表
         """
+        self._ensure_initialized()
         if not self._s3_client:
             return []
             
@@ -580,6 +601,7 @@ class RustFSUtils:
         Returns:
             bool: 是否复制成功
         """
+        self._ensure_initialized()
         if not self._s3_client:
             logger.error("RustFS客户端未初始化")
             return False
@@ -624,6 +646,7 @@ class RustFSUtils:
         Returns:
             str or None: 预签名URL
         """
+        self._ensure_initialized()
         if not self._s3_client:
             logger.error("RustFS客户端未初始化")
             return None
@@ -659,6 +682,7 @@ class RustFSUtils:
         Returns:
             int: 总字节数
         """
+        self._ensure_initialized()
         objects = self.list_objects(bucket_name)
         total_size = sum(obj.get('Size', 0) for obj in objects)
         return total_size
@@ -674,6 +698,7 @@ class RustFSUtils:
         Returns:
             int: 对象数量
         """
+        self._ensure_initialized()
         objects = self.list_objects(bucket_name, prefix=prefix)
         return len(objects)
 

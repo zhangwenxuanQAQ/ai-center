@@ -54,12 +54,18 @@ class RedisUtils:
     _instance: Optional['RedisUtils'] = None
     _redis_client: Optional[Any] = None
     _is_connected: bool = False
+    _initialized: bool = False
 
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance._initialize()
         return cls._instance
+
+    def _ensure_initialized(self):
+        """懒加载初始化，首次使用时才建立连接"""
+        if not self._initialized:
+            self._initialized = True
+            self._initialize()
 
     def _initialize(self):
         """
@@ -107,16 +113,19 @@ class RedisUtils:
     @property
     def is_available(self) -> bool:
         """检查Redis功能是否可用"""
+        self._ensure_initialized()
         return REDIS_AVAILABLE and self._redis_client is not None and self._is_connected
 
     @property
     def client(self) -> Optional[Any]:
         """获取Redis客户端实例"""
+        self._ensure_initialized()
         return self._redis_client
 
     def _reconnect(self) -> bool:
         """重新连接Redis"""
         logger.info("尝试重新连接Redis...")
+        self._initialized = False
         self._initialize()
         return self._is_connected
 
@@ -124,6 +133,7 @@ class RedisUtils:
 
     def health(self) -> bool:
         """健康检查"""
+        self._ensure_initialized()
         if not self._redis_client:
             return False
 
@@ -142,6 +152,7 @@ class RedisUtils:
 
     def info(self) -> Optional[Dict[str, Any]]:
         """获取Redis信息"""
+        self._ensure_initialized()
         if not self._redis_client:
             return None
 
@@ -160,6 +171,7 @@ class RedisUtils:
 
     def get(self, key: str) -> Optional[str]:
         """获取值"""
+        self._ensure_initialized()
         if not self._redis_client:
             return None
 
@@ -172,6 +184,7 @@ class RedisUtils:
 
     def set(self, key: str, value: str, exp: int = 3600) -> bool:
         """设置值"""
+        self._ensure_initialized()
         if not self._redis_client:
             return False
 
@@ -185,6 +198,7 @@ class RedisUtils:
 
     def set_obj(self, key: str, obj: Any, exp: int = 3600) -> bool:
         """设置对象（自动JSON序列化）"""
+        self._ensure_initialized()
         if not self._redis_client:
             return False
 
@@ -198,6 +212,7 @@ class RedisUtils:
 
     def get_obj(self, key: str) -> Optional[Any]:
         """获取对象（自动JSON反序列化）"""
+        self._ensure_initialized()
         if not self._redis_client:
             return None
 
@@ -213,6 +228,7 @@ class RedisUtils:
 
     def exists(self, key: str) -> bool:
         """检查Key是否存在"""
+        self._ensure_initialized()
         if not self._redis_client:
             return False
 
@@ -225,6 +241,7 @@ class RedisUtils:
 
     def delete(self, key: str) -> bool:
         """删除Key"""
+        self._ensure_initialized()
         if not self._redis_client:
             return False
 
@@ -238,6 +255,7 @@ class RedisUtils:
 
     def incrby(self, key: str, increment: int = 1) -> Optional[int]:
         """递增"""
+        self._ensure_initialized()
         if not self._redis_client:
             return None
 
@@ -261,6 +279,7 @@ class RedisUtils:
         Returns:
             bool: 是否成功
         """
+        self._ensure_initialized()
         if not self._redis_client:
             return False
 
@@ -295,6 +314,7 @@ class RedisUtils:
         Returns:
             RedisMsg or None: 消息对象
         """
+        self._ensure_initialized()
         if not self._redis_client:
             return None
 
@@ -373,6 +393,7 @@ class RedisUtils:
         Returns:
             dict: 队列信息
         """
+        self._ensure_initialized()
         if not self._redis_client:
             return None
 
@@ -399,6 +420,7 @@ class RedisUtils:
         Returns:
             list: 待确认消息列表
         """
+        self._ensure_initialized()
         if not self._redis_client:
             return []
 
@@ -421,6 +443,7 @@ class RedisUtils:
         Returns:
             bool: 是否发布成功
         """
+        self._ensure_initialized()
         if not self._redis_client:
             return False
 
@@ -443,6 +466,7 @@ class RedisUtils:
         Returns:
             pubsub: Redis pubsub对象
         """
+        self._ensure_initialized()
         if not self._redis_client:
             return None
 

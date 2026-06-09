@@ -63,6 +63,7 @@ def retry_on_failure(func: Callable) -> Callable:
     """
     @wraps(func)
     def wrapper(self, *args, **kwargs):
+        self._ensure_initialized()
         if not self._es_client:
             logger.error("ES客户端未初始化")
             return self._get_default_return_value(func.__name__)
@@ -97,12 +98,18 @@ class ESUtils:
     _es_client: Optional[Elasticsearch] = None
     _es_version: str = ""
     _is_version_valid: bool = False
+    _initialized: bool = False
 
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance._initialize()
         return cls._instance
+
+    def _ensure_initialized(self):
+        """懒加载初始化，首次使用时才建立连接"""
+        if not self._initialized:
+            self._initialized = True
+            self._initialize()
 
     def _initialize(self):
         """
@@ -227,11 +234,13 @@ class ESUtils:
     @property
     def is_available(self) -> bool:
         """检查ES功能是否可用"""
+        self._ensure_initialized()
         return ELASTICSEARCH_AVAILABLE and self._es_client is not None and self._is_version_valid
 
     @property
     def client(self) -> Optional[Elasticsearch]:
         """获取ES客户端实例"""
+        self._ensure_initialized()
         return self._es_client
 
     @property
