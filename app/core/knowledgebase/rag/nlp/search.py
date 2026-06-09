@@ -51,17 +51,53 @@ def is_chinese(text: str) -> bool:
 
 def find_codec(blob: bytes) -> str:
     """检测文本编码"""
+    if not blob:
+        return "utf-8"
+    
+    # 优先检测UTF-8编码（最常用的编码）
+    # 检查UTF-8 BOM
+    if blob.startswith(b'\xef\xbb\xbf'):
+        return "utf-8"
+    
+    # 尝试UTF-8解码（严格模式）
+    try:
+        blob[:1024].decode('utf-8')
+        return "utf-8"
+    except Exception:
+        pass
+    
+    # 使用chardet检测
     try:
         import chardet
         detected = chardet.detect(blob[:1024])
-        if detected['confidence'] > 0.5:
-            if detected['encoding'] == "ascii":
+        if detected['confidence'] > 0.9:  # 提高置信度阈值
+            detected_encoding = detected['encoding']
+            # 如果检测为ascii，返回utf-8
+            if detected_encoding == "ascii":
                 return "utf-8"
+            # 如果检测为UTF-16，需要验证（可能是误判）
+            if detected_encoding and detected_encoding.lower() in ['utf-16', 'utf-16-le', 'utf-16-be']:
+                # 尝试用UTF-16解码前1024字节
+                try:
+                    decoded = blob[:1024].decode(detected_encoding, errors='strict')
+                    # 检查解码结果是否合理（不包含过多控制字符）
+                    control_chars = sum(1 for c in decoded if ord(c) < 32 and c not in '\n\r\t')
+                    if control_chars > len(decoded) * 0.3:  # 控制字符超过30%，可能是误判
+                        # 回退到UTF-8
+                        try:
+                            blob[:1024].decode('utf-8', errors='strict')
+                            return "utf-8"
+                        except:
+                            pass
+                except:
+                    pass
+            return detected_encoding if detected_encoding else "utf-8"
     except ImportError:
         pass
         
+    # 尝试其他编码
     all_codecs = [
-        'utf-8', 'gb2312', 'gbk', 'utf_16', 'ascii', 'big5',
+        'gb2312', 'gbk', 'utf_16', 'ascii', 'big5',
         'utf_32', 'latin_1', 'windows-1252'
     ]
     
