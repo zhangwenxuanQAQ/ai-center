@@ -12,6 +12,7 @@ import tempfile
 import logging
 from io import BytesIO
 from pathlib import Path
+from typing import Dict, Any, List, Optional
 
 from app.constants.knowledgebase_document_constants import FileType
 from app.core.utils.resource_utils import get_file_icon_path
@@ -440,3 +441,187 @@ def convert_base64_audio_to_wav(base64_content: str, original_filename: str) -> 
         cleanup_temp_files(temp_file_path)
         if converted_audio_path and converted_audio_path != temp_file_path:
             cleanup_temp_files(converted_audio_path)
+
+
+def generate_markdown_file(content: str) -> tuple:
+    """
+    为富文本内容生成临时markdown文件
+    
+    Args:
+        content: 富文本内容（markdown格式）
+    
+    Returns:
+        tuple: (临时文件路径, 二进制数据, 错误信息)，成功时错误信息为None
+    """
+    temp_file_path = None
+    
+    try:
+        # 创建临时markdown文件
+        temp_file = tempfile.NamedTemporaryFile(suffix='.md', delete=False, mode='w', encoding='utf-8')
+        temp_file.write(content)
+        temp_file.close()
+        temp_file_path = temp_file.name
+        
+        # 读取二进制数据
+        with open(temp_file_path, 'rb') as f:
+            binary_data = f.read()
+        
+        logger.info(f"成功生成markdown临时文件: {temp_file_path}")
+        return temp_file_path, binary_data, None
+    except Exception as e:
+        error_msg = f"生成markdown文件失败: {str(e)}"
+        logger.error(error_msg)
+        if temp_file_path:
+            cleanup_temp_files(temp_file_path)
+        return None, None, error_msg
+
+
+def generate_custom_template_excel(document_config: Dict[str, Any]) -> tuple:
+    """
+    为自定义模版知识生成临时excel文件
+    
+    Args:
+        document_config: 文档配置对象，包含custom_fields和chapters
+    
+    Returns:
+        tuple: (临时文件路径, 二进制数据, 错误信息)，成功时错误信息为None
+    """
+    temp_file_path = None
+    
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, Alignment
+        
+        # 创建工作簿
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "知识内容"
+        
+        # 获取自定义字段
+        custom_fields = document_config.get('custom_fields', [])
+        chapters = document_config.get('chapters', [])
+        
+        # 构建表头
+        headers = []
+        for field in custom_fields:
+            headers.append(field.get('field_name', ''))
+        headers.append('章节')
+        
+        # 写入表头
+        for col_idx, header in enumerate(headers, start=1):
+            cell = ws.cell(row=1, column=col_idx, value=header)
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+        
+        # 构建数据行
+        rows_data = []
+        
+        # 如果没有章节，生成一行（自定义字段值 + 空章节内容）
+        if not chapters:
+            row_values = []
+            for field in custom_fields:
+                field_value = field.get('value', '')
+                row_values.append(str(field_value) if field_value is not None else '')
+            row_values.append('')
+            rows_data.append(row_values)
+        else:
+            # 递归处理章节
+            def process_chapters(chapter_list: List[Dict], parent_path: str = ''):
+                for chapter in chapter_list:
+                    chapter_name = chapter.get('name', '')
+                    chapter_path = f"{parent_path}/{chapter_name}" if parent_path else f"/{chapter_name}"
+                    chapter_type = chapter.get('type', '')
+                    chapter_value = chapter.get('value')
+                    
+                    # 构建章节内容
+                    chapter_content = f"  \n章节名称：{chapter_name}  \n"
+                    chapter_content += f"章节路径: {chapter_path}  \n"
+                    chapter_content += "章节内容：  \n"
+                    
+                    if chapter_type == 'form':
+                        # 表单类型：字段名：字段值，每个字段换行
+                        if chapter_value and isinstance(chapter_value, dict):
+                            fields = chapter.get('fields', [])
+                            for field in fields:
+                                field_id = field.get('id', '')
+                                field_name = field.get('field_name', '')
+                                field_value = chapter_value.get(field_id, '')
+                                chapter_content += f"{field_name}：{field_value}  \n"
+                    
+                    elif chapter_type == 'list':
+                        # 列表类型：组装成表格的html字符串
+                        if chapter_value and isinstance(chapter_value, list):
+                            fields = chapter.get('fields', [])
+                            table_html = "<table>  \n"
+                            # 表头
+                            table_html += "<tr>"
+                            for field in fields:
+                                field_name = field.get('field_name', '')
+                                table_html += f"<th>{field_name}</th>"
+                            table_html += "</tr>  \n"
+                            # 表格内容
+                            for row_data in chapter_value:
+                                table_html += "<tr>"
+                                for field in fields:
+                                    field_id = field.get('id', '')
+                                    cell_value = row_data.get(field_id, '')
+                                    table_html += f"<td>{cell_value}</td>"
+                                table_html += "</tr>  \n"
+                            table_html += "</table>"
+                            chapter_content += table_html
+                    
+                    elif chapter_type == 'rich_text':
+                        # 富文本类型：直接使用内容
+                        if chapter_value:
+                            chapter_content += str(chapter_value)
+                    
+                    # 构建行数据
+                    row_values = []
+                    for field in custom_fields:
+                        field_value = field.get('value', '')
+                        row_values.append(str(field_value) if field_value is not None else '')
+                    row_values.append(chapter_content)
+                    rows_data.append(row_values)
+                    
+                    # 递归处理子章节
+                    child_chapters = [ch for ch in chapters if ch.get('parentId') == chapter.get('id')]
+                    if child_chapters:
+                        process_chapters(child_chapters, chapter_path)
+            
+            # 获取根章节（没有parentId的章节）
+            root_chapters = [ch for ch in chapters if not ch.get('parentId')]
+            process_chapters(root_chapters)
+        
+        # 写入数据行
+        for row_idx, row_data in enumerate(rows_data, start=2):
+            for col_idx, cell_value in enumerate(row_data, start=1):
+                cell = ws.cell(row=row_idx, column=col_idx, value=cell_value)
+                cell.alignment = Alignment(vertical='top', wrap_text=True)
+        
+        # 调整列宽
+        for col_idx in range(1, len(headers) + 1):
+            ws.column_dimensions[openpyxl.utils.get_column_letter(col_idx)].width = 30
+        
+        # 保存到临时文件
+        temp_file = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
+        temp_file.close()
+        temp_file_path = temp_file.name
+        
+        wb.save(temp_file_path)
+        
+        # 读取二进制数据
+        with open(temp_file_path, 'rb') as f:
+            binary_data = f.read()
+        
+        logger.info(f"成功生成excel临时文件: {temp_file_path}")
+        return temp_file_path, binary_data, None
+    except ImportError as e:
+        error_msg = f"生成excel文件失败: openpyxl库未安装 - {str(e)}"
+        logger.error(error_msg)
+        return None, None, error_msg
+    except Exception as e:
+        error_msg = f"生成excel文件失败: {str(e)}"
+        logger.error(error_msg)
+        if temp_file_path:
+            cleanup_temp_files(temp_file_path)
+        return None, None, error_msg

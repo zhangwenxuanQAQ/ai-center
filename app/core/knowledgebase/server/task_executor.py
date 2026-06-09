@@ -33,7 +33,6 @@ from app.database.models import KnowledgebaseDocument, Knowledgebase, LLMModel
 from app.database.storage.rustfs_utils import rustfs_utils
 from app.core.llm_model.factory import LLMFactory
 from app.constants.knowledgebase_document_constants import RunningStatus
-from app.core.knowledgebase.rag.nlp import rag_tokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -61,11 +60,8 @@ class DocumentTask:
     def __init__(
         self,
         task_id: str,
-        doc_id: str,
-        kb_id: str,
-        filename: str = "",
+        doc: Optional[KnowledgebaseDocument] = None,
         binary: Optional[bytes] = None,
-        parse_type: str = "naive",
         lang: str = "Chinese",
         parser_config: Optional[Dict[str, Any]] = None,
         embedding_model_id: Optional[str] = None,
@@ -73,11 +69,8 @@ class DocumentTask:
         metadatas: Optional[Dict[str, Any]] = None,
     ):
         self.task_id = task_id
-        self.doc_id = doc_id
-        self.kb_id = kb_id
-        self.filename = filename
+        self.doc = doc
         self.binary = binary
-        self.parse_type = parse_type
         self.lang = lang
         self.parser_config = parser_config or {}
         self.embedding_model_id = embedding_model_id
@@ -91,6 +84,26 @@ class DocumentTask:
         self.result: Optional[List[Dict[str, Any]]] = None
         self.progress: float = 0.0
         self.progress_message: str = ""
+
+    @property
+    def doc_id(self) -> str:
+        return self.doc.id if self.doc else ""
+
+    @property
+    def kb_id(self) -> str:
+        return self.doc.kb_id if self.doc else ""
+
+    @property
+    def filename(self) -> str:
+        return self._filename if hasattr(self, '_filename') and self._filename else (self.doc.file_name if self.doc else "")
+
+    @filename.setter
+    def filename(self, value: str):
+        self._filename = value
+
+    @property
+    def parse_type(self) -> str:
+        return self.doc.chunk_method if self.doc else "naive"
 
 
 class TaskExecutor:
@@ -209,6 +222,20 @@ class TaskExecutor:
             recovered_count = 0
             failed_count = 0
             
+            # 批量获取知识库信息，减少数据库查询
+            kb_ids = set()
+            kb_cache = {}
+            
+            for doc in pending_docs:
+                kb_ids.add(doc.kb_id)
+            
+            # 一次性查询所有知识库的模型信息
+            for kb in Knowledgebase.select().where(Knowledgebase.id << kb_ids):
+                kb_cache[kb.id] = {
+                    'embedding_model_id': kb.embedding_model_id,
+                    'text_model_id': kb.text_model_id
+                }
+            
             for doc in pending_docs:
                 try:
                     logger.info(f"恢复任务: doc_id={doc.id}, filename={doc.file_name}")
@@ -244,15 +271,15 @@ class TaskExecutor:
                         except (json.JSONDecodeError, TypeError):
                             pass
 
+                    # 从缓存获取知识库模型信息
+                    kb_info = kb_cache.get(doc.kb_id, {})
+                    
                     task = self.submit_task(
-                        doc_id=doc.id,
-                        kb_id=doc.kb_id,
-                        filename=doc.location or doc.file_name,
-                        parse_type=doc.chunk_method,
+                        doc=doc,
                         lang="Chinese",
                         parser_config=self._get_doc_parser_config(doc),
-                        embedding_model_id=self._get_kb_embedding_model_id(doc.kb_id),
-                        text_model_id=self._get_kb_text_model_id(doc.kb_id),
+                        embedding_model_id=kb_info.get('embedding_model_id'),
+                        text_model_id=kb_info.get('text_model_id'),
                         metadatas=metadatas,
                     )
                     
@@ -333,6 +360,8 @@ class TaskExecutor:
         """信号处理函数"""
         logger.info(f"收到信号 {signum}，正在关闭...")
         self.stop()
+        import sys
+        sys.exit(0)
 
     def _load_mapping_config(self):
         """加载ES索引映射配置"""
@@ -348,8 +377,14 @@ class TaskExecutor:
             logger.error(f"加载ES映射配置失败: {e}")
             self._mapping_config = None
 
-    def _init_kb_index(self, kb_id: str, vector_size: int = 1024):
-        """初始化知识库ES索引，索引名为知识库ID"""
+    def _init_kb_index(self, kb_id: str, vector_size: int = 1024, custom_field_mappings: Dict[str, Any] = None):
+        """初始化知识库ES索引，索引名为知识库ID
+        
+        Args:
+            kb_id: 知识库ID
+            vector_size: 向量大小
+            custom_field_mappings: 自定义字段映射，用于添加keyword类型的索引字段
+        """
         if not es_utils.is_available:
             logger.warning("ES不可用，跳过索引初始化")
             return False
@@ -358,17 +393,46 @@ class TaskExecutor:
             index_name = kb_id
             if es_utils.client.indices.exists(index=index_name):
                 logger.info(f"ES索引已存在: {index_name}")
+                # 如果索引已存在，需要更新映射以添加自定义字段
+                if custom_field_mappings:
+                    try:
+                        es_utils.client.indices.put_mapping(
+                            index=index_name,
+                            body={"properties": custom_field_mappings}
+                        )
+                        logger.info(f"成功更新ES索引映射，添加自定义字段: {list(custom_field_mappings.keys())}")
+                    except Exception as e:
+                        logger.warning(f"更新ES索引映射失败: {e}")
                 return True
 
             mappings = None
             if self._mapping_config:
                 mappings = self._mapping_config.get("mappings", {})
                 settings = self._mapping_config.get("settings", {})
+                
+                # 添加自定义字段映射
+                if custom_field_mappings:
+                    if "properties" not in mappings:
+                        mappings["properties"] = {}
+                    mappings["properties"].update(custom_field_mappings)
+                
                 body = {"settings": settings, "mappings": mappings}
                 es_utils.client.indices.create(index=index_name, body=body)
                 logger.info(f"成功使用mapping.json创建ES索引: {index_name}")
+                if custom_field_mappings:
+                    logger.info(f"已添加自定义字段映射: {list(custom_field_mappings.keys())}")
             else:
                 es_utils.create_index(index_name)
+                # 如果使用默认创建，也需要添加自定义字段映射
+                if custom_field_mappings:
+                    try:
+                        es_utils.client.indices.put_mapping(
+                            index=index_name,
+                            body={"properties": custom_field_mappings}
+                        )
+                        logger.info(f"成功更新ES索引映射，添加自定义字段: {list(custom_field_mappings.keys())}")
+                    except Exception as e:
+                        logger.warning(f"更新ES索引映射失败: {e}")
 
             return True
         except Exception as e:
@@ -377,9 +441,10 @@ class TaskExecutor:
 
     def submit_task(
         self,
-        doc_id: str,
-        kb_id: str,
-        filename: str = "",
+        doc: Optional[KnowledgebaseDocument] = None,
+        task_id: Optional[str] = None,
+        kb_id: Optional[str] = None,
+        filename: Optional[str] = None,
         parse_type: str = "naive",
         lang: str = "Chinese",
         parser_config: Optional[Dict[str, Any]] = None,
@@ -390,10 +455,15 @@ class TaskExecutor:
         """
         提交任务到队列
 
+        支持两种调用方式:
+        1. 传入文档对象: submit_task(doc=doc, lang="Chinese", ...)
+        2. 传入参数: submit_task(task_id="xxx", filename="xxx", parse_type="naive", ...)
+
         Args:
-            doc_id: 文档ID
-            kb_id: 知识库ID
-            filename: 文件名
+            doc: 文档对象（新方式）
+            task_id: 任务ID（旧方式）
+            kb_id: 知识库ID（旧方式）
+            filename: 文件名（旧方式）
             parse_type: 解析类型
             lang: 语言
             parser_config: 解析配置
@@ -404,17 +474,20 @@ class TaskExecutor:
         Returns:
             DocumentTask: 任务对象
         """
-        task_id = doc_id
+        if doc is not None:
+            task_id = doc.id
+            kb_id = doc.kb_id
+            filename = doc.location or doc.file_name
+            parse_type = doc.chunk_method
+        
+        if task_id is None:
+            task_id = str(uuid.uuid4())
 
         self._tasks.pop(task_id, None)
-        # self._clear_pending_messages(task_id)
 
         task = DocumentTask(
             task_id=task_id,
-            doc_id=doc_id,
-            kb_id=kb_id,
-            filename=filename,
-            parse_type=parse_type,
+            doc=doc,
             lang=lang,
             parser_config=parser_config,
             embedding_model_id=embedding_model_id,
@@ -426,21 +499,9 @@ class TaskExecutor:
         task.status = RunningStatus.WAITING
         logger.info(f"新任务已创建: task_id={task_id}, status={task.status}")
 
-        try:
-            doc = KnowledgebaseDocument.get(KnowledgebaseDocument.id == doc_id)
-            doc.running_status = RunningStatus.WAITING
-            doc.task_progress = 0
-            doc.task_progress_message = "等待执行中..."
-            doc.task_begin_at = None
-            doc.task_end_at = None
-            doc.save()
-            
-        except Exception as e:
-            logger.warning(f"清空文档进度失败: {e}")
-
         message = {
             "task_id": task_id,
-            "doc_id": doc_id,
+            "doc_id": task_id,
             "kb_id": kb_id,
             "filename": filename,
             "parse_type": parse_type,
@@ -546,10 +607,7 @@ class TaskExecutor:
 
             task = DocumentTask(
                 task_id=task_id,
-                doc_id=doc.id,
-                kb_id=doc.kb_id,
-                filename=doc.location or doc.file_name,
-                parse_type=doc.chunk_method,
+                doc=doc,
                 lang="Chinese",
                 parser_config=parser_config,
                 embedding_model_id=kb.embedding_model_id if kb else None,
@@ -848,6 +906,7 @@ class TaskExecutor:
         import asyncio
         from app.core.knowledgebase.rag.prompts.generator import keyword_extraction
         from app.core.knowledgebase.rag.utils.common_utils import get_llm_cache, set_llm_cache
+        from app.core.knowledgebase.rag.nlp import rag_tokenizer
 
         self._set_progress(task, 0.50, "开始提取关键词...")
 
@@ -1030,7 +1089,21 @@ class TaskExecutor:
         if not vector_size:
             vector_size = self._get_vector_size(task.embedding_model_id) if task.embedding_model_id else 1024
         
-        self._init_kb_index(task.kb_id, vector_size)
+        # 如果是自定义模版知识，需要添加自定义字段的索引
+        custom_field_mappings = {}
+        if task.doc and task.doc.source_type == 'custom_template':
+            document_config = task.doc.document_config
+            if isinstance(document_config, str):
+                import json
+                document_config = json.loads(document_config)
+            
+            custom_fields = document_config.get('custom_fields', [])
+            for field in custom_fields:
+                if field.get('is_param_search') and field.get('field_code'):
+                    # 将字段编码作为索引字段（keyword类型）
+                    custom_field_mappings[field['field_code']] = {"type": "keyword"}
+        
+        self._init_kb_index(task.kb_id, vector_size, custom_field_mappings)
 
         docs_to_insert = []
 
@@ -1046,7 +1119,19 @@ class TaskExecutor:
 
             doc["doc_id"] = task.doc_id
             doc["kb_id"] = task.kb_id
-            doc["doc_name"] = task.filename
+            
+            # 添加doc_title字段，存储文档标题
+            if task.doc and task.doc.title:
+                doc["doc_title"] = task.doc.title
+            
+            # 如果file_name为空则docnm_kwd和doc_name字段使用文档标题
+            if task.filename:
+                doc["doc_name"] = task.filename
+                doc["docnm_kwd"] = task.filename
+            elif task.doc and task.doc.title:
+                doc["doc_name"] = task.doc.title
+                doc["docnm_kwd"] = task.doc.title
+            
             doc["chunk_id"] = f"{task.doc_id}_{i}"
             doc["create_time"] = str(datetime.now()).replace("T", " ")[:19]
             doc["create_timestamp_flt"] = datetime.now().timestamp()
@@ -1287,66 +1372,125 @@ class TaskExecutor:
           0.85 ~ 1.00: ES写入 (_insert_es)
         """
         from app.utils.token_utils import num_tokens_from_string
+        from app.core.knowledgebase.utils.file_utils import (
+            generate_markdown_file, 
+            generate_custom_template_excel, 
+            cleanup_temp_files
+        )
+        
         logger.info(f"开始执行切片流水线: {task.task_id}, 文档: {task.filename}")
-
+        
         self._set_progress(task, 0.0, "开始读取文件...")
+        
+        temp_file_path = None
+        
+        try:
+            # 根据source_type进行不同文件读取处理
+            if task.doc and task.doc.source_type == 'rich_text':
+                # 富文本类型：从document_config中读取富文本内容，生成临时markdown文件
+                logger.info(f"处理富文本类型文档: {task.task_id}")
+                document_config = task.doc.document_config
+                if isinstance(document_config, str):
+                    import json
+                    document_config = json.loads(document_config)
+                
+                rich_text_content = document_config.get('content', '')
+                if not rich_text_content:
+                    raise RuntimeError("富文本内容为空")
+                
+                self._set_progress(task, 0.02, "正在生成临时markdown文件...")
+                temp_file_path, binary, error = generate_markdown_file(rich_text_content)
+                if error:
+                    raise RuntimeError(error)
+                
+                logger.info(f"生成markdown临时文件: {temp_file_path}")
+                
+                task.binary = binary
+                # 修改filename为临时markdown文件名
+                task.filename = f"{task.doc.title or 'rich_text'}.md"
+                
+            elif task.doc and task.doc.source_type == 'custom_template':
+                # 自定义模版类型：生成临时excel文件
+                logger.info(f"处理自定义模版类型文档: {task.task_id}")
+                document_config = task.doc.document_config
+                if isinstance(document_config, str):
+                    import json
+                    document_config = json.loads(document_config)
+                
+                self._set_progress(task, 0.02, "正在生成临时excel文件...")
+                temp_file_path, binary, error = generate_custom_template_excel(document_config)
+                if error:
+                    raise RuntimeError(error)
 
-        if not task.binary:
-            logger.info(f"从RustFS读取文件: {task.kb_id}/{task.filename}")
-            binary = rustfs_utils.download_object(task.kb_id, task.filename)
-            if not binary:
-                raise RuntimeError(f"从RustFS读取文件失败: {task.kb_id}/{task.filename}")
-            task.binary = binary
+                logger.info(f"生成excel临时文件: {temp_file_path}")
 
-        self._set_progress(task, 0.05, "文件读取完成，开始切片...")
-
-        chunks = self._build_chunks(task)
-        if not chunks:
-            task.result = []
+                task.binary = binary
+                # 修改filename为临时excel文件名
+                task.filename = f"{task.doc.title or 'custom_template'}.xlsx"
+                
+            elif not task.binary:
+                # 本地文件或数据源：保持现有逻辑
+                self._set_progress(task, 0.02, f"从RustFS读取文件: {task.kb_id}/{task.filename}")
+                logger.info(f"从RustFS读取文件: {task.kb_id}/{task.filename}")
+                binary = rustfs_utils.download_object(task.kb_id, task.filename)
+                if not binary:
+                    raise RuntimeError(f"从RustFS读取文件失败: {task.kb_id}/{task.filename}")
+                task.binary = binary
+            
+            self._set_progress(task, 0.05, "文件读取完成，开始切片...")
+            
+            chunks = self._build_chunks(task)
+            if not chunks:
+                task.result = []
+                task.status = RunningStatus.DONE
+                task.completed_at = datetime.now()
+                task.progress = 1.0
+                task.progress_message = "文档切片为空，无需处理"
+                return
+            
+            embedding_model = None
+            if task.embedding_model_id:
+                embedding_model = self._get_embedding_model(task.embedding_model_id)
+            
+            if embedding_model:
+                chunks = self._embedding_chunks(chunks, embedding_model, task)
+            else:
+                logger.warning(f"未配置Embedding模型，使用默认零向量: {task.kb_id}")
+                self._set_progress(task, 0.60, "未配置Embedding模型，使用默认零向量")
+                vector_size = self._get_vector_size(task.embedding_model_id) if task.embedding_model_id else 1024
+                q_vec_field = f"q_{vector_size}_vec"
+                zero_vector = [0.0] * vector_size
+                for chunk in chunks:
+                    chunk["embedding"] = zero_vector
+                    chunk[q_vec_field] = zero_vector
+                    chunk["tkn_cnt_int"] = num_tokens_from_string(chunk.get("content_with_weight", ""))
+                    chunk["token_num_int"] = chunk["tkn_cnt_int"]
+                self._set_progress(task, 0.85, "零向量准备完成")
+            
+            self._insert_es(chunks, task)
+            
+            total_tokens = sum(chunk.get("tkn_cnt_int", 0) for chunk in chunks)
+            task.token_num = total_tokens
+            
+            task.result = chunks
             task.status = RunningStatus.DONE
             task.completed_at = datetime.now()
-            task.progress = 1.0
-            task.progress_message = "文档切片为空，无需处理"
-            return
-
-        embedding_model = None
-        if task.embedding_model_id:
-            embedding_model = self._get_embedding_model(task.embedding_model_id)
-
-        if embedding_model:
-            chunks = self._embedding_chunks(chunks, embedding_model, task)
-        else:
-            logger.warning(f"未配置Embedding模型，使用默认零向量: {task.kb_id}")
-            self._set_progress(task, 0.60, "未配置Embedding模型，使用默认零向量")
-            vector_size = self._get_vector_size(task.embedding_model_id) if task.embedding_model_id else 1024
-            q_vec_field = f"q_{vector_size}_vec"
-            zero_vector = [0.0] * vector_size
-            for chunk in chunks:
-                chunk["embedding"] = zero_vector
-                chunk[q_vec_field] = zero_vector
-                chunk["tkn_cnt_int"] = num_tokens_from_string(chunk.get("content_with_weight", ""))
-                chunk["token_num_int"] = chunk["tkn_cnt_int"]
-            self._set_progress(task, 0.85, "零向量准备完成")
-
-        self._insert_es(chunks, task)
-
-        total_tokens = sum(chunk.get("tkn_cnt_int", 0) for chunk in chunks)
-        task.token_num = total_tokens
-
-        task.result = chunks
-        task.status = RunningStatus.DONE
-        task.completed_at = datetime.now()
-
-        if task.started_at:
-            duration = (task.completed_at - task.started_at).total_seconds()
-            minutes = int(duration // 60)
-            seconds = int(duration % 60)
-            duration_str = f"{minutes}分{seconds}秒" if minutes > 0 else f"{seconds}秒"
-            self._set_progress(task, 1.0, f"完成！共生成 {len(chunks)} 个切片\n开始时间: {task.started_at.strftime('%Y-%m-%d %H:%M:%S')}\n结束时间: {task.completed_at.strftime('%Y-%m-%d %H:%M:%S')}\n耗时: {duration_str}")
-        else:
-            self._set_progress(task, 1.0, f"完成！共生成 {len(chunks)} 个切片")
-
-        logger.info(f"切片流水线完成: {task.task_id}, {len(chunks)} 个切片, token总数: {total_tokens}")
+            
+            if task.started_at:
+                duration = (task.completed_at - task.started_at).total_seconds()
+                minutes = int(duration // 60)
+                seconds = int(duration % 60)
+                duration_str = f"{minutes}分{seconds}秒" if minutes > 0 else f"{seconds}秒"
+                self._set_progress(task, 1.0, f"完成！共生成 {len(chunks)} 个切片\n开始时间: {task.started_at.strftime('%Y-%m-%d %H:%M:%S')}\n结束时间: {task.completed_at.strftime('%Y-%m-%d %H:%M:%S')}\n耗时: {duration_str}")
+            else:
+                self._set_progress(task, 1.0, f"完成！共生成 {len(chunks)} 个切片")
+            
+            logger.info(f"切片流水线完成: {task.task_id}, {len(chunks)} 个切片, token总数: {total_tokens}")
+        
+        finally:
+            # 清理临时文件
+            if temp_file_path:
+                cleanup_temp_files(temp_file_path)
 
     def _heartbeat_loop(self):
         """心跳检测循环"""
@@ -1452,12 +1596,17 @@ class TaskExecutor:
     def run_document_task(self, doc_id: str) -> Optional[DocumentTask]:
         """执行文档切片任务（从数据库读取文档信息并提交）"""
         try:
+            logger.info(f"开始执行文档切片任务: doc_id={doc_id}")
+            
             doc = KnowledgebaseDocument.get(KnowledgebaseDocument.id == doc_id)
+            logger.info(f"找到文档: id={doc.id}, kb_id={doc.kb_id}, file_name={doc.file_name}, chunk_method={doc.chunk_method}")
+            
             if doc.deleted:
                 logger.error(f"文档已删除: {doc_id}")
                 return None
 
             kb = Knowledgebase.get(Knowledgebase.id == doc.kb_id)
+            logger.info(f"找到知识库: id={kb.id}, name={kb.name}, embedding_model_id={kb.embedding_model_id}")
 
             parser_config = {}
             if doc.chunk_config:
@@ -1475,6 +1624,7 @@ class TaskExecutor:
 
             embedding_model_id = kb.embedding_model_id if kb else None
             text_model_id = kb.text_model_id if kb else None
+            logger.info(f"模型配置: embedding_model_id={embedding_model_id}, text_model_id={text_model_id}")
 
             self._delete_es_chunks(doc.kb_id, doc_id)
 
@@ -1505,27 +1655,25 @@ class TaskExecutor:
             })
 
             task = self.submit_task(
-                doc_id=doc.id,
-                kb_id=doc.kb_id,
-                filename=doc.location or doc.file_name,
-                parse_type=doc.chunk_method,
+                doc=doc,
                 lang="Chinese",
                 parser_config=parser_config,
                 embedding_model_id=embedding_model_id,
                 text_model_id=text_model_id,
                 metadatas=metadatas,
             )
-
+            
+            logger.info(f"任务提交结果: task_id={task.task_id if task else None}")
             return task
 
         except KnowledgebaseDocument.DoesNotExist:
             logger.error(f"文档不存在: {doc_id}")
             return None
         except Knowledgebase.DoesNotExist:
-            logger.error(f"知识库不存在")
+            logger.error(f"知识库不存在: kb_id={doc.kb_id if 'doc' in dir() else 'unknown'}")
             return None
         except Exception as e:
-            logger.error(f"执行文档任务失败: {e}")
+            logger.error(f"执行文档任务失败: {e}", exc_info=True)
             return None
 
     def stop_document_task(self, doc_id: str) -> bool:

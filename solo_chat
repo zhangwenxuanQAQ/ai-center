@@ -1033,3 +1033,343 @@ default_params字段是json对象字符串，来自 "组件Param"类的所有属
 - 如果是表单章节类型，右侧需要以表单形式展示字段配置，展示格式为：字段中文名（字段编码）+ 问号图标悬浮显示字段说明 + 控件（需要根据字段类型使用不同控件，可以参考设置元数据界面字段值控件逻辑，控件需要禁用）。
 - 如果是列表章节类型，右侧以表格形式展示，每个字段作为表格头，表格头显示字段中文名（字段编码）。不要添加按钮，不要默认添加一样数据，不要操作列。
 - 如果是富文本类型，右侧保持现在的markdown编辑器，改成只读模式 
+
+
+自定义模版知识保存到document_config字段格式需要保持知识目录中的document_config格式，然后在对应的字段对象中添加value字段来存具体的字段值。 
+例子：
+知识目录document_config:
+```
+{
+  "tags": [
+    "测试标签1",
+    "测试标签2"
+  ],
+  "template_type": "custom_template",
+  "custom_fields": [
+    {
+      "id": "row_1780386368222",
+      "field_name": "日期1",
+      "field_code": "date",
+      "field_type": "date",
+      "field_dict": "",
+      "description": "123",
+      "is_param_search": true,
+      "is_required": true
+    },
+    {
+      "id": "row_1780393260998",
+      "field_name": "姓名1",
+      "field_code": "name",
+      "field_type": "text",
+      "field_dict": "",
+      "description": "456",
+      "is_param_search": true,
+      "is_required": false
+    }
+  ],
+  "has_knowledge_content": true,
+  "chapter_type": "fixed",
+  "chapters": [
+    {
+      "id": "chapter_1780394468362",
+      "name": "章节1",
+      "type": "form",
+      "fields": [
+        {
+          "id": "row_1780394434911",
+          "field_name": "字段1",
+          "field_code": "field1",
+          "field_type": "text",
+          "field_dict": "",
+          "description": "123",
+          "is_required": true
+        },
+        {
+          "id": "row_1780454590847",
+          "field_name": "整数",
+          "field_code": "field2",
+          "field_type": "integer",
+          "field_dict": "",
+          "description": "number",
+          "is_required": false
+        },
+        {
+          "id": "row_1780458658478",
+          "field_name": "日期",
+          "field_code": "",
+          "field_type": "date",
+          "field_dict": "",
+          "description": "",
+          "is_required": false
+        },
+        {
+          "id": "row_1780458662706",
+          "field_name": "日期范围",
+          "field_code": "",
+          "field_type": "date_range",
+          "field_dict": "",
+          "description": "date_range",
+          "is_required": false
+        },
+        {
+          "id": "row_1780458678943",
+          "field_name": "数字范围",
+          "field_code": "",
+          "field_type": "integer_range",
+          "field_dict": "",
+          "description": "",
+          "is_required": false
+        }
+      ]
+    },
+    {
+      "id": "chapter_1780394493353",
+      "name": "章节2",
+      "parentId": "chapter_1780394468362",
+      "type": "list",
+      "fields": [
+        {
+          "id": "row_1780454417015",
+          "field_name": "字段1",
+          "field_code": "",
+          "field_type": "text",
+          "field_dict": "",
+          "description": "123",
+          "is_required": true
+        },
+        {
+          "id": "row_1780458705407",
+          "field_name": "整数",
+          "field_code": "",
+          "field_type": "integer",
+          "field_dict": "",
+          "description": "",
+          "is_required": false
+        },
+        {
+          "id": "row_1780458705567",
+          "field_name": "日期",
+          "field_code": "",
+          "field_type": "date",
+          "field_dict": "",
+          "description": "",
+          "is_required": false
+        },
+        {
+          "id": "row_1780458728639",
+          "field_name": "日期范围",
+          "field_code": "",
+          "field_type": "date_range",
+          "field_dict": "",
+          "description": "",
+          "is_required": false
+        },
+        {
+          "id": "row_1780458728702",
+          "field_name": "整数范围",
+          "field_code": "",
+          "field_type": "integer_range",
+          "field_dict": "",
+          "description": "整数范围",
+          "is_required": false
+        }
+      ]
+    },
+    {
+      "id": "chapter_1780395094314",
+      "name": "章节3",
+      "parentId": "chapter_1780394493353",
+      "type": "rich_text"
+    }
+  ]
+}
+```
+保存到数据集表的document_config字段需要如下格式：
+```
+{
+  "custom_fields": [
+    {
+      "id": "row_1780386368222",
+      "field_name": "日期1",
+      "field_code": "date",
+      "field_type": "date",
+      "field_dict": "",
+      "description": "123",
+      "is_param_search": true,
+      "is_required": true,
+      "value":null
+    },
+    {
+      "id": "row_1780393260998",
+      "field_name": "姓名1",
+      "field_code": "name",
+      "field_type": "text",
+      "field_dict": "",
+      "description": "456",
+      "is_param_search": true,
+      "is_required": false,
+      "value":null
+    }
+  ],
+  "chapters": [
+    {
+      "id": "chapter_1780394468362",
+      "name": "章节1",
+      "type": "form",
+      "fields": [
+        {
+          "id": "row_1780394434911",
+          "field_name": "字段1",
+          "field_code": "field1",
+          "field_type": "text",
+          "field_dict": "",
+          "description": "123",
+          "is_required": true
+        },
+        {
+          "id": "row_1780454590847",
+          "field_name": "整数",
+          "field_code": "field2",
+          "field_type": "integer",
+          "field_dict": "",
+          "description": "number",
+          "is_required": false
+        },
+        {
+          "id": "row_1780458658478",
+          "field_name": "日期",
+          "field_code": "",
+          "field_type": "date",
+          "field_dict": "",
+          "description": "",
+          "is_required": false
+        },
+        {
+          "id": "row_1780458662706",
+          "field_name": "日期范围",
+          "field_code": "",
+          "field_type": "date_range",
+          "field_dict": "",
+          "description": "date_range",
+          "is_required": false
+        },
+        {
+          "id": "row_1780458678943",
+          "field_name": "数字范围",
+          "field_code": "",
+          "field_type": "integer_range",
+          "field_dict": "",
+          "description": "",
+          "is_required": false
+        }
+      ],
+      "value":{"字段id":"字段值"}
+    },
+    {
+      "id": "chapter_1780394493353",
+      "name": "章节2",
+      "parentId": "chapter_1780394468362",
+      "type": "list",
+      "fields": [
+        {
+          "id": "row_1780454417015",
+          "field_name": "字段1",
+          "field_code": "",
+          "field_type": "text",
+          "field_dict": "",
+          "description": "123",
+          "is_required": true
+        },
+        {
+          "id": "row_1780458705407",
+          "field_name": "整数",
+          "field_code": "",
+          "field_type": "integer",
+          "field_dict": "",
+          "description": "",
+          "is_required": false
+        },
+        {
+          "id": "row_1780458705567",
+          "field_name": "日期",
+          "field_code": "",
+          "field_type": "date",
+          "field_dict": "",
+          "description": "",
+          "is_required": false
+        },
+        {
+          "id": "row_1780458728639",
+          "field_name": "日期范围",
+          "field_code": "",
+          "field_type": "date_range",
+          "field_dict": "",
+          "description": "",
+          "is_required": false
+        },
+        {
+          "id": "row_1780458728702",
+          "field_name": "整数范围",
+          "field_code": "",
+          "field_type": "integer_range",
+          "field_dict": "",
+          "description": "整数范围",
+          "is_required": false
+        }
+      ],
+      "value":[{"字段id":"字段值"},{"字段id":"字段值"}]
+    },
+    {
+      "id": "chapter_1780395094314",
+      "name": "章节3",
+      "parentId": "chapter_1780394493353",
+      "type": "rich_text",
+      "value":"富文本内容"
+    }
+  ]
+}
+```
+自定义字段每个字段对象添加value属性，章节每个章节添加value属性，值根据章节类型不同而不同）。
+
+## 文档切片功能更新
+### 部分后端方法修改：
+- submit_task入参添加doc字段，直接传文档对象，删除doc_id,kb_id,filename,parse_type字段。
+- DocumentTask类型添加doc字段，删除doc_id,kb_id,filename,parse_type字段。
+- _execute_chunk方法逻辑更新,需要根据doc的source_type进行不同文件读取处理：
+  - 如果是本地文件或者数据源则保持现有逻辑。
+  - 如果富文本则需要将document_config中的富文本内容生成到一个临时markdown文件中（后缀.md）,然后获取文件的binary数据，临时文件需要删除。
+  - 如果是自定义模版则需要生成一个临时excel文件（后缀.xlsx），文件内容生成规则如下：
+    - 表头为custom_fields中的字段名称 +  章节内容。
+    - 每个章节内容对应一行，如果没有章节也需要生成一行（即各个自定义字段的值+ 空的章节内容）。
+    - 章节内容的组装规则如下：
+      - 每个内容都需要包含章节名称和章节路径（从根章节开始，每个章节用/分隔）。
+      - 如果章节类型为form：字段名：字段值，每个字段换行。
+      - 如果章节类型为list，则组装成表格（table）的html字符串，字段名作为表格头，字段值作为表格内容。
+      - 如果章节类型为rich_text，则直接将富文本内容作为章节内容。
+
+      excel文件例子:
+      表头：自定义字段1,自定义字段2,自定义字段3, 章节内容
+      第一行：  字段1值,字段2值,字段3值, 章节名称：“章节1”
+                                       章节路径: /章节1
+                                       章节内容：
+                                       字段1：字段值
+                                       字段2：字段值
+                                       字段3：字段值
+      第二行：  字段1值,字段2值,字段3值, 章节名称： 章节2
+                                       章节路径: /章节1/章节2
+                                       章节内容：
+                                        <table>
+                                        <tr><th>字段1</th><th>字段2</th></tr>
+                                        <tr><td>张三</td><td>25</td></tr>
+                                        <tr><td>李四</td><td>30</td></tr>
+                                        </table>
+      第三行：  字段1值,字段2值,字段3值, 章节名称： 章节3
+                                       章节路径: /章节1/章节2/章节3
+                                       章节内容：
+                                       富文本内容
+
+- 在core/knowledgebase/utils/file_utils.py文件中实现上述markdown文件和自定义模版知识excel文件生成方法。
+- 导入向量数据库添加一个dock_title字段，存储文档标题（doc的title字段），如果file_name为空则docnm_kwd和doc_name字段使用文档标题。
+- 导入向量数据库时如果是自定义模版知识需要判断自定义字段的is_param_search字段，如果为true则需要将字段编码作为索引字段（keyword类型）。
+
+### 添加富文本知识的切片处理逻辑
