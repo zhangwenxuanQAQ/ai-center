@@ -87,8 +87,14 @@ const SimpleEditableTable: React.FC<SimpleEditableTableProps> = ({ value = [], o
         <Input
           size="small"
           value={text}
-          onChange={e => handleUpdateRow(record.id, 'field_code', e.target.value)}
-          placeholder="请输入字段编码"
+          onChange={e => {
+            let value = e.target.value.replace(/[^a-zA-Z0-9_]/g, '');
+            if (value.length > 0 && /^[0-9]/.test(value[0])) {
+              value = value.substring(1);
+            }
+            handleUpdateRow(record.id, 'field_code', value);
+          }}
+          placeholder="字母或下划线开头"
           disabled={disabled}
         />
       ),

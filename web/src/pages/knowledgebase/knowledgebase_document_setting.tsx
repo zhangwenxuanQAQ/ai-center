@@ -86,6 +86,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
   const [constants, setConstants] = useState<DocumentConstants | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const [sourceType, setSourceType] = useState<string>('local_document');
   const [chunkMethod, setChunkMethod] = useState<string>('naive');
@@ -741,13 +742,119 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       setOriginalData(initData);
       setCustomFieldValues(initCustomFieldValues);
       setRichTextContent(initRichTextContent);
+      setIsInitialized(true);
     } else if (constants) {
       initDefaultChunkConfig('naive');
+      setIsInitialized(true);
     }
   }, [doc, constants]);
 
+  const normalizeValue = (value: any): any => {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+    if (typeof value === 'number' && isNaN(value)) {
+      return null;
+    }
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed === '') return null;
+      const num = Number(trimmed);
+      if (!isNaN(num) && trimmed === num.toString()) {
+        return num;
+      }
+      return trimmed;
+    }
+    return value;
+  };
+
+  const deepCompareValues = (a: any, b: any): boolean => {
+    const normA = normalizeValue(a);
+    const normB = normalizeValue(b);
+    
+    if (normA === null && normB === null) return true;
+    if (normA === null || normB === null) return false;
+    
+    if (typeof normA === 'number' && typeof normB === 'number') {
+      return normA === normB;
+    }
+    
+    if (Array.isArray(normA) && Array.isArray(normB)) {
+      if (normA.length !== normB.length) return false;
+      for (let i = 0; i < normA.length; i++) {
+        if (!deepCompareValues(normA[i], normB[i])) {
+          return false;
+        }
+      }
+      return true;
+    }
+    
+    if (typeof normA === 'object' && typeof normB === 'object') {
+      const keysA = Object.keys(normA);
+      const keysB = Object.keys(normB);
+      const allKeys = new Set([...keysA, ...keysB]);
+      for (const key of allKeys) {
+        if (!deepCompareValues(normA[key], normB[key])) {
+          return false;
+        }
+      }
+      return true;
+    }
+    
+    return normA === normB;
+  };
+
+  const compareCustomFieldValues = (current: Record<string, any>, original: Record<string, any>): boolean => {
+    const allKeys = new Set([...Object.keys(current), ...Object.keys(original)]);
+    for (const key of allKeys) {
+      if (!deepCompareValues(current[key], original[key])) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const fieldChanges = useMemo(() => {
+    if (!isInitialized) {
+      return {
+        sourceType: false,
+        chunkMethod: false,
+        chunkConfig: false,
+        tags: false,
+        status: false,
+        fileList: false,
+        categoryId: false,
+        metadatas: false,
+        richTextContent: false,
+        title: false,
+        customFieldValues: false,
+      };
+    }
+    return {
+      sourceType: sourceType !== originalData.sourceType,
+      chunkMethod: chunkMethod !== originalData.chunkMethod,
+      chunkConfig: JSON.stringify(chunkConfig) !== JSON.stringify(originalData.chunkConfig),
+      tags: JSON.stringify(tags) !== JSON.stringify(originalData.tags),
+      status: status !== originalData.status,
+      fileList: JSON.stringify(fileList) !== JSON.stringify(originalData.fileList),
+      categoryId: categoryId !== originalData.categoryId,
+      metadatas: JSON.stringify(metadatas) !== JSON.stringify(originalData.metadatas),
+      richTextContent: richTextContent !== originalData.richTextContent,
+      title: title !== originalData.title,
+      customFieldValues: !compareCustomFieldValues(customFieldValues, originalData.customFieldValues),
+    };
+  }, [sourceType, chunkMethod, chunkConfig, tags, status, fileList, categoryId, metadatas, richTextContent, title, customFieldValues, originalData, isInitialized]);
+
+  const changedFieldStyle = {
+    border: `1px solid ${theme === 'dark' ? '#faad14' : '#faad14'}`,
+    borderRadius: 4,
+    padding: 8,
+    margin: -8,
+    backgroundColor: theme === 'dark' ? 'rgba(250, 173, 20, 0.1)' : 'rgba(250, 173, 20, 0.05)',
+  };
+
   useEffect(() => {
-    if (!constants) return;
+    if (!constants || !isInitialized) return;
     const current = {
       sourceType,
       chunkMethod,
@@ -774,7 +881,22 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       current.title !== originalData.title ||
       JSON.stringify(current.customFieldValues) !== JSON.stringify(originalData.customFieldValues);
     setHasChanges(changed);
-    }, [sourceType, chunkMethod, chunkConfig, tags, status, fileList, categoryId, metadatas, richTextContent, title, customFieldValues, originalData, constants]);
+    }, [sourceType, chunkMethod, chunkConfig, tags, status, fileList, categoryId, metadatas, richTextContent, title, customFieldValues, originalData, constants, isInitialized]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isEdit && hasChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isEdit, hasChanges]);
 
   // 当数据源列表和选中的数据源ID都有值时，设置selectedDatasource
   useEffect(() => {
@@ -997,10 +1119,29 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         
         // 复制custom_fields，并为每个字段添加value属性
         if (categoryDocConfig.custom_fields && categoryDocConfig.custom_fields.length > 0) {
-          documentConfig.custom_fields = categoryDocConfig.custom_fields.map((field: any) => ({
-            ...field,
-            value: customFieldValues[field.id] !== undefined ? customFieldValues[field.id] : null,
-          }));
+          documentConfig.custom_fields = categoryDocConfig.custom_fields.map((field: any) => {
+            let value = customFieldValues[field.id];
+            if (value === undefined || value === null) {
+              if (field.default_value !== undefined && field.default_value !== null) {
+                value = field.default_value;
+              } else {
+                switch (field.field_type) {
+                  case 'object':
+                    value = {};
+                    break;
+                  case 'array':
+                    value = [];
+                    break;
+                  default:
+                    value = null;
+                }
+              }
+            }
+            return {
+              ...field,
+              value,
+            };
+          });
         }
         
         // 复制chapters，并为每个章节添加value属性
@@ -1017,7 +1158,24 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
                 value = {};
                 if (chapter.fields && chapter.fields.length > 0) {
                   for (const field of chapter.fields) {
-                    value[field.id] = chapterValue[field.id] !== undefined ? chapterValue[field.id] : null;
+                    let fieldValue = chapterValue[field.id];
+                    if (fieldValue === undefined || fieldValue === null) {
+                      if (field.default_value !== undefined && field.default_value !== null) {
+                        fieldValue = field.default_value;
+                      } else {
+                        switch (field.field_type) {
+                          case 'object':
+                            fieldValue = {};
+                            break;
+                          case 'array':
+                            fieldValue = [];
+                            break;
+                          default:
+                            fieldValue = null;
+                        }
+                      }
+                    }
+                    value[field.id] = fieldValue;
                   }
                 }
                 break;
@@ -1316,9 +1474,10 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     };
     
     return (
-      <div>
+      <div style={{ ...(isEdit && fieldChanges.sourceType ? changedFieldStyle : {}) }}>
         <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
           数据来源 <span style={{ color: '#ff4d4f' }}>*</span>
+          {isEdit && fieldChanges.sourceType && <span style={{ color: '#faad14', marginLeft: 8, fontSize: 12 }}>已修改</span>}
         </div>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           {constants.source_types
@@ -1495,9 +1654,10 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
   const renderRichTextEditor = () => {
     if (sourceType !== 'rich_text') return null;
     return (
-      <div style={{ width: '100%' }}>
+      <div style={{ width: '100%', ...(isEdit && fieldChanges.richTextContent ? changedFieldStyle : {}) }}>
         <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
           知识内容 <span style={{ color: '#ff4d4f' }}>*</span>
+          {isEdit && fieldChanges.richTextContent && <span style={{ color: '#faad14', marginLeft: 8, fontSize: 12 }}>已修改</span>}
         </div>
         <div style={{ width: '100%' }}>
           <MDEditor
@@ -1957,9 +2117,10 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     const displayMethods = availableChunkMethods.length > 0 ? availableChunkMethods : constants?.chunk_methods || [];
     
     return (
-      <div style={{ width: '100%' }}>
+      <div style={{ width: '100%', ...(isEdit && fieldChanges.chunkMethod ? changedFieldStyle : {}) }}>
         <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
           切片方法 <span style={{ color: '#ff4d4f' }}>*</span>
+          {isEdit && fieldChanges.chunkMethod && <span style={{ color: '#faad14', marginLeft: 8, fontSize: 12 }}>已修改</span>}
         </div>
         <Select
           value={chunkMethod}
@@ -1980,9 +2141,10 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     if (fields.length === 0) return null;
 
     return (
-      <div style={{ width: '100%' }}>
+      <div style={{ width: '100%', ...(isEdit && fieldChanges.chunkConfig ? changedFieldStyle : {}) }}>
         <div style={{ marginBottom: 12, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
           切片配置
+          {isEdit && fieldChanges.chunkConfig && <span style={{ color: '#faad14', marginLeft: 8, fontSize: 12 }}>已修改</span>}
         </div>
         <div style={{ 
           width: '100%',
@@ -2118,9 +2280,10 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
 
   const renderTitle = () => {
     return (
-      <div style={{ width: '100%' }}>
+      <div style={{ width: '100%', ...(isEdit && fieldChanges.title ? changedFieldStyle : {}) }}>
         <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
           知识标题 <span style={{ color: '#ff4d4f' }}>*</span>
+          {isEdit && fieldChanges.title && <span style={{ color: '#faad14', marginLeft: 8, fontSize: 12 }}>已修改</span>}
         </div>
         <Input
           value={title}
@@ -2134,9 +2297,10 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
 
   const renderCategory = () => {
     return (
-      <div style={{ width: '100%' }}>
+      <div style={{ width: '100%', ...(isEdit && fieldChanges.categoryId ? changedFieldStyle : {}) }}>
         <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
           知识目录
+          {isEdit && fieldChanges.categoryId && <span style={{ color: '#faad14', marginLeft: 8, fontSize: 12 }}>已修改</span>}
         </div>
         <TreeSelect
           value={categoryId || undefined}
@@ -2153,9 +2317,10 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
 
   const renderTags = () => {
     return (
-      <div style={{ width: '100%' }}>
+      <div style={{ width: '100%', ...(isEdit && fieldChanges.tags ? changedFieldStyle : {}) }}>
         <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
           标签
+          {isEdit && fieldChanges.tags && <span style={{ color: '#faad14', marginLeft: 8, fontSize: 12 }}>已修改</span>}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
@@ -2259,9 +2424,10 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     };
 
     return (
-      <div style={{ width: '100%' }}>
+      <div style={{ width: '100%', ...(isEdit && fieldChanges.metadatas ? changedFieldStyle : {}) }}>
         <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
           元数据
+          {isEdit && fieldChanges.metadatas && <span style={{ color: '#faad14', marginLeft: 8, fontSize: 12 }}>已修改</span>}
         </div>
         <div style={{ width: '100%' }}>
           {metadatas.length > 0 && (
@@ -2364,20 +2530,22 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         case 'integer':
           return (
             <InputNumber 
-              value={fieldValue || 0} 
+              value={fieldValue !== undefined && fieldValue !== null ? fieldValue : undefined} 
               style={inputStyle} 
               precision={0}
               onChange={handleValueChange}
+              placeholder="请输入整数"
             />
           );
         case 'float':
         case 'double':
           return (
             <InputNumber 
-              value={fieldValue || 0} 
+              value={fieldValue !== undefined && fieldValue !== null ? fieldValue : undefined} 
               style={inputStyle} 
               step={0.01}
               onChange={handleValueChange}
+              placeholder="请输入小数"
             />
           );
         case 'date':
@@ -2395,19 +2563,25 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
           return (
             <Space style={{ width: '100%' }}>
               <InputNumber 
-                value={Array.isArray(fieldValue) ? fieldValue[0] : 0}
+                value={Array.isArray(fieldValue) && fieldValue[0] !== undefined ? fieldValue[0] : undefined}
                 precision={0} 
                 placeholder="最小值" 
                 style={{ height: 32, flex: 1 }}
-                onChange={(v) => handleValueChange([v || 0, Array.isArray(fieldValue) ? fieldValue[1] : 0])}
+                onChange={(v) => {
+                  const currentArr = Array.isArray(fieldValue) ? fieldValue : [undefined, undefined];
+                  handleValueChange([v, currentArr[1]]);
+                }}
               />
               <span style={{ color: '#999', alignSelf: 'center' }}>~</span>
               <InputNumber 
-                value={Array.isArray(fieldValue) ? fieldValue[1] : 0}
+                value={Array.isArray(fieldValue) && fieldValue[1] !== undefined ? fieldValue[1] : undefined}
                 precision={0} 
                 placeholder="最大值" 
                 style={{ height: 32, flex: 1 }}
-                onChange={(v) => handleValueChange([Array.isArray(fieldValue) ? fieldValue[0] : 0, v || 0])}
+                onChange={(v) => {
+                  const currentArr = Array.isArray(fieldValue) ? fieldValue : [undefined, undefined];
+                  handleValueChange([currentArr[0], v]);
+                }}
               />
             </Space>
           );
@@ -2415,19 +2589,25 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
           return (
             <Space style={{ width: '100%' }}>
               <InputNumber 
-                value={Array.isArray(fieldValue) ? fieldValue[0] : 0}
+                value={Array.isArray(fieldValue) && fieldValue[0] !== undefined ? fieldValue[0] : undefined}
                 step={0.01} 
                 placeholder="最小值" 
                 style={{ height: 32, flex: 1 }}
-                onChange={(v) => handleValueChange([v || 0, Array.isArray(fieldValue) ? fieldValue[1] : 0])}
+                onChange={(v) => {
+                  const currentArr = Array.isArray(fieldValue) ? fieldValue : [undefined, undefined];
+                  handleValueChange([v, currentArr[1]]);
+                }}
               />
               <span style={{ color: '#999', alignSelf: 'center' }}>~</span>
               <InputNumber 
-                value={Array.isArray(fieldValue) ? fieldValue[1] : 0}
+                value={Array.isArray(fieldValue) && fieldValue[1] !== undefined ? fieldValue[1] : undefined}
                 step={0.01} 
                 placeholder="最大值" 
                 style={{ height: 32, flex: 1 }}
-                onChange={(v) => handleValueChange([Array.isArray(fieldValue) ? fieldValue[0] : 0, v || 0])}
+                onChange={(v) => {
+                  const currentArr = Array.isArray(fieldValue) ? fieldValue : [undefined, undefined];
+                  handleValueChange([currentArr[0], v]);
+                }}
               />
             </Space>
           );
@@ -2472,9 +2652,10 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     };
     
     return (
-      <div style={{ width: '100%' }}>
+      <div style={{ width: '100%', ...(isEdit && fieldChanges.customFieldValues ? changedFieldStyle : {}) }}>
         <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
           知识配置
+          {isEdit && fieldChanges.customFieldValues && <span style={{ color: '#faad14', marginLeft: 8, fontSize: 12 }}>已修改</span>}
         </div>
         <div style={{ 
           padding: 16, 
@@ -2534,9 +2715,10 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
 
   const renderStatus = () => {
     return (
-      <div style={{ width: '100%' }}>
+      <div style={{ width: '100%', ...(isEdit && fieldChanges.status ? changedFieldStyle : {}) }}>
         <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
           状态
+          {isEdit && fieldChanges.status && <span style={{ color: '#faad14', marginLeft: 8, fontSize: 12 }}>已修改</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center' }}>
           <Switch 

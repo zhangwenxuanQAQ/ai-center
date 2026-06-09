@@ -202,20 +202,26 @@ const ChapterList: React.FC<ChapterListProps> = ({
         return (
           <Space style={{ width: '100%' }}>
             <InputNumber 
-              value={Array.isArray(value) ? value[0] : 0}
+              value={Array.isArray(value) && value[0] !== undefined ? value[0] : undefined}
               precision={0} 
               placeholder="最小值" 
               style={{ height: inputHeight, flex: 1 }}
-              onChange={(v) => onChange([v || 0, Array.isArray(value) ? value[1] : 0])}
+              onChange={(v) => {
+                const currentArr = Array.isArray(value) ? value : [undefined, undefined];
+                onChange([v, currentArr[1]]);
+              }}
               disabled={disabled}
             />
             <span style={{ color: '#999', alignSelf: 'center' }}>~</span>
             <InputNumber 
-              value={Array.isArray(value) ? value[1] : 0}
+              value={Array.isArray(value) && value[1] !== undefined ? value[1] : undefined}
               precision={0} 
               placeholder="最大值" 
               style={{ height: inputHeight, flex: 1 }}
-              onChange={(v) => onChange([Array.isArray(value) ? value[0] : 0, v || 0])}
+              onChange={(v) => {
+                const currentArr = Array.isArray(value) ? value : [undefined, undefined];
+                onChange([currentArr[0], v]);
+              }}
               disabled={disabled}
             />
           </Space>
@@ -224,20 +230,26 @@ const ChapterList: React.FC<ChapterListProps> = ({
         return (
           <Space style={{ width: '100%' }}>
             <InputNumber 
-              value={Array.isArray(value) ? value[0] : 0}
+              value={Array.isArray(value) && value[0] !== undefined ? value[0] : undefined}
               step={0.01} 
               placeholder="最小值" 
               style={{ height: inputHeight, flex: 1 }}
-              onChange={(v) => onChange([v || 0, Array.isArray(value) ? value[1] : 0])}
+              onChange={(v) => {
+                const currentArr = Array.isArray(value) ? value : [undefined, undefined];
+                onChange([v, currentArr[1]]);
+              }}
               disabled={disabled}
             />
             <span style={{ color: '#999', alignSelf: 'center' }}>~</span>
             <InputNumber 
-              value={Array.isArray(value) ? value[1] : 0}
+              value={Array.isArray(value) && value[1] !== undefined ? value[1] : undefined}
               step={0.01} 
               placeholder="最大值" 
               style={{ height: inputHeight, flex: 1 }}
-              onChange={(v) => onChange([Array.isArray(value) ? value[0] : 0, v || 0])}
+              onChange={(v) => {
+                const currentArr = Array.isArray(value) ? value : [undefined, undefined];
+                onChange([currentArr[0], v]);
+              }}
               disabled={disabled}
             />
           </Space>
@@ -360,10 +372,8 @@ const ChapterList: React.FC<ChapterListProps> = ({
           case 'integer_range':
           case 'long_range':
           case 'float_range':
-            newRow[fieldKey] = [0, 0];
-            break;
           case 'date_range':
-            newRow[fieldKey] = [];
+            newRow[fieldKey] = [undefined, undefined];
             break;
           default:
             newRow[fieldKey] = undefined;

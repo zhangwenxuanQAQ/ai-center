@@ -60,7 +60,7 @@ body[data-theme="dark"] .ant-layout-content {
 
 /* Card 样式 */
 body[data-theme="dark"] .ant-card {
-  background-color: #000000 !important;
+  background-color: #1a1a1a !important;
   border-color: #333333 !important;
 }
 

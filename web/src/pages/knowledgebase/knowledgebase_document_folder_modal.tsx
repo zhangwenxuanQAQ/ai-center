@@ -143,6 +143,48 @@ const KnowledgebaseDocumentFolderModal: React.FC<KnowledgebaseDocumentFolderModa
           message.error(`基础属性字段编码重复：${[...new Set(duplicateCodes)].join('、')}`);
           return;
         }
+        
+        // 检查编码格式：只能包含字母、数字、下划线，且必须以字母或下划线开头
+        const fieldCodePattern = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+        const invalidCodes = customFields.filter(f => f.field_code && !fieldCodePattern.test(f.field_code));
+        if (invalidCodes.length > 0) {
+          const invalidCodeNames = invalidCodes.map(f => f.field_code).join('、');
+          message.error(`字段编码只能包含字母、数字、下划线，且必须以字母或下划线开头，以下编码格式错误：${invalidCodeNames}`);
+          return;
+        }
+      }
+
+      // 校验章节目录字段的编码格式
+      if (selectedTemplate === 'custom_template' && hasKnowledgeContent && chapterType === 'fixed' && chapters && chapters.length > 0) {
+        const fieldCodePattern = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+        
+        // 递归检查所有章节的字段
+        const checkChapterFields = (chapterList: Chapter[]): boolean => {
+          for (const chapter of chapterList) {
+            if (chapter.fields && chapter.fields.length > 0) {
+              for (const field of chapter.fields) {
+                if (field.field_code && !fieldCodePattern.test(field.field_code)) {
+                  message.error(`章节"${chapter.name}"中的字段编码"${field.field_code}"格式错误，只能包含字母、数字、下划线，且必须以字母或下划线开头`);
+                  return false;
+                }
+              }
+            }
+            // 递归检查子章节
+            const childChapters = chapters.filter(ch => ch.parentId === chapter.id);
+            if (childChapters.length > 0) {
+              if (!checkChapterFields(childChapters)) {
+                return false;
+              }
+            }
+          }
+          return true;
+        };
+
+        // 获取根章节
+        const rootChapters = chapters.filter(ch => !ch.parentId);
+        if (!checkChapterFields(rootChapters)) {
+          return;
+        }
       }
 
       setLoading(true);

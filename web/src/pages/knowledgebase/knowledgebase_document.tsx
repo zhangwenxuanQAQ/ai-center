@@ -101,6 +101,10 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
             setSelectedDocumentForChunks(doc);
             setViewingChunks(true);
           }
+          if (view === 'edit' && !showDocumentSetting) {
+            setEditingDocument(doc);
+            setShowDocumentSetting(true);
+          }
         }
       }
     }
@@ -998,6 +1002,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
                 onClick={() => { 
                   setEditingDocument(record); 
                   setShowDocumentSetting(true);
+                  setSearchParams({ view: 'edit', documentId: record.id });
                 }}
               />
             </Tooltip>
@@ -1044,10 +1049,15 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
         <KnowledgebaseDocumentSetting
           knowledgebase={knowledgebase}
           document={editingDocument}
-          onBack={() => setShowDocumentSetting(false)}
+          onBack={() => {
+            setShowDocumentSetting(false);
+            setEditingDocument(undefined);
+            setSearchParams();
+          }}
           onSave={() => {
             setShowDocumentSetting(false);
             setEditingDocument(undefined);
+            setSearchParams();
             fetchDocuments();
           }}
           selectedCategoryId={selectedCategory || undefined}
