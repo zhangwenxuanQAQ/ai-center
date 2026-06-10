@@ -1228,9 +1228,9 @@ class KnowledgebaseDocumentService:
         from_ = (page - 1) * page_size
         
         sort = [
-            {"page_num_int": {"order": "asc"}},
-            {"top_int": {"order": "asc"}},
-            {"create_timestamp_flt": {"order": "desc"}}
+            {"page_num_int": {"order": "asc", "missing": "_last", "unmapped_type": "integer"}},
+            {"top_int": {"order": "asc", "missing": "_last", "unmapped_type": "integer"}},
+            {"create_timestamp_flt": {"order": "desc", "missing": "_last", "unmapped_type": "float"}}
         ]
         
         chunks = es_utils.search_documents(

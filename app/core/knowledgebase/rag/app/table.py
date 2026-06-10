@@ -315,7 +315,7 @@ def chunk(filename, binary=None, from_page=0, to_page=10000000000, lang="Chinese
         "float": "_flt", "datetime": "_dt", "bool": "_kwd"
     }
     
-    for df in dfs:
+    for page_num, df in enumerate(dfs):
         # 移除ID列
         for n in ["id", "_id", "index", "idx"]:
             if n in df.columns:
@@ -353,7 +353,7 @@ def chunk(filename, binary=None, from_page=0, to_page=10000000000, lang="Chinese
         
         eng = lang.lower() == "english"
         
-        for ii, row in df.iterrows():
+        for top_int, row in df.iterrows():
             d = {"docnm_kwd": filename, "title_tks": rag_tokenizer.tokenize(re.sub(r"\.[a-zA-Z]+$", "", filename))}
             row_fields = []
             
@@ -371,6 +371,11 @@ def chunk(filename, binary=None, from_page=0, to_page=10000000000, lang="Chinese
             
             if not row_fields:
                 continue
+            
+            # 添加位置信息
+            d["page_num_int"] = [page_num + 1]
+            d["top_int"] = [int(top_int)]
+            d["position_int"] = [(page_num + 1, 0, 0, int(top_int), 0)]
             
             formatted_text = "\n".join([f"- {field}: {value}" for field, value in row_fields])
             tokenize_doc(d, formatted_text, eng)
