@@ -49,9 +49,9 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 COPY pyproject.toml uv.lock ./
 
-RUN uv pip install py-spy
+RUN uv pip install py-spy --index-url https://mirrors.aliyun.com/pypi/simple/
 
-RUN uv pip install -r pyproject.toml
+RUN uv pip install -r pyproject.toml --index-url https://mirrors.aliyun.com/pypi/simple/
 
 COPY app/ ./app/
 COPY configs/ ./configs/
