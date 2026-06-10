@@ -114,7 +114,11 @@ def main():
 
     import uvicorn
 
-    workers = multiprocessing.cpu_count()
+    config_workers = config.server.get('workers', 0)
+    if config_workers > 0:
+        workers = config_workers
+    else:
+        workers = multiprocessing.cpu_count()
     workers = min(workers, 8)
     workers = max(workers, 1)
 
