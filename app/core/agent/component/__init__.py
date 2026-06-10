@@ -19,6 +19,7 @@ import logging
 import os
 import inspect
 import json
+import uuid
 from pathlib import Path
 
 from .generate import Generate, GenerateParam, GenerateParamFrontEndField
@@ -187,8 +188,8 @@ def register_components():
                 sort_order = (max_sort + 1) if max_sort else 1
                 
                 db.execute_sql(
-                    "INSERT INTO agent_component (component_name, component_title, default_params, status, category, sort_order) VALUES (%s, %s, %s, %s, %s, %s)",
-                    (component_name, component_title, json.dumps(default_params, ensure_ascii=False), 1, category, sort_order)
+                    "INSERT INTO agent_component (id, component_name, component_title, default_params, status, category, sort_order) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                    (uuid.uuid4().hex, component_name, component_title, json.dumps(default_params, ensure_ascii=False), 1, category, sort_order)
                 )
                 added_count += 1
                 logging.info(f"新增组件: {component_name}, 分类: {category}, 排序: {sort_order}")

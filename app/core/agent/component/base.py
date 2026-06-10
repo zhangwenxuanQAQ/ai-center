@@ -21,7 +21,7 @@ import time
 from abc import ABC
 from datetime import datetime
 from functools import partial
-from typing import Any, Tuple, Union
+from typing import Any, Tuple, Union, List, Dict
 
 import pandas as pd
 
@@ -534,7 +534,7 @@ class ComponentBase(ABC):
     def set_infor(self, v):
         setattr(self._param, self._param.infor_var_name, v)
 
-    def _fetch_outputs_from(self, sources: list[dict[str, Any]]) -> list[pd.DataFrame]:
+    def _fetch_outputs_from(self, sources: List[Dict[str, Any]]) -> List[pd.DataFrame]:
         """
         :param sources:  依赖
         :return:

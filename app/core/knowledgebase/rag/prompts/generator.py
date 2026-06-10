@@ -4,7 +4,7 @@ import json
 import logging
 import re
 from copy import deepcopy
-from typing import Tuple
+from typing import Tuple, List, Dict
 import jinja2
 import json_repair
 from app.utils.misc_utils import hash_str2int
@@ -304,7 +304,7 @@ def vision_llm_figure_describe_prompt_with_context(context_above: str, context_b
     return template.render(context_above=context_above, context_below=context_below)
 
 
-def tool_schema(tools_description: list[dict], complete_task=False):
+def tool_schema(tools_description: List[Dict], complete_task=False):
     if not tools_description:
         return ""
     desc = {}
