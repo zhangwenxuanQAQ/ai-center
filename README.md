@@ -294,7 +294,7 @@ RUSTFS_PASSWORD=rustfsadmin
    
    # 构建镜像（镜像名称来自PROJECT_VERSION文件）
    # 在项目根目录执行
-   docker build -t ai-center:aihub_v2_beta_0.1 -f docker/Dockerfile ..
+   docker build -t ai-center:aihub_v2_beta_0.1 -f docker/Dockerfile .
    
    # 或使用docker-compose构建（完整环境）
    docker-compose build
