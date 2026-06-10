@@ -775,8 +775,8 @@ try:
     except Exception as e:
         logger.info(f"  处理 knowledgebase_document_category 表失败: {e}")
     
-    # 为 knowledgebase_document 表添加 category_id、tags 和 document_config 字段
-    logger.info("\n为 knowledgebase_document 表添加 category_id、tags 和 document_config 字段...")
+    # 为 knowledgebase_document 表添加 category_id、title、tags 和 document_config 字段
+    logger.info("\n为 knowledgebase_document 表添加 category_id、title、tags 和 document_config 字段...")
     try:
         cursor = db.execute_sql("DESCRIBE knowledgebase_document;")
         columns = [column[0] for column in cursor.fetchall()]
@@ -786,6 +786,12 @@ try:
             logger.info("  category_id 字段已添加")
         else:
             logger.info("  category_id 字段已存在，跳过")
+        
+        if 'title' not in columns:
+            db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN title VARCHAR(255) DEFAULT NULL AFTER category_id")
+            logger.info("  title 字段已添加")
+        else:
+            logger.info("  title 字段已存在，跳过")
         
         if 'tags' not in columns:
             db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN tags TEXT DEFAULT NULL")
