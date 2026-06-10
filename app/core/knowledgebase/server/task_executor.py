@@ -16,7 +16,6 @@
 import json
 import logging
 import os
-import signal
 import threading
 import time
 import uuid
@@ -153,9 +152,6 @@ class TaskExecutor:
         self._shutdown_event.clear()
         self._load_mapping_config()
 
-        self._register_signals()
-
-        # 先清空队列和创建消费者组，再启动工作线程
         self._clear_queue_on_startup()
 
         self._worker_thread = threading.Thread(
@@ -339,29 +335,12 @@ class TaskExecutor:
         if self._heartbeat_thread and self._heartbeat_thread.is_alive():
             self._heartbeat_thread.join(timeout=5)
 
-        # 关闭线程池
         if self._thread_pool:
             logger.info("正在关闭线程池...")
-            self._thread_pool.shutdown(wait=True, cancel_futures=False)
+            self._thread_pool.shutdown(wait=False, cancel_futures=True)
             logger.info("线程池已关闭")
 
         logger.info("任务调度器已停止")
-
-    def _register_signals(self):
-        """注册信号处理器"""
-        try:
-            signal.signal(signal.SIGINT, self._signal_handler)
-            signal.signal(signal.SIGTERM, self._signal_handler)
-            logger.info("信号处理器已注册 (SIGINT, SIGTERM)")
-        except Exception as e:
-            logger.warning(f"信号处理器注册失败: {e}")
-
-    def _signal_handler(self, signum, frame):
-        """信号处理函数"""
-        logger.info(f"收到信号 {signum}，正在关闭...")
-        self.stop()
-        import sys
-        sys.exit(0)
 
     def _load_mapping_config(self):
         """加载ES索引映射配置"""
