@@ -330,7 +330,17 @@ class KnowledgebaseService:
             status_bool = status.lower() == 'true'
             query = query.where(Knowledgebase.status == status_bool)
 
-        return list(query.order_by(Knowledgebase.created_at.desc()).offset(skip).limit(limit))
+        knowledgebases = list(query.order_by(Knowledgebase.created_at.desc()).offset(skip).limit(limit))
+        
+        for kb in knowledgebases:
+            enabled_doc_count = KnowledgebaseDocument.select().where(
+                (KnowledgebaseDocument.kb_id == kb.id) &
+                (KnowledgebaseDocument.status == True) &
+                (KnowledgebaseDocument.deleted == False)
+            ).count()
+            kb.enabled_doc_num = enabled_doc_count
+        
+        return knowledgebases
 
     @staticmethod
     def count_knowledgebases(category_id: str = None, name: str = None, code: str = None, status: str = None) -> int:

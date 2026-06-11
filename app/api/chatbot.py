@@ -5,7 +5,7 @@
 import socket
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 from app.services.chatbot.service import ChatbotService
 from app.services.chatbot.dto import ChatbotCreate, ChatbotUpdate, Chatbot as ChatbotSchema
 from app.utils.response import ResponseUtil, ApiResponse
@@ -418,3 +418,90 @@ def unbind_tool_from_chatbot(chatbot_id: str, request: UnbindToolRequest):
     """
     ChatbotService.unbind_tool_from_chatbot(chatbot_id, request.tool_binding_id)
     return ResponseUtil.success(message="工具解绑成功")
+
+
+class BindKnowledgebaseRequest(BaseModel):
+    """
+    绑定知识库请求DTO
+    """
+    knowledgebase_id: str = Field(..., description="知识库ID")
+
+
+class BindKnowledgebasesRequest(BaseModel):
+    """
+    批量绑定知识库请求DTO
+    """
+    knowledgebase_ids: List[str] = Field(..., description="知识库ID列表")
+
+
+class UnbindKnowledgebaseRequest(BaseModel):
+    """
+    解绑知识库请求DTO
+    """
+    kb_binding_id: str = Field(..., description="知识库绑定ID")
+
+
+@router.get("/{chatbot_id}/knowledgebases", response_model=ApiResponse)
+def get_chatbot_knowledgebases(chatbot_id: str):
+    """
+    获取机器人绑定的知识库列表
+    
+    Args:
+        chatbot_id: 机器人ID
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象，包含绑定的知识库列表
+    """
+    knowledgebases = ChatbotService.get_chatbot_knowledgebases(chatbot_id)
+    return ResponseUtil.success(data=knowledgebases, message="获取机器人绑定知识库成功")
+
+
+@router.post("/{chatbot_id}/knowledgebases/bind", response_model=ApiResponse)
+def bind_knowledgebase_to_chatbot(chatbot_id: str, request: BindKnowledgebaseRequest):
+    """
+    绑定知识库到机器人
+    
+    Args:
+        chatbot_id: 机器人ID
+        request: 绑定知识库请求DTO
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    chatbot_kb = ChatbotService.bind_knowledgebase_to_chatbot(chatbot_id, request.knowledgebase_id)
+    return ResponseUtil.success(data={"binding_id": str(chatbot_kb.id)}, message="知识库绑定成功")
+
+
+@router.post("/{chatbot_id}/knowledgebases/batch_bind", response_model=ApiResponse)
+def bind_knowledgebases_to_chatbot(chatbot_id: str, request: BindKnowledgebasesRequest):
+    """
+    批量绑定知识库到机器人
+    
+    Args:
+        chatbot_id: 机器人ID
+        request: 批量绑定知识库请求DTO
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    bindings = ChatbotService.bind_knowledgebases_to_chatbot(chatbot_id, request.knowledgebase_ids)
+    return ResponseUtil.success(
+        data={"binding_count": len(bindings), "binding_ids": [str(b.id) for b in bindings]},
+        message=f"成功绑定 {len(bindings)} 个知识库"
+    )
+
+
+@router.post("/{chatbot_id}/knowledgebases/unbind", response_model=ApiResponse)
+def unbind_knowledgebase_from_chatbot(chatbot_id: str, request: UnbindKnowledgebaseRequest):
+    """
+    解绑机器人的知识库
+    
+    Args:
+        chatbot_id: 机器人ID
+        request: 解绑知识库请求DTO
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    ChatbotService.unbind_knowledgebase_from_chatbot(chatbot_id, request.kb_binding_id)
+    return ResponseUtil.success(message="知识库解绑成功")

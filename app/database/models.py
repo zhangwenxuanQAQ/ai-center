@@ -483,6 +483,25 @@ class ChatbotTool(BaseModel):
         )
 
 
+class ChatbotKnowledgebase(BaseModel):
+    """
+    机器人知识库关联模型
+    
+    存储机器人与知识库的绑定关系
+    """
+    deleted = BooleanField(default=False, verbose_name="是否删除")
+    deleted_at = DateTimeField(null=True, verbose_name="删除时间")
+    deleted_user_id = CharField(max_length=40, null=True, verbose_name="删除用户ID")
+    chatbot_id = CharField(max_length=40, index=True, verbose_name="机器人ID")
+    knowledgebase_id = CharField(max_length=40, index=True, verbose_name="知识库ID")
+    
+    class Meta:
+        table_name = 'chatbot_knowledgebase'
+        indexes = (
+            (('chatbot_id', 'knowledgebase_id'), True),
+        )
+
+
 class DatasourceCategory(SoftDeleteModel):
     """
     数据源分类模型
@@ -605,6 +624,7 @@ def create_tables():
         ChatbotModel,
         ChatbotPrompt,
         ChatbotTool,
+        ChatbotKnowledgebase,
         DatasourceCategory,
         Datasource,
         AgentCategory,

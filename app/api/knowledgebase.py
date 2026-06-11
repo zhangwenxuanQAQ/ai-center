@@ -287,6 +287,7 @@ def get_knowledgebases(
                 kb_dict['retrieval_config'] = json.loads(kb_dict['retrieval_config'])
             except (json.JSONDecodeError, TypeError):
                 pass
+        kb_dict['enabled_doc_num'] = getattr(kb, 'enabled_doc_num', 0)
         kbs_data.append(kb_dict)
     return ResponseUtil.success(data={"data": kbs_data, "total": total}, message="获取知识库列表成功")
 

@@ -1154,21 +1154,6 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
           >
             新增知识
           </Button>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => {
-              setIsDatasetModalVisible(true)
-            }}
-            style={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              border: 'none',
-              borderRadius: '18px',
-              height: '36px',
-            }}
-          >
-            新增知识-弹窗
-          </Button>
           <Dropdown menu={{ items: batchMenuItems }} disabled={selectedRowKeys.length === 0}>
             <Button>
               批量操作 ({selectedRowKeys.length})

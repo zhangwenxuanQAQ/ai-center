@@ -153,6 +153,16 @@ const ChatbotSetting: React.FC = () => {
   const [selectedTools, setSelectedTools] = useState<Record<string, string[]>>({});
   const [serverFilter, setServerFilter] = useState<string>('');
   const [toolFilter, setToolFilter] = useState<string>('');
+  
+  // 知识库绑定相关state
+  const [boundKnowledgebases, setBoundKnowledgebases] = useState<any[]>([]);
+  const [isKnowledgebaseSelectModalVisible, setIsKnowledgebaseSelectModalVisible] = useState(false);
+  const [selectedKnowledgebases, setSelectedKnowledgebases] = useState<string[]>([]);
+  const [knowledgebaseFilter, setKnowledgebaseFilter] = useState<string>('');
+  const [expandedKnowledgebases, setExpandedKnowledgebases] = useState<string[]>([]);
+  const [knowledgebaseDocuments, setKnowledgebaseDocuments] = useState<Record<string, any[]>>({});
+  const [documentConstants, setDocumentConstants] = useState<any>(null);
+  const [availableKnowledgebases, setAvailableKnowledgebases] = useState<Knowledgebase[]>([]);
 
   useEffect(() => {
     const currentTheme = document.body.getAttribute('data-theme') || 'light';
@@ -180,8 +190,19 @@ const ChatbotSetting: React.FC = () => {
       fetchConfigParams();
       fetchBoundPrompts(id);
       fetchBoundTools(id);
+      fetchBoundKnowledgebases(id);
+      fetchDocumentConstants();
     }
   }, [id]);
+
+  const fetchDocumentConstants = async () => {
+    try {
+      const data = await knowledgebaseService.getDocumentConstants();
+      setDocumentConstants(data);
+    } catch (error) {
+      console.error('Failed to fetch document constants:', error);
+    }
+  };
 
   const fetchConfigParams = async () => {
     try {
@@ -212,6 +233,15 @@ const ChatbotSetting: React.FC = () => {
       setBoundTools(tools);
     } catch (error) {
       console.error('Failed to fetch bound tools:', error);
+    }
+  };
+
+  const fetchBoundKnowledgebases = async (chatbotId: string) => {
+    try {
+      const knowledgebases = await chatbotService.getChatbotKnowledgebases(chatbotId);
+      setBoundKnowledgebases(knowledgebases);
+    } catch (error) {
+      console.error('Failed to fetch bound knowledgebases:', error);
     }
   };
 
@@ -293,6 +323,82 @@ const ChatbotSetting: React.FC = () => {
     } catch (error) {
       console.error('Failed to unbind tool:', error);
       message.error('工具解绑失败');
+    }
+  };
+
+  const handleSelectKnowledgebase = async () => {
+    setSelectedKnowledgebases([]);
+    setExpandedKnowledgebases([]);
+    setKnowledgebaseFilter('');
+    setKnowledgebaseDocuments({});
+    
+    setIsKnowledgebaseSelectModalVisible(true);
+    
+    try {
+      const result = await knowledgebaseService.getKnowledgebases(1, 100);
+      setAvailableKnowledgebases(result.data || []);
+    } catch (error) {
+      console.error('Failed to fetch knowledgebases:', error);
+      message.error('获取知识库列表失败');
+    }
+  };
+
+  const handleKnowledgebaseSelect = (knowledgebaseId: string) => {
+    setSelectedKnowledgebases(prev => 
+      prev.includes(knowledgebaseId)
+        ? prev.filter(id => id !== knowledgebaseId)
+        : [...prev, knowledgebaseId]
+    );
+  };
+
+  const handleToggleKnowledgebaseExpand = async (knowledgebaseId: string) => {
+    const isExpanded = expandedKnowledgebases.includes(knowledgebaseId);
+    
+    if (isExpanded) {
+      setExpandedKnowledgebases(prev => prev.filter(id => id !== knowledgebaseId));
+    } else {
+      setExpandedKnowledgebases(prev => [...prev, knowledgebaseId]);
+      
+      if (!knowledgebaseDocuments[knowledgebaseId]) {
+        try {
+          const result = await knowledgebaseService.getDocuments(knowledgebaseId, 1, 100, undefined, undefined, undefined, true);
+          const enabledDocs = result.data.filter((doc: any) => doc.status === true);
+          setKnowledgebaseDocuments(prev => ({
+            ...prev,
+            [knowledgebaseId]: enabledDocs
+          }));
+        } catch (error) {
+          console.error(`Failed to fetch documents for knowledgebase ${knowledgebaseId}:`, error);
+          setKnowledgebaseDocuments(prev => ({
+            ...prev,
+            [knowledgebaseId]: []
+          }));
+        }
+      }
+    }
+  };
+
+  const handleBindKnowledgebases = async () => {
+    if (!chatbot) return;
+    if (selectedKnowledgebases.length === 0) {
+      message.warning('请选择要绑定的知识库');
+      return;
+    }
+    await chatbotService.bindKnowledgebasesToChatbot(chatbot.id, selectedKnowledgebases);
+    message.success('知识库绑定成功');
+    setIsKnowledgebaseSelectModalVisible(false);
+    fetchBoundKnowledgebases(chatbot.id);
+  };
+
+  const handleUnbindKnowledgebase = async (kbBindingId: string) => {
+    if (!chatbot) return;
+    try {
+      await chatbotService.unbindKnowledgebaseFromChatbot(chatbot.id, kbBindingId);
+      message.success('知识库解绑成功');
+      fetchBoundKnowledgebases(chatbot.id);
+    } catch (error) {
+      console.error('Failed to unbind knowledgebase:', error);
+      message.error('知识库解绑失败');
     }
   };
 
@@ -1681,48 +1787,90 @@ const ChatbotSetting: React.FC = () => {
             <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <DatabaseOutlined style={{ fontSize: '14px', color: theme === 'dark' ? '#fff' : '#000' }} />
               <span style={{ fontWeight: 500, fontSize: '14px', color: theme === 'dark' ? '#fff' : '#000' }}>关联知识库</span>
-              <span style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999' }}>（多选）</span>
             </div>
             
-            {knowledges.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '16px', color: theme === 'dark' ? '#aaa' : '#999', fontSize: '12px' }}>
-                暂无可用知识库
+            {boundKnowledgebases.length === 0 ? (
+              <div 
+                style={{ 
+                  textAlign: 'center', 
+                  padding: '32px 0', 
+                  color: theme === 'dark' ? '#aaa' : '#999', 
+                  fontSize: '14px',
+                  border: theme === 'dark' ? '2px dashed rgba(255, 255, 255, 0.2)' : '2px dashed #d9d9d9',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s'
+                }}
+                onClick={handleSelectKnowledgebase}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = '#52c41a';
+                  e.currentTarget.style.color = '#52c41a';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = theme === 'dark' ? 'rgba(255, 255, 255, 0.2)' : '#d9d9d9';
+                  e.currentTarget.style.color = theme === 'dark' ? '#aaa' : '#999';
+                }}
+              >
+                <div style={{ fontSize: '32px', marginBottom: '12px' }}>
+                  <PlusOutlined />
+                </div>
+                <div>点击添加知识库</div>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {knowledges.map(knowledge => (
-                  <div
-                    key={knowledge.id}
-                    onClick={() => {
-                      setSelectedKnowledgeId(selectedKnowledgeId === knowledge.id ? undefined : knowledge.id);
-                      setHasChanges(true);
-                    }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '8px 12px',
-                      border: `1px solid ${selectedKnowledgeId === knowledge.id ? '#52c41a' : (theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#d9d9d9')}`,
-                      borderRadius: '4px',
-                      background: selectedKnowledgeId === knowledge.id 
-                        ? (theme === 'dark' ? 'rgba(82, 196, 26, 0.1)' : 'rgba(82, 196, 26, 0.05)')
-                        : 'transparent',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <Avatar 
-                      size={24} 
-                      icon={<DatabaseOutlined />}
-                      style={{ backgroundColor: '#52c41a', flexShrink: 0 }}
-                    />
-                    <div style={{ flex: 1, minWidth: 0, fontSize: '13px', color: theme === 'dark' ? '#fff' : '#000' }}>
-                      {knowledge.name}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {boundKnowledgebases.map((kb: any) => (
+                  <div key={kb.binding_id} style={{
+                    border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8',
+                    borderRadius: '4px',
+                    background: theme === 'dark' ? 'rgba(255, 255, 255, 0.02)' : '#fff',
+                    padding: '12px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                        <Avatar 
+                          size={24} 
+                          src={kb.kb_avatar || undefined}
+                          icon={<DatabaseOutlined />}
+                          style={{ backgroundColor: '#52c41a', flexShrink: 0 }}
+                        />
+                        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>
+                            {kb.kb_name}
+                          </div>
+                          <div style={{ fontSize: '13px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+                            {kb.kb_code}
+                          </div>
+                          {kb.kb_description && (
+                            <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+                              {kb.kb_description}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ fontSize: '11px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+                          文档: {kb.enabled_doc_num || 0}
+                        </div>
+                        <Button
+                          type="text"
+                          icon={<DeleteOutlined />}
+                          size="small"
+                          danger
+                          onClick={() => handleUnbindKnowledgebase(kb.binding_id)}
+                          title="解绑知识库"
+                        />
+                      </div>
                     </div>
-                    {selectedKnowledgeId === knowledge.id && (
-                      <CheckCircleOutlined style={{ color: '#52c41a', fontSize: '14px' }} />
-                    )}
                   </div>
                 ))}
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  size="small"
+                  onClick={handleSelectKnowledgebase}
+                >
+                  添加知识库
+                </Button>
               </div>
             )}
           </div>
@@ -2292,6 +2440,165 @@ const ChatbotSetting: React.FC = () => {
                   </div>
                 );
               })}
+          </div>
+        )}
+      </Modal>
+
+      {/* 知识库选择弹窗 */}
+      <Modal
+        title="选择知识库"
+        open={isKnowledgebaseSelectModalVisible}
+        onCancel={() => {
+          setIsKnowledgebaseSelectModalVisible(false);
+          setKnowledgebaseFilter('');
+        }}
+        footer={[
+          <Button key="cancel" onClick={() => {
+            setIsKnowledgebaseSelectModalVisible(false);
+            setKnowledgebaseFilter('');
+          }}>
+            取消
+          </Button>,
+          <Button key="submit" type="primary" onClick={handleBindKnowledgebases}>
+            绑定
+          </Button>
+        ]}
+        width={800}
+        className={`chatbot-modal ${theme === 'dark' ? 'dark' : 'light'}`}
+      >
+        {/* 搜索输入框 */}
+        <div style={{ marginBottom: '16px' }}>
+          <Input
+            placeholder="搜索知识库名称或编码"
+            value={knowledgebaseFilter}
+            onChange={(e) => setKnowledgebaseFilter(e.target.value)}
+          />
+        </div>
+        
+        {availableKnowledgebases.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '24px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+            暂无可用知识库
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
+            {availableKnowledgebases
+              .filter(knowledge => 
+                knowledge.name.toLowerCase().includes(knowledgebaseFilter.toLowerCase()) ||
+                knowledge.code.toLowerCase().includes(knowledgebaseFilter.toLowerCase())
+              )
+              .map(knowledge => (
+                <div key={knowledge.id} style={{
+                  border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8',
+                  borderRadius: '4px',
+                  background: theme === 'dark' ? 'rgba(255, 255, 255, 0.02)' : '#fff'
+                }}>
+                  <div 
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '12px',
+                      cursor: 'pointer',
+                      borderBottom: expandedKnowledgebases.includes(knowledge.id) 
+                        ? (theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8')
+                        : 'none'
+                    }}
+                    onClick={() => handleKnowledgebaseSelect(knowledge.id)}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedKnowledgebases.includes(knowledge.id)}
+                      onChange={() => handleKnowledgebaseSelect(knowledge.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        accentColor: '#52c41a'
+                      }}
+                    />
+                    <Avatar 
+                      size={24} 
+                      src={knowledge.avatar || undefined}
+                      icon={<DatabaseOutlined />}
+                      style={{ backgroundColor: '#52c41a', flexShrink: 0 }}
+                    />
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ fontSize: '14px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>
+                          {knowledge.name}
+                        </div>
+                        <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+                          {knowledge.code}
+                        </div>
+                      </div>
+                      {knowledge.description && (
+                        <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999', textAlign: 'left' }}>
+                          {knowledge.description}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ fontSize: '11px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+                      文档: {knowledgebaseDocuments[knowledge.id] ? knowledgebaseDocuments[knowledge.id].length : (knowledge.enabled_doc_num || knowledge.doc_num || 0)}
+                    </div>
+                    <div 
+                      style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999', cursor: 'pointer', padding: '4px' }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleKnowledgebaseExpand(knowledge.id);
+                      }}
+                    >
+                      {expandedKnowledgebases.includes(knowledge.id) ? '▼' : '▶'}
+                    </div>
+                  </div>
+                  {expandedKnowledgebases.includes(knowledge.id) && (
+                    <div style={{ padding: '8px 12px', borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8' }}>
+                      {knowledgebaseDocuments[knowledge.id] === undefined ? (
+                        <div style={{ padding: '16px', textAlign: 'center', color: theme === 'dark' ? '#aaa' : '#999', fontSize: '12px' }}>
+                          加载中...
+                        </div>
+                      ) : knowledgebaseDocuments[knowledge.id].length === 0 ? (
+                        <div style={{ padding: '16px', textAlign: 'center', color: theme === 'dark' ? '#aaa' : '#999', fontSize: '12px' }}>
+                          暂无启用的数据集
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                          {knowledgebaseDocuments[knowledge.id].map((doc: any) => {
+                            const sourceTypeLabel = documentConstants?.source_types 
+                              ? (documentConstants.source_types.find((st: any) => st.key === doc.source_type)?.label || doc.source_type || '未知来源')
+                              : (doc.source_type || '未知来源');
+                            
+                            return (
+                              <div key={doc.id} style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '4px',
+                                padding: '12px',
+                                border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.05)' : '1px solid #f0f0f0',
+                                borderRadius: '4px',
+                                background: theme === 'dark' ? 'rgba(255, 255, 255, 0.02)' : '#fafafa'
+                              }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'space-between' }}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: 1 }}>
+                                    <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', textAlign: 'left' }}>
+                                      {doc.title || '无标题'}
+                                    </div>
+                                    {doc.file_name && (
+                                      <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999', textAlign: 'left' }}>
+                                        文档名称: {doc.file_name}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div style={{ fontSize: '11px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+                                    {sourceTypeLabel}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
           </div>
         )}
       </Modal>

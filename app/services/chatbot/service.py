@@ -4,7 +4,8 @@
 
 import json
 from datetime import datetime
-from app.database.models import Chatbot, ChatbotMCP, ChatbotCategory, ChatbotModel, LLMModel, ChatbotPrompt, Prompt, ChatbotTool, MCPServer, MCPTool
+from typing import List
+from app.database.models import Chatbot, ChatbotMCP, ChatbotCategory, ChatbotModel, LLMModel, ChatbotPrompt, Prompt, ChatbotTool, MCPServer, MCPTool, ChatbotKnowledgebase, Knowledgebase, KnowledgebaseDocument
 from app.services.chatbot.dto import ChatbotCreate, ChatbotUpdate, Chatbot as ChatbotDTO
 from app.database.db_utils import handle_transaction
 from app.core.exceptions import ResourceNotFoundError, DuplicateResourceError
@@ -933,6 +934,189 @@ class ChatbotService:
                 raise ResourceNotFoundError(message=f"工具绑定关系 {tool_binding_id} 不存在")
             
             ChatbotTool.delete().where(ChatbotTool.id == chatbot_tool.id).execute()
+            
+            return True
+        except Exception as e:
+            raise
+    
+    @staticmethod
+    def get_chatbot_knowledgebases(chatbot_id: str):
+        """
+        获取机器人绑定的知识库列表
+        
+        Args:
+            chatbot_id: 机器人ID
+            
+        Returns:
+            list: 绑定的知识库信息列表
+        """
+        try:
+            chatbot_kbs = ChatbotKnowledgebase.select().where(
+                (ChatbotKnowledgebase.chatbot_id == chatbot_id) &
+                (ChatbotKnowledgebase.deleted == False)
+            )
+            
+            knowledgebases = []
+            for chatbot_kb in chatbot_kbs:
+                try:
+                    kb = Knowledgebase.get_by_id(chatbot_kb.knowledgebase_id)
+                    if kb.deleted:
+                        continue
+                    
+                    enabled_doc_num = KnowledgebaseDocument.select().where(
+                        (KnowledgebaseDocument.kb_id == kb.id) &
+                        (KnowledgebaseDocument.status == True) &
+                        (KnowledgebaseDocument.deleted == False)
+                    ).count()
+                    
+                    knowledgebases.append({
+                        "binding_id": str(chatbot_kb.id),
+                        "kb_id": str(kb.id),
+                        "kb_name": kb.name,
+                        "kb_code": kb.code,
+                        "kb_description": kb.description,
+                        "kb_avatar": kb.avatar,
+                        "enabled_doc_num": enabled_doc_num,
+                        "token_num": kb.token_num,
+                        "chunk_num": kb.chunk_num
+                    })
+                except Knowledgebase.DoesNotExist:
+                    continue
+            
+            return knowledgebases
+        except Exception as e:
+            raise
+    
+    @staticmethod
+    @handle_transaction
+    def bind_knowledgebase_to_chatbot(chatbot_id: str, knowledgebase_id: str):
+        """
+        绑定知识库到机器人
+        
+        Args:
+            chatbot_id: 机器人ID
+            knowledgebase_id: 知识库ID
+            
+        Returns:
+            ChatbotKnowledgebase: 绑定关系对象，如果已绑定则返回None
+            
+        Raises:
+            ResourceNotFoundError: 机器人或知识库不存在
+        """
+        try:
+            try:
+                chatbot = Chatbot.get_by_id(chatbot_id)
+                if chatbot.deleted:
+                    raise ResourceNotFoundError(message=f"机器人 {chatbot_id} 不存在")
+            except Chatbot.DoesNotExist:
+                raise ResourceNotFoundError(message=f"机器人 {chatbot_id} 不存在")
+            
+            try:
+                kb = Knowledgebase.get_by_id(knowledgebase_id)
+                if kb.deleted:
+                    raise ResourceNotFoundError(message=f"知识库 {knowledgebase_id} 不存在")
+            except Knowledgebase.DoesNotExist:
+                raise ResourceNotFoundError(message=f"知识库 {knowledgebase_id} 不存在")
+            
+            existing = ChatbotKnowledgebase.select().where(
+                (ChatbotKnowledgebase.chatbot_id == chatbot_id) &
+                (ChatbotKnowledgebase.knowledgebase_id == knowledgebase_id) &
+                (ChatbotKnowledgebase.deleted == False)
+            ).first()
+            
+            if existing:
+                return None
+            
+            chatbot_kb = ChatbotKnowledgebase(
+                chatbot_id=chatbot_id,
+                knowledgebase_id=knowledgebase_id
+            )
+            chatbot_kb.save(force_insert=True)
+            
+            return chatbot_kb
+        except Exception as e:
+            raise
+    
+    @staticmethod
+    @handle_transaction
+    def bind_knowledgebases_to_chatbot(chatbot_id: str, knowledgebase_ids: List[str]):
+        """
+        批量绑定知识库到机器人
+        
+        Args:
+            chatbot_id: 机器人ID
+            knowledgebase_ids: 知识库ID列表
+            
+        Returns:
+            List[ChatbotKnowledgebase]: 绑定关系对象列表
+            
+        Raises:
+            ResourceNotFoundError: 机器人不存在
+        """
+        try:
+            try:
+                chatbot = Chatbot.get_by_id(chatbot_id)
+                if chatbot.deleted:
+                    raise ResourceNotFoundError(message=f"机器人 {chatbot_id} 不存在")
+            except Chatbot.DoesNotExist:
+                raise ResourceNotFoundError(message=f"机器人 {chatbot_id} 不存在")
+            
+            bindings = []
+            for knowledgebase_id in knowledgebase_ids:
+                try:
+                    kb = Knowledgebase.get_by_id(knowledgebase_id)
+                    if kb.deleted:
+                        continue
+                except Knowledgebase.DoesNotExist:
+                    continue
+                
+                existing = ChatbotKnowledgebase.select().where(
+                    (ChatbotKnowledgebase.chatbot_id == chatbot_id) &
+                    (ChatbotKnowledgebase.knowledgebase_id == knowledgebase_id) &
+                    (ChatbotKnowledgebase.deleted == False)
+                ).first()
+                
+                if existing:
+                    continue
+                
+                chatbot_kb = ChatbotKnowledgebase(
+                    chatbot_id=chatbot_id,
+                    knowledgebase_id=knowledgebase_id
+                )
+                chatbot_kb.save(force_insert=True)
+                bindings.append(chatbot_kb)
+            
+            return bindings
+        except Exception as e:
+            raise
+    
+    @staticmethod
+    @handle_transaction
+    def unbind_knowledgebase_from_chatbot(chatbot_id: str, kb_binding_id: str):
+        """
+        解绑机器人的知识库
+        
+        Args:
+            chatbot_id: 机器人ID
+            kb_binding_id: 知识库绑定ID
+            
+        Returns:
+            bool: 解绑是否成功
+            
+        Raises:
+            ResourceNotFoundError: 绑定关系不存在
+        """
+        try:
+            chatbot_kb = ChatbotKnowledgebase.select().where(
+                (ChatbotKnowledgebase.id == kb_binding_id) &
+                (ChatbotKnowledgebase.chatbot_id == chatbot_id) &
+                (ChatbotKnowledgebase.deleted == False)
+            ).first()
+            
+            if not chatbot_kb:
+                raise ResourceNotFoundError(message=f"知识库绑定关系 {kb_binding_id} 不存在")
+            
+            ChatbotKnowledgebase.delete().where(ChatbotKnowledgebase.id == chatbot_kb.id).execute()
             
             return True
         except Exception as e:

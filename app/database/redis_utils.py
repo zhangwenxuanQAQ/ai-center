@@ -350,9 +350,7 @@ class RedisUtils:
                     else:
                         raise
 
-                # 读取消息
-                # 读取pending消息(msg_id="0")时不阻塞，读取新消息(msg_id=">")时阻塞5秒
-                block_ms = 0 if msg_id != ">" else 5000
+                block_ms = 0 if msg_id != ">" else 1000
                 args = {
                     "groupname": group_name,
                     "consumername": consumer_name,

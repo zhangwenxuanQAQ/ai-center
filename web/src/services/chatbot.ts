@@ -292,4 +292,45 @@ export const chatbotService = {
       tool_binding_id: toolBindingId
     });
   },
+
+  /**
+   * 获取机器人绑定的知识库列表
+   * @param chatbotId - 机器人ID
+   */
+  getChatbotKnowledgebases: async (chatbotId: string): Promise<any[]> => {
+    return http.get<any[]>(`/aicenter/v1/chatbot/${chatbotId}/knowledgebases`);
+  },
+
+  /**
+   * 绑定知识库到机器人
+   * @param chatbotId - 机器人ID
+   * @param knowledgebaseId - 知识库ID
+   */
+  bindKnowledgebaseToChatbot: async (chatbotId: string, knowledgebaseId: string): Promise<any> => {
+    return http.post<any>(`/aicenter/v1/chatbot/${chatbotId}/knowledgebases/bind`, {
+      knowledgebase_id: knowledgebaseId
+    });
+  },
+
+  /**
+   * 批量绑定知识库到机器人
+   * @param chatbotId - 机器人ID
+   * @param knowledgebaseIds - 知识库ID列表
+   */
+  bindKnowledgebasesToChatbot: async (chatbotId: string, knowledgebaseIds: string[]): Promise<any> => {
+    return http.post<any>(`/aicenter/v1/chatbot/${chatbotId}/knowledgebases/batch_bind`, {
+      knowledgebase_ids: knowledgebaseIds
+    });
+  },
+
+  /**
+   * 解绑机器人的知识库
+   * @param chatbotId - 机器人ID
+   * @param kbBindingId - 知识库绑定ID
+   */
+  unbindKnowledgebaseFromChatbot: async (chatbotId: string, kbBindingId: string): Promise<any> => {
+    return http.post<any>(`/aicenter/v1/chatbot/${chatbotId}/knowledgebases/unbind`, {
+      kb_binding_id: kbBindingId
+    });
+  },
 };

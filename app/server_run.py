@@ -1507,6 +1507,37 @@ try:
     except Exception as e:
         logger.error(f"[MIGRATION]   更新 knowledgebase_document 表 title 字段失败: {e}")
 
+    # 创建 chatbot_knowledgebase 表（机器人知识库关联表）
+    logger.info("\n[MIGRATION] 创建 chatbot_knowledgebase 表...")
+    try:
+        cursor = db.execute_sql("SHOW TABLES;")
+        tables = cursor.fetchall()
+        table_names = [table[0] for table in tables]
+        
+        if 'chatbot_knowledgebase' not in table_names:
+            db.execute_sql("""
+                CREATE TABLE chatbot_knowledgebase (
+                    id CHAR(36) NOT NULL PRIMARY KEY,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    created_user_id CHAR(36) DEFAULT NULL,
+                    updated_user_id CHAR(36) DEFAULT NULL,
+                    deleted TINYINT(1) DEFAULT 0,
+                    deleted_at DATETIME DEFAULT NULL,
+                    deleted_user_id CHAR(36) DEFAULT NULL,
+                    chatbot_id CHAR(36) NOT NULL,
+                    knowledgebase_id CHAR(36) NOT NULL,
+                    INDEX idx_chatbot_id (chatbot_id),
+                    INDEX idx_knowledgebase_id (knowledgebase_id),
+                    UNIQUE KEY uk_chatbot_knowledgebase (chatbot_id, knowledgebase_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            """)
+            logger.info("[MIGRATION]   chatbot_knowledgebase 表创建成功")
+        else:
+            logger.info("[MIGRATION]   chatbot_knowledgebase 表已存在，跳过")
+    except Exception as e:
+        logger.error(f"[MIGRATION]   创建 chatbot_knowledgebase 表失败: {e}")
+
     logger.info("\n[MIGRATION] ✅ 数据库迁移完成")
 except Exception as e:
     logger.error(f"\n[MIGRATION] ❌ 数据库迁移失败: {e}")
