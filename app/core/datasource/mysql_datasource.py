@@ -22,6 +22,7 @@ class MySQLDatasource(DatasourceBase):
         Returns:
             Dict[str, Any]: 连接测试结果
         """
+        connection = None
         try:
             import pymysql
             connection = pymysql.connect(
@@ -35,12 +36,17 @@ class MySQLDatasource(DatasourceBase):
             )
             with connection.cursor() as cursor:
                 cursor.execute("SELECT 1")
-            connection.close()
             return {"success": True, "message": "MySQL数据库连接成功"}
         except ImportError:
             return {"success": False, "message": "缺少pymysql依赖，请执行: pip install pymysql"}
         except Exception as e:
             return {"success": False, "message": f"MySQL数据库连接失败: {str(e)}"}
+        finally:
+            if connection:
+                try:
+                    connection.close()
+                except:
+                    pass
 
     def execute_query(self, query: str, params: Optional[Dict] = None) -> Dict[str, Any]:
         """
@@ -53,6 +59,7 @@ class MySQLDatasource(DatasourceBase):
         Returns:
             Dict[str, Any]: 查询结果
         """
+        connection = None
         try:
             import pymysql
             connection = pymysql.connect(
@@ -69,7 +76,6 @@ class MySQLDatasource(DatasourceBase):
                 if query.strip().upper().startswith('SELECT'):
                     results = cursor.fetchall()
                     columns = [desc[0] for desc in cursor.description] if cursor.description else []
-                    connection.close()
                     return {
                         "success": True,
                         "message": "查询执行成功",
@@ -82,7 +88,6 @@ class MySQLDatasource(DatasourceBase):
                 else:
                     connection.commit()
                     affected_rows = cursor.rowcount
-                    connection.close()
                     return {
                         "success": True,
                         "message": f"操作成功，影响行数: {affected_rows}",
@@ -92,6 +97,12 @@ class MySQLDatasource(DatasourceBase):
             return {"success": False, "message": "缺少pymysql依赖，请执行: pip install pymysql"}
         except Exception as e:
             return {"success": False, "message": f"查询执行失败: {str(e)}"}
+        finally:
+            if connection:
+                try:
+                    connection.close()
+                except:
+                    pass
 
     def get_schema_info(self) -> Dict[str, Any]:
         """
@@ -100,6 +111,7 @@ class MySQLDatasource(DatasourceBase):
         Returns:
             Dict[str, Any]: Schema信息
         """
+        connection = None
         try:
             import pymysql
             connection = pymysql.connect(
@@ -134,7 +146,6 @@ class MySQLDatasource(DatasourceBase):
                         "table_comment": table.get('TABLE_COMMENT', ''),
                         "columns": columns,
                     })
-                connection.close()
                 return {
                     "success": True,
                     "message": "获取Schema信息成功",
@@ -144,6 +155,12 @@ class MySQLDatasource(DatasourceBase):
             return {"success": False, "message": "缺少pymysql依赖，请执行: pip install pymysql"}
         except Exception as e:
             return {"success": False, "message": f"获取Schema信息失败: {str(e)}"}
+        finally:
+            if connection:
+                try:
+                    connection.close()
+                except:
+                    pass
 
     def list_tables(self, database: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -155,6 +172,7 @@ class MySQLDatasource(DatasourceBase):
         Returns:
             Dict[str, Any]: 包含表列表的字典
         """
+        connection = None
         try:
             import pymysql
             target_database = database or self.config.get('database', '')
@@ -187,7 +205,6 @@ class MySQLDatasource(DatasourceBase):
                         "create_time": str(table.get('CREATE_TIME', '')) if table.get('CREATE_TIME') else '',
                         "update_time": str(table.get('UPDATE_TIME', '')) if table.get('UPDATE_TIME') else '',
                     })
-                connection.close()
                 return {
                     "success": True,
                     "message": "获取表列表成功",
@@ -201,6 +218,12 @@ class MySQLDatasource(DatasourceBase):
             return {"success": False, "message": "缺少pymysql依赖，请执行: pip install pymysql"}
         except Exception as e:
             return {"success": False, "message": f"获取表列表失败: {str(e)}"}
+        finally:
+            if connection:
+                try:
+                    connection.close()
+                except:
+                    pass
 
     def get_table_columns(self, table_name: str, database: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -213,6 +236,7 @@ class MySQLDatasource(DatasourceBase):
         Returns:
             Dict[str, Any]: 包含字段信息的字典
         """
+        connection = None
         try:
             import pymysql
             target_database = database or self.config.get('database', '')
@@ -252,7 +276,6 @@ class MySQLDatasource(DatasourceBase):
                         "column_comment": col.get('COLUMN_COMMENT', ''),
                         "ordinal_position": col.get('ORDINAL_POSITION', 0),
                     })
-                connection.close()
                 return {
                     "success": True,
                     "message": "获取表字段信息成功",
@@ -267,6 +290,12 @@ class MySQLDatasource(DatasourceBase):
             return {"success": False, "message": "缺少pymysql依赖，请执行: pip install pymysql"}
         except Exception as e:
             return {"success": False, "message": f"获取表字段信息失败: {str(e)}"}
+        finally:
+            if connection:
+                try:
+                    connection.close()
+                except:
+                    pass
 
     def get_monitor_info(self) -> Dict[str, Any]:
         """
@@ -275,6 +304,7 @@ class MySQLDatasource(DatasourceBase):
         Returns:
             Dict[str, Any]: 包含监控信息的字典
         """
+        connection = None
         try:
             import pymysql
             connection = pymysql.connect(
@@ -340,8 +370,6 @@ class MySQLDatasource(DatasourceBase):
                 bytes_out_row = cursor.fetchone()
                 bytes_out = int(bytes_out_row.get('Value', 0)) if bytes_out_row else 0
 
-            connection.close()
-
             days, remainder = divmod(uptime_seconds, 86400)
             hours, remainder = divmod(remainder, 3600)
             minutes, _ = divmod(remainder, 60)
@@ -372,3 +400,9 @@ class MySQLDatasource(DatasourceBase):
             return {"success": False, "message": "缺少pymysql依赖，请执行: pip install pymysql", "data": {"status": "disconnected"}}
         except Exception as e:
             return {"success": False, "message": f"获取MySQL监控信息失败: {str(e)}", "data": {"status": "disconnected"}}
+        finally:
+            if connection:
+                try:
+                    connection.close()
+                except:
+                    pass
