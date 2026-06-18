@@ -48,14 +48,14 @@ def convert_kb_to_openai_tool(kb: Knowledgebase) -> Dict[str, Any]:
                     },
                     'query': {
                         'type': 'string',
-                        'description': '搜索内容'
+                        'description': '根据用户问题改写为知识库的查询条件'
                     },
                     'reasoning_content': {
                         'type': 'string',
                         'description': '为何选择并使用本工具，返回思考过程'
                     }
                 },
-                'required': ['task_name', 'kb_id', 'query']
+                'required': ['task_name', 'kb_id', 'query',"action"]
             }
         }
     }

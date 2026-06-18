@@ -123,6 +123,7 @@ class ChatStreamResponse:
     step_id: str = ''
     parent_step_id: Optional[str] = None
     reasoning_time: Optional[int] = None
+    avatar: Optional[str] = None
     
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -171,6 +172,9 @@ class ChatStreamResponse:
         if self.parent_step_id is not None:
             data['parent_step_id'] = self.parent_step_id
         
+        if self.avatar is not None:
+            data['avatar'] = self.avatar
+        
         return data
     
     @classmethod
@@ -179,7 +183,8 @@ class ChatStreamResponse:
         error: str,
         chat_id: str = '',
         user_message_id: str = '',
-        assistant_message_id: str = ''
+        assistant_message_id: str = '',
+        avatar: Optional[str] = None
     ) -> 'ChatStreamResponse':
         """
         创建错误响应
@@ -189,6 +194,7 @@ class ChatStreamResponse:
             chat_id: 对话ID
             user_message_id: 用户消息ID
             assistant_message_id: 助手消息ID
+            avatar: 头像URL
             
         Returns:
             ChatStreamResponse: 错误响应对象
@@ -198,7 +204,8 @@ class ChatStreamResponse:
             chat_id=chat_id,
             user_message_id=user_message_id,
             assistant_message_id=assistant_message_id,
-            status=MessageStatus.DONE
+            status=MessageStatus.DONE,
+            avatar=avatar
         )
     
     @classmethod
@@ -208,7 +215,8 @@ class ChatStreamResponse:
         user_message_id: str,
         assistant_message_id: str,
         step: Optional[str] = None,
-        step_id: str = ''
+        step_id: str = '',
+        avatar: Optional[str] = None
     ) -> 'ChatStreamResponse':
         """
         创建消息开始响应
@@ -219,6 +227,7 @@ class ChatStreamResponse:
             assistant_message_id: 助手消息ID
             step: 阶段标识（task_planning/model_answer/task_execution/result_summary）
             step_id: 阶段ID
+            avatar: 头像URL
             
         Returns:
             ChatStreamResponse: 开始响应对象
@@ -230,7 +239,8 @@ class ChatStreamResponse:
             assistant_message_id=assistant_message_id,
             status=MessageStatus.START,
             step=step,
-            step_id=step_id
+            step_id=step_id,
+            avatar=avatar
         )
     
     @classmethod
@@ -247,7 +257,8 @@ class ChatStreamResponse:
         status: str = MessageStatus.RUNNING,
         step_id: str = '',
         step: Optional[str] = None,
-        reasoning_time: Optional[int] = None
+        reasoning_time: Optional[int] = None,
+        avatar: Optional[str] = None
     ) -> 'ChatStreamResponse':
         """
         创建文本流响应
@@ -264,6 +275,8 @@ class ChatStreamResponse:
             status: 消息状态
             step_id: 阶段ID
             step: 阶段标识
+            reasoning_time: 推理耗时
+            avatar: 头像URL
             
         Returns:
             ChatStreamResponse: 文本响应对象
@@ -280,7 +293,8 @@ class ChatStreamResponse:
             status=status,
             step_id=step_id,
             step=step,
-            reasoning_time=reasoning_time
+            reasoning_time=reasoning_time,
+            avatar=avatar
         )
     
     @classmethod
@@ -293,7 +307,8 @@ class ChatStreamResponse:
         status: str = MessageStatus.RUNNING,
         step_id: str = '',
         step: Optional[str] = None,
-        reasoning_content: Optional[str] = None
+        reasoning_content: Optional[str] = None,
+        avatar: Optional[str] = None
     ) -> 'ChatStreamResponse':
         """
         创建工具调用响应
@@ -307,6 +322,7 @@ class ChatStreamResponse:
             step_id: 阶段ID
             step: 阶段标识
             reasoning_content: 思考过程
+            avatar: 头像URL
             
         Returns:
             ChatStreamResponse: 工具调用响应对象
@@ -320,7 +336,8 @@ class ChatStreamResponse:
             status=status,
             step_id=step_id,
             step=step,
-            reasoning_content=reasoning_content
+            reasoning_content=reasoning_content,
+            avatar=avatar
         )
     
     @classmethod
@@ -331,7 +348,8 @@ class ChatStreamResponse:
         user_message_id: str,
         assistant_message_id: str,
         step_id: str = '',
-        step: Optional[str] = None
+        step: Optional[str] = None,
+        avatar: Optional[str] = None
     ) -> 'ChatStreamResponse':
         """
         创建任务规划响应
@@ -343,6 +361,7 @@ class ChatStreamResponse:
             assistant_message_id: 助手消息ID
             step_id: 阶段ID
             step: 阶段标识
+            avatar: 头像URL
             
         Returns:
             ChatStreamResponse: 任务规划响应对象
@@ -355,5 +374,6 @@ class ChatStreamResponse:
             assistant_message_id=assistant_message_id,
             status=MessageStatus.RUNNING,
             step_id=step_id,
-            step=step
+            step=step,
+            avatar=avatar
         )

@@ -221,7 +221,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
   const processSSEMessageUpdate = (msg: Message, data: any, idTracker: { assistant: string, user: string }) => {
     // 用户消息处理
     if (msg.role === 'user') {
-      if (data.user_message_id && msg.id === idTracker.user) {
+      if (data.user_message_id && (msg.id === idTracker.user || msg.message_id === idTracker.user)) {
         idTracker.user = data.user_message_id;
         return { ...msg, id: data.user_message_id, message_id: data.user_message_id };
       }
@@ -308,6 +308,10 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
 
       if (data.reasoning_time != null) {
         updates.reasoning_time = data.reasoning_time;
+      }
+
+      if (data.avatar) {
+        updates.avatar = data.avatar;
       }
 
       if (status === 'start') {
@@ -612,6 +616,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       content: '',
       status: 'start',
       created_at: new Date().toISOString(),
+      avatar: selectedChatbot?.avatar || (selectedModel?.provider ? getProviderAvatar(selectedModel.provider) : undefined)
     };
     setMessages(prev => [...prev, assistantMessage]);
     setThinkingMessageId(assistantMessageId);
@@ -641,15 +646,33 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           // 当收到status=start且有step_id时，处理消息新增或更新
           if (status === 'start' && stepId && data.step) {
             setMessages(prev => {
+              // 先更新用户消息（如果有user_message_id）
+              let updatedMessages = prev;
+              if (data.user_message_id) {
+                updatedMessages = prev.map(msg => {
+                  if (msg.role === 'user' && (msg.id === idTracker.user || msg.message_id === idTracker.user)) {
+                    idTracker.user = data.user_message_id;
+                    return { ...msg, id: data.user_message_id, message_id: data.user_message_id };
+                  }
+                  return msg;
+                });
+              }
+              
               // 检查是否已有相同step_id的消息
-              const existingStepMsg = prev.find(msg => msg.step_id === stepId && msg.role === 'assistant');
+              const existingStepMsg = updatedMessages.find(msg => msg.step_id === stepId && msg.role === 'assistant');
               if (existingStepMsg) {
-                // 已存在，更新该消息
-                return prev.map(msg => msg.step_id === stepId ? processSSEMessageUpdate(msg, data, idTracker) : msg);
+                // 已存在，更新该消息和用户消息
+                return updatedMessages.map(msg => {
+                  if (msg.role === 'user') {
+                    return processSSEMessageUpdate(msg, data, idTracker);
+                  }
+                  if (msg.step_id === stepId) return processSSEMessageUpdate(msg, data, idTracker);
+                  return msg;
+                });
               }
               
               // 检查是否有初始的"思考中..."消息（没有step_id），需要移除它
-              const initialMsgIndex = prev.findIndex(msg => msg.role === 'assistant' && !msg.step_id && msg.status === 'start');
+              const initialMsgIndex = updatedMessages.findIndex(msg => msg.role === 'assistant' && !msg.step_id && msg.status === 'start');
               
               // 每个步骤创建独立的消息记录，不覆盖之前的步骤消息
               const newStepMsg: Message = {
@@ -662,23 +685,28 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 step: data.step,
                 step_id: stepId,
                 reasoning_content: '',
-                reasoning_end: false
+                reasoning_end: false,
+                avatar: data.avatar
               };
               
               // 如果有初始"思考中"消息，移除它并新增具体步骤消息
               if (initialMsgIndex >= 0) {
-                const newMessages = prev.filter((_, idx) => idx !== initialMsgIndex);
+                const newMessages = updatedMessages.filter((_, idx) => idx !== initialMsgIndex);
                 return [...newMessages, newStepMsg];
               }
               
-              return [...prev, newStepMsg];
+              return [...updatedMessages, newStepMsg];
             });
           } else {
             // 其他情况，更新现有消息
-            // 只更新匹配的step_id的消息，避免不同步骤互相影响
+            // 更新用户消息和匹配的助手消息
             const stepId = data.step_id;
             setMessages(prev => prev.map(msg => {
-              if (msg.role !== 'assistant') return msg;
+              // 用户消息也需要更新（处理user_message_id）
+              if (msg.role === 'user') {
+                return processSSEMessageUpdate(msg, data, idTracker);
+              }
+              // 助手消息：只更新匹配的step_id的消息，避免不同步骤互相影响
               if (!stepId) return processSSEMessageUpdate(msg, data, idTracker);
               if (msg.step_id === stepId) return processSSEMessageUpdate(msg, data, idTracker);
               return msg;
@@ -936,6 +964,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       
       const userMessage: Message = {
         id: Date.now().toString(),
+        message_id: messageId,
         role: 'user',
         content: content.trim(),
         created_at: new Date().toISOString(),
@@ -956,7 +985,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       role: 'assistant',
       content: '',
       status: 'start',
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      avatar: selectedChatbot?.avatar || (selectedModel?.provider ? getProviderAvatar(selectedModel.provider) : undefined)
     };
     setMessages(prev => [...prev, assistantMessage]);
     setThinkingMessageId(assistantMessageId);
@@ -1013,7 +1043,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       }
       
       if (hasFiles && query.length > 0) {
-        const idTracker = { assistant: assistantMessageId, user: currentUserMessageId };
+        const idTracker = { assistant: assistantMessageId, user: messageId || currentUserMessageId };
         // 使用带文件的发送方法
         chatService.sendMessageStreamWithFiles(
           query,
@@ -1051,7 +1081,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                     step: data.step,
                     step_id: stepId,
                     reasoning_content: '',
-                    reasoning_end: false
+                    reasoning_end: false,
+                    avatar: data.avatar
                   };
                   // 更新idTracker
                   if (data.assistant_message_id) {
@@ -1109,7 +1140,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           }
         );
       } else {
-        const idTracker = { assistant: assistantMessageId, user: currentUserMessageId };
+        const idTracker = { assistant: assistantMessageId, user: messageId || currentUserMessageId };
         // 使用普通发送方法
         chatService.sendMessageStream(
           content,
@@ -1126,15 +1157,33 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             // 当收到status=start且有step_id时，处理消息新增或更新
             if (status === 'start' && stepId && data.step) {
               setMessages(prev => {
+                // 先更新用户消息（如果有user_message_id）
+                let updatedMessages = prev;
+                if (data.user_message_id) {
+                  updatedMessages = prev.map(msg => {
+                    if (msg.role === 'user' && (msg.id === idTracker.user || msg.message_id === idTracker.user)) {
+                      idTracker.user = data.user_message_id;
+                      return { ...msg, id: data.user_message_id, message_id: data.user_message_id };
+                    }
+                    return msg;
+                  });
+                }
+                
                 // 检查是否已有相同step_id的消息
-                const existingStepMsg = prev.find(msg => msg.step_id === stepId && msg.role === 'assistant');
+                const existingStepMsg = updatedMessages.find(msg => msg.step_id === stepId && msg.role === 'assistant');
                 if (existingStepMsg) {
-                  // 已存在，更新该消息
-                  return prev.map(msg => msg.step_id === stepId ? processSSEMessageUpdate(msg, data, idTracker) : msg);
+                  // 已存在，更新该消息和用户消息
+                  return updatedMessages.map(msg => {
+                    if (msg.role === 'user') {
+                      return processSSEMessageUpdate(msg, data, idTracker);
+                    }
+                    if (msg.step_id === stepId) return processSSEMessageUpdate(msg, data, idTracker);
+                    return msg;
+                  });
                 }
                 
                 // 检查是否有初始的"思考中..."消息（没有step_id），需要移除它
-                const initialMsgIndex = prev.findIndex(msg => msg.role === 'assistant' && !msg.step_id && msg.status === 'start');
+                const initialMsgIndex = updatedMessages.findIndex(msg => msg.role === 'assistant' && !msg.step_id && msg.status === 'start');
                 
                 // 新增具体步骤消息，使用stepId作为唯一标识，确保不同步骤的消息不混淆
                 const newStepMsg: Message = {
@@ -1147,7 +1196,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                   step: data.step,
                   step_id: stepId,
                   reasoning_content: '',
-                  reasoning_end: false
+                  reasoning_end: false,
+                  avatar: data.avatar
                 };
                 // 更新idTracker
                 if (data.assistant_message_id) {
@@ -1156,11 +1206,11 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 
                 // 如果有初始"思考中"消息，移除它并新增具体步骤消息
                 if (initialMsgIndex >= 0) {
-                  const newMessages = prev.filter((_, idx) => idx !== initialMsgIndex);
+                  const newMessages = updatedMessages.filter((_, idx) => idx !== initialMsgIndex);
                   return [...newMessages, newStepMsg];
                 }
                 
-                return [...prev, newStepMsg];
+                return [...updatedMessages, newStepMsg];
               });
             } else {
               // 其他情况，更新现有消息
@@ -1552,6 +1602,12 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             groups.push(currentGroup);
           }
           currentGroup = { assistantId, messages: [msg] };
+        }
+      } else if (msg.role === 'tool') {
+        if (currentGroup) {
+          currentGroup.messages.push(msg);
+        } else {
+          groups.push({ assistantId: '', messages: [msg] });
         }
       }
     });
@@ -2061,7 +2117,6 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
 
   const renderGroupedMessages = () => {
     const groups = groupMessagesByAssistantId();
-    debugger
     return groups.map((group, groupIndex) => {
       if (!group.assistantId) {
         // 用户消息组
@@ -2089,7 +2144,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 id={msg.step_id || undefined}
                 className="step-container"
               >
-                {renderAssistantMessageContent(msg)}
+                {msg.role === 'tool' ? renderToolMessage(msg) : renderAssistantMessageContent(msg)}
               </div>
             ))}
             <div className="message-footer">
@@ -2136,9 +2191,104 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     });
   };
 
+  const renderToolMessage = (msg: Message) => {
+    const toolCall = msg.extra_content?.tool_call;
+    const toolCallId = toolCall?.tool_call_id || msg.id;
+    const hasReasoning = toolCall?.reasoning_content;
+    const hasResult = toolCall?.result != null;
+    const hasMessage = msg.content;
+
+    return (
+      <div className={`tool-call-card tool-call-${toolCall?.status || 'success'}`}>
+        <div className="tool-call-header" onClick={() => toggleToolCall(toolCallId)}>
+          <div className="tool-call-header-left">
+            {toolCall?.status === 'start' && <LoadingOutlined spin className="tool-call-icon-start" />}
+            {toolCall?.status === 'running' && <LoadingOutlined spin className="tool-call-icon-running" />}
+            {toolCall?.status === 'success' && <span className="tool-call-icon-success">✓</span>}
+            {toolCall?.status === 'error' && <span className="tool-call-icon-error">✗</span>}
+            {expandedToolCalls.has(toolCallId) ? (
+              <DownOutlined style={{ fontSize: 10 }} />
+            ) : (
+              <RightOutlined style={{ fontSize: 10 }} />
+            )}
+            <span className="tool-call-task-name">{toolCall?.task_name || toolCall?.name || '工具调用'}</span>
+          </div>
+          <div className="tool-call-header-right">
+            {toolCall?.elapsed_ms != null && toolCall.elapsed_ms > 0 && (
+              <span className="tool-call-elapsed">
+                {(toolCall.elapsed_ms / 1000).toFixed(1)}s
+              </span>
+            )}
+          </div>
+        </div>
+        {expandedToolCalls.has(toolCallId) && (
+          <div className="tool-call-content">
+            {hasReasoning && (
+              <div className={`tool-call-reasoning-text ${theme === 'dark' ? 'dark' : 'light'}`}>
+                <MDEditor.Markdown
+                  source={toolCall.reasoning_content}
+                  className={`md-editor small-text ${theme === 'dark' ? 'dark' : 'light'}`}
+                />
+              </div>
+            )}
+            {(hasMessage || hasResult) && (
+              <>
+                {hasReasoning && <div className="tool-call-divider" />}
+                <div 
+                  className="tool-call-result-header" 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleToolCallResult(toolCallId);
+                  }}
+                >
+                  {expandedToolCallResults.has(toolCallId) ? (
+                    <DownOutlined style={{ fontSize: 10 }} />
+                  ) : (
+                    <RightOutlined style={{ fontSize: 10 }} />
+                  )}
+                  <span className="tool-call-result-title">工具结果</span>
+                </div>
+                {expandedToolCallResults.has(toolCallId) && (
+                  <>
+                    {hasMessage && (
+                      <div className={`tool-call-message ${theme === 'dark' ? 'dark' : 'light'}`}>
+                        <MDEditor.Markdown
+                          source={msg.content}
+                          className={`md-editor small-text ${theme === 'dark' ? 'dark' : 'light'}`}
+                        />
+                      </div>
+                    )}
+                    {hasResult && (
+                      <div className={`tool-call-result ${theme === 'dark' ? 'dark' : 'light'}`}>
+                        <MDEditor.Markdown
+                          source={typeof toolCall.result === 'string' ? toolCall.result : JSON.stringify(toolCall.result, null, 2)}
+                          className={`md-editor small-text ${theme === 'dark' ? 'dark' : 'light'}`}
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderMessage = (msg: Message, index: number) => {
     if (msg.role === 'tool') {
-      return null;
+      return (
+        <div 
+          key={msg.id} 
+          id={msg.step_id || undefined}
+          className={`message tool`}
+        >
+          <div className="message-content">
+            {renderToolMessage(msg)}
+          </div>
+        </div>
+      );
     }
     
     const isUser = msg.role === 'user';

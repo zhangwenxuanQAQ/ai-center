@@ -589,7 +589,8 @@ class ChatCoreService:
             user_message_id=user_message_id,
             assistant_message_id=assistant_message_id,
             step=MessageStep.ANALYZE_QUERY,
-            step_id=analyze_problem_step_id
+            step_id=analyze_problem_step_id,
+            avatar=avatar
         ).to_dict()
         
         # 创建消息记录
@@ -636,7 +637,8 @@ class ChatCoreService:
                         chat_id=chat_id,
                         user_message_id=user_message_id,
                         assistant_message_id=assistant_message_id,
-                        error=chunk['error']
+                        error=chunk['error'],
+                        avatar=avatar
                     ).to_dict()
                     return False
                 
@@ -654,7 +656,8 @@ class ChatCoreService:
                         status=MessageStatus.RUNNING,
                         step_id=analyze_problem_step_id,
                         step=MessageStep.ANALYZE_QUERY,
-                        reasoning_time=reasoning_time
+                        reasoning_time=reasoning_time,
+                        avatar=avatar
                     ).to_dict()
                 
                 # 收集text（判断结果）
@@ -673,7 +676,8 @@ class ChatCoreService:
                 status=MessageStatus.DONE,
                 step_id=analyze_problem_step_id,
                 step=MessageStep.ANALYZE_QUERY,
-                reasoning_time=reasoning_time
+                reasoning_time=reasoning_time,
+                avatar=avatar
             ).to_dict()
             
             # 更新消息记录
@@ -696,7 +700,8 @@ class ChatCoreService:
                 chat_id=chat_id,
                 user_message_id=user_message_id,
                 assistant_message_id=assistant_message_id,
-                error=str(e)
+                error=str(e),
+                avatar=avatar
             ).to_dict()
             raise e
     
@@ -737,7 +742,8 @@ class ChatCoreService:
             user_message_id=user_message_id,
             assistant_message_id=assistant_message_id,
             step=MessageStep.TASK_PLANNING,
-            step_id=task_planning_step_id
+            step_id=task_planning_step_id,
+            avatar=avatar
         ).to_dict()
         
         # 步骤开始后创建消息记录
@@ -775,7 +781,11 @@ class ChatCoreService:
         for chunk in model.stream_generate_with_messages(messages, **planning_params):
             if 'error' in chunk:
                 print(f"任务规划错误: {chunk['error']}")
-                yield ChatStreamResponse.error_response(chunk['error'], chat_id).to_dict()
+                yield ChatStreamResponse.error_response(
+                    error=chunk['error'],
+                    chat_id=chat_id,
+                    avatar=avatar
+                ).to_dict()
                 return None
             
             if chunk.get('text'):
@@ -794,7 +804,8 @@ class ChatCoreService:
                     status=MessageStatus.RUNNING,
                     step_id=task_planning_step_id,
                     step=MessageStep.TASK_PLANNING,
-                    reasoning_time=reasoning_time
+                    reasoning_time=reasoning_time,
+                    avatar=avatar
                 ).to_dict()
         
         # 4. 解析并返回任务列表
@@ -807,7 +818,8 @@ class ChatCoreService:
                 user_message_id=user_message_id,
                 assistant_message_id=assistant_message_id,
                 step_id=task_planning_step_id,
-                step=MessageStep.TASK_PLANNING
+                step=MessageStep.TASK_PLANNING,
+                avatar=avatar
             ).to_dict()
         
         reasoning_time = int((time.time() - start_time) * 1000)
@@ -823,7 +835,8 @@ class ChatCoreService:
             status=MessageStatus.DONE,
             step_id=task_planning_step_id,
             step=MessageStep.TASK_PLANNING,
-            reasoning_time=reasoning_time
+            reasoning_time=reasoning_time,
+            avatar=avatar
         ).to_dict()
         
         # 5. 更新任务规划消息到数据库
@@ -855,6 +868,7 @@ class ChatCoreService:
         user_message_id: str,
         assistant_message_id: str,
         task_execution_step_id: str = '',
+        avatar: Optional[str] = None,
         **model_params
     ) -> Generator[Dict[str, Any], None, Tuple[str, str]]:
         """
@@ -872,6 +886,7 @@ class ChatCoreService:
             user_message_id: 用户消息ID
             assistant_message_id: 助手消息ID
             task_execution_step_id: 任务执行阶段的step_id
+            avatar: 头像URL
             **model_params: 模型参数
             
         Returns:
@@ -900,7 +915,11 @@ class ChatCoreService:
             
             for chunk in model.stream_generate_with_messages(task_messages, **model_params):
                 if 'error' in chunk:
-                    yield ChatStreamResponse.error_response(chunk['error'], chat_id).to_dict()
+                    yield ChatStreamResponse.error_response(
+                        error=chunk['error'],
+                        chat_id=chat_id,
+                        avatar=avatar
+                    ).to_dict()
                     return
                 
                 if chunk.get('text'):
@@ -928,7 +947,8 @@ class ChatCoreService:
                     usage=chunk.get('usage'),
                     status=chunk_status,
                     step_id=task_execution_step_id,
-                    step=MessageStep.TASK_EXECUTION
+                    step=MessageStep.TASK_EXECUTION,
+                    avatar=avatar
                 ).to_dict()
             
             if tool_calls_list and tool_map:
@@ -959,7 +979,8 @@ class ChatCoreService:
                             assistant_message_id=assistant_message_id,
                             status=MessageStatus.RUNNING,
                             step_id=task_execution_step_id,
-                            step=MessageStep.TASK_EXECUTION
+                            step=MessageStep.TASK_EXECUTION,
+                            avatar=avatar
                         ).to_dict()
                         continue
                     
@@ -980,7 +1001,8 @@ class ChatCoreService:
                             assistant_message_id=assistant_message_id,
                             status=MessageStatus.RUNNING,
                             step_id=task_execution_step_id,
-                            step=MessageStep.TASK_EXECUTION
+                            step=MessageStep.TASK_EXECUTION,
+                            avatar=avatar
                         ).to_dict()
                         task_messages.append({
                             'role': 'tool',
@@ -1004,7 +1026,8 @@ class ChatCoreService:
                             assistant_message_id=assistant_message_id,
                             status=MessageStatus.RUNNING,
                             step_id=task_execution_step_id,
-                            step=MessageStep.TASK_EXECUTION
+                            step=MessageStep.TASK_EXECUTION,
+                            avatar=avatar
                         ).to_dict()
                         task_messages.append({
                             'role': 'tool',
@@ -1024,6 +1047,7 @@ class ChatCoreService:
         chat_id: str,
         user_message_id: str,
         assistant_message_id: str,
+        avatar: Optional[str] = None,
         **model_params
     ) -> Generator[Dict[str, Any], None, None]:
         """
@@ -1036,6 +1060,7 @@ class ChatCoreService:
             chat_id: 对话ID
             user_message_id: 用户消息ID
             assistant_message_id: 助手消息ID
+            avatar: 头像URL
             **model_params: 模型参数
             
         Yields:
@@ -1057,7 +1082,11 @@ class ChatCoreService:
         
         for chunk in model.stream_generate_with_messages(messages, **model_params):
             if 'error' in chunk:
-                yield ChatStreamResponse.error_response(chunk['error'], chat_id).to_dict()
+                yield ChatStreamResponse.error_response(
+                    error=chunk['error'],
+                    chat_id=chat_id,
+                    avatar=avatar
+                ).to_dict()
                 return
             
             if chunk.get('text'):
@@ -1070,7 +1099,8 @@ class ChatCoreService:
                     usage=chunk.get('usage'),
                     status=MessageStatus.DONE if chunk.get('finish_reason') else MessageStatus.RUNNING,
                     step_id=result_summary_step_id,
-                    step=MessageStep.RESULT_SUMMARY
+                    step=MessageStep.RESULT_SUMMARY,
+                    avatar=avatar
                 ).to_dict()
     
     @staticmethod
@@ -1123,7 +1153,8 @@ class ChatCoreService:
                 user_message_id=user_message_id,
                 assistant_message_id=assistant_message_id,
                 step=MessageStep.MODEL_ANSWER,
-                step_id=model_answer_step_id
+                step_id=model_answer_step_id,
+                avatar=avatar
             ).to_dict()
             
             ChatMessageService.create_assistant_message(
@@ -1146,7 +1177,11 @@ class ChatCoreService:
             
             for chunk in model.stream_generate_with_messages(messages, **model_params):
                 if 'error' in chunk:
-                    yield ChatStreamResponse.error_response(chunk['error'], chat_id).to_dict()
+                    yield ChatStreamResponse.error_response(
+                        error=chunk['error'],
+                        chat_id=chat_id,
+                        avatar=avatar
+                    ).to_dict()
                     return
                 
                 if chunk.get('text'):
@@ -1185,7 +1220,8 @@ class ChatCoreService:
                     status=chunk_status,
                     step_id=model_answer_step_id,
                     step=MessageStep.MODEL_ANSWER,
-                    reasoning_time=reasoning_time
+                    reasoning_time=reasoning_time,
+                    avatar=avatar
                 ).to_dict()
         
             if round_finished and (full_response_chunk or reasoning_content_chunk):
@@ -1239,7 +1275,8 @@ class ChatCoreService:
                             assistant_message_id=assistant_message_id,
                             status=MessageStatus.START,
                             step_id=tool_step_id,
-                            step=MessageStep.TOOL_CALL
+                            step=MessageStep.TOOL_CALL,
+                            avatar=avatar
                         ).to_dict()
                         
                         ChatMessageService.create_tool_message(
@@ -1252,7 +1289,7 @@ class ChatCoreService:
                             step_id=tool_step_id,
                             message_id=assistant_message_id,
                             reasoning_content=reasoning_content,
-                            extra_content=json.dumps(tool_call_info.to_dict(), ensure_ascii=False),
+                            extra_content=json.dumps({"tool_call": tool_call_info.to_dict()}, ensure_ascii=False),
                             avatar=avatar
                         )
                         continue
@@ -1276,7 +1313,8 @@ class ChatCoreService:
                             assistant_message_id=assistant_message_id,
                             status=MessageStatus.DONE,
                             step_id=tool_step_id,
-                            step=MessageStep.TOOL_CALL
+                            step=MessageStep.TOOL_CALL,
+                            avatar=avatar
                         ).to_dict()
                         messages.append({
                             'role': 'tool',
@@ -1294,7 +1332,7 @@ class ChatCoreService:
                             step=MessageStep.TOOL_CALL,
                             message_id=assistant_message_id,
                             reasoning_content=reasoning_content,
-                            extra_content=json.dumps(tool_call_info.to_dict(), ensure_ascii=False),
+                            extra_content=json.dumps({"tool_call": tool_call_info.to_dict()}, ensure_ascii=False),
                             avatar=avatar
                         )
                     else:
@@ -1316,7 +1354,8 @@ class ChatCoreService:
                             assistant_message_id=assistant_message_id,
                             status=MessageStatus.DONE,
                             step_id=tool_step_id,
-                            step=MessageStep.TOOL_CALL
+                            step=MessageStep.TOOL_CALL,
+                            avatar=avatar
                         ).to_dict()
                         
                         ChatMessageService.upsert_tool_message(
@@ -1329,7 +1368,7 @@ class ChatCoreService:
                             step=MessageStep.TOOL_CALL,
                             message_id=assistant_message_id,
                             reasoning_content=reasoning_content,
-                            extra_content=json.dumps(tool_call_info.to_dict(), ensure_ascii=False),
+                            extra_content=json.dumps({"tool_call": tool_call_info.to_dict()}, ensure_ascii=False),
                             avatar=avatar
                         )
                         messages.append({
@@ -1423,7 +1462,11 @@ class ChatCoreService:
                 except ChatbotModel.DoesNotExist:
                     pass
             except ResourceNotFoundError as e:
-                yield ChatStreamResponse.error_response(str(e), chat_id).to_dict()
+                yield ChatStreamResponse.error_response(
+                    error=str(e),
+                    chat_id=chat_id,
+                    avatar=avatar
+                ).to_dict()
                 return
         
         if not chat_id:
@@ -1485,7 +1528,11 @@ class ChatCoreService:
             if chat.model_id:
                 model_id = chat.model_id
             else:
-                yield ChatStreamResponse.error_response('未指定模型', chat_id).to_dict()
+                yield ChatStreamResponse.error_response(
+                    error='未指定模型',
+                    chat_id=chat_id,
+                    avatar=avatar
+                ).to_dict()
                 return
         
         model_config, llm_config , model_type = ChatCoreService.get_model_config(model_id)
@@ -1507,8 +1554,8 @@ class ChatCoreService:
         
         ChatService.update_chat_config(
             chat_id=chat_id,
-            model_id=model_id if not chatbot_id else None,
-            chatbot_id=chatbot_id if not model_id else None,
+            model_id=None if chatbot_id else model_id,
+            chatbot_id= chatbot_id,
             config=config
         )
         
@@ -1621,7 +1668,8 @@ class ChatCoreService:
                         user_message_id=user_message_id,
                         assistant_message_id=assistant_message_id,
                         step=MessageStep.TASK_LIST,
-                        step_id=task_list_step_id
+                        step_id=task_list_step_id,
+                        avatar=avatar
                     ).to_dict()
                     
                     # 3.3 创建任务列表消息记录
@@ -1645,7 +1693,8 @@ class ChatCoreService:
                         user_message_id=user_message_id,
                         assistant_message_id=assistant_message_id,
                         step_id=task_list_step_id,
-                        step=MessageStep.TASK_LIST
+                        step=MessageStep.TASK_LIST,
+                        avatar=avatar
                     ).to_dict()
                     
                     # 3.5 任务列表结束 - yield DONE状态消息
@@ -1658,7 +1707,8 @@ class ChatCoreService:
                         finish_reason='stop',
                         status=MessageStatus.DONE,
                         step_id=task_list_step_id,
-                        step=MessageStep.TASK_LIST
+                        step=MessageStep.TASK_LIST,
+                        avatar=avatar
                     ).to_dict()
                     
                     # 3.6 更新任务列表消息记录
@@ -1815,7 +1865,8 @@ class ChatCoreService:
                             user_message_id=user_message_id,
                             assistant_message_id=assistant_message_id,
                             step=MessageStep.RESULT_SUMMARY,
-                            step_id=result_summary_step_id
+                            step_id=result_summary_step_id,
+                            avatar=avatar
                         ).to_dict()
                         
                         # 步骤开始后创建消息记录
@@ -1838,7 +1889,11 @@ class ChatCoreService:
                         
                         for chunk in model.stream_generate_with_messages(summary_messages, **model_params):
                             if 'error' in chunk:
-                                yield ChatStreamResponse.error_response(chunk['error'], chat_id).to_dict()
+                                yield ChatStreamResponse.error_response(
+                                    error=chunk['error'],
+                                    chat_id=chat_id,
+                                    avatar=avatar
+                                ).to_dict()
                                 return
                             
                             if chunk.get('text'):
@@ -1852,7 +1907,8 @@ class ChatCoreService:
                                 finish_reason=chunk.get('finish_reason'),
                                 usage=chunk.get('usage'),
                                 status=MessageStatus.DONE if chunk.get('finish_reason') else MessageStatus.RUNNING,
-                                step_id=result_summary_step_id
+                                step_id=result_summary_step_id,
+                                avatar=avatar
                             ).to_dict()
                         
                         # 更新result_summary步骤的消息记录
@@ -2097,8 +2153,8 @@ class ChatCoreService:
         
         ChatService.update_chat_config(
             chat_id=chat_id,
-            model_id=model_id if not chatbot_id else None,
-            chatbot_id=chatbot_id if not model_id else None,
+            model_id=None if chatbot_id else model_id,
+            chatbot_id= chatbot_id,
             config=config
         )
         

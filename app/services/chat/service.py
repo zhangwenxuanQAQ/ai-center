@@ -320,10 +320,8 @@ class ChatService:
         except Chat.DoesNotExist:
             raise ResourceNotFoundError(message=f"对话 {chat_id} 不存在")
         
-        if model_id is not None:
-            db_chat.model_id = model_id
-        if chatbot_id is not None:
-            db_chat.chatbot_id = chatbot_id
+        db_chat.model_id = model_id
+        db_chat.chatbot_id = chatbot_id
         if config is not None:
             # 确保config作为JSON字符串保存
             if isinstance(config, dict):
