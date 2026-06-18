@@ -269,8 +269,6 @@ export const chatService = {
       }
 
       const decoder = new TextDecoder();
-      let fullResponse = '';
-      let fullReasoning = '';
 
       try {
         while (true) {
@@ -301,20 +299,8 @@ export const chatService = {
                   return;
                 }
                 
-                if (data.text) {
-                  fullResponse += data.text;
-                }
-                
-                if (data.reasoning_content) {
-                  fullReasoning += data.reasoning_content;
-                }
-                
                 if (onMessage) {
-                  onMessage({
-                    ...data,
-                    full_text: fullResponse,
-                    full_reasoning: fullReasoning
-                  });
+                  onMessage(data);
                 }
               } catch (error) {
                 console.error('Error parsing SSE data:', error);

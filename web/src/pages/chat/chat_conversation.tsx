@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Input, Button, Switch, Modal, Slider, message, Popconfirm, Tooltip, Dropdown, Empty, Spin, Popover, InputNumber, Select, Steps, Upload, List } from 'antd';
-import { SendOutlined, ClearOutlined, SettingOutlined, RobotOutlined, BulbOutlined, LoadingOutlined, DownOutlined, RightOutlined, CopyOutlined, ReloadOutlined, EditOutlined, InfoCircleOutlined, StopOutlined, PaperClipOutlined, FolderOpenOutlined, FileTextOutlined, UploadOutlined, CloseCircleOutlined, InboxOutlined, FilePdfOutlined, FileWordOutlined, FileImageOutlined, SoundOutlined, DownloadOutlined } from '@ant-design/icons';
+import { SendOutlined, ClearOutlined, SettingOutlined, RobotOutlined, BulbOutlined, LoadingOutlined, DownOutlined, RightOutlined, CopyOutlined, ReloadOutlined, EditOutlined, InfoCircleOutlined, StopOutlined, PaperClipOutlined, FolderOpenOutlined, FileTextOutlined, UploadOutlined, CloseCircleOutlined, InboxOutlined, FilePdfOutlined, FileWordOutlined, FileImageOutlined, SoundOutlined, DownloadOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import DataSourceFileSelector from '../datasource/datasource data_select';
 import type { MenuProps, UploadProps } from 'antd';
 import MDEditor from '@uiw/react-md-editor';
@@ -8,7 +8,7 @@ import { llmModelService, LLMModel } from '../../services/llm_model';
 import { chatbotService, Chatbot } from '../../services/chatbot';
 import { chatService, Conversation, Message, QueryItem, FileInfo } from '../../services/chat';
 import { datasourceService, Datasource } from '../../services/datasource';
-import { getProviderAvatar, getDefaultAvatar } from '../../utils/avatar';
+import { getProviderAvatar, getDefaultAvatar, resolveAvatarPath } from '../../utils/avatar';
 
 const { TextArea } = Input;
 
@@ -24,19 +24,44 @@ interface ConfigParam {
   options?: string[];
 }
 
+interface ToolCallStep {
+  tool_call_id: string;
+  name: string;
+  task_name?: string;
+  status: 'start' | 'running' | 'success' | 'error';
+  result?: any;
+  message?: string;
+  elapsed_ms?: number;
+}
+
+interface TaskInfo {
+  id: number;
+  name: string;
+  description: string;
+  status: 'pending' | 'running' | 'done';
+}
+
 interface Message {
   id: string;
+  message_id?: string;
   role: 'user' | 'assistant' | 'tool';
   content: string;
   created_at: string;
   reasoning_content?: string;
   reasoning_time?: number;
+  reasoning_end?: boolean;
   usage?: {
     prompt_tokens?: number;
     completion_tokens?: number;
     total_tokens?: number;
   };
   extra_content?: any;
+  tool_calls?: ToolCallStep[];
+  status?: 'start' | 'running' | 'done';
+  step?: 'task_planning' | 'task_list' | 'model_answer' | 'task_execution' | 'result_summary';
+  step_id?: string;
+  task_plan?: TaskInfo[];
+  avatar?: string;
 }
 
 interface Conversation {
@@ -78,6 +103,9 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
   const [modelConfig, setModelConfig] = useState<Record<string, any>>({});
   const [systemPrompt, setSystemPrompt] = useState<string>('');
   const [expandedReasoning, setExpandedReasoning] = useState<Set<string>>(new Set());
+  const [expandedToolCalls, setExpandedToolCalls] = useState<Set<string>>(new Set());
+  const [expandedToolCallResults, setExpandedToolCallResults] = useState<Set<string>>(new Set());
+  const [expandedTaskPlans, setExpandedTaskPlans] = useState<Set<string>>(new Set());
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState('');
   const [editingFiles, setEditingFiles] = useState<any[]>([]); // 保存编辑消息的文件信息
@@ -115,6 +143,9 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     }
     
     if (conversation) {
+      // 立即清空消息列表，防止显示旧对话的消息
+      setMessages([]);
+      setLoading(true);
       fetchMessages(conversation.id);
       fetchConversationConfig(conversation.id);
     } else {
@@ -129,7 +160,14 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         setModelConfig({});
       }
     }
-  }, [conversation, models, chatbots]);
+  }, [conversation]);
+
+  // 当models或chatbots加载完成后，重新加载对话配置
+  useEffect(() => {
+    if (conversation && models.length > 0 && chatbots.length > 0) {
+      fetchConversationConfig(conversation.id);
+    }
+  }, [models, chatbots]);
 
   const fetchConversationConfig = async (conversationId: string) => {
     try {
@@ -175,6 +213,113 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     } catch (error) {
       console.error('Failed to fetch conversation config:', error);
     }
+  };
+
+  /**
+   * 处理SSE消息更新，支持多轮回答展示
+   */
+  const processSSEMessageUpdate = (msg: Message, data: any, idTracker: { assistant: string, user: string }) => {
+    // 用户消息处理
+    if (msg.role === 'user') {
+      if (data.user_message_id && msg.id === idTracker.user) {
+        idTracker.user = data.user_message_id;
+        return { ...msg, id: data.user_message_id, message_id: data.user_message_id };
+      }
+      return msg;
+    }
+
+    // 助手消息处理：严格基于step_id匹配，不同step_id之间互不影响
+    if (msg.role === 'assistant') {
+      const dataStepId = data.step_id;
+      const msgStepId = msg.step_id;
+
+      // 严格检查step_id匹配，只有step_id完全一致时才更新
+      const dataHasStepId = dataStepId !== undefined && dataStepId !== null && dataStepId !== '';
+      const msgHasStepId = msgStepId !== undefined && msgStepId !== null && msgStepId !== '';
+
+      if (dataHasStepId) {
+        if (!msgHasStepId || dataStepId !== msgStepId) {
+          return msg;
+        }
+      } else {
+        if (msgHasStepId) {
+          return msg;
+        }
+      }
+
+      const updates: any = { ...msg };
+
+      // 更新message_id（后端返回的ID），但保持id不变（用于React渲染，保持唯一性）
+      if (data.assistant_message_id) {
+        updates.message_id = data.assistant_message_id;
+      }
+
+      const status = data.status || 'running';
+      updates.status = status;
+
+      if (data.step) {
+        updates.step = data.step;
+      }
+
+      if (data.step_id) {
+        updates.step_id = data.step_id;
+      }
+
+      if (data.task_plan) {
+        updates.task_plan = data.task_plan.map((task: any) => ({
+          id: task.id,
+          name: task.name,
+          description: task.description,
+          status: task.status || 'pending'
+        }));
+      }
+
+      // 如果reasoning_end已为true，不再处理reasoning_content的更新
+      // 防止新步骤的数据被错误地追加到已结束的步骤中
+      if (!msg.reasoning_end) {
+        if (data.reasoning_content) {
+          updates.reasoning_content = (msg.reasoning_content || '') + data.reasoning_content;
+        }
+      }
+
+      if (data.text) {
+        updates.content = (msg.content || '') + data.text;
+      }
+
+      if (data.reasoning_end) {
+        updates.reasoning_end = true;
+      }
+
+      if (data.usage) {
+        updates.usage = data.usage;
+      }
+
+      if (data.tool_call) {
+        const tc = data.tool_call;
+        const existingCalls = updates.tool_calls || [];
+        const existingIndex = existingCalls.findIndex((c: ToolCallStep) => c.tool_call_id === tc.tool_call_id);
+        if (existingIndex >= 0) {
+          existingCalls[existingIndex] = { ...existingCalls[existingIndex], ...tc };
+        } else {
+          existingCalls.push(tc);
+        }
+        updates.tool_calls = [...existingCalls];
+      }
+
+      if (data.reasoning_time != null) {
+        updates.reasoning_time = data.reasoning_time;
+      }
+
+      if (status === 'start') {
+        setThinkingMessageId(data.assistant_message_id);
+      }
+
+      updates.created_at = new Date().toISOString();
+      return updates;
+    }
+
+    // 默认返回原消息
+    return msg;
   };
 
   useEffect(() => {
@@ -288,16 +433,53 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     setLoading(true);
     try {
       const result = await chatService.getMessages(conversationId, 1, 50);
-      const mappedMessages = result.items.map((msg: any) => ({
-        id: msg.message_id || msg.id,
-        role: msg.role,
-        content: msg.content,
-        created_at: msg.created_at,
-        reasoning_content: msg.reasoning_content,
-        reasoning_time: msg.reasoning_time,
-        usage: msg.usage,
-        extra_content: msg.extra_content
-      }));
+      const mappedMessages = result.items.map((msg: any) => {
+        let extraContent = msg.extra_content;
+        let step_id = undefined;
+        let step = undefined;
+        let tool_calls = undefined;
+        try {
+          if (typeof extraContent === 'string') {
+            extraContent = JSON.parse(extraContent);
+          }
+          if (extraContent && extraContent.step_id) {
+            step_id = extraContent.step_id;
+          }
+          if (extraContent && extraContent.step) {
+            step = extraContent.step;
+          }
+          if (extraContent && extraContent.step === 'tool_call' && extraContent.tool_call_id) {
+            tool_calls = [{
+              tool_call_id: extraContent.tool_call_id,
+              name: extraContent.name,
+              task_name: extraContent.task_name,
+              status: extraContent.status,
+              result: extraContent.result,
+              message: extraContent.message,
+              elapsed_ms: extraContent.elapsed_ms,
+              reasoning_content: extraContent.reasoning_content
+            }];
+          }
+        } catch (e) {
+          // ignore parsing errors
+        }
+        return {
+          id: step_id || msg.message_id || msg.id,
+          message_id: msg.message_id || msg.id,
+          role: msg.role,
+          content: msg.content,
+          created_at: msg.created_at,
+          reasoning_content: msg.reasoning_content,
+          reasoning_time: msg.reasoning_time,
+          reasoning_end: msg.reasoning_content ? true : undefined,
+          usage: msg.usage,
+          extra_content: extraContent,
+          tool_calls,
+          step_id,
+          step,
+          avatar: msg.avatar
+        };
+      });
       setMessages(mappedMessages);
       
       const durations: Record<string, number> = {};
@@ -428,6 +610,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       id: assistantMessageId,
       role: 'assistant',
       content: '',
+      status: 'start',
       created_at: new Date().toISOString(),
     };
     setMessages(prev => [...prev, assistantMessage]);
@@ -452,28 +635,55 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         undefined, // messageId is undefined for new messages
         systemPrompt, // 系统提示词
         (data) => {
-          setMessages(prev => prev.map(msg => {
-            if (msg.id === idTracker.assistant) {
-              const updates: any = {
-                ...msg,
-                content: data.full_text,
-                reasoning_content: data.full_reasoning
-              };
-              if (data.assistant_message_id) {
-                idTracker.assistant = data.assistant_message_id;
-                updates.id = data.assistant_message_id;
-                setThinkingMessageId(data.assistant_message_id);
+          const status = data.status || 'running';
+          const stepId = data.step_id;
+          
+          // 当收到status=start且有step_id时，处理消息新增或更新
+          if (status === 'start' && stepId && data.step) {
+            setMessages(prev => {
+              // 检查是否已有相同step_id的消息
+              const existingStepMsg = prev.find(msg => msg.step_id === stepId && msg.role === 'assistant');
+              if (existingStepMsg) {
+                // 已存在，更新该消息
+                return prev.map(msg => msg.step_id === stepId ? processSSEMessageUpdate(msg, data, idTracker) : msg);
               }
-              // 更新created_at为当前时间，确保与用户消息时间不同
-              updates.created_at = new Date().toISOString();
-              return updates;
-            }
-            if (data.user_message_id && msg.id === idTracker.user) {
-              idTracker.user = data.user_message_id;
-              return { ...msg, id: data.user_message_id };
-            }
-            return msg;
-          }));
+              
+              // 检查是否有初始的"思考中..."消息（没有step_id），需要移除它
+              const initialMsgIndex = prev.findIndex(msg => msg.role === 'assistant' && !msg.step_id && msg.status === 'start');
+              
+              // 每个步骤创建独立的消息记录，不覆盖之前的步骤消息
+              const newStepMsg: Message = {
+                id: stepId,
+                message_id: data.assistant_message_id,
+                role: 'assistant',
+                content: '',
+                created_at: new Date().toISOString(),
+                status: 'start',
+                step: data.step,
+                step_id: stepId,
+                reasoning_content: '',
+                reasoning_end: false
+              };
+              
+              // 如果有初始"思考中"消息，移除它并新增具体步骤消息
+              if (initialMsgIndex >= 0) {
+                const newMessages = prev.filter((_, idx) => idx !== initialMsgIndex);
+                return [...newMessages, newStepMsg];
+              }
+              
+              return [...prev, newStepMsg];
+            });
+          } else {
+            // 其他情况，更新现有消息
+            // 只更新匹配的step_id的消息，避免不同步骤互相影响
+            const stepId = data.step_id;
+            setMessages(prev => prev.map(msg => {
+              if (msg.role !== 'assistant') return msg;
+              if (!stepId) return processSSEMessageUpdate(msg, data, idTracker);
+              if (msg.step_id === stepId) return processSSEMessageUpdate(msg, data, idTracker);
+              return msg;
+            }));
+          }
         },
         (error) => {
           console.error('Failed to send message:', error);
@@ -565,6 +775,42 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
 
   const toggleReasoning = (messageId: string) => {
     setExpandedReasoning(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(messageId)) {
+        newSet.delete(messageId);
+      } else {
+        newSet.add(messageId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleToolCall = (toolCallId: string) => {
+    setExpandedToolCalls(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(toolCallId)) {
+        newSet.delete(toolCallId);
+      } else {
+        newSet.add(toolCallId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleToolCallResult = (toolCallId: string) => {
+    setExpandedToolCallResults(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(toolCallId)) {
+        newSet.delete(toolCallId);
+      } else {
+        newSet.add(toolCallId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleTaskPlan = (messageId: string) => {
+    setExpandedTaskPlans(prev => {
       const newSet = new Set(prev);
       if (newSet.has(messageId)) {
         newSet.delete(messageId);
@@ -709,6 +955,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       id: assistantMessageId,
       role: 'assistant',
       content: '',
+      status: 'start',
       created_at: new Date().toISOString()
     };
     setMessages(prev => [...prev, assistantMessage]);
@@ -777,29 +1024,53 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           messageId,
           systemPrompt,
           (data) => {
-            setMessages(prev => prev.map(msg => {
-              if (msg.id === idTracker.assistant) {
-                const updates: any = {
-                  ...msg,
-                  content: data.full_text,
-                  reasoning_content: data.full_reasoning
-                };
-                if (data.assistant_message_id) {
-                  idTracker.assistant = data.assistant_message_id;
-                  updates.id = data.assistant_message_id;
-                  setThinkingMessageId(data.assistant_message_id);
-                }
-                // 更新created_at为当前时间，确保与用户消息时间不同
-                updates.created_at = new Date().toISOString();
-                return updates;
+              const status = data.status || 'running';
+              const stepId = data.step_id;
+              
+              // 当收到status=start且有step_id时，处理消息新增或更新
+              if (status === 'start' && stepId && data.step) {
+                setMessages(prev => {
+                  // 检查是否已有相同step_id的消息
+                  const existingStepMsg = prev.find(msg => msg.step_id === stepId && msg.role === 'assistant');
+                  if (existingStepMsg) {
+                    // 已存在，更新该消息
+                    return prev.map(msg => msg.step_id === stepId ? processSSEMessageUpdate(msg, data, idTracker) : msg);
+                  }
+                  
+                  // 检查是否有初始的"思考中..."消息（没有step_id），需要移除它
+                  const initialMsgIndex = prev.findIndex(msg => msg.role === 'assistant' && !msg.step_id && msg.status === 'start');
+                  
+                  // 新增具体步骤消息，使用stepId作为唯一标识，确保不同步骤的消息不混淆
+                  const newStepMsg: Message = {
+                    id: stepId,  // 使用stepId作为唯一标识，不使用assistant_message_id
+                    message_id: data.assistant_message_id,
+                    role: 'assistant',
+                    content: '',
+                    created_at: new Date().toISOString(),
+                    status: 'start',
+                    step: data.step,
+                    step_id: stepId,
+                    reasoning_content: '',
+                    reasoning_end: false
+                  };
+                  // 更新idTracker
+                  if (data.assistant_message_id) {
+                    idTracker.assistant = data.assistant_message_id;
+                  }
+                  
+                  // 如果有初始"思考中"消息，移除它并新增具体步骤消息
+                  if (initialMsgIndex >= 0) {
+                    const newMessages = prev.filter((_, idx) => idx !== initialMsgIndex);
+                    return [...newMessages, newStepMsg];
+                  }
+                  
+                  return [...prev, newStepMsg];
+                });
+              } else {
+                // 其他情况，更新现有消息
+                setMessages(prev => prev.map(msg => processSSEMessageUpdate(msg, data, idTracker)));
               }
-              if (data.user_message_id && idTracker.user && msg.id === idTracker.user) {
-                idTracker.user = data.user_message_id;
-                return { ...msg, id: data.user_message_id };
-              }
-              return msg;
-            }));
-          },
+            },
           (error) => {
             console.error('Failed to send message:', error);
             const errorMessage = typeof error === 'string' ? error : (error?.message || error?.error || '发送失败，请重试');
@@ -849,28 +1120,52 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           messageId,
           systemPrompt,
           (data) => {
-            setMessages(prev => prev.map(msg => {
-              if (msg.id === idTracker.assistant) {
-                const updates: any = {
-                  ...msg,
-                  content: data.full_text,
-                  reasoning_content: data.full_reasoning
+            const status = data.status || 'running';
+            const stepId = data.step_id;
+            
+            // 当收到status=start且有step_id时，处理消息新增或更新
+            if (status === 'start' && stepId && data.step) {
+              setMessages(prev => {
+                // 检查是否已有相同step_id的消息
+                const existingStepMsg = prev.find(msg => msg.step_id === stepId && msg.role === 'assistant');
+                if (existingStepMsg) {
+                  // 已存在，更新该消息
+                  return prev.map(msg => msg.step_id === stepId ? processSSEMessageUpdate(msg, data, idTracker) : msg);
+                }
+                
+                // 检查是否有初始的"思考中..."消息（没有step_id），需要移除它
+                const initialMsgIndex = prev.findIndex(msg => msg.role === 'assistant' && !msg.step_id && msg.status === 'start');
+                
+                // 新增具体步骤消息，使用stepId作为唯一标识，确保不同步骤的消息不混淆
+                const newStepMsg: Message = {
+                  id: stepId,  // 使用stepId作为唯一标识，不使用assistant_message_id
+                  message_id: data.assistant_message_id,
+                  role: 'assistant',
+                  content: '',
+                  created_at: new Date().toISOString(),
+                  status: 'start',
+                  step: data.step,
+                  step_id: stepId,
+                  reasoning_content: '',
+                  reasoning_end: false
                 };
+                // 更新idTracker
                 if (data.assistant_message_id) {
                   idTracker.assistant = data.assistant_message_id;
-                  updates.id = data.assistant_message_id;
-                  setThinkingMessageId(data.assistant_message_id);
                 }
-                // 更新created_at为当前时间，确保与用户消息时间不同
-                updates.created_at = new Date().toISOString();
-                return updates;
-              }
-              if (data.user_message_id && idTracker.user && msg.id === idTracker.user) {
-                idTracker.user = data.user_message_id;
-                return { ...msg, id: data.user_message_id };
-              }
-              return msg;
-            }));
+                
+                // 如果有初始"思考中"消息，移除它并新增具体步骤消息
+                if (initialMsgIndex >= 0) {
+                  const newMessages = prev.filter((_, idx) => idx !== initialMsgIndex);
+                  return [...newMessages, newStepMsg];
+                }
+                
+                return [...prev, newStepMsg];
+              });
+            } else {
+              // 其他情况，更新现有消息
+              setMessages(prev => prev.map(msg => processSSEMessageUpdate(msg, data, idTracker)));
+            }
           },
           (error) => {
             console.error('Failed to send message:', error);
@@ -925,15 +1220,26 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
   const handleRegenerate = async (messageIndex: number) => {
     if (messageIndex < 1) return;
 
-    const userMessage = messages[messageIndex - 1];
-    if (userMessage.role !== 'user') return;
+    // 往上找最近的一个user消息（可能中间有tool消息）
+    let userMessageIndex = -1;
+    for (let i = messageIndex - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') {
+        userMessageIndex = i;
+        break;
+      }
+    }
+    
+    if (userMessageIndex === -1) return;
+
+    const userMessage = messages[userMessageIndex];
 
     // Remove all messages after and including the current assistant message
     // 同时也删除旧的用户消息，因为我们会在 handleSendMessageWithMessages 中添加新的用户消息
-    const updatedMessages = messages.slice(0, messageIndex - 1);
+    const updatedMessages = messages.slice(0, userMessageIndex);
     
     // 直接调用 handleSendMessageWithMessages，它会处理消息添加
-    handleSendMessageWithMessages(updatedMessages, userMessage.content, userMessage.id, userMessage.extra_content);
+    // 使用 message_id（数据库中的真实ID）而不是前端临时生成的id
+    handleSendMessageWithMessages(updatedMessages, userMessage.content, userMessage.message_id || userMessage.id, userMessage.extra_content);
   };
 
   const getChatbotAvatar = (chatbot: Chatbot): string => {
@@ -1226,15 +1532,617 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
   const currentSelection = getCurrentSelection();
   const hasModelsOrChatbots = models.length > 0 || chatbots.length > 0;
 
+  const groupMessagesByAssistantId = () => {
+    const groups: { assistantId: string; messages: Message[] }[] = [];
+    let currentGroup: { assistantId: string; messages: Message[] } | null = null;
+    
+    messages.forEach((msg) => {
+      if (msg.role === 'user') {
+        if (currentGroup) {
+          groups.push(currentGroup);
+          currentGroup = null;
+        }
+        groups.push({ assistantId: '', messages: [msg] });
+      } else if (msg.role === 'assistant') {
+        const assistantId = msg.message_id || msg.id;
+        if (currentGroup && currentGroup.assistantId === assistantId) {
+          currentGroup.messages.push(msg);
+        } else {
+          if (currentGroup) {
+            groups.push(currentGroup);
+          }
+          currentGroup = { assistantId, messages: [msg] };
+        }
+      }
+    });
+    
+    if (currentGroup) {
+      groups.push(currentGroup);
+    }
+    
+    return groups;
+  };
+
+  const renderAssistantMessageContent = (msg: Message) => {
+    if (msg.role !== 'assistant') return null;
+
+    return (
+      <>
+        {/* 分析问题阶段 */}
+        {(msg.step === 'analyze_query' || msg.extra_content?.step === 'analyze_query') && (
+          <>
+            {msg.status === 'start' && (
+              <div className="message-reasoning">
+                <div className="reasoning-header">
+                  <LoadingOutlined spin />
+                  <BulbOutlined />
+                  <span>分析问题中...</span>
+                </div>
+              </div>
+            )}
+            {msg.status === 'running' && msg.reasoning_content && !msg.reasoning_end && (
+              <div className="message-reasoning">
+                <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
+                  <LoadingOutlined spin />
+                  <BulbOutlined />
+                  <span>分析问题中</span>
+                  {thinkingDuration[msg.step_id || msg.id] && (
+                    <span className="reasoning-duration">
+                      ({(thinkingDuration[msg.step_id || msg.id] / 1000).toFixed(1)}s)
+                    </span>
+                  )}
+                </div>
+                {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
+                  <div className="reasoning-text">
+                    <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                      <MDEditor.Markdown
+                        source={msg.reasoning_content}
+                        className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            {(msg.status !== 'start' || !msg.status) && msg.reasoning_content && (msg.reasoning_end || msg.status === 'done') && (
+              <div className="message-reasoning">
+                <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
+                  {expandedReasoning.has(msg.step_id || msg.id) ? (
+                    <DownOutlined />
+                  ) : (
+                    <RightOutlined />
+                  )}
+                  <BulbOutlined />
+                  <span>分析问题</span>
+                  {msg.reasoning_time != null ? (
+                    <span className="reasoning-duration">
+                      ({(msg.reasoning_time / 1000).toFixed(1)}s)
+                    </span>
+                  ) : thinkingDuration[msg.step_id || msg.id] ? (
+                    <span className="reasoning-duration">
+                      ({(thinkingDuration[msg.step_id || msg.id] / 1000).toFixed(1)}s)
+                    </span>
+                  ) : null}
+                </div>
+                {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
+                  <div className="reasoning-text">
+                    <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                      <MDEditor.Markdown
+                        source={msg.reasoning_content}
+                        className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* 用户发送消息后，在获取后端接口返回之前默认显示 等待转换图标 + "思考中..." */}
+        {/* 只有当消息没有任何步骤信息时才显示默认的"思考中..." */}
+        {msg.status === 'start' && !msg.step && !msg.extra_content?.step && !msg.step_id && (
+          <div className="message-reasoning">
+            <div className="reasoning-header">
+              <LoadingOutlined spin />
+              <BulbOutlined />
+              <span>思考中...</span>
+            </div>
+          </div>
+        )}
+
+        {/* 任务规划阶段 */}
+        {(msg.step === 'task_planning' || msg.extra_content?.step === 'task_planning') && (
+          <>
+            {msg.status === 'start' && (
+              <div className="message-reasoning">
+                <div className="reasoning-header">
+                  <LoadingOutlined spin />
+                  <BulbOutlined />
+                  <span>任务规划中...</span>
+                </div>
+              </div>
+            )}
+            {msg.status === 'running' && msg.reasoning_content && !msg.reasoning_end && (
+              <div className="message-reasoning">
+                <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
+                  <LoadingOutlined spin />
+                  <BulbOutlined />
+                  <span>任务规划中</span>
+                  {thinkingDuration[msg.step_id || msg.id] && (
+                    <span className="reasoning-duration">
+                      ({(thinkingDuration[msg.step_id || msg.id] / 1000).toFixed(1)}s)
+                    </span>
+                  )}
+                </div>
+                {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
+                  <div className="reasoning-text">
+                    <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                      <MDEditor.Markdown
+                        source={msg.reasoning_content}
+                        className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            {(msg.status !== 'start' || !msg.status) && msg.reasoning_content && (msg.reasoning_end || msg.status === 'done') && (
+              <div className={`message-reasoning ${theme === 'dark' ? 'dark' : 'light'}`}>
+                <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
+                  {expandedReasoning.has(msg.step_id || msg.id) ? (
+                    <DownOutlined />
+                  ) : (
+                    <RightOutlined />
+                  )}
+                  <BulbOutlined />
+                  <span>任务规划</span>
+                  {msg.reasoning_time != null ? (
+                    <span className="reasoning-duration">
+                      ({(msg.reasoning_time / 1000).toFixed(1)}s)
+                    </span>
+                  ) : thinkingDuration[msg.step_id || msg.id] ? (
+                    <span className="reasoning-duration">
+                      ({(thinkingDuration[msg.step_id || msg.id] / 1000).toFixed(1)}s)
+                    </span>
+                  ) : null}
+                </div>
+                {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
+                  <div className="reasoning-text">
+                    <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                      <MDEditor.Markdown
+                        source={msg.reasoning_content}
+                        className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                      />
+                    </div>
+                  </div>
+                )}
+                {msg.task_plan && msg.task_plan.length > 0 && (
+                  <div className="reasoning-text">
+                    <div className="task-plan-list">
+                      {msg.task_plan.map((task) => (
+                        <div key={task.id} className="task-item">
+                          <div className={`task-status ${task.status}`}>
+                            {task.status === 'done' ? '✓' : task.status === 'running' ? <LoadingOutlined spin style={{ fontSize: 12 }} /> : '○'}
+                          </div>
+                          <div className="task-content">
+                            <div className="task-name">{task.name}</div>
+                            <div className="task-description">{task.description}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* 任务列表阶段 - 使用步骤条组件展示 */}
+        {(msg.step === 'task_list' || msg.extra_content?.step === 'task_list') && (
+          <>
+            {msg.status === 'start' && (
+              <div className="message-reasoning">
+                <div className="reasoning-header">
+                  <FileTextOutlined />
+                  <span>任务列表</span>
+                </div>
+              </div>
+            )}
+            {msg.task_plan && msg.task_plan.length > 0 && (
+              <div className="message-reasoning">
+                <div className="task-list-container">
+                  <div className="task-list-header" onClick={() => toggleTaskPlan(msg.step_id || msg.id)}>
+                    <FileTextOutlined />
+                    <span>任务列表</span>
+                    <DownOutlined className={`expand-icon ${expandedTaskPlans.has(msg.step_id || msg.id) ? 'expanded' : ''}`} />
+                  </div>
+                  {expandedTaskPlans.has(msg.step_id || msg.id) && (
+                    <div className="task-list-steps">
+                      {msg.task_plan.map((task, index) => (
+                        <div key={task.id} className="task-step-item">
+                          <div className="step-connector">
+                            <div className={`step-icon ${task.status}`}>
+                              {task.status === 'done' ? <CheckCircleOutlined /> : task.status === 'running' ? <LoadingOutlined spin /> : <ClockCircleOutlined />}
+                            </div>
+                            {index < msg.task_plan.length - 1 && (
+                              <div className={`step-line ${task.status === 'done' ? 'done' : ''}`} />
+                            )}
+                          </div>
+                          <div className="step-content">
+                            <div className="step-name">{task.name}</div>
+                            <div className="step-description">{task.description}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* 模型回答阶段 */}
+        {(msg.step === 'model_answer' || msg.extra_content?.step === 'model_answer') && (
+          <>
+            {msg.status === 'start' && (
+              <div className="message-reasoning">
+                <div className="reasoning-header">
+                  <LoadingOutlined spin />
+                  <BulbOutlined />
+                  <span>正在思考中...</span>
+                </div>
+              </div>
+            )}
+            {msg.status === 'running' && msg.reasoning_content && !msg.reasoning_end && (
+              <div className="message-reasoning">
+                <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
+                  <LoadingOutlined spin />
+                  <BulbOutlined />
+                  <span>正在思考中</span>
+                  {thinkingDuration[msg.step_id || msg.id] && (
+                    <span className="reasoning-duration">
+                      ({(thinkingDuration[msg.step_id || msg.id] / 1000).toFixed(1)}s)
+                    </span>
+                  )}
+                </div>
+                {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
+                  <div className="reasoning-text">
+                    <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                      <MDEditor.Markdown
+                        source={msg.reasoning_content}
+                        className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            {(msg.status !== 'start' || !msg.status) && msg.reasoning_content && (msg.reasoning_end || msg.status === 'done') && (
+              <div className="message-reasoning">
+                <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
+                  {expandedReasoning.has(msg.step_id || msg.id) ? (
+                    <DownOutlined />
+                  ) : (
+                    <RightOutlined />
+                  )}
+                  <BulbOutlined />
+                  <span>思考过程</span>
+                  {msg.reasoning_time != null ? (
+                    <span className="reasoning-duration">
+                      ({(msg.reasoning_time / 1000).toFixed(1)}s)
+                    </span>
+                  ) : thinkingDuration[msg.step_id || msg.id] ? (
+                    <span className="reasoning-duration">
+                      ({(thinkingDuration[msg.step_id || msg.id] / 1000).toFixed(1)}s)
+                    </span>
+                  ) : null}
+                </div>
+                {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
+                  <div className="reasoning-text">
+                    <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                      <MDEditor.Markdown
+                        source={msg.reasoning_content}
+                        className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            {msg.content && (msg.status !== 'start' || !msg.status) && (
+              <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                <MDEditor.Markdown
+                  source={msg.content}
+                  className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                />
+              </div>
+            )}
+          </>
+        )}
+
+        {/* 工具调用阶段 */}
+        {(msg.step === 'tool_call' || msg.extra_content?.step === 'tool_call') && msg.tool_calls && msg.tool_calls.length > 0 && (
+          <div className="tool-calls-container">
+            {msg.tool_calls.map((tc, tcIndex) => (
+              <div key={tc.tool_call_id || `tc-${tcIndex}`} className={`tool-call-card tool-call-${tc.status}`}>
+                <div className="tool-call-header" onClick={() => toggleToolCall(tc.tool_call_id || `tc-${tcIndex}`)}>
+                  <div className="tool-call-header-left">
+                    {tc.status === 'start' && <LoadingOutlined spin className="tool-call-icon-start" />}
+                    {tc.status === 'running' && <LoadingOutlined spin className="tool-call-icon-running" />}
+                    {tc.status === 'success' && <span className="tool-call-icon-success">✓</span>}
+                    {tc.status === 'error' && <span className="tool-call-icon-error">✗</span>}
+                    {expandedToolCalls.has(tc.tool_call_id || `tc-${tcIndex}`) ? (
+                      <DownOutlined style={{ fontSize: 10 }} />
+                    ) : (
+                      <RightOutlined style={{ fontSize: 10 }} />
+                    )}
+                    {tc.task_name && <span className="tool-call-task-name">{tc.task_name}</span>}
+                  </div>
+                  <div className="tool-call-header-right">
+                    {tc.elapsed_ms != null && tc.elapsed_ms > 0 && (
+                      <span className="tool-call-elapsed">
+                        {(tc.elapsed_ms / 1000).toFixed(1)}s
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {expandedToolCalls.has(tc.tool_call_id || `tc-${tcIndex}`) && (
+                  <div className="tool-call-content">
+                    {/* 思考过程 - 直接展示内容，不显示标题文字 */}
+                    {tc.reasoning_content && (
+                      <div className={`tool-call-reasoning-text ${theme === 'dark' ? 'dark' : 'light'}`}>
+                        <MDEditor.Markdown
+                          source={tc.reasoning_content}
+                          className={`md-editor small-text ${theme === 'dark' ? 'dark' : 'light'}`}
+                        />
+                      </div>
+                    )}
+                    {/* 工具结果展开收起 */}
+                    {(tc.message || tc.result) && (
+                      <>
+                        {/* 分隔线 */}
+                        {tc.reasoning_content && <div className="tool-call-divider" />}
+                        {/* 工具结果头部 */}
+                        <div 
+                          className="tool-call-result-header" 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleToolCallResult(tc.tool_call_id || `tc-${tcIndex}`);
+                          }}
+                        >
+                          {expandedToolCallResults.has(tc.tool_call_id || `tc-${tcIndex}`) ? (
+                            <DownOutlined style={{ fontSize: 10 }} />
+                          ) : (
+                            <RightOutlined style={{ fontSize: 10 }} />
+                          )}
+                          <span className="tool-call-result-title">工具结果</span>
+                        </div>
+                        {/* 工具结果内容 */}
+                        {expandedToolCallResults.has(tc.tool_call_id || `tc-${tcIndex}`) && (
+                          <>
+                            {/* 工具调用消息 */}
+                            {tc.message && (
+                              <div className={`tool-call-message ${theme === 'dark' ? 'dark' : 'light'}`}>
+                                <MDEditor.Markdown
+                                  source={tc.message}
+                                  className={`md-editor small-text ${theme === 'dark' ? 'dark' : 'light'}`}
+                                />
+                              </div>
+                            )}
+                            {/* 工具调用结果 */}
+                            {tc.result && (
+                              <div className={`tool-call-result ${theme === 'dark' ? 'dark' : 'light'}`}>
+                                <MDEditor.Markdown
+                                  source={typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result, null, 2)}
+                                  className={`md-editor small-text ${theme === 'dark' ? 'dark' : 'light'}`}
+                                />
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 任务执行阶段 */}
+        {(msg.step === 'task_execution' || msg.extra_content?.step === 'task_execution') && msg.tool_calls && msg.tool_calls.length > 0 && (
+          <div className="tool-calls-container">
+            {msg.tool_calls.map((tc, tcIndex) => (
+              <div key={tc.tool_call_id || `tc-${tcIndex}`} className={`tool-call-card tool-call-${tc.status}`}>
+                <div className="tool-call-header" onClick={() => toggleToolCall(tc.tool_call_id || `tc-${tcIndex}`)}>
+                  <div className="tool-call-header-left">
+                    {tc.status === 'start' && <LoadingOutlined spin className="tool-call-icon-start" />}
+                    {tc.status === 'running' && <LoadingOutlined spin className="tool-call-icon-running" />}
+                    {tc.status === 'success' && <span className="tool-call-icon-success">✓</span>}
+                    {tc.status === 'error' && <span className="tool-call-icon-error">✗</span>}
+                    {expandedToolCalls.has(tc.tool_call_id || `tc-${tcIndex}`) ? (
+                      <DownOutlined style={{ fontSize: 10 }} />
+                    ) : (
+                      <RightOutlined style={{ fontSize: 10 }} />
+                    )}
+                    {tc.task_name && <span className="tool-call-task-name">{tc.task_name}</span>}
+                  </div>
+                  <div className="tool-call-header-right">
+                    {tc.elapsed_ms != null && tc.elapsed_ms > 0 && (
+                      <span className="tool-call-elapsed">
+                        {(tc.elapsed_ms / 1000).toFixed(1)}s
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {expandedToolCalls.has(tc.tool_call_id || `tc-${tcIndex}`) && (
+                  <div className="tool-call-content">
+                    {tc.message && (
+                      <div className={`tool-call-message ${theme === 'dark' ? 'dark' : 'light'}`}>
+                        <MDEditor.Markdown
+                          source={tc.message}
+                          className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                        />
+                      </div>
+                    )}
+                    {tc.result && (
+                      <div className={`tool-call-result ${theme === 'dark' ? 'dark' : 'light'}`}>
+                        <MDEditor.Markdown
+                          source={JSON.stringify(tc.result, null, 2)}
+                          className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 结果总结阶段 */}
+        {(msg.step === 'result_summary' || msg.extra_content?.step === 'result_summary') && msg.content && (msg.status !== 'start' || !msg.status) && (
+          <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+            <MDEditor.Markdown
+              source={msg.content}
+              className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+            />
+          </div>
+        )}
+
+        {/* 没有step的情况，显示内容和思考过程 */}
+        {!msg.step && !msg.extra_content?.step && (
+          <>
+            {/* 历史消息显示思考过程 */}
+            {(!msg.status || msg.status === 'done') && msg.reasoning_content && (
+              <div className="message-reasoning">
+                <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
+                  {expandedReasoning.has(msg.step_id || msg.id) ? (
+                    <DownOutlined />
+                  ) : (
+                    <RightOutlined />
+                  )}
+                  <BulbOutlined />
+                  <span>思考过程</span>
+                  {msg.reasoning_time != null && (
+                    <span className="reasoning-duration">
+                      ({(msg.reasoning_time / 1000).toFixed(1)}s)
+                    </span>
+                  )}
+                </div>
+                {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
+                  <div className="reasoning-text">
+                    <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                      <MDEditor.Markdown
+                        source={msg.reasoning_content}
+                        className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            {msg.content && (msg.status !== 'start' || !msg.status) && (
+              <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                <MDEditor.Markdown
+                  source={msg.content}
+                  className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                />
+              </div>
+            )}
+          </>
+        )}
+      </>
+    );
+  };
+
+  const renderGroupedMessages = () => {
+    const groups = groupMessagesByAssistantId();
+    debugger
+    return groups.map((group, groupIndex) => {
+      if (!group.assistantId) {
+        // 用户消息组
+        const msg = group.messages[0];
+        return renderMessage(msg, groupIndex);
+      }
+      
+      // 助手消息组
+      return (
+        <div key={group.assistantId} className="message assistant">
+          <div className={`message-avatar ${theme === 'dark' ? 'dark' : 'light'}`}>
+            <img 
+              src={resolveAvatarPath(group.messages[0]?.avatar) || currentSelection?.avatar || getDefaultAvatar()} 
+              alt="AI" 
+              className="avatar-image"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = getDefaultAvatar();
+              }}
+            />
+          </div>
+          <div className="message-content">
+            {group.messages.map((msg, msgIndex) => (
+              <div 
+                key={msg.step_id || msg.id || msgIndex}
+                id={msg.step_id || undefined}
+                className="step-container"
+              >
+                {renderAssistantMessageContent(msg)}
+              </div>
+            ))}
+            <div className="message-footer">
+              <span className="message-time">
+                {group.messages[0]?.created_at ? new Date(group.messages[0].created_at).toLocaleString('zh-CN', { 
+                  year: 'numeric', 
+                  month: '2-digit', 
+                  day: '2-digit',
+                  hour: '2-digit', 
+                  minute: '2-digit',
+                  second: '2-digit',
+                  hour12: false 
+                }) : ''}
+              </span>
+              <div className="message-actions">
+                {group.messages.some(m => m.content) && (
+                  <>
+                    <Tooltip title="重新回答">
+                      <Button 
+                        type="text" 
+                        size="small"
+                        icon={<ReloadOutlined />} 
+                        onClick={() => handleRegenerate(groupIndex)}
+                      />
+                    </Tooltip>
+                    <Tooltip title="复制回答">
+                      <Button 
+                        type="text" 
+                        size="small"
+                        icon={<CopyOutlined />} 
+                        onClick={() => {
+                          const content = group.messages.map(m => m.content).filter(Boolean).join('\n');
+                          copyToClipboard(content, '回答');
+                        }}
+                      />
+                    </Tooltip>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    });
+  };
+
   const renderMessage = (msg: Message, index: number) => {
-    // 跳过工具消息的显示
     if (msg.role === 'tool') {
       return null;
     }
     
     const isUser = msg.role === 'user';
     
-    // 解析消息中的文件信息
     let files: FileInfo[] = [];
     if (msg.extra_content && msg.extra_content.files) {
       files = msg.extra_content.files.map((file: any) => ({
@@ -1249,11 +2157,15 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     }
     
     return (
-      <div key={msg.id} className={`message ${msg.role}`}>
+      <div 
+        key={msg.id} 
+        id={msg.step_id || undefined}
+        className={`message ${msg.role}`}
+      >
         <div className={`message-avatar ${theme === 'dark' ? 'dark' : 'light'}`}>
           {isUser ? '👤' : (
             <img 
-              src={currentSelection?.avatar || getDefaultAvatar()} 
+              src={resolveAvatarPath(msg.avatar) || currentSelection?.avatar || getDefaultAvatar()} 
               alt="AI" 
               className="avatar-image"
               onError={(e) => {
@@ -1263,57 +2175,387 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           )}
         </div>
         <div className="message-content">
-          {msg.role === 'assistant' && thinkingMessageId === msg.id && (
-            <div className="message-reasoning">
-              <div className="reasoning-header" onClick={() => toggleReasoning(msg.id)}>
-                <LoadingOutlined spin />
-                <BulbOutlined /> 正在思考中
-                {thinkingDuration[msg.id] && (
-                  <span className="reasoning-duration">
-                    ({(thinkingDuration[msg.id] / 1000).toFixed(1)}s)
-                  </span>
-                )}
-              </div>
-              {expandedReasoning.has(msg.id) && msg.reasoning_content && (
-                <div className="reasoning-text">
-                  <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                    <MDEditor.Markdown
-                      source={msg.reasoning_content}
-                      className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
-                    />
+          {msg.role === 'assistant' && (
+            <>
+              {/* 分析问题阶段 */}
+              {(msg.step === 'analyze_query' || msg.extra_content?.step === 'analyze_query') && (
+                <>
+                  {msg.status === 'start' && (
+                    <div className="message-reasoning">
+                      <div className="reasoning-header">
+                        <LoadingOutlined spin />
+                        <BulbOutlined />
+                        <span>分析问题中...</span>
+                      </div>
+                    </div>
+                  )}
+                  {msg.status === 'running' && msg.reasoning_content && !msg.reasoning_end && (
+                    <div className="message-reasoning">
+                      <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
+                        <LoadingOutlined spin />
+                        <BulbOutlined />
+                        <span>分析问题中</span>
+                        {thinkingDuration[msg.step_id || msg.id] && (
+                          <span className="reasoning-duration">
+                            ({(thinkingDuration[msg.step_id || msg.id] / 1000).toFixed(1)}s)
+                          </span>
+                        )}
+                      </div>
+                      {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
+                        <div className="reasoning-text">
+                          <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                            <MDEditor.Markdown
+                              source={msg.reasoning_content}
+                              className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {(msg.status !== 'start' || !msg.status) && msg.reasoning_content && (msg.reasoning_end || msg.status === 'done') && (
+                    <div className="message-reasoning">
+                      <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
+                        {expandedReasoning.has(msg.step_id || msg.id) ? (
+                          <DownOutlined />
+                        ) : (
+                          <RightOutlined />
+                        )}
+                        <BulbOutlined />
+                        <span>分析问题</span>
+                        {msg.reasoning_time != null ? (
+                          <span className="reasoning-duration">
+                            ({(msg.reasoning_time / 1000).toFixed(1)}s)
+                          </span>
+                        ) : thinkingDuration[msg.step_id || msg.id] ? (
+                          <span className="reasoning-duration">
+                            ({(thinkingDuration[msg.step_id || msg.id] / 1000).toFixed(1)}s)
+                          </span>
+                        ) : null}
+                      </div>
+                      {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
+                        <div className="reasoning-text">
+                          <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                            <MDEditor.Markdown
+                              source={msg.reasoning_content}
+                              className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* 用户发送消息后，在获取后端接口返回之前默认显示 等待转换图标 + "思考中..." */}
+              {/* 只有当消息没有任何步骤信息时才显示默认的"思考中..." */}
+              {msg.status === 'start' && !msg.step && !msg.extra_content?.step && !msg.step_id && (
+                <div className="message-reasoning">
+                  <div className="reasoning-header">
+                    <LoadingOutlined spin />
+                    <BulbOutlined />
+                    <span>思考中...</span>
                   </div>
                 </div>
               )}
-            </div>
-          )}
-          {msg.role === 'assistant' && msg.reasoning_content && thinkingMessageId !== msg.id && (
-            <div className="message-reasoning">
-              <div className="reasoning-header" onClick={() => toggleReasoning(msg.id)}>
-                {expandedReasoning.has(msg.id) ? (
-                  <DownOutlined />
-                ) : (
-                  <RightOutlined />
-                )}
-                <BulbOutlined /> 思考过程
-                {thinkingDuration[msg.id] && (
-                  <span className="reasoning-duration">
-                    ({(thinkingDuration[msg.id] / 1000).toFixed(1)}s)
-                  </span>
-                )}
-              </div>
-              {expandedReasoning.has(msg.id) && msg.reasoning_content && (
-                <div className="reasoning-text">
-                  <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                    <MDEditor.Markdown
-                      source={msg.reasoning_content}
-                      className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
-                    />
-                  </div>
+
+              {/* 任务规划阶段 */}
+              {(msg.step === 'task_planning' || msg.extra_content?.step === 'task_planning') && (
+                <>
+                  {msg.status === 'start' && (
+                    <div className="message-reasoning">
+                      <div className="reasoning-header">
+                        <LoadingOutlined spin />
+                        <BulbOutlined />
+                        <span>任务规划中...</span>
+                      </div>
+                    </div>
+                  )}
+                  {msg.status === 'running' && msg.reasoning_content && !msg.reasoning_end && (
+                    <div className="message-reasoning">
+                      <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
+                        <LoadingOutlined spin />
+                        <BulbOutlined />
+                        <span>任务规划中</span>
+                        {thinkingDuration[msg.step_id || msg.id] && (
+                          <span className="reasoning-duration">
+                            ({(thinkingDuration[msg.step_id || msg.id] / 1000).toFixed(1)}s)
+                          </span>
+                        )}
+                      </div>
+                      {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
+                        <div className="reasoning-text">
+                          <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                            <MDEditor.Markdown
+                              source={msg.reasoning_content}
+                              className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {(msg.status !== 'start' || !msg.status) && msg.reasoning_content && (msg.reasoning_end || msg.status === 'done') && (
+                    <div className={`message-reasoning ${theme === 'dark' ? 'dark' : 'light'}`}>
+                      <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
+                        {expandedReasoning.has(msg.step_id || msg.id) ? (
+                          <DownOutlined />
+                        ) : (
+                          <RightOutlined />
+                        )}
+                        <BulbOutlined />
+                        <span>任务规划</span>
+                        {msg.reasoning_time != null ? (
+                          <span className="reasoning-duration">
+                            ({(msg.reasoning_time / 1000).toFixed(1)}s)
+                          </span>
+                        ) : thinkingDuration[msg.step_id || msg.id] ? (
+                          <span className="reasoning-duration">
+                            ({(thinkingDuration[msg.step_id || msg.id] / 1000).toFixed(1)}s)
+                          </span>
+                        ) : null}
+                      </div>
+                      {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
+                        <div className="reasoning-text">
+                          <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                            <MDEditor.Markdown
+                              source={msg.reasoning_content}
+                              className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {msg.task_plan && msg.task_plan.length > 0 && (msg.status === 'done' || !msg.status) && (
+                    <div className={`message-reasoning ${theme === 'dark' ? 'dark' : 'light'}`} style={{ marginTop: 8 }}>
+                      <div className="reasoning-header" onClick={() => toggleTaskPlan(msg.id)}>
+                        {expandedTaskPlans.has(msg.id) ? (
+                          <DownOutlined />
+                        ) : (
+                          <RightOutlined />
+                        )}
+                        <BulbOutlined />
+                        <span>任务步骤条</span>
+                        <span className="reasoning-duration">({msg.task_plan.length}个任务)</span>
+                      </div>
+                      {expandedTaskPlans.has(msg.id) && (
+                        <div className="reasoning-text">
+                          <div className="task-plan-steps">
+                            {msg.task_plan.map((task, taskIndex) => (
+                              <div key={task.id || `task-${taskIndex}`} className={`task-step task-step-${task.status}`}>
+                                <div className="task-step-icon">
+                                  {task.status === 'pending' && <span className="step-icon-pending">○</span>}
+                                  {task.status === 'running' && <LoadingOutlined spin className="step-icon-running" />}
+                                  {task.status === 'done' && <span className="step-icon-done">✓</span>}
+                                </div>
+                                <div className="task-step-content">
+                                  <div className="task-step-name">{task.name}</div>
+                                  {task.description && (
+                                  <div className="task-step-description">{task.description}</div>
+                                )}
+                              </div>
+                              {taskIndex < (msg.task_plan?.length || 0) - 1 && (
+                                <div className="task-step-connector" />
+                              )}
+                            </div>
+                          ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* 模型回答阶段 */}
+              {(msg.step === 'model_answer' || msg.extra_content?.step === 'model_answer') && (
+                <>
+                  {msg.status === 'start' && (
+                    <div className="message-reasoning">
+                      <div className="reasoning-header">
+                        <LoadingOutlined spin />
+                        <BulbOutlined />
+                        <span>正在思考中...</span>
+                      </div>
+                    </div>
+                  )}
+                  {msg.status === 'running' && msg.reasoning_content && !msg.reasoning_end && (
+                    <div className="message-reasoning">
+                      <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
+                        <LoadingOutlined spin />
+                        <BulbOutlined />
+                        <span>正在思考中</span>
+                        {thinkingDuration[msg.step_id || msg.id] && (
+                          <span className="reasoning-duration">
+                            ({(thinkingDuration[msg.step_id || msg.id] / 1000).toFixed(1)}s)
+                          </span>
+                        )}
+                      </div>
+                      {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
+                        <div className="reasoning-text">
+                          <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                            <MDEditor.Markdown
+                              source={msg.reasoning_content}
+                              className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {(msg.status !== 'start' || !msg.status) && msg.reasoning_content && (msg.reasoning_end || msg.status === 'done') && (
+                    <div className="message-reasoning">
+                      <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
+                        {expandedReasoning.has(msg.step_id || msg.id) ? (
+                          <DownOutlined />
+                        ) : (
+                          <RightOutlined />
+                        )}
+                        <BulbOutlined />
+                        <span>思考过程</span>
+                        {msg.reasoning_time != null ? (
+                          <span className="reasoning-duration">
+                            ({(msg.reasoning_time / 1000).toFixed(1)}s)
+                          </span>
+                        ) : thinkingDuration[msg.step_id || msg.id] ? (
+                          <span className="reasoning-duration">
+                            ({(thinkingDuration[msg.step_id || msg.id] / 1000).toFixed(1)}s)
+                          </span>
+                        ) : null}
+                      </div>
+                      {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
+                        <div className="reasoning-text">
+                          <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                            <MDEditor.Markdown
+                              source={msg.reasoning_content}
+                              className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {msg.content && (msg.status !== 'start' || !msg.status) && (
+                    <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                      <MDEditor.Markdown
+                        source={msg.content}
+                        className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* 任务执行阶段 */}
+              {(msg.step === 'task_execution' || msg.extra_content?.step === 'task_execution') && msg.tool_calls && msg.tool_calls.length > 0 && (
+                <div className="tool-calls-container">
+                  {msg.tool_calls.map((tc, tcIndex) => (
+                    <div key={tc.tool_call_id || `tc-${tcIndex}`} className={`tool-call-card tool-call-${tc.status}`}>
+                      <div className="tool-call-header" onClick={() => toggleToolCall(tc.tool_call_id || `tc-${tcIndex}`)}>
+                        <div className="tool-call-header-left">
+                          {tc.status === 'start' && <LoadingOutlined spin className="tool-call-icon-start" />}
+                          {tc.status === 'running' && <LoadingOutlined spin className="tool-call-icon-running" />}
+                          {tc.status === 'success' && <span className="tool-call-icon-success">✓</span>}
+                          {tc.status === 'error' && <span className="tool-call-icon-error">✗</span>}
+                          {expandedToolCalls.has(tc.tool_call_id || `tc-${tcIndex}`) ? (
+                            <DownOutlined style={{ fontSize: 10 }} />
+                          ) : (
+                            <RightOutlined style={{ fontSize: 10 }} />
+                          )}
+                          <span className="tool-call-name">{tc.name}</span>
+                          {tc.task_name && <span className="tool-call-task-name">: {tc.task_name}</span>}
+                        </div>
+                        <div className="tool-call-header-right">
+                          {tc.elapsed_ms != null && tc.elapsed_ms > 0 && (
+                            <span className="tool-call-elapsed">
+                              {tc.elapsed_ms >= 1000
+                                ? `${(tc.elapsed_ms / 1000).toFixed(1)}s`
+                                : `${tc.elapsed_ms}ms`}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {expandedToolCalls.has(tc.tool_call_id || `tc-${tcIndex}`) && (
+                        <div className="tool-call-body">
+                          {tc.status === 'start' && (
+                            <div className="tool-call-start-text">准备调用工具...</div>
+                          )}
+                          {tc.status === 'running' && (
+                            <div className="tool-call-running-text">正在执行工具调用...</div>
+                          )}
+                          {tc.status === 'success' && tc.result != null && (
+                            <div className="tool-call-result">
+                              <pre>{typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result, null, 2)}</pre>
+                            </div>
+                          )}
+                          {tc.status === 'error' && tc.message && (
+                            <div className="tool-call-error-text">{tc.message}</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
-            </div>
+
+              {/* 结果总结阶段 */}
+              {(msg.step === 'result_summary' || msg.extra_content?.step === 'result_summary') && msg.content && (msg.status !== 'start' || !msg.status) && (
+                <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                  <MDEditor.Markdown
+                    source={msg.content}
+                    className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                  />
+                </div>
+              )}
+
+              {/* 没有step的情况，显示内容和思考过程 */}
+              {!msg.step && !msg.extra_content?.step && (
+                <>
+                  {/* 历史消息显示思考过程 */}
+                  {(!msg.status || msg.status === 'done') && msg.reasoning_content && (
+                    <div className="message-reasoning">
+                      <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
+                        {expandedReasoning.has(msg.step_id || msg.id) ? (
+                          <DownOutlined />
+                        ) : (
+                          <RightOutlined />
+                        )}
+                        <BulbOutlined />
+                        <span>思考过程</span>
+                        {msg.reasoning_time != null && (
+                          <span className="reasoning-duration">
+                            ({(msg.reasoning_time / 1000).toFixed(1)}s)
+                          </span>
+                        )}
+                      </div>
+                      {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
+                        <div className="reasoning-text">
+                          <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                            <MDEditor.Markdown
+                              source={msg.reasoning_content}
+                              className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {msg.content && (msg.status !== 'start' || !msg.status) && (
+                    <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                      <MDEditor.Markdown
+                        source={msg.content}
+                        className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+            </>
           )}
           
+          {/* 用户消息显示内容 */}
           {editingMessageId === msg.id ? (
             <>
               {/* 显示文件列表（在编辑框上方） */}
@@ -1399,7 +2641,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 </div>
               </div>
             </>
-          ) : msg.content ? (
+          ) : isUser && msg.content ? (
             <>
               {/* 显示文件列表（在文本消息上方） */}
               {files.length > 0 && (
@@ -1480,8 +2722,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                   })}
                 </div>
               )}
-              
-              {/* 显示文本消息 */}
+              {/* 显示用户消息内容 */}
               <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
                 <MDEditor.Markdown
                   source={msg.content}
@@ -1489,11 +2730,12 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 />
               </div>
             </>
-          ) : (
-            // 无文本消息时只显示文件列表
-            files.length > 0 && (
-              <div style={{ marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {files.map((file) => {
+          ) : null}
+          
+          {/* 显示文件列表 */}
+          {!isUser && files.length > 0 && (
+            <div style={{ marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {files.map((file, fileIndex) => {
                   // 计算文件大小（使用实际文件大小）
                   let fileSize = '';
                   if (file.file_size) {
@@ -1523,7 +2765,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                   
                   return (
                     <div
-                      key={fileName || `file-${index}`}
+                      key={fileName || `file-${fileIndex}`}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -1568,8 +2810,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                   );
                 })}
               </div>
-            )
-          )}
+            )}
           <div className="message-footer">
             <span className="message-time">
               {msg.created_at ? new Date(msg.created_at).toLocaleString('zh-CN', { 
@@ -1653,7 +2894,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             <Dropdown
               menu={{ 
                 items: getDropdownItems(),
-                className: `chat-selector-dropdown ${theme === 'dark' ? 'dark' : 'light'}`
+                className: `chat-selector-dropdown ${theme === 'dark' ? 'dark' : 'light'}`,
+                style: { maxHeight: 600, overflowY: 'auto' }
               }}
               trigger={['click']}
               placement="bottomLeft"
@@ -1720,7 +2962,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           renderEmptyState()
         ) : (
           <>
-            {messages.map((msg, index) => renderMessage(msg, index))}
+            {renderGroupedMessages()}
             <div ref={messagesEndRef} />
           </>
         )}
