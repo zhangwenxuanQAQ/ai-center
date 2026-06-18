@@ -137,7 +137,7 @@ class ChatMessageBase(BaseModel):
     extra_content: Optional[Any] = Field(None, description="额外内容JSON")
     reasoning_content: Optional[str] = Field(None, description="思考过程内容")
     reasoning_time: Optional[int] = Field(None, description="思考耗时（毫秒）")
-    avatar: Optional[str] = Field(None, max_length=500, description="头像URL")
+    avatar: Optional[str] = Field(None, description="头像URL")
     model_id: Optional[str] = Field(None, max_length=40, description="模型ID")
     chatbot_id: Optional[str] = Field(None, max_length=40, description="机器人ID")
     
