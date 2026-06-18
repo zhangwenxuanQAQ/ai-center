@@ -16,6 +16,7 @@ from app.services.chat.dto import (
 )
 from app.services.chat.service import ChatService, ChatMessageService
 from app.core.chat.chat_service import ChatCoreService
+from app.database.models import Chat
 from app.utils.response import ResponseUtil, ApiResponse
 from app.core.exceptions import ResourceNotFoundError
 from app.services.chat.file_utils import get_file_from_datasource
@@ -311,6 +312,29 @@ async def chat_completions(
         return ResponseUtil.error(message="query参数不能为空")
     
     try:
+        # 更新chat表数据，将对话的model_id, chatbot_id, config, system_prompt更新成最新的
+        if chat_request.chat_id:
+            update_fields = {}
+            if chat_request.model_id:
+                update_fields['model_id'] = chat_request.model_id
+            if chat_request.chatbot_id:
+                update_fields['chatbot_id'] = chat_request.chatbot_id
+            if chat_request.config:
+                update_fields['config'] = chat_request.config
+            if chat_request.system_prompt:
+                update_fields['system_prompt'] = chat_request.system_prompt
+            
+            if update_fields:
+                try:
+                    Chat.update(**update_fields).where(
+                        (Chat.id == chat_request.chat_id) &
+                        (Chat.user_id == user_id) &
+                        (Chat.deleted == False)
+                    ).execute()
+                    logger.info(f"更新chat表成功 - chat_id: {chat_request.chat_id}, fields: {update_fields}")
+                except Exception as e:
+                    logger.error(f"更新chat表失败: {e}")
+        
         if chat_request.stream:
             async def generate():
                 try:

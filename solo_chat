@@ -1372,4 +1372,681 @@ default_params字段是json对象字符串，来自 "组件Param"类的所有属
 - 导入向量数据库添加一个dock_title字段，存储文档标题（doc的title字段），如果file_name为空则docnm_kwd和doc_name字段使用文档标题。
 - 导入向量数据库时如果是自定义模版知识需要判断自定义字段的is_param_search字段，如果为true则需要将字段编码作为索引字段（keyword类型）。
 
-### 添加富文本知识的切片处理逻辑
+## 接下来开始完善聊天逻辑
+1. 聊天逻辑的系统提示词生成时需要将react_system_prompt.md文件中的内容作为顶级系统提示词，md文件中的内容需要放到系统提示词的最顶部。
+2. 如果使用机器人聊天则需要将关联的知识库也转换为tools，作为模型参数传递。
+  - 在app\core\knowledgebase\utils\tool_util.py文件中实现知识库转换为openai tool格式的方法，格式例子如下：
+```
+{
+  "type": "function",
+  "function": {
+    "name": "知识库名称",
+    "description": "知识库描述",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "action": {
+                "type": "string",
+                "enum": ["knowledgebase_search"],   # 只有这一个可选值
+                "description": "操作类型，必须为 knowledgebase_search , 表示知识库检索"
+            },
+        "kb_id": {
+                "type": "string",
+                "enum": ["知识库id"],   # 只有这一个可选值
+                "description": "知识库id"
+            },
+        "query": {
+          "type": "string",
+          "description": "搜索内容"
+        }
+      },
+      "required": ["kb_id","query"]
+    }
+  }
+}
+```
+3. 修改mcp转为openai tool格式的方法，添加action字段，值为mcp_tool
+4. 修改app/core/llm_model/utils/tool_util.py的process_tool_calls方法，需要根据action类型进行不同处理：
+  - 如果是mcp_tool则保持现在的逻辑。
+  - 如果是knowledgebase_search则需要获取kb_id和query字段，然后调用RetrievalService的知识库检索方法，相关参数需要根据kb_id从知识库中查询，query字段作为检索参数。
+
+5. 在app/core/llm_model/utils/tool_util.py的process_tool_calls方法中实现多个工具的并行调用（即同时调用多个工具，每个工具互不干扰）。聊天主逻辑需要实时获取每个工具的调用结果，每一次获取需要yield返回。
+6. 聊天主服务在工具调用之前需要的yield一条消息，tool_call字段的status设置为"running"。工具调用完成后需要记录每个工具的调用耗时，单位为毫秒。
+7. 前端需要展示工具调用步骤，每个步骤卡片支持展开/收起，展开显示思考过程和工具调用结果，卡片头显示状态图标，工具名称和耗时，状态图标根据status字段使用不同的图标（比如running则为转圈）。
+  
+
+## 聊天消息处理优化
+- 聊天的start_response不在循环外生成，应该在每轮回答的开始生成。 每轮回答完成后需要保存消息记录到chat_message表中。
+比如当用户提问，大模型回答时如果是第一条消息则返回一个start_response，知道本轮回答完毕（即消息状态是done）后新增一条消息记录，使用create_assistant_message方法。
+- 工具消息保存的message_id应该和本次聊天的assistant_message_id一致。
+- 前端每接受一条消息状态为start的消息时需要使用新的组件展示，比如有多个思考过程，则需要对每个思考过程进行展示。
+
+
+## 修改聊天接口逻辑：
+现在builtin_prompts目录下有三个系统提示词文件：
+- react_system_prompt.md
+- task_planner.md
+- result_summary.md
+
+后端聊天逻辑需要改成如下：
+- 每次循环时需要先试用task_planner.md文件中的系统提示词，将用户问题进行任务规划。
+- 如果不需要执行子任务，则直接返回结果。
+- 如果需要执行子任务则需要获取任务规划返回的任务名称按顺序执行。任务执行还是使用react_system_prompt.md文件中的系统提示词。（和现在一样，任务使用并行执行）。
+- 所有子任务全部执行完成后，需要调用result_summary.md提示词，返回的结果作为新一轮消息。
+- 任务规划，子任务执行结果都要保存到chat_message表中。
+
+前端展示修改：
+- 使用竖向步骤条展示任务规划后的任务列表，展示任务名称和描述，根据状态展示不同的图标（比如running则为转圈，done则为勾选）。
+- 步骤条可以展开/收起，展开显示子任务运行过程。
+
+
+后端聊天逻辑应该把任务规划放到原来while循环中，每一轮都需要进行任务规划，具体逻辑如下：
+1. 用户提问。
+2. 进入while循环：
+  2.1. 首先进行任务规划（不需要返回tool_call，tool_choice="none"）。
+  2.2. 如果不需要执行子任务，则直接返回结果。
+  2.3. 如果需要执行子任务则需要获取任务规划返回的任务列表按顺序执行。
+  2.4. 子任务流程：
+    2.4.1. 就是原来的while循环，需要根据子任务的query调用大模型，返回子任务的结果。
+    2.4.2. 当需要用户补充或确认时，需要等待用户输入，然后继续执行子任务。
+    2.4.3. 子任务执行完成后，需要更新子任务的状态为done，保存到chat_message表中。
+  2.5. 所有子任务全部执行完成后使用result_summary调用大模型，返回的结果作为新一轮消息。
+3. 知道有最终答案或者需要用户补充或确认时，循环结束。
+
+
+
+## 前端渲染系统回复逻辑：
+以下是我提问后流式输出所有结果样例1：
+```
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "start", "phase": "task_planning"}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_content": "用户"}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_content": "只是说\"你好"}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_content": "\"，这是一个简单的"}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_content": "问候语，不需要"}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_content": "执行任何子任务"}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_content": "。我应该"}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_content": "返回一个空的任务"}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_content": "列表。"}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "done", "finish_reason": "stop"}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "start", "phase": "model_answer"}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_content": "用户"}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_content": "只是简单地"}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_content": "打招呼说\"你好"}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_content": "\""}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_content": "，这是一个简单的问候"}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_content": "，不需要"}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_content": "调用任何工具。"}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_content": "我可以直接回复"}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_content": "问候语，并"}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_content": "询问用户"}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_content": "有什么需要帮助的。"}
+
+data: {"text": "你好！欢迎使用", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_end": true}
+
+data: {"text": "地图", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_end": true}
+
+data: {"text": "服务助手。我可以", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_end": true}
+
+data: {"text": "帮您查询天气、", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_end": true}
+
+data: {"text": "规划路线（驾车", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_end": true}
+
+data: {"text": "/", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_end": true}
+
+data: {"text": "步行/骑行/", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_end": true}
+
+data: {"text": "公交）、搜索地点", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_end": true}
+
+data: {"text": "、测量距离等", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_end": true}
+
+data: {"text": "。请问", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_end": true}
+
+data: {"text": "有什么可以帮您的", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_end": true}
+
+data: {"text": "吗？", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "reasoning_end": true}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "done", "finish_reason": "stop"}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "c0d0d679c4d04d2b8ac82de88c718e83", "assistant_message_id": "f6f64518d0094c5982e6602e85d45fca", "status": "running", "usage": {"completion_tokens": 74, "prompt_tokens": 2966, "total_tokens": 3040, "completion_tokens_details": {"accepted_prediction_tokens": null, "audio_tokens": null, "reasoning_tokens": 31, "rejected_prediction_tokens": null, "text_tokens": 74}, "prompt_tokens_details": {"audio_tokens": null, "cached_tokens": null, "text_tokens": 2966}}}
+
+data: [DONE]
+
+
+```
+根据上面的流式输出结果应该如下展示回复内容：
+- 任务规划（phase=task_planning）
+  - 点击收起组件，收起任务规划思考过程（reasoning_content字段）
+  - 点击展开组件，显示任务规划思考过程
+- 思考过程 （phase=model_answer)
+  - 点击收起组件，收起模型思考过程（reasoning_content字段）
+  - 点击展开组件，显示模型思考过程
+- 回复正文 （text字段）
+
+
+## 聊天界面需要按以下规则渲染系统回复：
+根据流式输出结果应该如下展示回复内容：
+- 任务规划（phase=task_planning）
+  - 点击收起组件，收起任务规划思考过程（reasoning_content字段）
+  - 点击展开组件，显示任务规划思考过程
+- 任务步骤条（如果任务规划有返回任务列表，text字段）
+  - 点击具体步骤可以展开收起任务详情
+- 思考过程 （phase=model_answer)
+  - 点击收起组件，收起模型思考过程（reasoning_content字段）
+  - 点击展开组件，显示模型思考过程
+- 回复正文 （text字段）
+
+前端聊天界面显示有问题，现在会显示2次文本答案。以下是流式输出所有返回：
+data: {"text": "", "full_text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "5693fabd04354b4bb8debe464dfaf0d0", "assistant_message_id": "52226fd6ad6546f089f936b0d680c637", "status": "start", "step_id": "step_9c0fa814", "step": "model_answer"}
+
+data: {"text": "", "full_text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "5693fabd04354b4bb8debe464dfaf0d0", "assistant_message_id": "52226fd6ad6546f089f936b0d680c637", "status": "running", "step_id": "step_9c0fa814", "reasoning_content": "用户", "full_reasoning": "用户"}
+
+data: {"text": "", "full_text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "5693fabd04354b4bb8debe464dfaf0d0", "assistant_message_id": "52226fd6ad6546f089f936b0d680c637", "status": "running", "step_id": "step_9c0fa814", "reasoning_content": "只是简单地", "full_reasoning": "只是简单地"}
+
+data: {"text": "", "full_text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "5693fabd04354b4bb8debe464dfaf0d0", "assistant_message_id": "52226fd6ad6546f089f936b0d680c637", "status": "running", "step_id": "step_9c0fa814", "reasoning_content": "打招呼说\"你好", "full_reasoning": "打招呼说\"你好"}
+
+data: {"text": "", "full_text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "5693fabd04354b4bb8debe464dfaf0d0", "assistant_message_id": "52226fd6ad6546f089f936b0d680c637", "status": "running", "step_id": "step_9c0fa814", "reasoning_content": "\"", "full_reasoning": "\""}
+
+data: {"text": "", "full_text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "5693fabd04354b4bb8debe464dfaf0d0", "assistant_message_id": "52226fd6ad6546f089f936b0d680c637", "status": "running", "step_id": "step_9c0fa814", "reasoning_content": "，这是一个简单的问候", "full_reasoning": "，这是一个简单的问候"}
+
+data: {"text": "", "full_text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "5693fabd04354b4bb8debe464dfaf0d0", "assistant_message_id": "52226fd6ad6546f089f936b0d680c637", "status": "running", "step_id": "step_9c0fa814", "reasoning_content": "，不需要", "full_reasoning": "，不需要"}
+
+data: {"text": "", "full_text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "5693fabd04354b4bb8debe464dfaf0d0", "assistant_message_id": "52226fd6ad6546f089f936b0d680c637", "status": "running", "step_id": "step_9c0fa814", "reasoning_content": "调用任何工具。", "full_reasoning": "调用任何工具。"}
+
+data: {"text": "", "full_text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "5693fabd04354b4bb8debe464dfaf0d0", "assistant_message_id": "52226fd6ad6546f089f936b0d680c637", "status": "running", "step_id": "step_9c0fa814", "reasoning_content": "我可以直接回复", "full_reasoning": "我可以直接回复"}
+
+data: {"text": "", "full_text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "5693fabd04354b4bb8debe464dfaf0d0", "assistant_message_id": "52226fd6ad6546f089f936b0d680c637", "status": "running", "step_id": "step_9c0fa814", "reasoning_content": "问候并询问用户", "full_reasoning": "问候并询问用户"}
+
+data: {"text": "", "full_text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "5693fabd04354b4bb8debe464dfaf0d0", "assistant_message_id": "52226fd6ad6546f089f936b0d680c637", "status": "running", "step_id": "step_9c0fa814", "reasoning_content": "有什么", "full_reasoning": "有什么"}
+
+data: {"text": "", "full_text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "5693fabd04354b4bb8debe464dfaf0d0", "assistant_message_id": "52226fd6ad6546f089f936b0d680c637", "status": "running", "step_id": "step_9c0fa814", "reasoning_content": "需要帮助的。\n", "full_reasoning": "需要帮助的。\n"}
+
+data: {"text": "你好！欢迎使用", "full_text": "你好！欢迎使用", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "5693fabd04354b4bb8debe464dfaf0d0", "assistant_message_id": "52226fd6ad6546f089f936b0d680c637", "status": "running", "step_id": "step_9c0fa814", "reasoning_end": true}
+
+data: {"text": "地图", "full_text": "地图", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "5693fabd04354b4bb8debe464dfaf0d0", "assistant_message_id": "52226fd6ad6546f089f936b0d680c637", "status": "running", "step_id": "step_9c0fa814", "reasoning_end": true}
+
+data: {"text": "服务助手。我可以", "full_text": "服务助手。我可以", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "5693fabd04354b4bb8debe464dfaf0d0", "assistant_message_id": "52226fd6ad6546f089f936b0d680c637", "status": "running", "step_id": "step_9c0fa814", "reasoning_end": true}
+
+data: {"text": "帮您查询天气、", "full_text": "帮您查询天气、", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "5693fabd04354b4bb8debe464dfaf0d0", "assistant_message_id": "52226fd6ad6546f089f936b0d680c637", "status": "running", "step_id": "step_9c0fa814", "reasoning_end": true}
+
+data: {"text": "规划路线（驾车", "full_text": "规划路线（驾车", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "5693fabd04354b4bb8debe464dfaf0d0", "assistant_message_id": "52226fd6ad6546f089f936b0d680c637", "status": "running", "step_id": "step_9c0fa814", "reasoning_end": true}
+
+data: {"text": "、步行、骑行", "full_text": "、步行、骑行", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "5693fabd04354b4bb8debe464dfaf0d0", "assistant_message_id": "52226fd6ad6546f089f936b0d680c637", "status": "running", "step_id": "step_9c0fa814", "reasoning_end": true}
+
+data: {"text": "、公交）、搜索", "full_text": "、公交）、搜索", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "5693fabd04354b4bb8debe464dfaf0d0", "assistant_message_id": "52226fd6ad6546f089f936b0d680c637", "status": "running", "step_id": "step_9c0fa814", "reasoning_end": true}
+
+data: {"text": "地点、测量", "full_text": "地点、测量", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "5693fabd04354b4bb8debe464dfaf0d0", "assistant_message_id": "52226fd6ad6546f089f936b0d680c637", "status": "running", "step_id": "step_9c0fa814", "reasoning_end": true}
+
+data: {"text": "距离等。请问", "full_text": "距离等。请问", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "5693fabd04354b4bb8debe464dfaf0d0", "assistant_message_id": "52226fd6ad6546f089f936b0d680c637", "status": "running", "step_id": "step_9c0fa814", "reasoning_end": true}
+
+data: {"text": "有什么可以", "full_text": "有什么可以", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "5693fabd04354b4bb8debe464dfaf0d0", "assistant_message_id": "52226fd6ad6546f089f936b0d680c637", "status": "running", "step_id": "step_9c0fa814", "reasoning_end": true}
+
+data: {"text": "帮您的吗？", "full_text": "帮您的吗？", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "5693fabd04354b4bb8debe464dfaf0d0", "assistant_message_id": "52226fd6ad6546f089f936b0d680c637", "status": "running", "step_id": "step_9c0fa814", "reasoning_end": true}
+
+data: {"text": "", "full_text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "5693fabd04354b4bb8debe464dfaf0d0", "assistant_message_id": "52226fd6ad6546f089f936b0d680c637", "status": "done", "step_id": "step_9c0fa814", "finish_reason": "stop"}
+
+data: {"text": "", "full_text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "5693fabd04354b4bb8debe464dfaf0d0", "assistant_message_id": "52226fd6ad6546f089f936b0d680c637", "status": "running", "step_id": "step_9c0fa814", "usage": {"completion_tokens": 72, "prompt_tokens": 2966, "total_tokens": 3038, "completion_tokens_details": {"accepted_prediction_tokens": null, "audio_tokens": null, "reasoning_tokens": 29, "rejected_prediction_tokens": null, "text_tokens": 72}, "prompt_tokens_details": {"audio_tokens": null, "cached_tokens": null, "text_tokens": 2966}}}
+
+data: [DONE]
+
+现在会显示两行"你好！欢迎使用地图服务助手。我可以帮您查询天气、规划路线（驾车、步行、骑行、公交）、搜索地点、测量距离等。请问有什么可以帮您的吗？"
+
+
+
+
+重新修改前端系统回复渲染逻辑，前端不要实现使用rounds。逻辑改成如下：
+用户发送消息后，在获取后端接口返回之前默认显示 等待转换图标 + “思考中...”。
+获取到后端流式返回结果后根据status，step和step_id使用不同的渲染逻辑。
+同一个step_id对应同一个流程步骤，根据status判断状态。
+status=start表示流程开始，根据step显示对应的内容，比如任务规划，深度思考，子任务执行等。
+status=running表示改流程进行中。
+status=done表示流程结束。
+reasoning_content字段表示思考过程，使用现在的收起展开组件显示。
+text表示最终回复内容，需要显示在思考过程下面。
+
+
+下面是一个聊天回复的所有流式输出返回：
+```
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "start", "step_id": "step_7947ba9e", "step": "analyze_query"}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "用户", "step": "analyze_query", "reasoning_time": 1024}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "想要", "step": "analyze_query", "reasoning_time": 1092}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "查询检查", "step": "analyze_query", "reasoning_time": 1160}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "报告 ID。我", "step": "analyze_query", "reasoning_time": 1427}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "需要使用检查", "step": "analyze_query", "reasoning_time": 1429}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "报告知识库工具来", "step": "analyze_query", "reasoning_time": 1562}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "搜索相关信息。", "step": "analyze_query", "reasoning_time": 1563}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "这是一个简单的查询任务", "step": "analyze_query", "reasoning_time": 1697}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "，只需要", "step": "analyze_query", "reasoning_time": 1700}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "执行一次知识库搜索", "step": "analyze_query", "reasoning_time": 1896}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "即可，", "step": "analyze_query", "reasoning_time": 1900}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "不需要拆分成多个", "step": "analyze_query", "reasoning_time": 2027}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "子任务。\n\n", "step": "analyze_query", "reasoning_time": 2029}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "让我分析一下：\n", "step": "analyze_query", "reasoning_time": 2224}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "1. 用户", "step": "analyze_query", "reasoning_time": 2228}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "的问题是\"帮我查询", "step": "analyze_query", "reasoning_time": 2421}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "检查报告", "step": "analyze_query", "reasoning_time": 2426}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": " ID\"\n2", "step": "analyze_query", "reasoning_time": 2562}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": ". 我", "step": "analyze_query", "reasoning_time": 2563}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "可以使用\"检查报告", "step": "analyze_query", "reasoning_time": 2699}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "知识库\"", "step": "analyze_query", "reasoning_time": 2702}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "工具来搜索\n", "step": "analyze_query", "reasoning_time": 2844}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "3. 这是一个", "step": "analyze_query", "reasoning_time": 2848}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "单一的查询操作，", "step": "analyze_query", "reasoning_time": 3062}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "不需要拆", "step": "analyze_query", "reasoning_time": 3066}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "分成多个步骤\n\n", "step": "analyze_query", "reasoning_time": 3205}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "所以", "step": "analyze_query", "reasoning_time": 3207}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "不需要拆分子任务", "step": "analyze_query", "reasoning_time": 3432}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "，", "step": "analyze_query", "reasoning_time": 3435}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "直接输出\"否", "step": "analyze_query", "reasoning_time": 3576}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_7947ba9e", "reasoning_content": "\"。\n", "step": "analyze_query", "reasoning_time": 3579}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "done", "step_id": "step_7947ba9e", "reasoning_content": "", "reasoning_end": true, "step": "analyze_query", "reasoning_time": 3773}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "start", "step_id": "step_a95f3003", "step": "model_answer"}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "reasoning_content": "用户", "step": "model_answer", "reasoning_time": 4711}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "reasoning_content": "想要查询检查报告", "step": "model_answer", "reasoning_time": 4773}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "reasoning_content": "ID，我需要使用", "step": "model_answer", "reasoning_time": 4909}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "reasoning_content": "检查", "step": "model_answer", "reasoning_time": 4912}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "reasoning_content": "报告知识库工具来", "step": "model_answer", "reasoning_time": 5047}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "reasoning_content": "搜索相关信息。", "step": "model_answer", "reasoning_time": 5052}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "reasoning_content": "根据工具描述，", "step": "model_answer", "reasoning_time": 5182}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "reasoning_content": "我需要提供task", "step": "model_answer", "reasoning_time": 5187}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "reasoning_content": "_name、kb_id", "step": "model_answer", "reasoning_time": 5317}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "reasoning_content": "和query", "step": "model_answer", "reasoning_time": 5319}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "reasoning_content": "参数。kb_id", "step": "model_answer", "reasoning_time": 5443}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "reasoning_content": "是固定的\"", "step": "model_answer", "reasoning_time": 5446}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "reasoning_content": "ff1c2", "step": "model_answer", "reasoning_time": 5579}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "reasoning_content": "c311", "step": "model_answer", "reasoning_time": 5583}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "reasoning_content": "28c4", "step": "model_answer", "reasoning_time": 5708}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "reasoning_content": "42eb9", "step": "model_answer", "reasoning_time": 5715}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "reasoning_content": "5fd82", "step": "model_answer", "reasoning_time": 5846}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "reasoning_content": "1f99", "step": "model_answer", "reasoning_time": 5851}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "reasoning_content": "07eee\"", "step": "model_answer", "reasoning_time": 5978}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "reasoning_content": "，query应该是用户", "step": "model_answer", "reasoning_time": 5982}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "reasoning_content": "想要查询的内容\"", "step": "model_answer", "reasoning_time": 6122}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "reasoning_content": "检查报告ID\"", "step": "model_answer", "reasoning_time": 6126}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "reasoning_content": "。\n\n让我调用", "step": "model_answer", "reasoning_time": 6260}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "reasoning_content": "这个工具来帮助用户", "step": "model_answer", "reasoning_time": 6264}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "reasoning_content": "查询检查报告ID", "step": "model_answer", "reasoning_time": 6420}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "reasoning_content": "相关信息。", "step": "model_answer", "reasoning_time": 6425}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 6714}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 6847}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 6850}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 6978}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 7151}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 7156}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 7238}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 7242}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 7362}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 7367}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 7491}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 7497}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 7627}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 7633}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 7754}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 7759}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 7886}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 8009}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 8018}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 8141}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 8266}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 8269}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 8424}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 8426}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 8560}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 8566}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 8690}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 8693}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 8814}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "step": "model_answer", "reasoning_time": 8816}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_a95f3003", "finish_reason": "tool_calls", "step": "model_answer", "reasoning_time": 8817}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "done", "step_id": "step_a95f3003", "usage": {"completion_tokens": 224, "prompt_tokens": 3347, "total_tokens": 3571, "completion_tokens_details": {"accepted_prediction_tokens": null, "audio_tokens": null, "reasoning_tokens": 91, "rejected_prediction_tokens": null, "text_tokens": 224}, "prompt_tokens_details": {"audio_tokens": null, "cached_tokens": null, "text_tokens": 3347}}, "step": "model_answer", "reasoning_time": 8818}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "start", "step_id": "tool_call_b676189801c64144ae9dc25d", "tool_call": {"tool_call_id": "call_b676189801c64144ae9dc25d", "name": "检查报告知识库", "task_name": "查询检查报告ID信息", "status": "start", "elapsed_ms": 0, "reasoning_content": "用户需要查询检查报告ID相关信息，我将使用检查报告知识库工具进行搜索检索。"}, "step": "tool_call"}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "done", "step_id": "tool_call_b676189801c64144ae9dc25d", "tool_call": {"tool_call_id": "call_b676189801c64144ae9dc25d", "name": "检查报告知识库", "task_name": "查询检查报告ID信息", "status": "success", "elapsed_ms": 676, "result": "未检索到相关内容", "reasoning_content": "用户需要查询检查报告ID相关信息，我将使用检查报告知识库工具进行搜索检索。"}, "step": "tool_call"}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "start", "step_id": "step_3e9d9bdd", "step": "model_answer"}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_content": "用户", "step": "model_answer", "reasoning_time": 10374}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_content": "查询", "step": "model_answer", "reasoning_time": 10445}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_content": "检查报告ID，", "step": "model_answer", "reasoning_time": 10479}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_content": "但知识库中没有检索", "step": "model_answer", "reasoning_time": 10590}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_content": "到相关内容。我需要", "step": "model_answer", "reasoning_time": 10637}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_content": "告知用户这个情况", "step": "model_answer", "reasoning_time": 10753}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_content": "，并询问", "step": "model_answer", "reasoning_time": 10757}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_content": "是否需要更具体的查询", "step": "model_answer", "reasoning_time": 10904}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_content": "内容", "step": "model_answer", "reasoning_time": 10910}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_content": "或者是否有其他可以帮助", "step": "model_answer", "reasoning_time": 11108}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_content": "的", "step": "model_answer", "reasoning_time": 11111}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_content": "。", "step": "model_answer", "reasoning_time": 11221}
+
+data: {"text": "很抱歉，我在", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 11224}
+
+data: {"text": "检查报告知识库中", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 11316}
+
+data: {"text": "未能检索到关于", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 11320}
+
+data: {"text": "\"检查报告ID", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 11419}
+
+data: {"text": "\"的相关信息。\n\n", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 11454}
+
+data: {"text": "可能的原因包括：", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 11527}
+
+data: {"text": "\n", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 11542}
+
+data: {"text": "- 查询关键词", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 11632}
+
+data: {"text": "过于", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 11637}
+
+data: {"text": "宽泛\n-", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 11737}
+
+data: {"text": " 知识库", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 11769}
+
+data: {"text": "中可能没有存储", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 11843}
+
+data: {"text": "相关", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 11850}
+
+data: {"text": "ID信息\n-", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 11952}
+
+data: {"text": " 可能需要", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 11957}
+
+data: {"text": "更具体的查询条件", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 12136}
+
+data: {"text": "\n\n请问", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 12142}
+
+data: {"text": "您是否可以提供更多信息", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 12329}
+
+data: {"text": "来帮助", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 12333}
+
+data: {"text": "我更好地查询？", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 12434}
+
+data: {"text": "例如：", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 12438}
+
+data: {"text": "\n- 您", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 12580}
+
+data: {"text": "想查询的具体检查", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 12583}
+
+data: {"text": "报告类型是什么？", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 12710}
+
+data: {"text": "\n- ", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 12714}
+
+data: {"text": "是否有特定的患者姓名", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 12857}
+
+data: {"text": "、日期", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 12862}
+
+data: {"text": "或其他标识信息？", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 12931}
+
+data: {"text": "\n-", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 12934}
+
+data: {"text": " 您是想了解", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 13041}
+
+data: {"text": "如何", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 13047}
+
+data: {"text": "获取检查报告ID", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 13185}
+
+data: {"text": "，还是", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 13189}
+
+data: {"text": "想查询某个特定", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 13267}
+
+data: {"text": "报告的", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 13271}
+
+data: {"text": "详细信息？\n\n请", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 13472}
+
+data: {"text": "提供更多细节，我将", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 13502}
+
+data: {"text": "尽力为您提供帮助。", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "reasoning_end": true, "step": "model_answer", "reasoning_time": 13577}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_3e9d9bdd", "finish_reason": "stop", "step": "model_answer", "reasoning_time": 13612}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "done", "step_id": "step_3e9d9bdd", "usage": {"completion_tokens": 156, "prompt_tokens": 3497, "total_tokens": 3653, "completion_tokens_details": {"accepted_prediction_tokens": null, "audio_tokens": null, "reasoning_tokens": 32, "rejected_prediction_tokens": null, "text_tokens": 156}, "prompt_tokens_details": {"audio_tokens": null, "cached_tokens": null, "text_tokens": 3497}}, "step": "model_answer", "reasoning_time": 13613}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "start", "step_id": "step_e01145b1", "step": "task_planning"}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "用户", "step": "task_planning", "reasoning_time": 1032}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "请求", "step": "task_planning", "reasoning_time": 1097}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "查询\"检查报告", "step": "task_planning", "reasoning_time": 1159}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "ID\"，这是一个", "step": "task_planning", "reasoning_time": 1281}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "比较", "step": "task_planning", "reasoning_time": 1286}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "模糊的请求。我需要", "step": "task_planning", "reasoning_time": 1406}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "先尝试", "step": "task_planning", "reasoning_time": 1411}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "在知识库中搜索", "step": "task_planning", "reasoning_time": 1527}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "相关信息，看看是否能", "step": "task_planning", "reasoning_time": 1533}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "找到关于检查报告", "step": "task_planning", "reasoning_time": 1644}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "ID的信息。\n\n", "step": "task_planning", "reasoning_time": 1648}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "根据可用的工具，", "step": "task_planning", "reasoning_time": 1782}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "我可以使用", "step": "task_planning", "reasoning_time": 1784}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "\"检查报告知识库", "step": "task_planning", "reasoning_time": 1899}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "\"工具来搜索", "step": "task_planning", "reasoning_time": 1904}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "相关内容。这个工具的", "step": "task_planning", "reasoning_time": 2144}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "kb", "step": "task_planning", "reasoning_time": 2150}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "_id是固定的\"", "step": "task_planning", "reasoning_time": 2274}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "ff1c", "step": "task_planning", "reasoning_time": 2277}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "2c31", "step": "task_planning", "reasoning_time": 2398}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "128c", "step": "task_planning", "reasoning_time": 2402}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "442eb", "step": "task_planning", "reasoning_time": 2530}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "95fd8", "step": "task_planning", "reasoning_time": 2536}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "21f9", "step": "task_planning", "reasoning_time": 2656}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "907eee", "step": "task_planning", "reasoning_time": 2661}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "\"，query参数", "step": "task_planning", "reasoning_time": 2895}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "应该是", "step": "task_planning", "reasoning_time": 2899}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "用户的查询内容。", "step": "task_planning", "reasoning_time": 2976}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "\n\n让我", "step": "task_planning", "reasoning_time": 2981}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "创建一个任务来执行", "step": "task_planning", "reasoning_time": 3242}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "这个搜索", "step": "task_planning", "reasoning_time": 3247}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "reasoning_content": "。", "step": "task_planning", "reasoning_time": 3344}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "running", "step_id": "step_e01145b1", "task_plan": [{"id": 1, "name": "查询检查报告ID信息", "description": "在检查报告知识库中搜索关于检查报告ID的相关信息", "status": "pending"}], "step": "task_planning"}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "done", "step_id": "step_e01145b1", "reasoning_end": true, "finish_reason": "stop", "step": "task_planning", "reasoning_time": 4416}
+
+data: {"text": "", "chat_id": "0b30d792b47a4162b369d872c8ef2650", "user_message_id": "f384d5d54bb64f1f9a54f046dff6a692", "assistant_message_id": "a96fd5d158bc40eeae5538ec2b5da60a", "status": "start", "step_id": "step_d5489b7a", "step": "task_execution"}
+
+data: [DONE]
+
+
+```
+正确的助理消息显示应该为：
+- 分析问题
+  ```
+  用户想要查询检查报告 ID。我需要使用检查报告知识库工具来搜索相关信息。这是一个简单的查询任务，只需要执行一次知识库搜索即可，不需要拆分成多个子任务。
+
+
+让我分析一下：
+
+
+
+用户的问题是"帮我查询检查报告 ID"
+
+我可以使用"检查报告知识库"工具来搜索
+
+这是一个单一的查询操作，不需要拆分成多个步骤
+
+
+所以不需要拆分子任务，直接输出"否"。
+  ```
+- 思考过程
+  ```
+  用户想要查询检查报告ID，我需要使用检查报告知识库工具来搜索相关信息。根据工具描述，我需要提供task_name、kb_id和query参数。kb_id是固定的"ff1c2c31128c442eb95fd821f9907eee"，query应该是用户想要查询的内容"检查报告ID"。
+
+
+让我调用这个工具来帮助用户查询检查报告ID相关信息
+  ```
+
+- 查询检查报告ID信息
+  ```
+  用户需要查询检查报告ID相关信息，我将使用检查报告知识库工具进行搜索检索。
+
+未检索到相关内容
+  ```
+
+- 思考过程
+  ```
+用户查询检查报告ID，但知识库中没有检索到相关内容。我需要告知用户这个情况，并询问是否需要更具体的查询内容或者是否有其他可以帮助的。
+  ```
+  很抱歉，我在检查报告知识库中未能检索到关于"检查报告ID"的相关信息。
+
+可能的原因包括：
+
+查询关键词过于宽泛
+知识库中可能没有存储相关ID信息
+可能需要更具体的查询条件
+请问您是否可以提供更多信息来帮助我更好地查询？例如：
+
+您想查询的具体检查报告类型是什么？
+是否有特定的患者姓名、日期或其他标识信息？
+您是想了解如何获取检查报告ID，还是想查询某个特定报告的详细信息？
+请提供更多细节，我将尽力为您提供帮助。
+
+- 任务规划
