@@ -7,7 +7,7 @@
 import json
 from typing import Dict, Any, List
 
-from app.database.models import Knowledgebase
+from app.database.models import Knowledgebase, KnowledgebaseDocument
 
 
 def convert_kb_to_openai_tool(kb: Knowledgebase) -> Dict[str, Any]:
@@ -22,13 +22,46 @@ def convert_kb_to_openai_tool(kb: Knowledgebase) -> Dict[str, Any]:
     """
     kb_id = str(kb.id)
     kb_name = kb.name
-    kb_description = kb.description or f'知识库: {kb_name}'
+    kb_description = kb.description or ''
+    
+    description_parts = [
+        f'【知识库】：{kb_name}',
+        f'【知识库描述】：{kb_description if kb_description else "无"}'
+    ]
+    
+    documents = KnowledgebaseDocument.select().where(
+        (KnowledgebaseDocument.kb_id == kb_id) &
+        (KnowledgebaseDocument.deleted == False) &
+        (KnowledgebaseDocument.status == True)
+    ).order_by(KnowledgebaseDocument.created_at.desc())
+    
+    if documents.count() > 0:
+        description_parts.append('【包含文档】：')
+        description_parts.append('| 标题 | 标签 |')
+        description_parts.append('| ------- | ------- |')
+        
+        for doc in documents:
+            title = doc.title or doc.file_name or '未命名文档'
+            tags_str = ''
+            if doc.tags:
+                try:
+                    tags_list = json.loads(doc.tags) if isinstance(doc.tags, str) else doc.tags
+                    if isinstance(tags_list, list):
+                        tags_str = ', '.join(tags_list)
+                except (json.JSONDecodeError, TypeError):
+                    tags_str = str(doc.tags) if doc.tags else ''
+            description_parts.append(f'| {title} | {tags_str if tags_str else "无"} |')
+    else:
+        description_parts.append('【包含文档】：无')
+    
+    description_parts.append('需要查询以上相关知识可以使用本工具')
+    full_description = ' \n'.join(description_parts)
 
     tool = {
         'type': 'function',
         'function': {
             'name': kb_name,
-            'description': kb_description,
+            'description': full_description,
             'parameters': {
                 'type': 'object',
                 'properties': {
@@ -55,7 +88,7 @@ def convert_kb_to_openai_tool(kb: Knowledgebase) -> Dict[str, Any]:
                         'description': '为何选择并使用本工具，返回思考过程'
                     }
                 },
-                'required': ['task_name', 'kb_id', 'query',"action"]
+                'required': ['task_name', 'kb_id', 'query', 'action']
             }
         }
     }
