@@ -397,7 +397,6 @@ docker run -d \
   -p 8081:8081 \
   -p 8082:8082 \
   -v /opt/ai-center/config/server_config.yaml:/aicenter/configs/server_config.yaml:ro \
-  -v /opt/ai-center/config/aicenter.conf:/etc/nginx/conf.d/aicenter.conf:ro \
   ai-center:aihub_v2_beta_0.1
 ```
 

@@ -1,6 +1,6 @@
 server:
   host: '0.0.0.0'
-  http_port: 8085
+  http_port: 8081
   workers: 1
 mcp:
   host: '0.0.0.0'
