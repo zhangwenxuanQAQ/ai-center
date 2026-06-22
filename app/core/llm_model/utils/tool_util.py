@@ -273,20 +273,26 @@ def _execute_single_tool(tool_call: Dict, tool_map: Dict[str, str]) -> Dict[str,
             }
 
 
-def process_tool_calls(tool_calls: List[Dict], tool_map: Dict[str, str]) -> Generator[Dict[str, Any], None, None]:
+def process_tool_calls(tool_calls: List[Dict], tool_map: Dict[str, str], chat_id: str = '') -> Generator[Dict[str, Any], None, None]:
     """
     处理工具调用，支持并行执行多个工具
 
     先yield每个工具的start状态，然后并行执行所有工具，
-    每个工具完成后立即yield其结果
+    每个工具开始执行后立即yield running状态，
+    每个工具完成后立即yield其结果。
+    支持通过chat_id检查停止标记，在工具执行过程中如果检测到停止请求，
+    会取消未完成的工具调用。
 
     Args:
         tool_calls: 工具调用列表
         tool_map: 工具名称到工具ID的映射
+        chat_id: 对话ID，用于检查停止状态
 
     Yields:
         Dict: 工具调用状态或结果
     """
+    from app.core.chat.chat_service import ChatStopManager
+    
     tool_call_task_names = {}
     tool_call_reasoning_contents = {}
     for tool_call in tool_calls:
@@ -315,27 +321,50 @@ def process_tool_calls(tool_calls: List[Dict], tool_map: Dict[str, str]) -> Gene
     with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(tool_calls), 10)) as executor:
         future_to_tool = {}
         for tool_call in tool_calls:
+            function_name = tool_call.get('function', {}).get('name', '')
+            tool_call_id = tool_call.get('id', '')
+            
             future = executor.submit(_execute_single_tool, tool_call, tool_map)
             future_to_tool[future] = tool_call
+            
+            yield {
+                'tool_call_id': tool_call_id,
+                'tool_name': function_name,
+                'task_name': tool_call_task_names.get(tool_call_id, ''),
+                'status': 'running',
+                'elapsed_ms': 0,
+                'reasoning_content': tool_call_reasoning_contents.get(tool_call_id, '')
+            }
 
-        for future in concurrent.futures.as_completed(future_to_tool):
-            try:
-                result = future.result()
-                tool_call = future_to_tool[future]
-                tool_call_id = tool_call.get('id', '')
-                result['status'] = 'error' if 'error' in result else 'success'
-                result['reasoning_content'] = tool_call_reasoning_contents.get(tool_call_id, '')
-                yield result
-            except Exception as e:
-                tool_call = future_to_tool[future]
-                function_name = tool_call.get('function', {}).get('name', '')
-                tool_call_id = tool_call.get('id', '')
-                yield {
-                    'tool_call_id': tool_call_id,
-                    'tool_name': function_name,
-                    'task_name': tool_call_task_names.get(tool_call_id, ''),
-                    'status': 'error',
-                    'elapsed_ms': 0,
-                    'error': str(e),
-                    'reasoning_content': tool_call_reasoning_contents.get(tool_call_id, '')
-                }
+        try:
+            for future in concurrent.futures.as_completed(future_to_tool):
+                if chat_id and ChatStopManager().is_stop_requested(chat_id):
+                    for pending_future in future_to_tool:
+                        if not pending_future.done():
+                            pending_future.cancel()
+                    break
+                
+                try:
+                    result = future.result()
+                    tool_call = future_to_tool[future]
+                    tool_call_id = tool_call.get('id', '')
+                    result['status'] = 'error' if 'error' in result else 'success'
+                    result['reasoning_content'] = tool_call_reasoning_contents.get(tool_call_id, '')
+                    yield result
+                except Exception as e:
+                    tool_call = future_to_tool[future]
+                    function_name = tool_call.get('function', {}).get('name', '')
+                    tool_call_id = tool_call.get('id', '')
+                    yield {
+                        'tool_call_id': tool_call_id,
+                        'tool_name': function_name,
+                        'task_name': tool_call_task_names.get(tool_call_id, ''),
+                        'status': 'error',
+                        'elapsed_ms': 0,
+                        'error': str(e),
+                        'reasoning_content': tool_call_reasoning_contents.get(tool_call_id, '')
+                    }
+        finally:
+            for pending_future in future_to_tool:
+                if not pending_future.done():
+                    pending_future.cancel()

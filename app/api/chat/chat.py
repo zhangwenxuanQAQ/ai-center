@@ -15,7 +15,7 @@ from app.services.chat.dto import (
     ChatRequest, ChatListResponse, ChatMessageListResponse
 )
 from app.services.chat.service import ChatService, ChatMessageService
-from app.core.chat.chat_service import ChatCoreService
+from app.core.chat.chat_service import ChatCoreService, ChatStopManager
 from app.database.models import Chat
 from app.utils.response import ResponseUtil, ApiResponse
 from app.core.exceptions import ResourceNotFoundError
@@ -337,6 +337,7 @@ async def chat_completions(
         
         if chat_request.stream:
             async def generate():
+                current_chat_id = None
                 try:
                     for chunk in ChatCoreService.chat_stream(
                         user_id=user_id,
@@ -348,10 +349,9 @@ async def chat_completions(
                         message_id=chat_request.message_id,
                         system_prompt=chat_request.system_prompt
                     ):
-                        # 检查客户端是否断开连接
-                        if await request.is_disconnected():
-                            # 客户端断开连接，触发GeneratorExit异常
-                            raise GeneratorExit("Client disconnected")
+                        # 记录chat_id用于停止时更新消息
+                        if chunk.get('chat_id'):
+                            current_chat_id = chunk['chat_id']
                         
                         if 'error' in chunk:
                             yield f"data: {json.dumps({'error': chunk['error'], 'chat_id': chunk.get('chat_id')}, ensure_ascii=False)}\n\n"
@@ -361,7 +361,6 @@ async def chat_completions(
 
                     yield "data: [DONE]\n\n"
                 except GeneratorExit:
-                    # 客户端断开连接，传播GeneratorExit异常
                     raise
                 except Exception as e:
                     print(f"Error in generate: {e}")
@@ -373,7 +372,8 @@ async def chat_completions(
                 headers={
                     "Cache-Control": "no-cache",
                     "Connection": "keep-alive",
-                    "X-Accel-Buffering": "no"
+                    "X-Accel-Buffering": "no",
+                    "Transfer-Encoding": "chunked"
                 }
             )
         else:
@@ -398,6 +398,47 @@ async def chat_completions(
     except Exception as e:
         logger.error(f"聊天接口异常: {str(e)}", exc_info=True)
         return ResponseUtil.error(message=f"聊天失败: {str(e)}")
+
+
+class StopChatRequest(BaseModel):
+    chat_id: str = Field(..., description="对话ID")
+
+
+@router.post("/stop", summary="停止聊天")
+async def stop_chat(
+    request: Request,
+    stop_request: StopChatRequest
+):
+    """
+    停止聊天
+    
+    将对话中所有正在运行的消息更新为停止状态，
+    并在content末尾拼接"已停止"
+    
+    Args:
+        request: 请求对象
+        stop_request: 停止请求参数
+            - chat_id: 对话ID
+            
+    Returns:
+        ApiResponse: 操作结果
+    """
+    user_id = get_user_id(request)
+    
+    try:
+        chat = Chat.get(
+            (Chat.id == stop_request.chat_id) &
+            (Chat.user_id == user_id) &
+            (Chat.deleted == False)
+        )
+    except Chat.DoesNotExist:
+        return ResponseUtil.not_found(message="对话不存在")
+    
+    updated_count = ChatMessageService.stop_chat_messages(stop_request.chat_id)
+    
+    ChatStopManager().request_stop(stop_request.chat_id)
+    
+    return ResponseUtil.success(data={"updated_count": updated_count}, message="已停止回答")
 
 
 class DownloadFileRequest(BaseModel):

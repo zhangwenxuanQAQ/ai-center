@@ -10,6 +10,7 @@ import base64
 import os
 import importlib.util
 import time
+import threading
 from typing import List, Dict, Any, Optional, Generator, Tuple, Union
 
 from app.database.models import Chat, ChatMessage, LLMModel, Chatbot, ChatbotPrompt, ChatbotTool, MCPTool
@@ -28,6 +29,40 @@ from app.core.prompt.utils.system_prompt_builder import (
     load_if_need_task_prompt,
     load_result_summary_prompt
 )
+
+
+class ChatStopManager:
+    """
+    聊天停止状态管理器
+    
+    管理聊天的停止状态，用于在手动停止回答时终止后端聊天流程
+    """
+    _instance = None
+    _lock = threading.Lock()
+
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._stop_flags = {}
+                    cls._instance._flags_lock = threading.Lock()
+        return cls._instance
+
+    def request_stop(self, chat_id: str):
+        """标记某个对话需要停止"""
+        with self._flags_lock:
+            self._stop_flags[chat_id] = True
+
+    def is_stop_requested(self, chat_id: str) -> bool:
+        """检查某个对话是否需要停止"""
+        with self._flags_lock:
+            return self._stop_flags.get(chat_id, False)
+
+    def clear_stop(self, chat_id: str):
+        """清除停止标记"""
+        with self._flags_lock:
+            self._stop_flags.pop(chat_id, None)
 
 
 def _load_mcp_tool_util():
@@ -631,6 +666,19 @@ class ChatCoreService:
             start_time = time.time()
             # 使用流式生成，同时收集reasoning_content和text
             for chunk in model.stream_generate_with_messages(messages, **check_params):
+                if ChatStopManager().is_stop_requested(chat_id):
+                    yield ChatStreamResponse.text_response(
+                        text='',
+                        chat_id=chat_id,
+                        user_message_id=user_message_id,
+                        assistant_message_id=assistant_message_id,
+                        status=MessageStatus.STOP,
+                        step_id=analyze_problem_step_id,
+                        step=MessageStep.ANALYZE_QUERY,
+                        avatar=avatar
+                    ).to_dict()
+                    return False
+                
                 if 'error' in chunk:
                     print(f"判断是否需要子任务错误: {chunk['error']}")
                     yield ChatStreamResponse.error_response(
@@ -779,6 +827,19 @@ class ChatCoreService:
         
         # 3. 只yield思考过程（不yield文本内容）
         for chunk in model.stream_generate_with_messages(messages, **planning_params):
+            if ChatStopManager().is_stop_requested(chat_id):
+                yield ChatStreamResponse.text_response(
+                    text='',
+                    chat_id=chat_id,
+                    user_message_id=user_message_id,
+                    assistant_message_id=assistant_message_id,
+                    status=MessageStatus.STOP,
+                    step_id=task_planning_step_id,
+                    step=MessageStep.TASK_PLANNING,
+                    avatar=avatar
+                ).to_dict()
+                return None
+            
             if 'error' in chunk:
                 print(f"任务规划错误: {chunk['error']}")
                 yield ChatStreamResponse.error_response(
@@ -914,6 +975,19 @@ class ChatCoreService:
             reasoning_content_chunk = ''
             
             for chunk in model.stream_generate_with_messages(task_messages, **model_params):
+                if ChatStopManager().is_stop_requested(chat_id):
+                    yield ChatStreamResponse.text_response(
+                        text='',
+                        chat_id=chat_id,
+                        user_message_id=user_message_id,
+                        assistant_message_id=assistant_message_id,
+                        status=MessageStatus.STOP,
+                        step_id=task_execution_step_id,
+                        step=MessageStep.TASK_EXECUTION,
+                        avatar=avatar
+                    ).to_dict()
+                    return
+                
                 if 'error' in chunk:
                     yield ChatStreamResponse.error_response(
                         error=chunk['error'],
@@ -958,7 +1032,20 @@ class ChatCoreService:
                     'tool_calls': tool_calls_list
                 })
                 
-                for tool_result in process_tool_calls(tool_calls_list, tool_map):
+                for tool_result in process_tool_calls(tool_calls_list, tool_map, chat_id):
+                    if ChatStopManager().is_stop_requested(chat_id):
+                        yield ChatStreamResponse.text_response(
+                            text='',
+                            chat_id=chat_id,
+                            user_message_id=user_message_id,
+                            assistant_message_id=assistant_message_id,
+                            status=MessageStatus.STOP,
+                            step_id=task_execution_step_id,
+                            step=MessageStep.TASK_EXECUTION,
+                            avatar=avatar
+                        ).to_dict()
+                        return
+                    
                     tool_call_id = tool_result.get('tool_call_id', '')
                     tool_name = tool_result.get('tool_name', '')
                     task_name = tool_result.get('task_name', '')
@@ -973,6 +1060,25 @@ class ChatCoreService:
                                 task_name=task_name,
                                 status='start',
                                 elapsed_ms=0
+                            ),
+                            chat_id=chat_id,
+                            user_message_id=user_message_id,
+                            assistant_message_id=assistant_message_id,
+                            status=MessageStatus.RUNNING,
+                            step_id=task_execution_step_id,
+                            step=MessageStep.TASK_EXECUTION,
+                            avatar=avatar
+                        ).to_dict()
+                        continue
+
+                    if tool_status == 'running':
+                        yield ChatStreamResponse.tool_call_response(
+                            tool_call=ToolCallInfo(
+                                tool_call_id=tool_call_id,
+                                name=tool_name,
+                                task_name=task_name,
+                                status='running',
+                                elapsed_ms=elapsed_ms
                             ),
                             chat_id=chat_id,
                             user_message_id=user_message_id,
@@ -1148,6 +1254,9 @@ class ChatCoreService:
         while True:
             model_answer_step_id = f"step_{uuid.uuid4().hex[:8]}"
             
+            round_start_time = time.time()
+            round_reasoning_end_time = None
+            
             yield ChatStreamResponse.start_response(
                 chat_id=chat_id,
                 user_message_id=user_message_id,
@@ -1176,6 +1285,19 @@ class ChatCoreService:
             round_finished = False
             
             for chunk in model.stream_generate_with_messages(messages, **model_params):
+                if ChatStopManager().is_stop_requested(chat_id):
+                    yield ChatStreamResponse.text_response(
+                        text='',
+                        chat_id=chat_id,
+                        user_message_id=user_message_id,
+                        assistant_message_id=assistant_message_id,
+                        status=MessageStatus.STOP,
+                        step_id=model_answer_step_id,
+                        step=MessageStep.MODEL_ANSWER,
+                        avatar=avatar
+                    ).to_dict()
+                    return
+                
                 if 'error' in chunk:
                     yield ChatStreamResponse.error_response(
                         error=chunk['error'],
@@ -1185,8 +1307,8 @@ class ChatCoreService:
                     return
                 
                 if chunk.get('text'):
-                    if reasoning_end_time is None and reasoning_content:
-                        reasoning_end_time = time.time()
+                    if round_reasoning_end_time is None and reasoning_content_chunk:
+                        round_reasoning_end_time = time.time()
                     full_response_chunk += chunk['text']
                     full_response += chunk['text']
                 
@@ -1198,7 +1320,7 @@ class ChatCoreService:
                     tool_calls_list = chunk.get('tool_calls')
                 
                 reasoning_end = False
-                if chunk.get('usage') and reasoning_content and reasoning_end_time is not None:
+                if chunk.get('usage') and reasoning_content_chunk and round_reasoning_end_time is not None:
                     reasoning_end = True
                 
                 chunk_status = MessageStatus.RUNNING
@@ -1206,7 +1328,7 @@ class ChatCoreService:
                     chunk_status = MessageStatus.DONE
                     round_finished = True
                 
-                reasoning_time = int((time.time() - start_time) * 1000)
+                reasoning_time = int((time.time() - round_start_time) * 1000)
                 
                 yield ChatStreamResponse.text_response(
                     text=chunk.get('text', ''),
@@ -1226,8 +1348,8 @@ class ChatCoreService:
         
             if round_finished and (full_response_chunk or reasoning_content_chunk):
                 reasoning_time = None
-                if reasoning_content_chunk and reasoning_end_time:
-                    reasoning_time = int((reasoning_end_time - start_time) * 1000)
+                if reasoning_content_chunk and round_reasoning_end_time:
+                    reasoning_time = int((round_reasoning_end_time - round_start_time) * 1000)
                 
                 ChatMessageService.upsert_assistant_message(
                     chat_id=chat_id,
@@ -1249,7 +1371,20 @@ class ChatCoreService:
                     'tool_calls': tool_calls_list
                 })
 
-                for tool_result in process_tool_calls(tool_calls_list, tool_map):
+                for tool_result in process_tool_calls(tool_calls_list, tool_map, chat_id):
+                    if ChatStopManager().is_stop_requested(chat_id):
+                        yield ChatStreamResponse.text_response(
+                            text='',
+                            chat_id=chat_id,
+                            user_message_id=user_message_id,
+                            assistant_message_id=assistant_message_id,
+                            status=MessageStatus.STOP,
+                            step_id=model_answer_step_id,
+                            step=MessageStep.MODEL_ANSWER,
+                            avatar=avatar
+                        ).to_dict()
+                        return
+                    
                     tool_call_id = tool_result.get('tool_call_id', '')
                     tool_name = tool_result.get('tool_name', '')
                     task_name = tool_result.get('task_name', '')
@@ -1292,6 +1427,27 @@ class ChatCoreService:
                             extra_content=json.dumps({"tool_call": tool_call_info.to_dict()}, ensure_ascii=False),
                             avatar=avatar
                         )
+                        continue
+
+                    if tool_status == 'running':
+                        tool_call_info = ToolCallInfo(
+                            tool_call_id=tool_call_id,
+                            name=tool_name,
+                            task_name=task_name,
+                            status='running',
+                            elapsed_ms=elapsed_ms,
+                            reasoning_content=reasoning_content
+                        )
+                        yield ChatStreamResponse.tool_call_response(
+                            tool_call=tool_call_info,
+                            chat_id=chat_id,
+                            user_message_id=user_message_id,
+                            assistant_message_id=assistant_message_id,
+                            status=MessageStatus.RUNNING,
+                            step_id=tool_step_id,
+                            step=MessageStep.TOOL_CALL,
+                            avatar=avatar
+                        ).to_dict()
                         continue
 
                     if 'error' in tool_result:
@@ -1607,9 +1763,46 @@ class ChatCoreService:
                 pass
 
         try:
-            # 主循环
+            ChatStopManager().clear_stop(chat_id)
+            
             while True:
                 round_count += 1
+                
+                if ChatStopManager().is_stop_requested(chat_id):
+                    yield ChatStreamResponse.text_response(
+                        text='',
+                        chat_id=chat_id,
+                        user_message_id=user_message_id,
+                        assistant_message_id=assistant_message_id,
+                        status=MessageStatus.STOP,
+                        step_id=current_step_id or '',
+                        step=current_step,
+                        avatar=avatar
+                    ).to_dict()
+                    is_stopped = True
+                    
+                    if full_response or reasoning_content:
+                        reasoning_time = None
+                        if reasoning_content and reasoning_end_time:
+                            reasoning_time = int((reasoning_end_time - start_time) * 1000)
+                        
+                        if current_step_id:
+                            ChatMessageService.upsert_assistant_message(
+                                chat_id=chat_id,
+                                assistant_content=full_response,
+                                step_id=current_step_id,
+                                model_id=model_id,
+                                chatbot_id=chatbot_id,
+                                config=config,
+                                reasoning_content=reasoning_content if reasoning_content else None,
+                                reasoning_time=reasoning_time,
+                                avatar=avatar,
+                                step=current_step
+                            )
+                    
+                    ChatMessageService.stop_chat_messages(chat_id)
+                    ChatStopManager().clear_stop(chat_id)
+                    break
                 
                 # 1. 先执行任务规划
                 task_plan = None
@@ -1650,6 +1843,32 @@ class ChatCoreService:
                     
                     for result in direct_answer_result:
                         if isinstance(result, dict):
+                            if result.get('status') == MessageStatus.STOP:
+                                is_stopped = True
+                                
+                                if full_response or reasoning_content:
+                                    reasoning_time = None
+                                    if reasoning_content and reasoning_end_time:
+                                        reasoning_time = int((reasoning_end_time - start_time) * 1000)
+                                    
+                                    if current_step_id:
+                                        ChatMessageService.upsert_assistant_message(
+                                            chat_id=chat_id,
+                                            assistant_content=full_response,
+                                            step_id=current_step_id,
+                                            model_id=model_id,
+                                            chatbot_id=chatbot_id,
+                                            config=config,
+                                            reasoning_content=reasoning_content if reasoning_content else None,
+                                            reasoning_time=reasoning_time,
+                                            avatar=avatar,
+                                            step=current_step
+                                        )
+                                
+                                ChatMessageService.stop_chat_messages(chat_id)
+                                ChatStopManager().clear_stop(chat_id)
+                                return
+                            
                             # 流式响应
                             yield result
                         elif isinstance(result, tuple) and len(result) == 3:
@@ -1724,6 +1943,19 @@ class ChatCoreService:
                     task_results = []
                     
                     for i, task in enumerate(task_plan):
+                        if ChatStopManager().is_stop_requested(chat_id):
+                            yield ChatStreamResponse.text_response(
+                                text='',
+                                chat_id=chat_id,
+                                user_message_id=user_message_id,
+                                assistant_message_id=assistant_message_id,
+                                status=MessageStatus.STOP,
+                                step_id=task_list_step_id,
+                                step=MessageStep.TASK_LIST,
+                                avatar=avatar
+                            ).to_dict()
+                            break
+                        
                         # 生成task_execution阶段的step_id
                         task_execution_step_id = f"step_{uuid.uuid4().hex[:8]}"
                         
@@ -1800,7 +2032,32 @@ class ChatCoreService:
                             assistant_message_id=assistant_message_id,
                             task_execution_step_id=task_execution_step_id,
                             **model_params
-                        ): 
+                        ):
+                            if isinstance(result, dict) and result.get('status') == MessageStatus.STOP:
+                                is_stopped = True
+                                
+                                if task_full_response or task_reasoning_content:
+                                    reasoning_time = None
+                                    if task_reasoning_content and reasoning_end_time:
+                                        reasoning_time = int((reasoning_end_time - start_time) * 1000)
+                                    
+                                    ChatMessageService.upsert_assistant_message(
+                                        chat_id=chat_id,
+                                        assistant_content=task_full_response,
+                                        step_id=task_execution_step_id,
+                                        model_id=model_id,
+                                        chatbot_id=chatbot_id,
+                                        config=config,
+                                        reasoning_content=task_reasoning_content if task_reasoning_content else None,
+                                        reasoning_time=reasoning_time,
+                                        avatar=avatar,
+                                        step=MessageStep.TASK_EXECUTION
+                                    )
+                                
+                                ChatMessageService.stop_chat_messages(chat_id)
+                                ChatStopManager().clear_stop(chat_id)
+                                return
+                            
                             yield result
                         
                         # 更新任务状态为done
@@ -1888,6 +2145,19 @@ class ChatCoreService:
                         ]
                         
                         for chunk in model.stream_generate_with_messages(summary_messages, **model_params):
+                            if ChatStopManager().is_stop_requested(chat_id):
+                                yield ChatStreamResponse.text_response(
+                                    text='',
+                                    chat_id=chat_id,
+                                    user_message_id=user_message_id,
+                                    assistant_message_id=assistant_message_id,
+                                    status=MessageStatus.STOP,
+                                    step_id=result_summary_step_id,
+                                    step=MessageStep.RESULT_SUMMARY,
+                                    avatar=avatar
+                                ).to_dict()
+                                break
+                            
                             if 'error' in chunk:
                                 yield ChatStreamResponse.error_response(
                                     error=chunk['error'],
@@ -1937,59 +2207,12 @@ class ChatCoreService:
                         
                         break  # 结束主循环
         except GeneratorExit:
-            # 客户端停止请求，保存已生成的内容
             is_stopped = True
+            ChatStopManager().request_stop(chat_id)
         except Exception as e:
-            # 其他异常，保存已生成的内容
             print(f"Error in stream_chat: {e}")
             pass
         finally:
-            # 只有手动停止时才更新或新增消息记录
-            if is_stopped and (full_response or reasoning_content):
-                # 添加"用户停止回答"标记
-                if full_response:
-                    full_response += "\n\n【用户停止回答】"
-                else:
-                    full_response = "【用户停止回答】"
-                
-                reasoning_time = None
-                if reasoning_content and reasoning_end_time:
-                    reasoning_time = int((reasoning_end_time - start_time) * 1000)
-                
-                # 通过step_id更新或新增消息
-                if current_step_id:
-                    ChatMessageService.upsert_assistant_message(
-                        chat_id=chat_id,
-                        assistant_content=full_response,
-                        step_id=current_step_id,
-                        model_id=model_id,
-                        chatbot_id=chatbot_id,
-                        config=config,
-                        reasoning_content=reasoning_content if reasoning_content else None,
-                        reasoning_time=reasoning_time,
-                        avatar=avatar,
-                        step=current_step
-                    )
-                else:
-                    # 如果没有step_id，使用普通创建方法
-                    # 生成一个新的step_id并设置默认步骤
-                    fallback_step_id = f"step_{uuid.uuid4().hex[:8]}"
-                    fallback_step = current_step if current_step else MessageStep.MODEL_ANSWER
-                    ChatMessageService.create_assistant_message(
-                        chat_id=chat_id,
-                        assistant_content=full_response,
-                        model_id=model_id,
-                        chatbot_id=chatbot_id,
-                        config=config,
-                        reasoning_content=reasoning_content if reasoning_content else None,
-                        reasoning_time=reasoning_time,
-                        avatar=avatar,
-                        message_id=assistant_message_id,
-                        step=fallback_step,
-                        step_id=fallback_step_id
-                    )
-
-            # 无论是否手动停止，都要更新chat表的messages字段
             chat_messages = ChatMessageService.get_messages_by_chat(chat_id)
             updated_messages = []
             msg_idx = 0
@@ -2227,7 +2450,7 @@ class ChatCoreService:
                     
                     # 处理工具调用
                     tool_result = None
-                    for result in process_tool_calls([tool_call], tool_map):
+                    for result in process_tool_calls([tool_call], tool_map, chat_id):
                         tool_result = result
                         break
                     

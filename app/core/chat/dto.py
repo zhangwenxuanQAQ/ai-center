@@ -17,6 +17,7 @@ class MessageStatus:
     START = 'start'
     RUNNING = 'running'
     DONE = 'done'
+    STOP = 'stop'
 
 
 class MessageStep:
@@ -25,6 +26,7 @@ class MessageStep:
     
     用于标识聊天流程中的各个阶段
     """
+    PRE_PROCESS = 'pre_process'
     ANALYZE_QUERY = 'analyze_query'
     TASK_PLANNING = 'task_planning'
     TASK_LIST = 'task_list'

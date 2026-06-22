@@ -57,8 +57,8 @@ interface Message {
   };
   extra_content?: any;
   tool_calls?: ToolCallStep[];
-  status?: 'start' | 'running' | 'done';
-  step?: 'task_planning' | 'task_list' | 'model_answer' | 'task_execution' | 'result_summary';
+  status?: 'start' | 'running' | 'done' | 'stop';
+  step?: 'pre_process' | 'task_planning' | 'task_list' | 'model_answer' | 'task_execution' | 'result_summary';
   step_id?: string;
   task_plan?: TaskInfo[];
   avatar?: string;
@@ -501,8 +501,30 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     }
   };
 
-  const handleStop = () => {
+  const handleStop = async () => {
     chatService.stopCurrentRequest();
+    
+    // 调用后端停止接口，更新消息状态
+    if (conversation?.id) {
+      try {
+        await chatService.stopChat(conversation.id);
+      } catch (e) {
+        console.error('停止聊天失败:', e);
+      }
+    }
+    
+    // 更新当前正在运行的消息状态为stop
+    setMessages(prev => prev.map(msg => {
+      if (msg.role === 'assistant' && (msg.status === 'start' || msg.status === 'running')) {
+        return {
+          ...msg,
+          status: 'stop',
+          content: msg.content ? (msg.content.endsWith('\n') ? msg.content + '已停止' : msg.content + '\n已停止') : '已停止'
+        };
+      }
+      return msg;
+    }));
+    
     setLoading(false);
     setThinkingMessageId(null);
   };
@@ -686,8 +708,14 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 step_id: stepId,
                 reasoning_content: '',
                 reasoning_end: false,
-                avatar: data.avatar
+                avatar: data.avatar,
+                tool_calls: []
               };
+              
+              // 如果当前消息包含 tool_call 数据，立即添加到 tool_calls
+              if (data.tool_call) {
+                newStepMsg.tool_calls = [data.tool_call];
+              }
               
               // 如果有初始"思考中"消息，移除它并新增具体步骤消息
               if (initialMsgIndex >= 0) {
@@ -1082,8 +1110,14 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                     step_id: stepId,
                     reasoning_content: '',
                     reasoning_end: false,
-                    avatar: data.avatar
+                    avatar: data.avatar,
+                    tool_calls: []
                   };
+                  
+                  // 如果当前消息包含 tool_call 数据，立即添加到 tool_calls
+                  if (data.tool_call) {
+                    newStepMsg.tool_calls = [data.tool_call];
+                  }
                   // 更新idTracker
                   if (data.assistant_message_id) {
                     idTracker.assistant = data.assistant_message_id;
@@ -1660,7 +1694,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 )}
               </div>
             )}
-            {(msg.status !== 'start' || !msg.status) && msg.reasoning_content && (msg.reasoning_end || msg.status === 'done') && (
+            {(msg.status !== 'start' || !msg.status) && msg.reasoning_content && (msg.reasoning_end || msg.status === 'done' || msg.status === 'stop') && (
               <div className="message-reasoning">
                 <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
                   {expandedReasoning.has(msg.step_id || msg.id) ? (
@@ -1743,7 +1777,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 )}
               </div>
             )}
-            {(msg.status !== 'start' || !msg.status) && msg.reasoning_content && (msg.reasoning_end || msg.status === 'done') && (
+            {(msg.status !== 'start' || !msg.status) && msg.reasoning_content && (msg.reasoning_end || msg.status === 'done' || msg.status === 'stop') && (
               <div className={`message-reasoning ${theme === 'dark' ? 'dark' : 'light'}`}>
                 <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
                   {expandedReasoning.has(msg.step_id || msg.id) ? (
@@ -1790,6 +1824,28 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* 预处理阶段 */}
+        {(msg.step === 'pre_process' || msg.extra_content?.step === 'pre_process') && (
+          <>
+            {msg.status === 'start' && (
+              <div className="message-reasoning">
+                <div className="reasoning-header">
+                  <LoadingOutlined spin />
+                  <span>正在预处理...</span>
+                </div>
+              </div>
+            )}
+            {msg.status === 'done' && (
+              <div className="message-reasoning">
+                <div className="reasoning-header">
+                  <CheckCircleOutlined />
+                  <span>预处理完成</span>
+                </div>
               </div>
             )}
           </>
@@ -1876,7 +1932,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 )}
               </div>
             )}
-            {(msg.status !== 'start' || !msg.status) && msg.reasoning_content && (msg.reasoning_end || msg.status === 'done') && (
+            {(msg.status !== 'start' || !msg.status) && msg.reasoning_content && (msg.reasoning_end || msg.status === 'done' || msg.status === 'stop') && (
               <div className="message-reasoning">
                 <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
                   {expandedReasoning.has(msg.step_id || msg.id) ? (
@@ -2073,7 +2129,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         {!msg.step && !msg.extra_content?.step && (
           <>
             {/* 历史消息显示思考过程 */}
-            {(!msg.status || msg.status === 'done') && msg.reasoning_content && (
+            {(!msg.status || msg.status === 'done' || msg.status === 'stop') && msg.reasoning_content && (
               <div className="message-reasoning">
                 <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
                   {expandedReasoning.has(msg.step_id || msg.id) ? (
@@ -2363,7 +2419,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                       )}
                     </div>
                   )}
-                  {(msg.status !== 'start' || !msg.status) && msg.reasoning_content && (msg.reasoning_end || msg.status === 'done') && (
+                  {(msg.status !== 'start' || !msg.status) && msg.reasoning_content && (msg.reasoning_end || msg.status === 'done' || msg.status === 'stop') && (
                     <div className="message-reasoning">
                       <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
                         {expandedReasoning.has(msg.step_id || msg.id) ? (
@@ -2410,6 +2466,28 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 </div>
               )}
 
+              {/* 预处理阶段 */}
+              {(msg.step === 'pre_process' || msg.extra_content?.step === 'pre_process') && (
+                <>
+                  {msg.status === 'start' && (
+                    <div className="message-reasoning">
+                      <div className="reasoning-header">
+                        <LoadingOutlined spin />
+                        <span>正在预处理...</span>
+                      </div>
+                    </div>
+                  )}
+                  {msg.status === 'done' && (
+                    <div className="message-reasoning">
+                      <div className="reasoning-header">
+                        <CheckCircleOutlined />
+                        <span>预处理完成</span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
               {/* 任务规划阶段 */}
               {(msg.step === 'task_planning' || msg.extra_content?.step === 'task_planning') && (
                 <>
@@ -2446,7 +2524,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                       )}
                     </div>
                   )}
-                  {(msg.status !== 'start' || !msg.status) && msg.reasoning_content && (msg.reasoning_end || msg.status === 'done') && (
+                  {(msg.status !== 'start' || !msg.status) && msg.reasoning_content && (msg.reasoning_end || msg.status === 'done' || msg.status === 'stop') && (
                     <div className={`message-reasoning ${theme === 'dark' ? 'dark' : 'light'}`}>
                       <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
                         {expandedReasoning.has(msg.step_id || msg.id) ? (
@@ -2478,7 +2556,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                       )}
                     </div>
                   )}
-                  {msg.task_plan && msg.task_plan.length > 0 && (msg.status === 'done' || !msg.status) && (
+                  {msg.task_plan && msg.task_plan.length > 0 && (msg.status === 'done' || msg.status === 'stop' || !msg.status) && (
                     <div className={`message-reasoning ${theme === 'dark' ? 'dark' : 'light'}`} style={{ marginTop: 8 }}>
                       <div className="reasoning-header" onClick={() => toggleTaskPlan(msg.id)}>
                         {expandedTaskPlans.has(msg.id) ? (
@@ -2555,7 +2633,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                       )}
                     </div>
                   )}
-                  {(msg.status !== 'start' || !msg.status) && msg.reasoning_content && (msg.reasoning_end || msg.status === 'done') && (
+                  {(msg.status !== 'start' || !msg.status) && msg.reasoning_content && (msg.reasoning_end || msg.status === 'done' || msg.status === 'stop') && (
                     <div className="message-reasoning">
                       <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
                         {expandedReasoning.has(msg.step_id || msg.id) ? (
@@ -2664,7 +2742,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               {!msg.step && !msg.extra_content?.step && (
                 <>
                   {/* 历史消息显示思考过程 */}
-                  {(!msg.status || msg.status === 'done') && msg.reasoning_content && (
+                  {(!msg.status || msg.status === 'done' || msg.status === 'stop') && msg.reasoning_content && (
                     <div className="message-reasoning">
                       <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
                         {expandedReasoning.has(msg.step_id || msg.id) ? (

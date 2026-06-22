@@ -589,6 +589,7 @@ class ChatMessageService:
             extra_content_dict['step'] = step
         if step_id is not None:
             extra_content_dict['step_id'] = step_id
+        extra_content_dict['step_status'] = 'running'
         
         extra_content_str = json.dumps(extra_content_dict, ensure_ascii=False) if extra_content_dict else None
         
@@ -672,6 +673,7 @@ class ChatMessageService:
             extra_content_dict['step'] = step
         if step_id is not None:
             extra_content_dict['step_id'] = step_id
+        extra_content_dict['step_status'] = 'running'
         
         extra_content_str = json.dumps(extra_content_dict, ensure_ascii=False) if extra_content_dict else None
         
@@ -831,6 +833,7 @@ class ChatMessageService:
             extra_content_dict['step'] = step
         if step_id is not None:
             extra_content_dict['step_id'] = step_id
+        extra_content_dict['step_status'] = 'running'
         
         extra_content_str = json.dumps(extra_content_dict, ensure_ascii=False) if extra_content_dict else None
         
@@ -991,6 +994,7 @@ class ChatMessageService:
             extra_content_dict['step'] = step
         if step_id is not None:
             extra_content_dict['step_id'] = step_id
+        extra_content_dict['step_status'] = 'running'
         
         extra_content_str = json.dumps(extra_content_dict, ensure_ascii=False) if extra_content_dict else None
         
@@ -1010,6 +1014,57 @@ class ChatMessageService:
         )
         tool_message.save(force_insert=True)
         return tool_message
+
+    @staticmethod
+    @handle_transaction
+    def stop_chat_messages(chat_id: str) -> int:
+        """
+        停止对话中正在运行的消息
+        
+        将所有正在运行的消息更新为stop状态，
+        保留思考内容和正文内容，在content末尾拼接"已停止"
+        
+        Args:
+            chat_id: 对话ID
+            
+        Returns:
+            int: 更新的消息数量
+        """
+        import json
+        
+        messages = ChatMessage.select().where(
+            (ChatMessage.chat_id == chat_id) &
+            (ChatMessage.deleted == False) &
+            (ChatMessage.role << ['assistant', 'tool'])
+        ).order_by(ChatMessage.created_at.desc())
+        
+        updated_count = 0
+        for msg in messages:
+            extra_data = {}
+            if msg.extra_content:
+                try:
+                    extra_data = json.loads(msg.extra_content)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            
+            step_status = extra_data.get('step_status', '')
+            
+            if step_status in ('running', 'start') or (not step_status and msg.content):
+                extra_data['step_status'] = 'stop'
+                msg.extra_content = json.dumps(extra_data, ensure_ascii=False)
+                
+                if msg.content:
+                    if not msg.content.endswith('\n'):
+                        msg.content += '\n'
+                    msg.content += '已停止'
+                else:
+                    msg.content = '已停止'
+                
+                msg.updated_at = datetime.now().astimezone()
+                msg.save()
+                updated_count += 1
+        
+        return updated_count
 
     @staticmethod
     @handle_transaction
