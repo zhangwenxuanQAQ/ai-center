@@ -119,6 +119,9 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
   // 自定义字段值状态
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, any>>({});
   
+  // 动态章节状态
+  const [dynamicChapters, setDynamicChapters] = useState<Chapter[]>([]);
+  
   // 合并用户标签和知识目录标签
   const tags = useMemo(() => {
     const allTags = [...categoryTags];
@@ -252,6 +255,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     richTextContent: '',
     title: '',
     customFieldValues: {} as Record<string, any>,
+    dynamicChapters: [] as Chapter[],
   });
 
   useEffect(() => {
@@ -523,6 +527,12 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         } else {
           setCategoryTags([]);
         }
+        
+        // 如果切换到非动态章节的知识目录，清空动态章节
+        const chapterType = category.document_config?.chapter_type || 'fixed';
+        if (chapterType !== 'dynamic') {
+          setDynamicChapters([]);
+        }
       }
     }
   }, [categoryId, categories, isEdit]);
@@ -657,6 +667,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       // 从document_config中读取richTextContent和customFieldValues
       let initRichTextContent = '';
       let initCustomFieldValues: Record<string, any> = {};
+      let initDynamicChapters: Chapter[] = [];
       
       if (doc.document_config) {
         try {
@@ -681,6 +692,24 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
           // 新格式：从chapters中读取value
           if (documentConfig.chapters && Array.isArray(documentConfig.chapters)) {
             const chapterFieldsValues: Record<string, any> = {};
+            
+            // 检查是否是动态章节
+            const category = findCategoryById(categories, docCategoryId);
+            const isDynamicChapter = category && 
+              category.document_config?.template_type === 'custom_template' && 
+              category.document_config?.chapter_type === 'dynamic';
+            
+            // 如果是动态章节，加载章节结构
+            if (isDynamicChapter) {
+              initDynamicChapters = documentConfig.chapters.map((chapter: any) => ({
+                id: chapter.id,
+                name: chapter.name,
+                parentId: chapter.parentId,
+                type: chapter.type,
+                fields: chapter.fields,
+              }));
+              setDynamicChapters(initDynamicChapters);
+            }
             
             for (const chapter of documentConfig.chapters) {
               if (chapter.id && chapter.value !== undefined) {
@@ -738,6 +767,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         richTextContent: initRichTextContent,
         title: doc.title || '',
         customFieldValues: initCustomFieldValues,
+        dynamicChapters: initDynamicChapters,
       };
       setOriginalData(initData);
       setCustomFieldValues(initCustomFieldValues);
@@ -747,7 +777,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       initDefaultChunkConfig('naive');
       setIsInitialized(true);
     }
-  }, [doc, constants]);
+  }, [doc, constants, categories]);
 
   const normalizeValue = (value: any): any => {
     if (value === null || value === undefined || value === '') {
@@ -828,6 +858,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         richTextContent: false,
         title: false,
         customFieldValues: false,
+        dynamicChapters: false,
       };
     }
     return {
@@ -842,6 +873,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       richTextContent: richTextContent !== originalData.richTextContent,
       title: title !== originalData.title,
       customFieldValues: !compareCustomFieldValues(customFieldValues, originalData.customFieldValues),
+      dynamicChapters: JSON.stringify(dynamicChapters) !== JSON.stringify(originalData.dynamicChapters),
     };
   }, [sourceType, chunkMethod, chunkConfig, tags, status, fileList, categoryId, metadatas, richTextContent, title, customFieldValues, originalData, isInitialized]);
 
@@ -867,6 +899,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       richTextContent,
       title,
       customFieldValues,
+      dynamicChapters: [...dynamicChapters],
     };
     const changed =
       current.sourceType !== originalData.sourceType ||
@@ -879,9 +912,10 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       JSON.stringify(current.metadatas) !== JSON.stringify(originalData.metadatas) ||
       current.richTextContent !== originalData.richTextContent ||
       current.title !== originalData.title ||
-      JSON.stringify(current.customFieldValues) !== JSON.stringify(originalData.customFieldValues);
+      JSON.stringify(current.customFieldValues) !== JSON.stringify(originalData.customFieldValues) ||
+      JSON.stringify(current.dynamicChapters) !== JSON.stringify(originalData.dynamicChapters);
     setHasChanges(changed);
-    }, [sourceType, chunkMethod, chunkConfig, tags, status, fileList, categoryId, metadatas, richTextContent, title, customFieldValues, originalData, constants, isInitialized]);
+    }, [sourceType, chunkMethod, chunkConfig, tags, status, fileList, categoryId, metadatas, richTextContent, title, customFieldValues, dynamicChapters, originalData, constants, isInitialized]);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -1046,7 +1080,9 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         }
         
         // 校验章节目录必填字段
-        const chapters = category.document_config.chapters || [];
+        // 如果是动态章节，使用dynamicChapters；如果是固定章节，使用category.document_config.chapters
+        const chapterType = category.document_config.chapter_type || 'fixed';
+        const chapters = chapterType === 'dynamic' ? dynamicChapters : (category.document_config.chapters || []);
         const chapterFieldsValues = customFieldValues.chapter_fields_values || {};
         
         // 递归校验章节字段
@@ -1149,6 +1185,58 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
           const chapterFieldsValues = customFieldValues.chapter_fields_values || {};
           
           documentConfig.chapters = categoryDocConfig.chapters.map((chapter: any) => {
+            const chapterValue = chapterFieldsValues[chapter.id] || {};
+            let value: any = null;
+            
+            switch (chapter.type) {
+              case 'form':
+                // 表单类型：value是对象 {"字段id":"字段值"}
+                value = {};
+                if (chapter.fields && chapter.fields.length > 0) {
+                  for (const field of chapter.fields) {
+                    let fieldValue = chapterValue[field.id];
+                    if (fieldValue === undefined || fieldValue === null) {
+                      if (field.default_value !== undefined && field.default_value !== null) {
+                        fieldValue = field.default_value;
+                      } else {
+                        switch (field.field_type) {
+                          case 'object':
+                            fieldValue = {};
+                            break;
+                          case 'array':
+                            fieldValue = [];
+                            break;
+                          default:
+                            fieldValue = null;
+                        }
+                      }
+                    }
+                    value[field.id] = fieldValue;
+                  }
+                }
+                break;
+              case 'list':
+                // 列表类型：value是数组 [{"字段id":"字段值"}]
+                value = chapterValue.list_data || [];
+                break;
+              case 'rich_text':
+                // 富文本类型：value是字符串
+                value = chapterValue.rich_text_content || '';
+                break;
+            }
+            
+            return {
+              ...chapter,
+              value,
+            };
+          });
+        }
+        
+        // 处理动态章节
+        if (categoryDocConfig.chapter_type === 'dynamic' && dynamicChapters.length > 0) {
+          const chapterFieldsValues = customFieldValues.chapter_fields_values || {};
+          
+          documentConfig.chapters = dynamicChapters.map((chapter: any) => {
             const chapterValue = chapterFieldsValues[chapter.id] || {};
             let value: any = null;
             
@@ -1434,6 +1522,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     setRichTextContent(originalData.richTextContent);
     setTitle(originalData.title);
     setCustomFieldValues(originalData.customFieldValues);
+    setDynamicChapters([...originalData.dynamicChapters]);
   };
 
   const renderSourceTypes = () => {
@@ -2697,6 +2786,34 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
                 chapters={chapters} 
                 onChange={() => {}} 
                 editable={false}
+                documentConstants={constants}
+                chapterFieldsValues={customFieldValues.chapter_fields_values || {}}
+                onChapterFieldsValuesChange={(values) => {
+                  setCustomFieldValues(prev => ({
+                    ...prev,
+                    chapter_fields_values: values,
+                  }));
+                }}
+              />
+            </div>
+          )}
+          
+          {/* 动态章节配置 */}
+          {hasKnowledgeContent && chapterType === 'dynamic' && (
+            <div style={{ marginTop: customFields.length > 0 ? 16 : 0, paddingTop: customFields.length > 0 ? 16 : 0, borderTop: customFields.length > 0 ? `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}` : 'none' }}>
+              <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
+                章节目录
+                <Tooltip title="动态章节：用户可手动添加章节及章节字段">
+                  <QuestionCircleOutlined style={{ marginLeft: 4, color: '#999', fontSize: 14 }} />
+                </Tooltip>
+              </div>
+              <ChapterList 
+                chapters={dynamicChapters} 
+                onChange={(newChapters) => {
+                  setDynamicChapters(newChapters);
+                  setHasChanges(true);
+                }} 
+                editable={true}
                 documentConstants={constants}
                 chapterFieldsValues={customFieldValues.chapter_fields_values || {}}
                 onChapterFieldsValuesChange={(values) => {
