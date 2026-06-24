@@ -703,7 +703,6 @@ body[data-theme="dark"] .md-editor-container .w-md-editor-content textarea,
 body[data-theme="dark"] .w-md-editor-content textarea,
 body[data-theme="dark"] .md-editor-container [class*="content"] textarea,
 body[data-theme="dark"] textarea[class*="editor"] {
-  background: #1a1a1a !important;
   color: #fff !important;
 }
 
@@ -855,191 +854,252 @@ body[data-theme="dark"] .md-editor-wrapper .w-md-editor-text-input::placeholder 
 
 /* CodeMirror 6 样式 */
 body[data-theme="dark"] .md-editor-wrapper .cm-editor,
-body[data-theme="dark"] .md-editor-wrapper .cm-editor * {
+body[data-theme="dark"] .md-editor-wrapper .cm-editor *,
+body[data-theme="dark"] .md-editor-container .cm-editor,
+body[data-theme="dark"] .md-editor-container .cm-editor * {
   background: var(--md-editor-bg) !important;
   color: var(--md-editor-text) !important;
 }
 
-body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-content {
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-content,
+body[data-theme="dark"] .md-editor-container .cm-editor .cm-content {
   caret-color: var(--md-editor-text) !important;
 }
 
-body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-activeLine {
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-activeLine,
+body[data-theme="dark"] .md-editor-container .cm-editor .cm-activeLine {
   background: rgba(255, 255, 255, 0.05) !important;
 }
 
-body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-line {
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-line,
+body[data-theme="dark"] .md-editor-container .cm-editor .cm-line {
   color: var(--md-editor-text) !important;
 }
 
-body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-cursor {
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-cursor,
+body[data-theme="dark"] .md-editor-container .cm-editor .cm-cursor {
   border-left-color: var(--md-editor-text) !important;
 }
 
-body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-selectionBackground {
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-selectionBackground,
+body[data-theme="dark"] .md-editor-container .cm-editor .cm-selectionBackground {
   background: rgba(102, 126, 234, 0.3) !important;
 }
 
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-gutters,
+body[data-theme="dark"] .md-editor-container .cm-editor .cm-gutters {
+  background: transparent !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-activeLineGutter,
+body[data-theme="dark"] .md-editor-container .cm-editor .cm-activeLineGutter {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
 /* CodeMirror 6 语法高亮 */
-body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-keyword {
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-keyword,
+body[data-theme="dark"] .md-editor-container .cm-editor .cm-keyword {
   color: #c792ea !important;
 }
 
-body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-string {
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-string,
+body[data-theme="dark"] .md-editor-container .cm-editor .cm-string {
   color: #c3e88d !important;
 }
 
-body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-comment {
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-comment,
+body[data-theme="dark"] .md-editor-container .cm-editor .cm-comment {
   color: #546e7a !important;
 }
 
-body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-number {
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-number,
+body[data-theme="dark"] .md-editor-container .cm-editor .cm-number {
   color: #f78c6c !important;
 }
 
-body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-property {
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-property,
+body[data-theme="dark"] .md-editor-container .cm-editor .cm-property {
   color: #82aaff !important;
 }
 
-body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-operator {
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-operator,
+body[data-theme="dark"] .md-editor-container .cm-editor .cm-operator {
   color: #89ddff !important;
 }
 
 /* CodeMirror 5 样式（备用） */
 body[data-theme="dark"] .md-editor-wrapper .CodeMirror,
-body[data-theme="dark"] .md-editor-wrapper .CodeMirror * {
+body[data-theme="dark"] .md-editor-wrapper .CodeMirror *,
+body[data-theme="dark"] .md-editor-container .CodeMirror,
+body[data-theme="dark"] .md-editor-container .CodeMirror * {
   background: var(--md-editor-bg) !important;
   color: var(--md-editor-text) !important;
 }
 
-body[data-theme="dark"] .md-editor-wrapper .CodeMirror-cursor {
+body[data-theme="dark"] .md-editor-wrapper .CodeMirror-cursor,
+body[data-theme="dark"] .md-editor-container .CodeMirror-cursor {
   border-left: 2px solid var(--md-editor-text) !important;
 }
 
-body[data-theme="dark"] .md-editor-wrapper .CodeMirror-gutters {
+body[data-theme="dark"] .md-editor-wrapper .CodeMirror-gutters,
+body[data-theme="dark"] .md-editor-container .CodeMirror-gutters {
   background: var(--md-editor-bg) !important;
   border-right: 1px solid var(--md-editor-border) !important;
 }
 
-body[data-theme="dark"] .md-editor-wrapper .CodeMirror-linenumber {
+body[data-theme="dark"] .md-editor-wrapper .CodeMirror-linenumber,
+body[data-theme="dark"] .md-editor-container .CodeMirror-linenumber {
   color: rgba(255, 255, 255, 0.3) !important;
 }
 
-body[data-theme="dark"] .md-editor-wrapper .CodeMirror-selected {
+body[data-theme="dark"] .md-editor-wrapper .CodeMirror-selected,
+body[data-theme="dark"] .md-editor-container .CodeMirror-selected {
   background: rgba(102, 126, 234, 0.3) !important;
 }
 
 /* 预览区域 */
 body[data-theme="dark"] .md-editor-wrapper .w-md-editor-preview,
 body[data-theme="dark"] .md-editor-wrapper .md-editor-preview,
-body[data-theme="dark"] .md-editor-wrapper [class*="preview"] {
+body[data-theme="dark"] .md-editor-wrapper [class*="preview"],
+body[data-theme="dark"] .md-editor-container .w-md-editor-preview,
+body[data-theme="dark"] .md-editor-container .md-editor-preview,
+body[data-theme="dark"] .md-editor-container [class*="preview"] {
   background: var(--md-editor-bg) !important;
 }
 
 body[data-theme="dark"] .md-editor-wrapper .w-md-editor-preview *,
 body[data-theme="dark"] .md-editor-wrapper .md-editor-preview *,
-body[data-theme="dark"] .md-editor-wrapper [class*="preview"] * {
+body[data-theme="dark"] .md-editor-wrapper [class*="preview"] *,
+body[data-theme="dark"] .md-editor-container .w-md-editor-preview *,
+body[data-theme="dark"] .md-editor-container .md-editor-preview *,
+body[data-theme="dark"] .md-editor-container [class*="preview"] * {
   color: var(--md-editor-text) !important;
 }
 
-body[data-theme="dark"] .md-editor-wrapper .wmde-markdown {
+body[data-theme="dark"] .md-editor-wrapper .wmde-markdown,
+body[data-theme="dark"] .md-editor-container .wmde-markdown {
   color: var(--md-editor-text) !important;
 }
 
-body[data-theme="dark"] .md-editor-wrapper .wmde-markdown code {
+body[data-theme="dark"] .md-editor-wrapper .wmde-markdown code,
+body[data-theme="dark"] .md-editor-container .wmde-markdown code {
   background: rgba(255, 255, 255, 0.1) !important;
   color: #c792ea !important;
 }
 
-body[data-theme="dark"] .md-editor-wrapper .wmde-markdown pre {
+body[data-theme="dark"] .md-editor-wrapper .wmde-markdown pre,
+body[data-theme="dark"] .md-editor-container .wmde-markdown pre {
   background: rgba(255, 255, 255, 0.05) !important;
 }
 
-body[data-theme="dark"] .md-editor-wrapper .wmde-markdown blockquote {
+body[data-theme="dark"] .md-editor-wrapper .wmde-markdown blockquote,
+body[data-theme="dark"] .md-editor-container .wmde-markdown blockquote {
   border-color: rgba(255, 255, 255, 0.2) !important;
 }
 
 /* 工具栏 */
 body[data-theme="dark"] .md-editor-wrapper .w-md-editor-toolbar,
-body[data-theme="dark"] .md-editor-wrapper .md-editor-toolbar {
+body[data-theme="dark"] .md-editor-wrapper .md-editor-toolbar,
+body[data-theme="dark"] .md-editor-container .w-md-editor-toolbar,
+body[data-theme="dark"] .md-editor-container .md-editor-toolbar {
   background: var(--md-editor-bg) !important;
   border-bottom: 1px solid var(--md-editor-border) !important;
 }
 
 body[data-theme="dark"] .md-editor-wrapper .w-md-editor-toolbar button,
-body[data-theme="dark"] .md-editor-wrapper .md-editor-toolbar button {
+body[data-theme="dark"] .md-editor-wrapper .md-editor-toolbar button,
+body[data-theme="dark"] .md-editor-container .w-md-editor-toolbar button,
+body[data-theme="dark"] .md-editor-container .md-editor-toolbar button {
   color: rgba(255, 255, 255, 0.7) !important;
 }
 
 body[data-theme="dark"] .md-editor-wrapper .w-md-editor-toolbar button:hover,
-body[data-theme="dark"] .md-editor-wrapper .md-editor-toolbar button:hover {
+body[data-theme="dark"] .md-editor-wrapper .md-editor-toolbar button:hover,
+body[data-theme="dark"] .md-editor-container .w-md-editor-toolbar button:hover,
+body[data-theme="dark"] .md-editor-container .md-editor-toolbar button:hover {
   background: rgba(255, 255, 255, 0.1) !important;
   color: var(--md-editor-text) !important;
 }
 
 /* 滚动条 */
-body[data-theme="dark"] .md-editor-wrapper ::-webkit-scrollbar {
+body[data-theme="dark"] .md-editor-wrapper ::-webkit-scrollbar,
+body[data-theme="dark"] .md-editor-container ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
-body[data-theme="dark"] .md-editor-wrapper ::-webkit-scrollbar-track {
+body[data-theme="dark"] .md-editor-wrapper ::-webkit-scrollbar-track,
+body[data-theme="dark"] .md-editor-container ::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.05);
 }
 
-body[data-theme="dark"] .md-editor-wrapper ::-webkit-scrollbar-thumb {
+body[data-theme="dark"] .md-editor-wrapper ::-webkit-scrollbar-thumb,
+body[data-theme="dark"] .md-editor-container ::-webkit-scrollbar-thumb {
   background: rgba(102, 126, 234, 0.6);
   border-radius: 4px;
 }
 
-body[data-theme="dark"] .md-editor-wrapper ::-webkit-scrollbar-thumb:hover {
+body[data-theme="dark"] .md-editor-wrapper ::-webkit-scrollbar-thumb:hover,
+body[data-theme="dark"] .md-editor-container ::-webkit-scrollbar-thumb:hover {
   background: rgba(102, 126, 234, 0.8);
 }
 
 /* 额外的强制样式 - 确保编辑器输入文字颜色正确 */
-body[data-theme="dark"] .md-editor-wrapper textarea {
+body[data-theme="dark"] .md-editor-wrapper textarea,
+body[data-theme="dark"] .md-editor-container textarea {
   color: #ffffff !important;
-  background-color: #1a1a1a !important;
+  background-color: transparent !important;
 }
 
-body[data-theme="dark"] .md-editor-wrapper .w-md-editor-textarea {
+body[data-theme="dark"] .md-editor-wrapper .w-md-editor-textarea,
+body[data-theme="dark"] .md-editor-container .w-md-editor-textarea {
   color: #ffffff !important;
-  background-color: #1a1a1a !important;
+  background-color: transparent !important;
 }
 
-body[data-theme="dark"] .md-editor-wrapper .w-md-editor-textarea textarea {
+body[data-theme="dark"] .md-editor-wrapper .w-md-editor-textarea textarea,
+body[data-theme="dark"] .md-editor-container .w-md-editor-textarea textarea {
   color: #ffffff !important;
-  background-color: #1a1a1a !important;
+  background-color: transparent !important;
 }
 
-body[data-theme="dark"] .md-editor-wrapper .w-md-editor-textarea pre {
+body[data-theme="dark"] .md-editor-wrapper .w-md-editor-textarea pre,
+body[data-theme="dark"] .md-editor-container .w-md-editor-textarea pre {
   color: #ffffff !important;
-  background-color: #1a1a1a !important;
+  background-color: transparent !important;
 }
 
-body[data-theme="dark"] .md-editor-wrapper .w-md-editor-textarea pre code {
+body[data-theme="dark"] .md-editor-wrapper .w-md-editor-textarea pre code,
+body[data-theme="dark"] .md-editor-container .w-md-editor-textarea pre code {
   color: #ffffff !important;
-  background-color: #1a1a1a !important;
+  background-color: transparent !important;
 }
 
 /* CodeMirror 强制样式 */
-body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-scroller {
-  background-color: #1a1a1a !important;
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-scroller,
+body[data-theme="dark"] .md-editor-container .cm-editor .cm-scroller {
+  background-color: transparent !important;
 }
 
-body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-content {
-  background-color: #1a1a1a !important;
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-content,
+body[data-theme="dark"] .md-editor-container .cm-editor .cm-content {
+  background-color: transparent !important;
 }
 
-body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-content > div {
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-content > div,
+body[data-theme="dark"] .md-editor-container .cm-editor .cm-content > div {
   color: #ffffff !important;
 }
 
-body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-line {
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-line,
+body[data-theme="dark"] .md-editor-container .cm-editor .cm-line {
   color: #ffffff !important;
 }
 
-body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-line span {
+body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-line span,
+body[data-theme="dark"] .md-editor-container .cm-editor .cm-line span {
   color: #ffffff !important;
 }
 
