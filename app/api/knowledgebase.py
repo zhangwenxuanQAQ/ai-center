@@ -4,7 +4,7 @@
 
 import json
 import logging
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Body, Query, UploadFile, File, Form, Request
 from fastapi.responses import StreamingResponse
 from app.database.models import KnowledgebaseDocumentCategory
@@ -1542,6 +1542,52 @@ def delete_chunk(
             return ResponseUtil.error(message="切片删除失败")
     except Exception as e:
         logger.error(f"删除切片失败: {e}")
+        return ResponseUtil.error(message=str(e))
+
+
+@router.post("/intelligent_extract", response_model=ApiResponse)
+async def intelligent_extract(
+    request: Request,
+    model_id: str = Form(...),
+    prompt: str = Form(...),
+    category_id: str = Form(...),
+    files: Optional[List[UploadFile]] = File(None),
+    text_content: Optional[str] = Form(None)
+):
+    """
+    智能提取接口（支持文件和文本两种输入方式）
+    
+    Args:
+        model_id: 模型ID
+        prompt: 提取提示词
+        category_id: 知识目录ID
+        files: 上传的文件列表（可选）
+        text_content: 文本内容（可选）
+        
+    Returns:
+        ApiResponse: 包含提取结果的响应
+        
+    Note:
+        files和text_content至少需要提供一个
+    """
+    try:
+        from app.services.knowledgebase.service import KnowledgebaseService
+        
+        if not files and not text_content:
+            return ResponseUtil.error(message="请提供文件或文本内容")
+        
+        extracted_data = await KnowledgebaseService.intelligent_extract(
+            model_id=model_id,
+            prompt=prompt,
+            category_id=category_id,
+            files=files,
+            text_content=text_content
+        )
+        
+        return ResponseUtil.success(data=extracted_data)
+        
+    except Exception as e:
+        logger.error(f"智能提取失败: {e}")
         return ResponseUtil.error(message=str(e))
 
 

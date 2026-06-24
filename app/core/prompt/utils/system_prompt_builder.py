@@ -10,22 +10,41 @@ from typing import Optional
 
 def _load_prompt_file(filename: str) -> str:
     """
-    加载指定文件内容
-
+    加载指定文件内容，支持从builtin_prompts及其子文件夹中查找
+    
     Args:
-        filename: 文件名
-
+        filename: 文件名（可以是相对路径，如knowledgebase/knowledge_template_extract.md）
+        
     Returns:
         str: 文件内容，文件不存在时返回空字符串
     """
-    prompt_path = os.path.join(
+    builtin_prompts_dir = os.path.join(
         os.path.dirname(os.path.dirname(__file__)),
-        'builtin_prompts',
-        filename
+        'builtin_prompts'
     )
-    if os.path.exists(prompt_path):
-        with open(prompt_path, 'r', encoding='utf-8') as f:
+    
+    def find_file_in_directory(directory: str, target_filename: str) -> Optional[str]:
+        """
+        在目录及其子目录中递归查找文件
+        
+        Args:
+            directory: 搜索的根目录
+            target_filename: 目标文件名
+            
+        Returns:
+            Optional[str]: 文件完整路径，未找到返回None
+        """
+        for root, dirs, files in os.walk(directory):
+            if target_filename in files:
+                return os.path.join(root, target_filename)
+        return None
+    
+    file_path = find_file_in_directory(builtin_prompts_dir, filename)
+    
+    if file_path and os.path.exists(file_path):
+        with open(file_path, 'r', encoding='utf-8') as f:
             return f.read().strip()
+    
     return ''
 
 

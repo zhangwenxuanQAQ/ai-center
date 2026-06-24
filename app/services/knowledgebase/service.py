@@ -1783,6 +1783,161 @@ class KnowledgebaseDocumentService:
             logger.error(f"删除切片失败: {e}")
             return False
 
+    @staticmethod
+    async def intelligent_extract(
+        model_id: str,
+        prompt: str,
+        category_id: str,
+        files: Optional[List[Any]] = None,
+        text_content: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        智能提取方法
+        
+        Args:
+            model_id: 模型ID
+            prompt: 提取提示词
+            category_id: 知识目录ID
+            files: 上传的文件列表（可选）
+            text_content: 文本内容（可选）
+            
+        Returns:
+            Dict: 提取结果
+            
+        Raises:
+            ResourceNotFoundError: 知识目录不存在
+        """
+        import json
+        import asyncio
+        from app.database.models import KnowledgebaseDocumentCategory, LLMModel
+        from app.core.llm_model.utils.llm_util import convert_query_to_message, format_prompt
+        from app.core.prompt.utils.system_prompt_builder import _load_prompt_file
+        from app.core.llm_model.factory import LLMFactory
+        from app.core.chat.chat_core import QueryItem
+        from fastapi import UploadFile
+        
+        try:
+            category = KnowledgebaseDocumentCategory.get(KnowledgebaseDocumentCategory.id == category_id)
+            if not category or category.deleted:
+                raise ResourceNotFoundError(message=f"知识目录 {category_id} 不存在")
+        except KnowledgebaseDocumentCategory.DoesNotExist:
+            raise ResourceNotFoundError(message=f"知识目录 {category_id} 不存在")
+        
+        try:
+            llm_model = LLMModel.get(LLMModel.id == model_id)
+            if not llm_model or llm_model.deleted:
+                raise ResourceNotFoundError(message=f"模型 {model_id} 不存在")
+        except LLMModel.DoesNotExist:
+            raise ResourceNotFoundError(message=f"模型 {model_id} 不存在")
+        
+        document_config = json.loads(category.document_config) if isinstance(category.document_config, str) else category.document_config
+        
+        template_type = document_config.get('template_type', '')
+        custom_fields = document_config.get('custom_fields', [])
+        chapters = document_config.get('chapters', [])
+        chapter_type = document_config.get('chapter_type', '')
+        has_knowledge_content = document_config.get('has_knowledge_content', False)
+        
+        system_prompt_template = _load_prompt_file('knowledge_template_extract.md')
+        
+        params = {
+            'TEMPLATE_TYPE': template_type,
+            'HAS_CUSTOM_FIELDS': '是' if custom_fields else '否',
+            'CUSTOM_FIELDS': json.dumps(custom_fields, ensure_ascii=False) if custom_fields else '无',
+            'HAS_CHAPTERS': '是' if chapters else '否',
+            'CHAPTER_TYPE': chapter_type or '无',
+            'HAS_KNOWLEDGE_CONTENT': '是' if has_knowledge_content else '否'
+        }
+        
+        system_prompt = format_prompt(system_prompt_template, params)
+        
+        query_items = []
+        
+        if files:
+            for file in files:
+                if isinstance(file, UploadFile):
+                    file_content = await file.read()
+                    import base64
+                    base64_content = base64.b64encode(file_content).decode('utf-8')
+                    
+                    from app.core.knowledgebase.utils.file_utils import get_mime_type
+                    mime_type = get_mime_type(file.filename)
+                    
+                    query_items.append(QueryItem(
+                        type='file_base64',
+                        content=base64_content,
+                        mime_type=mime_type,
+                        file_name=file.filename,
+                        file_size=len(file_content)
+                    ))
+        
+        if text_content:
+            query_items.append(QueryItem(
+                type='text',
+                content=text_content
+            ))
+        
+        user_message = convert_query_to_message(query_items, llm_model.model_type, model_id)
+        
+        user_prompt_message = {
+            'role': 'user',
+            'content': prompt
+        }
+        
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            user_message,
+            user_prompt_message
+        ]
+        
+        model_config = {
+            "api_key": llm_model.api_key,
+            "endpoint": llm_model.endpoint,
+            "name": llm_model.name,
+            "provider": llm_model.provider,
+        }
+        
+        if llm_model.config:
+            try:
+                extra_config = json.loads(llm_model.config) if isinstance(llm_model.config, str) else llm_model.config
+                model_config.update(extra_config)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        
+        llm_instance = LLMFactory.create_model(llm_model.model_type, model_config)
+        
+        if not llm_instance:
+            raise RuntimeError(f"无法创建模型实例: {model_id}")
+        
+        try:
+            result = llm_instance.generate_with_messages(messages)
+            
+            if 'error' in result:
+                raise RuntimeError(f"模型调用失败: {result['error']}")
+            
+            response = result.get('text', '')
+        except Exception as e:
+            logger.error(f"模型调用失败: {e}")
+            raise
+        
+        from app.core.llm_model.utils.llm_util import get_output_json_content
+        json_str = get_output_json_content(response)
+        
+        try:
+            extracted_data = json.loads(json_str)
+        except json.JSONDecodeError:
+            logger.warning(f"无法解析JSON响应: {response}")
+            extracted_data = {
+                "custom_fields": [],
+                "chapters": [],
+                "content": ""
+            }
+        
+        return {
+            "extracted_info": extracted_data,
+            "raw_response": response
+        }
+
 
 class KnowledgebaseDocumentCategoryService:
     """

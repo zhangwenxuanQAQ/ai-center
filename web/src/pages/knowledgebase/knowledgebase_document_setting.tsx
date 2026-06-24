@@ -8,6 +8,7 @@ import MDEditor from '@uiw/react-md-editor';
 import PageHeader from '../../components/page-header';
 import ChapterList from '../../components/ChapterList';
 import { Chapter } from './folder_modal/AddChapterModal';
+import IntelligentExtractModal from './intelligent_extract_modal';
 import {
   UploadOutlined,
   PlusOutlined,
@@ -27,6 +28,7 @@ import {
   FolderOutlined,
   TableOutlined,
   QuestionCircleOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons';
 import { knowledgebaseService, KnowledgebaseDocument, KnowledgebaseCategory, KnowledgebaseDocumentCategory } from '../../services/knowledgebase';
 import { datasourceService, Datasource } from '../../services/datasource';
@@ -155,6 +157,8 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
   const [newTag, setNewTag] = useState('');
   const tagInputRef = useRef<HTMLInputElement>(null);
   const fileMapRef = useRef<Map<string, File>>(new Map());
+  
+  const [showIntelligentExtract, setShowIntelligentExtract] = useState<boolean>(false);
 
   // 格式化文件大小
   const formatFileSize = (bytes: number): string => {
@@ -734,6 +738,15 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
               initCustomFieldValues.chapter_fields_values = chapterFieldsValues;
             }
           }
+
+          // 处理富文本章节类型：从content字段读取内容
+          const category = findCategoryById(categories, docCategoryId);
+          if (category && 
+              category.document_config?.template_type === 'custom_template' && 
+              category.document_config?.chapter_type === 'rich_text' &&
+              documentConfig.content) {
+            initCustomFieldValues.chapter_rich_text_content = documentConfig.content;
+          }
           
           if (documentConfig.content) {
             initRichTextContent = documentConfig.content;
@@ -1283,6 +1296,11 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
             };
           });
         }
+
+        // 处理富文本章节类型
+        if (categoryDocConfig.chapter_type === 'rich_text') {
+          documentConfig.content = customFieldValues.chapter_rich_text_content || '';
+        }
       }
     }
     
@@ -1744,9 +1762,20 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     if (sourceType !== 'rich_text') return null;
     return (
       <div style={{ width: '100%', ...(isEdit && fieldChanges.richTextContent ? changedFieldStyle : {}) }}>
-        <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
-          知识内容 <span style={{ color: '#ff4d4f' }}>*</span>
-          {isEdit && fieldChanges.richTextContent && <span style={{ color: '#faad14', marginLeft: 8, fontSize: 12 }}>已修改</span>}
+        <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            知识内容 <span style={{ color: '#ff4d4f' }}>*</span>
+            {isEdit && fieldChanges.richTextContent && <span style={{ color: '#faad14', marginLeft: 8, fontSize: 12 }}>已修改</span>}
+          </div>
+          <Button
+            type="primary"
+            icon={<ThunderboltOutlined />}
+            size="small"
+            onClick={() => setShowIntelligentExtract(true)}
+            style={{ marginLeft: 8 }}
+          >
+            智能提取
+          </Button>
         </div>
         <div style={{ width: '100%' }}>
           <MDEditor
@@ -2742,9 +2771,20 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     
     return (
       <div style={{ width: '100%', ...(isEdit && fieldChanges.customFieldValues ? changedFieldStyle : {}) }}>
-        <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
-          知识配置
-          {isEdit && fieldChanges.customFieldValues && <span style={{ color: '#faad14', marginLeft: 8, fontSize: 12 }}>已修改</span>}
+        <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            知识配置
+            {isEdit && fieldChanges.customFieldValues && <span style={{ color: '#faad14', marginLeft: 8, fontSize: 12 }}>已修改</span>}
+          </div>
+          <Button
+            type="primary"
+            icon={<ThunderboltOutlined />}
+            size="small"
+            onClick={() => setShowIntelligentExtract(true)}
+            style={{ marginLeft: 8 }}
+          >
+            智能提取
+          </Button>
         </div>
         <div style={{ 
           padding: 16, 
@@ -2825,6 +2865,29 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
               />
             </div>
           )}
+
+          {/* 富文本章节配置 */}
+          {hasKnowledgeContent && chapterType === 'rich_text' && (
+            <div style={{ marginTop: customFields.length > 0 ? 16 : 0, paddingTop: customFields.length > 0 ? 16 : 0, borderTop: customFields.length > 0 ? `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}` : 'none' }}>
+              <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
+                知识内容
+              </div>
+              <div style={{ width: '100%' }}>
+                <MDEditor
+                  value={customFieldValues.chapter_rich_text_content || ''}
+                  onChange={(val) => {
+                    setCustomFieldValues(prev => ({
+                      ...prev,
+                      chapter_rich_text_content: val || ''
+                    }));
+                    setHasChanges(true);
+                  }}
+                  height={250}
+                  preview="edit"
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -2847,6 +2910,39 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         </div>
       </div>
     );
+  };
+
+  const handleIntelligentExtractConfirm = (extractedData: {
+    title?: string;
+    tags?: string[];
+    customFieldValues?: Record<string, any>;
+    richTextContent?: string;
+  }) => {
+    if (extractedData.title) {
+      setTitle(extractedData.title);
+    }
+    if (extractedData.tags) {
+      const newCategoryTags = extractedData.tags.filter(tag => !categoryTags.includes(tag));
+      setUserTags(prev => {
+        const mergedTags = [...prev];
+        newCategoryTags.forEach(tag => {
+          if (!mergedTags.includes(tag)) {
+            mergedTags.push(tag);
+          }
+        });
+        return mergedTags;
+      });
+    }
+    if (extractedData.customFieldValues) {
+      setCustomFieldValues(prev => ({
+        ...prev,
+        ...extractedData.customFieldValues
+      }));
+    }
+    if (extractedData.richTextContent) {
+      setRichTextContent(extractedData.richTextContent);
+    }
+    message.success('智能提取结果已填充到配置页面');
   };
 
   const renderBottomButtons = () => {
@@ -3002,6 +3098,18 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         </Form>
       </div>
       {renderBottomButtons()}
+      
+      <IntelligentExtractModal
+        visible={showIntelligentExtract}
+        knowledgebaseId={knowledgebase.id}
+        selectedCategory={categoryId ? findCategoryById(categories, categoryId) : null}
+        currentTitle={title}
+        currentTags={tags}
+        currentCustomFieldValues={customFieldValues}
+        currentRichTextContent={richTextContent}
+        onCancel={() => setShowIntelligentExtract(false)}
+        onConfirm={handleIntelligentExtractConfirm}
+      />
     </div>
   );
 };

@@ -692,4 +692,57 @@ export const knowledgebaseService = {
   }>> => {
     return http.get('/aicenter/v1/knowledgebase/retrieval_configs') || [];
   },
+
+  /**
+   * 从文件进行智能提取
+   */
+  intelligentExtractFromFile: async (
+    files: File[],
+    modelId: string,
+    prompt: string,
+    categoryId?: string
+  ): Promise<{
+    content: string;
+    extracted_info: {
+      title?: string;
+      tags?: string[];
+      custom_fields?: Record<string, any>;
+      content?: string;
+    };
+  }> => {
+    const formData = new FormData();
+    files.forEach(file => formData.append('files', file));
+    formData.append('model_id', modelId);
+    formData.append('prompt', prompt);
+    if (categoryId) {
+      formData.append('category_id', categoryId);
+    }
+    
+    return http.post('/aicenter/v1/knowledgebase/intelligent_extract/file', formData);
+  },
+
+  /**
+   * 从文本进行智能提取
+   */
+  intelligentExtractFromText: async (
+    modelId: string,
+    prompt: string,
+    textContent: string,
+    categoryId?: string
+  ): Promise<{
+    content: string;
+    extracted_info: {
+      title?: string;
+      tags?: string[];
+      custom_fields?: Record<string, any>;
+      content?: string;
+    };
+  }> => {
+    return http.post('/aicenter/v1/knowledgebase/intelligent_extract/text', {
+      model_id: modelId,
+      prompt,
+      text_content: textContent,
+      category_id: categoryId
+    });
+  },
 };

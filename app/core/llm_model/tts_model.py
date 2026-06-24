@@ -73,10 +73,10 @@ class TTSModel(BaseLLM):
     
     def stream_generate(self, prompt: str, **kwargs) -> Generator[Dict[str, Any], None, None]:
         """
-        流式生成语音
+        流式语音合成（TTS模型不支持流式）
         
         Args:
-            prompt: 要转换为语音的文本
+            prompt: 提示词
             **kwargs: 其他参数
             
         Yields:
@@ -92,6 +92,19 @@ class TTSModel(BaseLLM):
                 yield response
         except Exception as e:
             yield {'error': str(e)}
+    
+    def generate_with_messages(self, messages: list, **kwargs) -> Dict[str, Any]:
+        """
+        使用消息列表生成文本（TTS模型不支持）
+        
+        Args:
+            messages: 消息列表
+            **kwargs: 其他参数
+            
+        Returns:
+            包含错误信息的字典
+        """
+        return {'error': 'TTS model does not support chat messages'}
     
     def stream_generate_with_messages(self, messages: list, **kwargs) -> Generator[Dict[str, Any], None, None]:
         """

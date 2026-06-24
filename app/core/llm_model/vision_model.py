@@ -206,6 +206,54 @@ class VisionModel(BaseLLM):
         except Exception as e:
             yield {'error': str(e)}
     
+    def generate_with_messages(self, messages: list, **kwargs) -> Dict[str, Any]:
+        """
+        使用消息列表生成文本（非流式）
+        
+        Args:
+            messages: 消息列表
+            **kwargs: 其他参数，如temperature、top_p、max_tokens、tools等
+            
+        Returns:
+            生成结果
+        """
+        if not self._validate_config():
+            return {'error': 'Invalid configuration'}
+        
+        try:
+            tools = kwargs.pop('tools', None)
+            
+            params = {
+                'model': self.model_name,
+                'messages': messages,
+                'temperature': 0.7,
+                'max_tokens': 4096
+            }
+            
+            if tools:
+                params['tools'] = tools
+            
+            params = self._handle_deep_thinking(params, kwargs)
+            params.update(kwargs)
+            
+            response = self.client.chat.completions.create(**params)
+            
+            result = {
+                'text': response.choices[0].message.content,
+                'usage': response.usage.model_dump() if response.usage else {},
+                'model': response.model
+            }
+            
+            if hasattr(response.choices[0].message, 'reasoning_content') and response.choices[0].message.reasoning_content:
+                result['reasoning_content'] = response.choices[0].message.reasoning_content
+            
+            if hasattr(response.choices[0].message, 'tool_calls') and response.choices[0].message.tool_calls:
+                result['tool_calls'] = response.choices[0].message.tool_calls
+            
+            return result
+        except Exception as e:
+            return {'error': str(e)}
+    
     def stream_generate_with_messages(self, messages: list, **kwargs) -> Generator[Dict[str, Any], None, None]:
         """
         使用消息列表流式生成文本

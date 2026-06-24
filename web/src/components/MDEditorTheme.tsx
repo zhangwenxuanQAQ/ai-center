@@ -9,6 +9,7 @@ interface MDEditorThemeProps {
   placeholder?: string;
   disabled?: boolean;
   style?: React.CSSProperties;
+  preview?: 'edit' | 'live' | 'preview';
 }
 
 const MDEditorTheme: React.FC<MDEditorThemeProps> = ({
@@ -18,6 +19,7 @@ const MDEditorTheme: React.FC<MDEditorThemeProps> = ({
   placeholder = '请输入内容...',
   disabled = false,
   style = {},
+  preview = 'edit',
 }) => {
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
@@ -88,6 +90,7 @@ const MDEditorTheme: React.FC<MDEditorThemeProps> = ({
           height={height}
           placeholder={placeholder}
           disabled={disabled}
+          preview={preview}
           className="theme-md-editor"
           style={{
             width: '100%',
