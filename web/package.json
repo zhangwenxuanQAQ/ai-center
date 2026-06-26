@@ -14,7 +14,7 @@
     "@ant-design/icons": "^6.1.0",
     "@redux-devtools/extension": "^4.0.0",
     "@types/react-resizable": "^3.0.8",
-    "@uiw/react-md-editor": "^4.0.11",
+    "@uiw/react-md-editor": "^4.1.1",
     "@xyflow/react": "^12.10.2",
     "antd": "^5.12.8",
     "immer": "^11.1.8",

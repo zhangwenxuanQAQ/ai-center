@@ -118,7 +118,7 @@ function App() {
                   <Link to="/prompts">提示词</Link>
                 </Menu.Item>
                 <Menu.Item key="7" icon={<SettingOutlined />}>
-                  <Link to="/llm_models">模型库</Link>
+                  <Link to="/llm_models">模型管理</Link>
                 </Menu.Item>
                 <Menu.Item key="8" icon={<CloudServerOutlined />}>
                   <Link to="/datasources">数据源</Link>

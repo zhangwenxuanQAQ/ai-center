@@ -7,7 +7,6 @@ import type { ColumnsType } from 'antd/es/table';
 import type { UploadProps } from 'antd';
 import { Resizable } from 'react-resizable';
 import { mcpService, MCPServer, MCPCategory, MCPTool } from '../../services/mcp';
-import PageHeader from '../../components/page-header';
 import MCPTesting from './mcp_testing';
 import '../../styles/common.css';
 import './mcp_setting.less';
@@ -971,18 +970,11 @@ const MCPSetting: React.FC = () => {
 
   return (
     <div className={`page-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-      <PageHeader
-        items={[
-          { title: 'MCP管理', icon: <ApiOutlined />, onClick: () => navigate('/mcp') },
-          { title: '服务配置' },
-          { title: server?.name || '' }
-        ]}
-        extra={
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/mcp')}>
-            返回列表
-          </Button>
-        }
-      />
+      <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', marginBottom: '20px' }}>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/mcp')}>
+          返回列表
+        </Button>
+      </div>
 
       <div className="mcp-setting-container" style={{ display: 'flex', gap: '8px', height: 'calc(100% - 60px)', overflow: 'hidden' }}>
         <div style={{ width: '30%', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '16px', overflow: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }} className="hide-scrollbar">

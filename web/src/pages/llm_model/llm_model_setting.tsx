@@ -916,7 +916,7 @@ const LLMModelSetting: React.FC = () => {
     <div className={`page-container ${theme === 'dark' ? 'dark' : 'light'}`}>
       <PageHeader
         items={[
-          { title: '模型库', icon: <SettingOutlined />, onClick: () => navigate('/llm_models') },
+          { title: '模型列表', icon: <SettingOutlined />, onClick: () => navigate('/llm_models') },
           { title: '模型配置' },
           { title: model?.name || '' }
         ]}

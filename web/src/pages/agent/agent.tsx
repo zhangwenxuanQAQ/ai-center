@@ -4,7 +4,6 @@ import { Layout, Tree, Card, Row, Col, Avatar, Empty, Spin, Button, Modal, Form,
 import { ApartmentOutlined, PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UpOutlined, DownOutlined, CheckCircleOutlined, CloseCircleOutlined, UploadOutlined } from '@ant-design/icons';
 import type { TreeDataNode, TreeProps, UploadProps } from 'antd';
 import { agentService, AgentCategory, AgentInstance } from '../../services/agent';
-import PageHeader from '../../components/page-header';
 import '../../styles/common.css';
 import './agent.less';
 
@@ -680,12 +679,6 @@ const AgentManagement: React.FC = () => {
 
   return (
     <div className={`page-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-      <PageHeader 
-        items={[
-          { title: '智能体管理', icon: <ApartmentOutlined /> }
-        ]} 
-      />
-
       <Layout className="agent-layout">
         <LeftSider
           width={260}
@@ -721,8 +714,8 @@ const AgentManagement: React.FC = () => {
           />
         </LeftSider>
 
-        <Content className={`agent-content ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <Content className={`agent-content ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '16px', boxSizing: 'border-box' }}>
+          <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap', alignItems: 'center',padding:'16px' }}>
             <Button 
               type="primary" 
               icon={<PlusOutlined />} 

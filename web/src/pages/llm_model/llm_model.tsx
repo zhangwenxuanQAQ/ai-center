@@ -1,15 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Layout, Tree, Card, Row, Col, Empty, Spin, Button, Modal, Form, Input, Select, TreeSelect, message, Popconfirm, Pagination, Tag, Switch, Tooltip } from 'antd';
-import { SettingOutlined, PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UpOutlined, DownOutlined, CheckCircleOutlined, CloseCircleOutlined, ExperimentOutlined, ApiTwoTone } from '@ant-design/icons';
-import type { TreeDataNode, TreeProps } from 'antd';
-import { llmModelService, LLMModel, LLMCategory } from '../../services/llm_model';
-import PageHeader from '../../components/page-header';
+import { Card, Row, Col, Empty, Spin, Button, Modal, Form, Input, Select, TreeSelect, message, Popconfirm, Pagination, Tag, Switch, Tooltip } from 'antd';
+import type { TreeDataNode } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, CheckCircleOutlined, CloseCircleOutlined, ApiTwoTone, ClockCircleOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { llmModelService, LLMModel } from '../../services/llm_model';
 import '../../styles/common.css';
 import './llm_model.less';
 import { getProviderAvatar } from '../../utils/avatar';
 
-const { Sider: LeftSider, Content } = Layout;
 const { Option } = Select;
 
 const MODEL_NAME_TO_PROVIDER = {
@@ -51,6 +49,7 @@ const LLMModelManagement: React.FC = () => {
   const [modelTypes, setModelTypes] = useState<Record<string, string>>({});
   const [editingModelId, setEditingModelId] = useState<string | null>(null);
   const [searchName, setSearchName] = useState<string>('');
+  const [searchTag, setSearchTag] = useState<string>('');
   const [filterModelTypes, setFilterModelTypes] = useState<string[]>([]);
   const [filterTags, setFilterTags] = useState<string[]>([]);
   const [allTags, setAllTags] = useState<string[]>([]);
@@ -105,7 +104,7 @@ const LLMModelManagement: React.FC = () => {
   useEffect(() => {
     setCurrentPage(1);
     fetchModels(selectedCategory, 1, pageSize);
-  }, [selectedCategory, searchName, filterModelTypes, filterTags, filterStatus]);
+  }, [selectedCategory, searchName, searchTag, filterModelTypes, filterTags, filterStatus]);
 
   useEffect(() => {
     fetchModels(selectedCategory, currentPage, pageSize);
@@ -177,7 +176,7 @@ const LLMModelManagement: React.FC = () => {
         searchName || undefined,
         filterModelTypes.length > 0 ? filterModelTypes.join(',') : undefined,
         filterStatus || undefined,
-        filterTags.length > 0 ? filterTags.join(',') : undefined
+        (searchTag || filterTags.length > 0) ? [...new Set([...filterTags, searchTag].filter(Boolean))].join(',') : undefined
       );
       
       // 确保标签数据已经从后端获取
@@ -641,35 +640,42 @@ const LLMModelManagement: React.FC = () => {
 
   return (
     <div className={`page-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-      <PageHeader items={[
-        { title: '模型库', icon: <SettingOutlined /> }
-      ]} />
-
-      <Layout className="llm-model-layout">
-        <LeftSider width={260} className={`category-sider ${theme === 'dark' ? 'dark' : 'light'}`}>
-          <div className={`sider-header ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>分类</span>
-            <Button type="primary" icon={<PlusOutlined />} onClick={handleAddCategory} size="small" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', borderRadius: '12px', padding: '0 12px', height: '28px', fontSize: '12px' }}>
-              新增分类
-            </Button>
-          </div>
-          <Tree showIcon selectedKeys={selectedKeys} expandedKeys={expandedKeys} onSelect={handleTreeSelect} onExpand={handleTreeExpand} treeData={buildTreeData()} className={`category-tree ${theme === 'dark' ? 'dark' : 'light'}`} />
-        </LeftSider>
-
-        <Content className={`llm-model-content ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap', alignItems: 'center' }}>
-            <Button type="primary" icon={<PlusOutlined />} onClick={handleAddModel} style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', borderRadius: '18px', padding: '0 20px', height: '36px' }}>
-              新增模型
-            </Button>
-            <Input
-              placeholder="搜索模型名称"
-              value={searchName}
-              onChange={(e) => setSearchName(e.target.value)}
-              prefix={<SearchOutlined />}
-              style={{ width: '200px', height: '36px', borderRadius: '18px', background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff', border: 'none' }}
-              className="no-border-input"
-            />
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <div style={{ fontWeight: '600', fontSize: '16px', color: theme === 'dark' ? '#ffffff' : '#000000' }}>模型管理</div>
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAddModel} style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', fontWeight: '500' }}>
+          新增模型
+        </Button>
+      </div>
+          
+          <div style={{ 
+            background: theme === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#ffffff', 
+            borderRadius: '12px', 
+            padding: '16px 20px',
+            marginBottom: '16px',
+            border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid rgba(0, 0, 0, 0.06)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <span style={{ fontWeight: '500', color: theme === 'dark' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.75)', whiteSpace: 'nowrap' }}>模型类型:</span>
+              <Button
+                type={filterModelTypes.length === 0 ? 'primary' : 'default'}
+                onClick={() => {
+                  setFilterModelTypes([]);
+                  setFilterTags([]);
+                }}
+                style={{
+                  borderRadius: '20px',
+                  padding: '6px 16px',
+                  height: '32px',
+                  fontWeight: '500',
+                  background: filterModelTypes.length === 0 
+                    ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' 
+                    : (theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#f5f5f5'),
+                  border: 'none',
+                  color: filterModelTypes.length === 0 ? '#ffffff' : (theme === 'dark' ? '#ffffff' : '#000000')
+                }}
+              >
+                全部
+              </Button>
               {Object.entries(modelTypes).map(([key, value]) => {
                 const hasTags = tagsByModelType[key] && tagsByModelType[key].length > 0;
                 return hasTags ? (
@@ -706,7 +712,7 @@ const LLMModelManagement: React.FC = () => {
                                 style={{
                                   cursor: 'pointer',
                                   background: isSelected
-                                    ? (theme === 'dark' ? '#667eea' : '#667eea')
+                                    ? '#667eea'
                                     : (theme === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.06)'),
                                   color: isSelected
                                     ? '#ffffff'
@@ -727,9 +733,8 @@ const LLMModelManagement: React.FC = () => {
                     }
                     placement="bottom"
                   >
-                    <div
-                      onMouseEnter={() => setHoveredModelType(key)}
-                      onMouseLeave={() => setHoveredModelType(null)}
+                    <Button
+                      key={key}
                       onClick={() => {
                         const currentTags = tagsByModelType[key] || [];
                         if (filterModelTypes.includes(key)) {
@@ -740,26 +745,23 @@ const LLMModelManagement: React.FC = () => {
                         }
                       }}
                       style={{
-                        padding: '6px 12px',
-                        borderRadius: '0px',
+                        borderRadius: '20px',
+                        padding: '6px 16px',
+                        height: '32px',
+                        fontWeight: '400',
                         background: filterModelTypes.includes(key) 
-                          ? theme === 'dark' ? 'rgba(102, 126, 234, 0.3)' : '#667eea'
-                          : theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
-                        color: filterModelTypes.includes(key) ? '#ffffff' : theme === 'dark' ? '#ffffff' : '#000000',
-                        cursor: 'pointer',
-                        border: '1px solid ' + (theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'),
-                        transition: 'all 0.3s ease'
+                          ? 'rgba(22, 119, 255, 0.12)'
+                          : (theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#f5f5f5'),
+                        border: filterModelTypes.includes(key) ? '1px solid #1677ff' : 'none',
+                        color: filterModelTypes.includes(key) ? '#1677ff' : (theme === 'dark' ? 'rgba(255, 255, 255, 0.75)' : 'rgba(0, 0, 0, 0.65)')
                       }}
-                      className="model-type-card"
                     >
                       {value}
-                    </div>
+                    </Button>
                   </Tooltip>
                 ) : (
-                  <div
+                  <Button
                     key={key}
-                    onMouseEnter={() => setHoveredModelType(key)}
-                    onMouseLeave={() => setHoveredModelType(null)}
                     onClick={() => {
                       if (filterModelTypes.includes(key)) {
                         setFilterModelTypes(filterModelTypes.filter(type => type !== key));
@@ -768,32 +770,45 @@ const LLMModelManagement: React.FC = () => {
                       }
                     }}
                     style={{
-                      padding: '6px 12px',
-                      borderRadius: '0px',
+                      borderRadius: '20px',
+                      padding: '6px 16px',
+                      height: '32px',
+                      fontWeight: '400',
                       background: filterModelTypes.includes(key) 
-                        ? theme === 'dark' ? 'rgba(102, 126, 234, 0.3)' : '#667eea'
-                        : theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
-                      color: filterModelTypes.includes(key) ? '#ffffff' : theme === 'dark' ? '#ffffff' : '#000000',
-                      cursor: 'pointer',
-                      border: '1px solid ' + (theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'),
-                      transition: 'all 0.3s ease'
+                        ? 'rgba(22, 119, 255, 0.12)'
+                        : (theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#f5f5f5'),
+                      border: filterModelTypes.includes(key) ? '1px solid #1677ff' : 'none',
+                      color: filterModelTypes.includes(key) ? '#1677ff' : (theme === 'dark' ? 'rgba(255, 255, 255, 0.75)' : 'rgba(0, 0, 0, 0.65)')
                     }}
-                    className="model-type-card"
                   >
                     {value}
-                  </div>
+                  </Button>
                 );
               })}
             </div>
+          </div>
+          
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', alignItems: 'center' }}>
+            <Input
+              placeholder="搜索模型名称..."
+              value={searchName}
+              onChange={(e) => setSearchName(e.target.value)}
+              prefix={<SearchOutlined />}
+              onPressEnter={() => fetchModels(selectedCategory, 1, pageSize)}
+              style={{ width: '300px', height: '36px', borderRadius: '8px', background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff', border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #d9d9d9' }}
+            />
+            <Button type="primary" onClick={() => fetchModels(selectedCategory, 1, pageSize)} style={{ borderRadius: '8px' }}>
+              <SearchOutlined />
+            </Button>
             <Select
-              placeholder="按状态筛选"
+              placeholder="全部状态"
               value={filterStatus}
               onChange={setFilterStatus}
               style={{
                 width: '120px',
-                borderRadius: '18px',
+                borderRadius: '8px',
                 background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
-                border: 'none',
+                border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #d9d9d9',
                 color: theme === 'dark' ? '#ffffff' : '#000000',
                 height: '36px'
               }}
@@ -824,62 +839,138 @@ const LLMModelManagement: React.FC = () => {
                       <Card 
                         hoverable 
                         className={`llm-model-card ${theme === 'dark' ? 'dark' : 'light'}`} 
-                        bodyStyle={{ padding: '16px' }}
+                        bodyStyle={{ padding: '16px', position: 'relative', minHeight: '200px' }}
                         onClick={() => handleCardClick(model.id)}
                       >
-                        <div className="card-content">
-                          <div className="card-actions">
-                            <Tooltip title="测试连接">
-                              <Button type="text" icon={<ApiTwoTone />} onClick={(e) => { e.stopPropagation(); handleTestConnection(model); }} className="action-button" />
-                            </Tooltip>
-                            <Tooltip title="编辑">
-                              <Button type="text" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); handleEditModel(model); }} className="action-button" />
-                            </Tooltip>
-                            <Tooltip title="删除">
-                              <Popconfirm title="确认删除" description="确定要删除这个模型吗？" onConfirm={(e) => { e.stopPropagation(); handleDeleteModel(model.id); }} okText="确认" cancelText="取消">
-                                <Button type="text" icon={<DeleteOutlined />} danger className="action-button" onClick={(e) => e.stopPropagation()} />
-                              </Popconfirm>
-                            </Tooltip>
-                          </div>
-                          <div className="card-main">
-                            <div className="card-icon">
+                        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                          {/* 顶部区域：图片+信息 | 状态 */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                            {/* 左上：图片 + 模型名称 + 类型 */}
+                            <div style={{ display: 'flex', gap: '12px' }}>
                               <img 
                                 src={getProviderAvatar(model.provider || '')} 
                                 alt={model.provider} 
                                 style={{ 
-                                  width: '32px', 
-                                  height: '32px', 
-                                  borderRadius: '50%',
+                                  width: '44px', 
+                                  height: '44px', 
+                                  borderRadius: '8px',
                                   objectFit: 'cover'
                                 }} 
                               />
-                            </div>
-                            <div className="card-title">{model.name}</div>
-                            <div className="card-meta">
-                              <div className="card-type">{getModelTypeLabel(model.model_type)}</div>
-                              <div className="card-status">
-                                {model.status ? (
-                                  <Tag icon={<CheckCircleOutlined />} color="success">启用</Tag>
-                                ) : (
-                                  <Tag icon={<CloseCircleOutlined />} color="error">禁用</Tag>
-                                )}
-                                {model.is_default && (
-                                  <Tag color="blue">默认</Tag>
-                                )}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                <div style={{ 
+                                  fontWeight: '600', 
+                                  fontSize: '15px',
+                                  color: theme === 'dark' ? '#ffffff' : '#000000'
+                                }}>
+                                  {model.name}
+                                </div>
+                                <div style={{ 
+                                  fontSize: '12px',
+                                  color: theme === 'dark' ? 'rgba(255, 255, 255, 0.55)' : 'rgba(0, 0, 0, 0.55)'
+                                }}>
+                                  {getModelTypeLabel(model.model_type)}
+                                </div>
                               </div>
                             </div>
-                            <div className="card-bottom">
-                              <div className="card-tags">
-                                {parseTags(model.tags).slice(0, 3).map((tag, idx) => (
-                                  <Tag key={idx} style={{ marginBottom: 4 }}>{tag}</Tag>
-                                ))}
-                                {parseTags(model.tags).length > 3 && (
-                                  <Tag>+{parseTags(model.tags).length - 3}</Tag>
-                                )}
-                              </div>
-                              <div className="card-date">{formatDate(model.created_at)}</div>
+                            {/* 右上：状态标签 */}
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                              <Tag 
+                                icon={model.status ? <CheckCircleOutlined /> : <CloseCircleOutlined />} 
+                                color={model.status ? 'success' : 'error'}
+                                style={{ marginBottom: 0, borderRadius: '4px', background: model.status ? (theme === 'dark' ? 'rgba(82, 196, 26, 0.15)' : undefined) : (theme === 'dark' ? 'rgba(255, 77, 79, 0.15)' : undefined), borderColor: model.status ? (theme === 'dark' ? 'rgba(82, 196, 26, 0.3)' : undefined) : (theme === 'dark' ? 'rgba(255, 77, 79, 0.3)' : undefined) }}
+                              >
+                                {model.status ? '已启用' : '已禁用'}
+                              </Tag>
+                              <Tag 
+                                color={model.status ? 'blue' : 'default'}
+                                style={{ marginBottom: 0, borderRadius: '4px', fontSize: '12px', background: model.status ? (theme === 'dark' ? 'rgba(24, 144, 255, 0.15)' : undefined) : (theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : undefined), borderColor: model.status ? (theme === 'dark' ? 'rgba(24, 144, 255, 0.3)' : undefined) : (theme === 'dark' ? 'rgba(255, 255, 255, 0.15)' : undefined) }}
+                              >
+                                {model.status ? '可用' : '不可用'}
+                              </Tag>
                             </div>
-
+                          </div>
+                          
+                          {/* 中间区域：标签 */}
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
+                            {parseTags(model.tags).slice(0, 3).map((tag, idx) => (
+                              <Tag key={idx} style={{ marginBottom: 0, fontSize: '12px', padding: '2px 8px', borderRadius: '4px', background: theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#f5f5f5', color: theme === 'dark' ? 'rgba(255, 255, 255, 0.75)' : 'rgba(0, 0, 0, 0.65)' }}>
+                                {tag}
+                              </Tag>
+                            ))}
+                            {parseTags(model.tags).length > 3 && (
+                              <Tag style={{ marginBottom: 0, fontSize: '12px', padding: '2px 8px', borderRadius: '4px', background: theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#f5f5f5', color: theme === 'dark' ? 'rgba(255, 255, 255, 0.75)' : 'rgba(0, 0, 0, 0.65)' }}>
+                                +{parseTags(model.tags).length - 3}
+                              </Tag>
+                            )}
+                          </div>
+                          
+                          {/* 底部区域：时间 + 操作按钮 */}
+                          <div style={{ display: 'flex', flexDirection: 'column', marginTop: 'auto' }}>
+                            <div style={{ 
+                              fontSize: '12px',
+                              color: theme === 'dark' ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.4)',
+                              marginBottom: '12px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}>
+                              <ClockCircleOutlined />
+                              最近更新: {formatDate(model.created_at)}
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <Button 
+                                onClick={(e) => { e.stopPropagation(); handleTestConnection(model); }} 
+                                style={{ 
+                                  flex: 1, 
+                                  height: '32px', 
+                                  borderRadius: '8px', 
+                                  background: '#e6f7ff', 
+                                  border: '1px solid #91d5ff',
+                                  color: '#1890ff',
+                                  fontWeight: '500',
+                                  fontSize: '12px'
+                                }}
+                              >
+                                <ApiTwoTone />
+                                测试连接
+                              </Button>
+                              <Button 
+                                onClick={(e) => { e.stopPropagation(); handleEditModel(model); }} 
+                                style={{ 
+                                  flex: 1, 
+                                  height: '32px', 
+                                  borderRadius: '8px', 
+                                  background: '#f6ffed', 
+                                  border: '1px solid #b7eb8f',
+                                  color: '#52c41a',
+                                  fontWeight: '500',
+                                  fontSize: '12px'
+                                }}
+                              >
+                                <EditOutlined />
+                                编辑
+                              </Button>
+                              <Popconfirm title="确认删除" description="确定要删除这个模型吗？" onConfirm={(e) => { e.stopPropagation(); handleDeleteModel(model.id); }} okText="确认" cancelText="取消">
+                                <Button 
+                                  onClick={(e) => e.stopPropagation()}
+                                  danger 
+                                  style={{ 
+                                    flex: 1, 
+                                    height: '32px', 
+                                    borderRadius: '8px', 
+                                    background: '#fff2f0', 
+                                    border: '1px solid #ffccc7',
+                                    color: '#ff4d4f',
+                                    fontWeight: '500',
+                                    fontSize: '12px'
+                                  }}
+                                >
+                                  <DeleteOutlined />
+                                  删除
+                                </Button>
+                              </Popconfirm>
+                            </div>
                           </div>
                         </div>
                       </Card>
@@ -930,8 +1021,6 @@ const LLMModelManagement: React.FC = () => {
               />
             </div>
           )}
-        </Content>
-      </Layout>
 
       {/* 新增模型模态框 */}
       <Modal 
@@ -943,6 +1032,10 @@ const LLMModelManagement: React.FC = () => {
         className={`llm-model-modal ${theme === 'dark' ? 'dark' : 'light'}`}
       >
         <Form form={form} layout="vertical" initialValues={{ status: true, model_type: 'text', is_default: false }}>
+          {/* 基本信息 */}
+          <div style={{ background: theme === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#f5f5f5', padding: '8px 12px', marginBottom: '16px', borderRadius: '4px' }}>
+            <span style={{ fontWeight: '500', fontSize: '14px', color: theme === 'dark' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.75)' }}>基本信息</span>
+          </div>
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item name="name" label="模型名称" rules={[{ required: true, message: '请输入模型名称' }]}>
@@ -961,12 +1054,63 @@ const LLMModelManagement: React.FC = () => {
           </Row>
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item name="category_id" label="分类">
-                <TreeSelect placeholder="请选择分类" treeData={buildCategoryTreeSelectData()} treeDefaultExpandAll allowClear />
+              <Form.Item label="标签">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {tags.map((tag, index) => (
+                      <Tag
+                        key={index}
+                        closable
+                        onClose={() => {
+                          const newTags = tags.filter((_, i) => i !== index);
+                          setTags(newTags);
+                        }}
+                        style={{ marginBottom: 4 }}
+                      >
+                        {tag}
+                      </Tag>
+                    ))}
+                    {showTagInput ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <Input
+                          ref={tagInputRef}
+                          type="text"
+                          size="small"
+                          value={newTag}
+                          onChange={(e) => setNewTag(e.target.value)}
+                          onKeyPress={(e) => e.key === 'Enter' && handleAddTag()}
+                          placeholder="输入标签"
+                          style={{ width: 120, height: 24 }}
+                        />
+                        <Button size="small" onClick={handleAddTag} style={{ height: 24 }}>添加</Button>
+                        <Button size="small" onClick={() => setShowTagInput(false)} style={{ height: 24 }}>取消</Button>
+                      </div>
+                    ) : (
+                      <Button 
+                        type="dashed" 
+                        icon={<PlusOutlined />} 
+                        onClick={() => {
+                          setShowTagInput(true);
+                          setTimeout(() => tagInputRef.current?.focus(), 100);
+                        }}
+                        style={{ borderStyle: 'dashed', height: 24, minWidth: 80 }}
+                      >
+                        添加标签
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </Form.Item>
             </Col>
             <Col span={6}>
-              <Form.Item name="status" label="状态" valuePropName="checked">
+              <Form.Item name="status" label={
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span>状态</span>
+                  <Tooltip title="测试连接失败，则自动转为禁用状态">
+                    <InfoCircleOutlined style={{ fontSize: 14, color: '#999' }} />
+                  </Tooltip>
+                </div>
+              } valuePropName="checked">
                 <Switch checkedChildren="启用" unCheckedChildren="禁用" />
               </Form.Item>
             </Col>
@@ -976,59 +1120,23 @@ const LLMModelManagement: React.FC = () => {
               </Form.Item>
             </Col>
           </Row>
-          <Form.Item name="endpoint" label="端点地址" rules={[{ required: true, message: '请输入端点地址' }]}>
-            <Input placeholder="请输入端点地址" />
-          </Form.Item>
-          <Form.Item name="api_key" label="API密钥" rules={[{ required: true, message: '请输入API密钥' }]}>
-            <Input.Password placeholder="请输入API密钥" />
-          </Form.Item>
-          <Form.Item label="标签">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                {tags.map((tag, index) => (
-                  <Tag
-                    key={index}
-                    closable
-                    onClose={() => {
-                      const newTags = tags.filter((_, i) => i !== index);
-                      setTags(newTags);
-                    }}
-                    style={{ marginBottom: 4 }}
-                  >
-                    {tag}
-                  </Tag>
-                ))}
-                {showTagInput ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Input
-                      ref={tagInputRef}
-                      type="text"
-                      size="small"
-                      value={newTag}
-                      onChange={(e) => setNewTag(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && handleAddTag()}
-                      placeholder="输入标签"
-                      style={{ width: 120, height: 24 }}
-                    />
-                    <Button size="small" onClick={handleAddTag} style={{ height: 24 }}>添加</Button>
-                    <Button size="small" onClick={() => setShowTagInput(false)} style={{ height: 24 }}>取消</Button>
-                  </div>
-                ) : (
-                  <Button 
-                    type="dashed" 
-                    icon={<PlusOutlined />} 
-                    onClick={() => {
-                      setShowTagInput(true);
-                      setTimeout(() => tagInputRef.current?.focus(), 100);
-                    }}
-                    style={{ borderStyle: 'dashed', height: 24, minWidth: 80 }}
-                  >
-                    添加标签
-                  </Button>
-                )}
-              </div>
-            </div>
-          </Form.Item>
+
+          {/* 连接参数 */}
+          <div style={{ background: theme === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#f5f5f5', padding: '8px 12px', marginBottom: '16px', borderRadius: '4px' }}>
+            <span style={{ fontWeight: '500', fontSize: '14px', color: theme === 'dark' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.75)' }}>连接参数</span>
+          </div>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="endpoint" label="端点地址" rules={[{ required: true, message: '请输入端点地址' }]}>
+                <Input placeholder="请输入端点地址" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="api_key" label="API密钥" rules={[{ required: true, message: '请输入API密钥' }]}>
+                <Input.Password placeholder="请输入API密钥" />
+              </Form.Item>
+            </Col>
+          </Row>
         </Form>
         <div style={{ 
           marginTop: '16px', 
@@ -1069,11 +1177,13 @@ const LLMModelManagement: React.FC = () => {
                 } else {
                   message.error({ content: `连接测试失败: ${result.message}`, key });
                   setHasTestedConnection(false);
+                  form.setFieldValue('status', false);
                 }
               } catch (error: any) {
                 setTestingConnection(false);
                 message.error({ content: `测试失败: ${error.message}`, key: 'test-new-model' });
                 setHasTestedConnection(false);
+                form.setFieldValue('status', false);
               }
             }}
           >
@@ -1081,10 +1191,41 @@ const LLMModelManagement: React.FC = () => {
           </Button>
           <Button 
             type="primary"
-            onClick={handleSubmit}
-            style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', color: '#fff' }}
+            loading={testingConnection}
+            onClick={async () => {
+              try {
+                const values = await form.validateFields();
+                const testData = {
+                  name: values.name,
+                  provider: getProviderFromModelName(values.name),
+                  endpoint: values.endpoint,
+                  api_key: values.api_key,
+                  model_type: values.model_type
+                };
+                
+                setTestingConnection(true);
+                const key = `submit-new-model`;
+                message.loading({ content: `正在测试连接...`, key, duration: 0 });
+                
+                const result = await llmModelService.testModelConfig(testData);
+                
+                setTestingConnection(false);
+                
+                if (result.success) {
+                  message.success({ content: `连接测试成功！`, key });
+                  handleSubmit();
+                } else {
+                  message.error({ content: `连接测试失败: ${result.message}`, key });
+                  form.setFieldValue('status', false);
+                }
+              } catch (error: any) {
+                setTestingConnection(false);
+                message.error({ content: `测试失败: ${error.message}`, key: 'submit-new-model' });
+                form.setFieldValue('status', false);
+              }
+            }}
           >
-            保存
+            确定
           </Button>
         </div>
       </Modal>
@@ -1099,6 +1240,10 @@ const LLMModelManagement: React.FC = () => {
         className={`llm-model-modal ${theme === 'dark' ? 'dark' : 'light'}`}
       >
         <Form form={editForm} layout="vertical">
+          {/* 基本信息 */}
+          <div style={{ background: theme === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#f5f5f5', padding: '8px 12px', marginBottom: '16px', borderRadius: '4px' }}>
+            <span style={{ fontWeight: '500', fontSize: '14px', color: theme === 'dark' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.75)' }}>基本信息</span>
+          </div>
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item name="name" label="模型名称" rules={[{ required: true, message: '请输入模型名称' }]}>
@@ -1117,12 +1262,63 @@ const LLMModelManagement: React.FC = () => {
           </Row>
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item name="category_id" label="分类">
-                <TreeSelect placeholder="请选择分类" treeData={buildCategoryTreeSelectData()} treeDefaultExpandAll allowClear />
+              <Form.Item label="标签">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {editTags.map((tag, index) => (
+                      <Tag
+                        key={index}
+                        closable
+                        onClose={() => {
+                          const newTags = editTags.filter((_, i) => i !== index);
+                          setEditTags(newTags);
+                        }}
+                        style={{ marginBottom: 4 }}
+                      >
+                        {tag}
+                      </Tag>
+                    ))}
+                    {showEditTagInput ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <Input
+                          ref={editTagInputRef}
+                          type="text"
+                          size="small"
+                          value={newEditTag}
+                          onChange={(e) => setNewEditTag(e.target.value)}
+                          onKeyPress={(e) => e.key === 'Enter' && handleAddEditTag()}
+                          placeholder="输入标签"
+                          style={{ width: 120, height: 24 }}
+                        />
+                        <Button size="small" onClick={handleAddEditTag} style={{ height: 24 }}>添加</Button>
+                        <Button size="small" onClick={() => setShowEditTagInput(false)} style={{ height: 24 }}>取消</Button>
+                      </div>
+                    ) : (
+                      <Button 
+                        type="dashed" 
+                        icon={<PlusOutlined />} 
+                        onClick={() => {
+                          setShowEditTagInput(true);
+                          setTimeout(() => editTagInputRef.current?.focus(), 100);
+                        }}
+                        style={{ borderStyle: 'dashed', height: 24, minWidth: 80 }}
+                      >
+                        添加标签
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </Form.Item>
             </Col>
             <Col span={6}>
-              <Form.Item name="status" label="状态" valuePropName="checked">
+              <Form.Item name="status" label={
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span>状态</span>
+                  <Tooltip title="测试连接失败，则自动转为禁用状态">
+                    <InfoCircleOutlined style={{ fontSize: 14, color: '#999' }} />
+                  </Tooltip>
+                </div>
+              } valuePropName="checked">
                 <Switch checkedChildren="启用" unCheckedChildren="禁用" />
               </Form.Item>
             </Col>
@@ -1132,59 +1328,23 @@ const LLMModelManagement: React.FC = () => {
               </Form.Item>
             </Col>
           </Row>
-          <Form.Item name="endpoint" label="端点地址" rules={[{ required: true, message: '请输入端点地址' }]}>
-            <Input placeholder="请输入端点地址" />
-          </Form.Item>
-          <Form.Item name="api_key" label="API密钥" rules={[{ required: true, message: '请输入API密钥' }]}>
-            <Input.Password placeholder="请输入API密钥" />
-          </Form.Item>
-          <Form.Item label="标签">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                {editTags.map((tag, index) => (
-                  <Tag
-                    key={index}
-                    closable
-                    onClose={() => {
-                      const newTags = editTags.filter((_, i) => i !== index);
-                      setEditTags(newTags);
-                    }}
-                    style={{ marginBottom: 4 }}
-                  >
-                    {tag}
-                  </Tag>
-                ))}
-                {showEditTagInput ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Input
-                      ref={editTagInputRef}
-                      type="text"
-                      size="small"
-                      value={newEditTag}
-                      onChange={(e) => setNewEditTag(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && handleAddEditTag()}
-                      placeholder="输入标签"
-                      style={{ width: 120, height: 24 }}
-                    />
-                    <Button size="small" onClick={handleAddEditTag} style={{ height: 24 }}>添加</Button>
-                    <Button size="small" onClick={() => setShowEditTagInput(false)} style={{ height: 24 }}>取消</Button>
-                  </div>
-                ) : (
-                  <Button 
-                    type="dashed" 
-                    icon={<PlusOutlined />} 
-                    onClick={() => {
-                      setShowEditTagInput(true);
-                      setTimeout(() => editTagInputRef.current?.focus(), 100);
-                    }}
-                    style={{ borderStyle: 'dashed', height: 24, minWidth: 80 }}
-                  >
-                    添加标签
-                  </Button>
-                )}
-              </div>
-            </div>
-          </Form.Item>
+
+          {/* 连接参数 */}
+          <div style={{ background: theme === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#f5f5f5', padding: '8px 12px', marginBottom: '16px', borderRadius: '4px' }}>
+            <span style={{ fontWeight: '500', fontSize: '14px', color: theme === 'dark' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.75)' }}>连接参数</span>
+          </div>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="endpoint" label="端点地址" rules={[{ required: true, message: '请输入端点地址' }]}>
+                <Input placeholder="请输入端点地址" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="api_key" label="API密钥" rules={[{ required: true, message: '请输入API密钥' }]}>
+                <Input.Password placeholder="请输入API密钥" />
+              </Form.Item>
+            </Col>
+          </Row>
         </Form>
         <div style={{ 
           marginTop: '16px', 
@@ -1207,24 +1367,26 @@ const LLMModelManagement: React.FC = () => {
                   const key = `test-edit-model-${editingModelId}`;
                   message.loading({ content: `正在测试连接...`, key, duration: 0 });
                   
-                  await llmModelService.updateLLMModel(editingModelId, {
+                  const testData = {
                     name: values.name,
+                    provider: getProviderFromModelName(values.name),
                     endpoint: values.endpoint,
                     api_key: values.api_key,
-                    model_type: values.model_type,
-                    tags: JSON.stringify(editTags)
-                  });
+                    model_type: values.model_type
+                  };
                   
-                  const result = await llmModelService.testConnection(editingModelId);
+                  const result = await llmModelService.testModelConfig(testData);
                   
                   if (result.success) {
                     message.success({ content: `连接测试成功！`, key });
                   } else {
                     message.error({ content: `连接测试失败: ${result.message}`, key });
+                    editForm.setFieldValue('status', false);
                   }
                 }
               } catch (error: any) {
                 message.error({ content: `测试失败: ${error.message}`, key: `test-edit-model-${editingModelId}` });
+                editForm.setFieldValue('status', false);
               }
             }}
           >
@@ -1232,10 +1394,39 @@ const LLMModelManagement: React.FC = () => {
           </Button>
           <Button 
             type="primary"
-            onClick={handleEditSubmit}
-            style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', color: '#fff' }}
+            onClick={async () => {
+              try {
+                const values = await editForm.validateFields();
+                
+                if (editingModelId) {
+                  const key = `submit-edit-model-${editingModelId}`;
+                  message.loading({ content: `正在测试连接...`, key, duration: 0 });
+                  
+                  const testData = {
+                    name: values.name,
+                    provider: getProviderFromModelName(values.name),
+                    endpoint: values.endpoint,
+                    api_key: values.api_key,
+                    model_type: values.model_type
+                  };
+                  
+                  const result = await llmModelService.testModelConfig(testData);
+                  
+                  if (result.success) {
+                    message.success({ content: `连接测试成功！`, key });
+                    handleEditSubmit();
+                  } else {
+                    message.error({ content: `连接测试失败: ${result.message}`, key });
+                    editForm.setFieldValue('status', false);
+                  }
+                }
+              } catch (error: any) {
+                message.error({ content: `测试失败: ${error.message}`, key: `submit-edit-model-${editingModelId}` });
+                editForm.setFieldValue('status', false);
+              }
+            }}
           >
-            保存
+            确定
           </Button>
         </div>
       </Modal>

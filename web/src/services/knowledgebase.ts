@@ -205,15 +205,6 @@ export const knowledgebaseService = {
   },
 
   /**
-   * 获取单个知识库文档分类
-   */
-  getDocumentCategory: async (kbId: string, categoryId: string): Promise<KnowledgebaseDocumentCategory> => {
-    return http.get<KnowledgebaseDocumentCategory>(
-      `/aicenter/v1/knowledgebase/${kbId}/document_category/${categoryId}`
-    );
-  },
-
-  /**
    * 创建文档分类
    */
   createDocumentCategory: async (kbId: string, data: Partial<KnowledgebaseDocumentCategory>): Promise<KnowledgebaseDocumentCategory> => {
@@ -250,7 +241,7 @@ export const knowledgebaseService = {
     page: number = 1,
     pageSize: number = 20,
     categoryId?: string,
-    title?: string,
+    name?: string,
     chunkMethod?: string[],
     runningStatus?: string[],
     status?: string
@@ -259,8 +250,8 @@ export const knowledgebaseService = {
     if (categoryId) {
       params.push(`category_id=${categoryId}`);
     }
-    if (title) {
-      params.push(`title=${encodeURIComponent(title)}`);
+    if (name) {
+      params.push(`name=${encodeURIComponent(name)}`);
     }
     if (chunkMethod && chunkMethod.length > 0) {
       chunkMethod.forEach(method => {
@@ -358,12 +349,6 @@ export const knowledgebaseService = {
       step?: number;
     }>>;
     running_status: Record<string, string>;
-    knowledge_templates: Array<{
-      key: string;
-      title: string;
-      description: string;
-      icon: string;
-    }>;
   }> => {
     return http.get('/aicenter/v1/knowledgebase/document_constants');
   },
@@ -532,22 +517,15 @@ export const knowledgebaseService = {
   },
 
   getAvailableChunkMethods: async (
-    fileType?: string,
-    fileName?: string,
-    sourceType?: string
+    fileType: string,
+    fileName?: string
   ): Promise<{
     available_methods: Array<{ key: string; label: string; is_default: boolean }>;
     default_method: string;
   }> => {
-    const params = [];
-    if (fileType) {
-      params.push(`file_type=${fileType}`);
-    }
+    const params = [`file_type=${fileType}`];
     if (fileName) {
       params.push(`file_name=${encodeURIComponent(fileName)}`);
-    }
-    if (sourceType) {
-      params.push(`source_type=${encodeURIComponent(sourceType)}`);
     }
     const queryString = params.length > 0 ? `?${params.join('&')}` : '';
     return http.get(`/aicenter/v1/knowledgebase/chunk_methods/available${queryString}`);

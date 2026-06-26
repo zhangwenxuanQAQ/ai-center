@@ -27,6 +27,7 @@ const ChatList: React.FC<ChatListProps> = ({
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [showSearch, setShowSearch] = useState(false);
+  const [activeTab, setActiveTab] = useState<'pinned' | 'all'>('pinned');
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -295,21 +296,19 @@ const ChatList: React.FC<ChatListProps> = ({
   const renderConversationItem = (conversation: Conversation) => (
     <div
       key={conversation.id}
-      className={`conversation-item ${theme === 'dark' ? 'dark' : 'light'} ${
-        selectedConversation?.id === conversation.id ? 'selected' : ''
+      className={`chat-item ${theme === 'dark' ? 'dark' : 'light'} ${
+        selectedConversation?.id === conversation.id ? 'active' : ''
       }`}
       onClick={() => onSelectConversation(conversation)}
     >
-      <div className="conversation-icon">
+      <div className="chat-avatar">
         <MessageOutlined />
       </div>
-      <div className="conversation-content">
-        <div className="conversation-title">{conversation.title}</div>
-        <div className="conversation-meta">
-          <span className="conversation-date">{formatDate(conversation.created_at)}</span>
-        </div>
+      <div className="chat-info">
+        <div className="chat-title">{conversation.title}</div>
+        <div className="chat-time">{formatDate(conversation.created_at)}</div>
       </div>
-      <div className="conversation-actions" onClick={e => e.stopPropagation()}>
+      <div className="chat-actions" onClick={e => e.stopPropagation()}>
         <Dropdown menu={{ items: getConversationMenu(conversation) }} trigger={['click']} placement="bottomRight">
           <Button type="text" icon={<MoreOutlined />} className="action-btn" />
         </Dropdown>
@@ -320,17 +319,15 @@ const ChatList: React.FC<ChatListProps> = ({
   const renderNewConversationItem = () => (
     <div
       key="new"
-      className={`conversation-item ${theme === 'dark' ? 'dark' : 'light'} ${selectedConversation === null ? 'selected' : ''}`}
+      className={`chat-item ${theme === 'dark' ? 'dark' : 'light'} ${selectedConversation === null ? 'active' : ''}`}
       onClick={() => onSelectConversation(null)}
     >
-      <div className="conversation-icon">
+      <div className="chat-avatar">
         <MessageOutlined />
       </div>
-      <div className="conversation-content">
-        <div className="conversation-title">新对话</div>
-        <div className="conversation-meta">
-          <span className="conversation-date">刚刚</span>
-        </div>
+      <div className="chat-info">
+        <div className="chat-title">新对话</div>
+        <div className="chat-time">刚刚</div>
       </div>
     </div>
   );
@@ -375,14 +372,35 @@ const ChatList: React.FC<ChatListProps> = ({
               setSearchText('');
             }
           }}
-          className="search-toggle-btn"
+          className={`search-toggle-btn ${theme === 'dark' ? 'dark' : 'light'}`}
         />
         <Button
           type="text"
           icon={<MenuFoldOutlined />}
           onClick={onToggleCollapse}
-          className="toggle-btn"
+          className={`toggle-btn ${theme === 'dark' ? 'dark' : 'light'}`}
         />
+      </div>
+      
+      <div className={`sidebar-tabs ${theme === 'dark' ? 'dark' : 'light'}`}>
+        <div 
+          className={`tab ${theme === 'dark' ? 'dark' : 'light'} ${activeTab === 'pinned' ? 'active' : ''}`}
+          onClick={() => setActiveTab('pinned')}
+        >
+          <PushpinOutlined />
+          <span>置顶对话</span>
+          {pinnedConversations.length > 0 && (
+            <span className="tab-badge">{pinnedConversations.length}</span>
+          )}
+        </div>
+        <div 
+          className={`tab ${theme === 'dark' ? 'dark' : 'light'} ${activeTab === 'all' ? 'active' : ''}`}
+          onClick={() => setActiveTab('all')}
+        >
+          <MessageOutlined />
+          <span>全部对话</span>
+          <span className="tab-badge">7天内</span>
+        </div>
       </div>
       
       {showSearch && (
@@ -409,24 +427,28 @@ const ChatList: React.FC<ChatListProps> = ({
           </div>
         ) : (
           <>
-            <div className="conversation-section">
-              <div className="section-title" style={{ fontSize: '14px', fontWeight: 500 }}>
-                <PushpinOutlined /> 置顶对话
-              </div>
-              {pinnedConversations.map(renderConversationItem)}
-            </div>
-            <div className="conversation-section">
-              <div className="section-title" style={{ fontSize: '14px', fontWeight: 500 }}><CommentOutlined />全部对话</div>
-              {Object.entries(groupConversationsByTime(unpinnedConversations)).map(([group, convs]) => (
-                <div key={group} className="conversation-group">
-                  <div className="group-title" style={{ textAlign: 'left', paddingLeft: '12px', fontSize: '12px' }}>{group}</div>
-                  {group === '今天' && showNewConversation && renderNewConversationItem()}
-                  {convs.map(renderConversationItem)}
-                </div>
-              ))}
-            </div>
-            {!showNewConversation && conversations.length === 0 && (
-              <Empty description="暂无对话" className={`empty-container ${theme === 'dark' ? 'dark' : 'light'}`} />
+            {activeTab === 'pinned' && (
+              <>
+                {pinnedConversations.length > 0 ? (
+                  pinnedConversations.map(renderConversationItem)
+                ) : (
+                  <Empty description="暂无置顶对话" className={`empty-container ${theme === 'dark' ? 'dark' : 'light'}`} />
+                )}
+              </>
+            )}
+            {activeTab === 'all' && (
+              <>
+                {Object.entries(groupConversationsByTime(unpinnedConversations)).map(([group, convs]) => (
+                  <div key={group} className="conversation-group">
+                    <div className="group-title" style={{ textAlign: 'left', paddingLeft: '12px', fontSize: '12px' ,marginTop:12}}>{group}</div>
+                    {group === '今天' && showNewConversation && renderNewConversationItem()}
+                    {convs.map(renderConversationItem)}
+                  </div>
+                ))}
+                {unpinnedConversations.length === 0 && !showNewConversation && (
+                  <Empty description="暂无对话" className={`empty-container ${theme === 'dark' ? 'dark' : 'light'}`} />
+                )}
+              </>
             )}
             {loadingMore && (
               <div className="loading-more">

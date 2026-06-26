@@ -6,7 +6,6 @@ const { Option } = Select;
 import { BookOutlined, PlusOutlined, UploadOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UpOutlined, DownOutlined, FileTextOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import type { TreeDataNode, TreeProps, UploadProps } from 'antd';
 import { knowledgebaseService, Knowledgebase, KnowledgebaseCategory } from '../../services/knowledgebase';
-import PageHeader from '../../components/page-header';
 import '../../styles/common.css';
 import './knowledgebase.less';
 
@@ -538,12 +537,6 @@ const KnowledgebaseManagement: React.FC = () => {
 
   return (
     <div className={`page-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-      <PageHeader 
-        items={[
-          { title: '知识库管理', icon: <BookOutlined /> }
-        ]} 
-      />
-
       <Layout className="knowledgebase-layout">
         <LeftSider
           width={260}
@@ -579,8 +572,8 @@ const KnowledgebaseManagement: React.FC = () => {
           />
         </LeftSider>
 
-        <Content className={`knowledgebase-content ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <Content className={`knowledgebase-content ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '16px', boxSizing: 'border-box' }}>
+          <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap', alignItems: 'center' ,padding:'16px'}}>
             <Button 
               type="primary" 
               icon={<PlusOutlined />} 

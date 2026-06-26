@@ -15,7 +15,6 @@ import { promptService, Prompt } from '../../services/prompt';
 import { knowledgebaseService, Knowledgebase } from '../../services/knowledgebase';
 import { mcpService, MCPServer } from '../../services/mcp';
 import { llmModelService, LLMModel } from '../../services/llm_model';
-import PageHeader from '../../components/page-header';
 import '../../styles/common.css';
 import './chatbot_setting.less';
 import { getDefaultAvatar } from '../../utils/avatar';
@@ -974,18 +973,11 @@ const ChatbotSetting: React.FC = () => {
 
   return (
     <div className={`page-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-      <PageHeader
-        items={[
-          { title: '机器人管理', icon: <RobotOutlined />, onClick: () => navigate('/chatbots') },
-          { title: '机器人配置' },
-          { title: chatbot?.name || '' }
-        ]}
-        extra={
-          <Button icon={<ArrowLeftOutlined />} onClick={handleBack}>
-            返回列表
-          </Button>
-        }
-      />
+      <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', marginBottom: '20px' }}>
+        <Button icon={<ArrowLeftOutlined />} onClick={handleBack}>
+          返回列表
+        </Button>
+      </div>
 
       <div className="chatbot-setting-container" style={{ display: 'flex', gap: '8px', height: 'calc(100% - 60px)', overflow: 'hidden' }}>
         {/* 左侧基本信息 */}
