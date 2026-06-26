@@ -92,7 +92,7 @@ def _extract_text_from_file(file_name: str, base64_content: str, chunk_method: s
         if content and content.strip():
             text_parts.append(content.strip())
 
-    result = "\n".join(text_parts) if text_parts else None
+    result = "\n\n".join(text_parts) if text_parts else None
     logger.info(f"最终提取的文本长度: {len(result) if result else 0}")
     return result
 
@@ -137,10 +137,10 @@ def _build_file_content_text(file_name: str, file_size: Optional[int], extracted
     if file_size is not None:
         parts.append(f"【{size_label}】：{file_size}（字节）")
     parts.append(f"【{content_label}】：{extracted_text}")
-    return "\n".join(parts)
+    return "\n\n".join(parts)
 
 
-def build_user_prompt_with_documents(query: List[QueryItem], original_text: str) -> str:
+def build_user_prompt_with_documents(query: List[QueryItem], original_text: str, chunk_method: str = "naive") -> str:
     """
     构建包含文档内容的用户提示词
 
@@ -150,6 +150,7 @@ def build_user_prompt_with_documents(query: List[QueryItem], original_text: str)
     Args:
         query: 查询数组
         original_text: 用户原始文本消息
+        chunk_method: 文件切片方法，默认naive
 
     Returns:
         str: 构建后的用户提示词
@@ -171,13 +172,13 @@ def build_user_prompt_with_documents(query: List[QueryItem], original_text: str)
             if not base64_content:
                 continue
 
-            chunk_method = _get_chunk_method_for_file(file_name)
-            extracted_text = _extract_text_from_file(file_name, base64_content, chunk_method)
+            chunk_method_to_use = chunk_method
+            extracted_text = _extract_text_from_file(file_name, base64_content, chunk_method_to_use)
 
             if extracted_text:
                 file_text = _build_file_content_text(file_name, file_size, extracted_text, file_index)
                 # 每个文件内容用 ``` 包裹
-                document_texts.append(f"```\n{file_text}\n```")
+                document_texts.append(f"```\n\n{file_text}\n\n```")
                 file_index += 1
             else:
                 logger.warning(f"文件内容提取为空: {file_name}")
@@ -206,13 +207,13 @@ def build_user_prompt_with_documents(query: List[QueryItem], original_text: str)
             if not base64_content:
                 continue
 
-            chunk_method = _get_chunk_method_for_file(file_name)
-            extracted_text = _extract_text_from_file(file_name, base64_content, chunk_method)
+            chunk_method_to_use = chunk_method
+            extracted_text = _extract_text_from_file(file_name, base64_content, chunk_method_to_use)
 
             if extracted_text:
                 file_text = _build_file_content_text(file_name, file_size, extracted_text, file_index)
                 # 每个文件内容用 ``` 包裹
-                document_texts.append(f"```\n{file_text}\n```")
+                document_texts.append(f"```\n\n{file_text}\n\n```")
                 file_index += 1
             else:
                 logger.warning(f"文件内容提取为空: {file_name}")

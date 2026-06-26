@@ -1545,11 +1545,11 @@ def delete_chunk(
         return ResponseUtil.error(message=str(e))
 
 
-@router.post("/intelligent_extract", response_model=ApiResponse)
+@router.post("/document/intelligent_extract", response_model=ApiResponse)
 async def intelligent_extract(
     request: Request,
     model_id: str = Form(...),
-    prompt: str = Form(...),
+    prompt: Optional[str] = Form(default=None),
     category_id: str = Form(...),
     files: Optional[List[UploadFile]] = File(None),
     text_content: Optional[str] = Form(None)
@@ -1559,7 +1559,7 @@ async def intelligent_extract(
     
     Args:
         model_id: 模型ID
-        prompt: 提取提示词
+        prompt: 提取提示词（可选）
         category_id: 知识目录ID
         files: 上传的文件列表（可选）
         text_content: 文本内容（可选）
@@ -1571,12 +1571,12 @@ async def intelligent_extract(
         files和text_content至少需要提供一个
     """
     try:
-        from app.services.knowledgebase.service import KnowledgebaseService
+        from app.services.knowledgebase.service import KnowledgebaseDocumentService
         
         if not files and not text_content:
             return ResponseUtil.error(message="请提供文件或文本内容")
         
-        extracted_data = await KnowledgebaseService.intelligent_extract(
+        extracted_data = await KnowledgebaseDocumentService.intelligent_extract(
             model_id=model_id,
             prompt=prompt,
             category_id=category_id,
@@ -1588,6 +1588,89 @@ async def intelligent_extract(
         
     except Exception as e:
         logger.error(f"智能提取失败: {e}")
+        return ResponseUtil.error(message=str(e))
+
+
+@router.post("/document/intelligent_extract_stream")
+async def intelligent_extract_stream(
+    request: Request,
+    model_id: str = Form(...),
+    prompt: Optional[str] = Form(default=None),
+    category_id: str = Form(...),
+    files: Optional[List[UploadFile]] = File(None),
+    text_content: Optional[str] = Form(None)
+):
+    """
+    智能提取流式返回接口（支持文件和文本两种输入方式）
+    
+    使用SSE（Server-Sent Events）流式返回识别过程，包括思考过程和正文
+    
+    Args:
+        model_id: 模型ID
+        prompt: 提取提示词（可选）
+        category_id: 知识目录ID
+        files: 上传的文件列表（可选）
+        text_content: 文本内容（可选）
+        
+    Returns:
+        StreamingResponse: SSE流式响应
+        
+    Note:
+        files和text_content至少需要提供一个
+        返回格式：data: {"thinking_content": "思考过程", "text": "正文内容", ...}\n\n
+    """
+    try:
+        from app.services.knowledgebase.service import KnowledgebaseDocumentService
+        
+        if not files and not text_content:
+            # 返回错误流
+            async def error_stream():
+                yield f"data: {json.dumps({'error': '请提供文件或文本内容'}, ensure_ascii=False)}\n\n"
+            return StreamingResponse(
+                error_stream(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no"
+                }
+            )
+        
+        async def generate_stream():
+            try:
+                async for chunk in KnowledgebaseDocumentService.intelligent_extract_stream(
+                    model_id=model_id,
+                    prompt=prompt,
+                    category_id=category_id,
+                    files=files,
+                    text_content=text_content
+                ):
+                    if 'error' in chunk:
+                        yield f"data: {json.dumps({'error': chunk['error'], 'extracted_data': None}, ensure_ascii=False)}\n\n"
+                        return
+                    
+                    # 返回流式数据（包含reasoning_content、text、extracted_data等）
+                    yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+                
+                # 结束标记
+                yield "data: [DONE]\n\n"
+                
+            except Exception as e:
+                logger.error(f"流式提取失败: {e}")
+                yield f"data: {json.dumps({'error': str(e), 'extracted_data': None}, ensure_ascii=False)}\n\n"
+        
+        return StreamingResponse(
+            generate_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"智能提取流式接口失败: {e}")
         return ResponseUtil.error(message=str(e))
 
 

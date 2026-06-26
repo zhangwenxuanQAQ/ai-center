@@ -2,7 +2,7 @@
 
 ## 任务说明
 
-你需要根据给定的文件内容或文本，结合用户问题，识别并提取相关信息，然后按照当前知识目录的模板类型，将提取的值填充到document_config的对应字段中。
+你需要根据给定的文件内容或文本，结合用户问题，识别并提取相关信息，然后按照当前知识目录的模板类型，章节类型，分别将提取的值填充到document_config的对应字段中。如果是章节类型是动态章节还需要根据内容解析出新的自定义字段以及章节目录。
 
 ## 当前知识目录模板信息
 
@@ -46,7 +46,7 @@ document_config是一个JSON对象，包含以下字段：
 
 3. **content**: 富文本内容（当章节类型为rich_text时）
 
-## 不同模板类型的处理方式
+## 不同模板类型的需要处理的内容
 
 ### 1. 富文本模板（rich_text）
 - 直接提取文本内容作为知识内容
@@ -59,8 +59,8 @@ document_config是一个JSON对象，包含以下字段：
 - 根据字段名称，编码，描述，从文本中提取对应值设置到value字段中
 
 #### 2.2 固定章节类型（fixed）
-- 处理自定义字段
-- 按照预定义的章节结构提取内容，设置到章节对象的value字段中。
+- 处理自定义字段，根据字段名称，编码，描述，从文本中提取对应值设置到value字段中。
+- 按照预定义的章节结构提取内容，设置到章节对象的value字段中。禁止添加新的自定义字段和章节。
 - 如果章节类型是form则value字段是一个JSON对象，例如：
   ```json
   {
@@ -87,16 +87,20 @@ document_config是一个JSON对象，包含以下字段：
   ```
 
 #### 2.3 动态章节类型（dynamic）
-- 处理自定义字段
-- 根据已有章节结构以及章节类型（form/list/rich_text）提取内容，这是方式和固定章节类型相同。
-- 根据上传的文本或者文件内容解析出可能的新的章节目录，尽可能识别出章节字段，章节内容，章节层级结构等。 将解析出的章节添加到chapters字段中，每个章节对象必须包含id、name、type字段。 根据章节类型还需要解析出对应的字段或者字段值，
-解析出字段的话需要添加到章节对象的fields字段中。
+- 处理自定义字段，根据字段名称，编码，描述，从文本中提取对应值设置到value字段中。
+- 根据已有章节结构以及章节类型（form/list/rich_text）提取内容，固定章节类型相同。
+- 根据内容提取新的章节目录，章节类型，章节字段，章节内容，章节层级结构等。
+   - 如要根据内容使用最合适的章节类型，章节类型优先级为：list/form/rich_text
+   - 如果字段类型无法判断则默认使用text类型。
+   - 将解析出的章节添加到chapters字段中，每个章节对象必须包含id、name、type字段。 根据章节类型还需要解析出对应的字段或者字段值，
+   - 已有的自定义字段不要被覆盖，只添加新的字段。
+   - 已有章节不要被覆盖，只添加新的章节。
 
 #### 2.4 富文本章节类型（rich_text）
 - 处理自定义字段
 - 将文本内容填充到document_config.content字段
 
-## 不同模板类型提取样例：
+## 不同模板类型提取后样例：
 
 ### 1. 富文本模板（rich_text）
 ```json
@@ -375,6 +379,174 @@ document_config是一个JSON对象，包含以下字段：
 }
 ```
 
+### 3. 自定义模板-动态章节（custom_template，chapter_type=dynamic）
+上传的文件信息如下:
+```
+   【文件名】：南宁产业投资集团有限责任公司贯彻落实“三重一大”决策制度实施办法（2023年版）.json
+   【文件大小】：27204（字节）
+   【文件内容】：{
+  "metadata": {
+    "document_title": "南宁产业投资集团有限责任公司贯彻落实“三重一大”决策制度实施办法（2023年版）",
+    "version": "2023年版",
+    "issuing_department": "中共南宁产业投资集团有限责任公司委员会",
+    "effective_date": "2023-12-20",
+    "confidentiality": "内部文件"
+  },
+  "structure": [
+    {
+      "chapter": "第一章",
+      "title": "总则",
+      "clauses": [
+        {
+          "number": "第一条",
+          "content": "为规范南宁产业投资集团有限责任公司（以下简称‘集团公司’）的决策行为，提高决策水平，防范决策风险，从源头上预防和遏制腐败问题发生，推动企业高质量发展，根据《中华人民共和国公司法》《中华人民共和国企业国有资产法》《企业国有资产监督管理暂行条例》《国有企业领导人员廉洁从业若干规定》《南宁市国资委监管企业‘三重一大’决策制度实施办法》（2023年版）等法律法规和有关规定，结合集团公司实际，制定本办法。",
+          "type": "definition",
+          "responsible_party": [
+            "集团公司"
+          ],
+          "time_condition": null,
+          "threshold": null,
+          "penalty": null,
+          "referenced_clause": null
+        }
+      ]
+    }
+  ]
+}
+```
+
+识别结果：
+  ```json
+  {
+  "custom_fields": [
+    {
+      "id": "",
+      "field_name": "document_title",
+      "field_code": "document_title",
+      "field_type": "text",
+      "field_dict": "",
+      "description": "",
+      "is_param_search": false,
+      "is_required": false,
+      "value": "南宁产业投资集团有限责任公司贯彻落实“三重一大”决策制度实施办法（2023年版）"
+    },
+    {
+      "id": "",
+      "field_name": "version",
+      "field_code": "version",
+      "field_type": "text",
+      "field_dict": "",
+      "description": "",
+      "is_param_search": false,
+      "is_required": false,
+      "value": "2023年版"
+    },
+    {
+      "id": "",
+      "field_name": "document_tissuing_departmentitle",
+      "field_code": "issuing_department",
+      "field_type": "text",
+      "field_dict": "",
+      "description": "",
+      "is_param_search": false,
+      "is_required": false,
+      "value": "中共南宁产业投资集团有限责任公司委员会"
+    },
+    {
+      "id": "",
+      "field_name": "effective_date",
+      "field_code": "effective_date",
+      "field_type": "text",
+      "field_dict": "",
+      "description": "",
+      "is_param_search": false,
+      "is_required": false,
+      "value": "2023-12-20"
+    },
+    {
+      "id": "",
+      "field_name": "confidentiality",
+      "field_code": "confidentiality",
+      "field_type": "text",
+      "field_dict": "",
+      "description": "",
+      "is_param_search": false,
+      "is_required": false,
+      "value": "内部文件"
+    }
+  ],
+  "chapters": [
+    {
+      "id": "",
+      "name": "第一章",
+      "type": "form",
+      "fields": [
+        {
+          "id": "",
+          "field_name": "title",
+          "field_code": "title",
+          "field_type": "text",
+          "field_dict": "",
+          "description": "",
+        }
+      ],
+      "value": {
+        "字段id": "总则",
+      }
+    },
+    {
+      "id": "",
+      "name": "第一条",
+      "parentId": "第一章的id",
+      "type": "form",
+      "fields": [
+        {
+          "id": "",
+          "field_name": "number",
+          "field_code": "",
+          "field_type": "text",
+          "field_dict": "",
+          "description": "",
+        },
+        {
+          "id": "",
+          "field_name": "content",
+          "field_code": "",
+          "field_type": "text",
+          "field_dict": "",
+          "description": "",
+        },
+        {
+          "id": "",
+          "field_name": "type",
+          "field_code": "",
+          "field_type": "text",
+          "field_dict": "",
+          "description": "",
+        },
+        {
+          "id": "",
+          "field_name": "responsible_party",
+          "field_code": "",
+          "field_type": "text",
+          "field_dict": "",
+          "description": "",
+        }
+      ],
+      "value": {
+        "字段1id": "第一条",
+        "字段2id": "为规范南宁产业投资集团有限责任公司（以下简称‘集团公司’）的决策行为，提高决策水平，防范决策风险，从源头上预防和遏制腐败问题发生，推动企业高质量发展，根据《中华人民共和国公司法》《中华人民共和国企业国有资产法》《企业国有资产监督管理暂行条例》《国有企业领导人员廉洁从业若干规定》《南宁市国资委监管企业‘三重一大’决策制度实施办法》（2023年版）等法律法规和有关规定，结合集团公司实际，制定本办法。",
+        "字段3id": "definition",
+        "字段4id": "[
+            \"集团公司\"
+          ]",
+        "字段5id": "总则",
+      }
+    }
+  ]
+}
+  ```
+
 ## 提取规则
 
 1. **文本提取**: 从输入内容中识别关键信息，根据字段名称进行匹配
@@ -391,6 +563,10 @@ document_config是一个JSON对象，包含以下字段：
    - form类型：提取表单字段值
    - list类型：提取表格或列表数据
    - rich_text类型：提取文本内容
+
+4. **id**:
+   - 章节ID：系统随机生成的唯一标识符
+   - 字段ID：系统随机生成的唯一标识符
 
 ## 输出格式
 
@@ -417,7 +593,7 @@ document_config是一个JSON对象，包含以下字段：
       "value": "提取内容"
     }
   ],
-  "content": "提取内容"
+  "content": "富文本提取内容"
 }
 ```
 

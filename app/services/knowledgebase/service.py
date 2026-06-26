@@ -5,7 +5,7 @@
 import json
 import logging
 from datetime import datetime
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Generator
 from app.database.models import KnowledgebaseCategory, Knowledgebase, KnowledgebaseDocument, KnowledgebaseDocumentCategory
 from app.services.knowledgebase.dto import (
     KnowledgebaseCategoryCreate, KnowledgebaseCategoryUpdate,
@@ -1786,8 +1786,8 @@ class KnowledgebaseDocumentService:
     @staticmethod
     async def intelligent_extract(
         model_id: str,
-        prompt: str,
         category_id: str,
+        prompt: Optional[str] = None,
         files: Optional[List[Any]] = None,
         text_content: Optional[str] = None
     ) -> Dict[str, Any]:
@@ -1796,7 +1796,7 @@ class KnowledgebaseDocumentService:
         
         Args:
             model_id: 模型ID
-            prompt: 提取提示词
+            prompt: 提取提示词（可选）
             category_id: 知识目录ID
             files: 上传的文件列表（可选）
             text_content: 文本内容（可选）
@@ -1809,12 +1809,15 @@ class KnowledgebaseDocumentService:
         """
         import json
         import asyncio
+        import re
         from app.database.models import KnowledgebaseDocumentCategory, LLMModel
         from app.core.llm_model.utils.llm_util import convert_query_to_message, format_prompt
         from app.core.prompt.utils.system_prompt_builder import _load_prompt_file
         from app.core.llm_model.factory import LLMFactory
-        from app.core.chat.chat_core import QueryItem
-        from fastapi import UploadFile
+        from app.services.chat.dto import QueryItem
+        # 从 starlette 导入 UploadFile，FastAPI 路由参数实际传入的是 starlette 的 UploadFile 实例
+        from starlette.datastructures import UploadFile
+        from app.services.prompt.service import PromptService
         
         try:
             category = KnowledgebaseDocumentCategory.get(KnowledgebaseDocumentCategory.id == category_id)
@@ -1830,7 +1833,13 @@ class KnowledgebaseDocumentService:
         except LLMModel.DoesNotExist:
             raise ResourceNotFoundError(message=f"模型 {model_id} 不存在")
         
-        document_config = json.loads(category.document_config) if isinstance(category.document_config, str) else category.document_config
+        try:
+            if isinstance(category.document_config, str) and category.document_config.strip():
+                document_config = json.loads(category.document_config)
+            else:
+                document_config = {}
+        except (json.JSONDecodeError, TypeError):
+            document_config = {}
         
         template_type = document_config.get('template_type', '')
         custom_fields = document_config.get('custom_fields', [])
@@ -1877,12 +1886,32 @@ class KnowledgebaseDocumentService:
                 content=text_content
             ))
         
-        user_message = convert_query_to_message(query_items, llm_model.model_type, model_id)
+        user_message = convert_query_to_message(query_items, llm_model.model_type, model_id, chunk_method="one")
         
-        user_prompt_message = {
-            'role': 'user',
-            'content': prompt
-        }
+        # 处理 prompt 中的提示词引用占位符
+        processed_prompt = ""
+        if prompt:
+            processed_prompt = prompt.strip()
+            # 解析 {{prompt@prompt_id}} 占位符
+            pattern = r'\{\{prompt@([^}]+)\}\}'
+            matches = re.findall(pattern, processed_prompt)
+            
+            for prompt_id in matches:
+                # 查询提示词内容
+                referenced_prompt = PromptService.get_prompt(prompt_id)
+                if referenced_prompt and referenced_prompt.content:
+                    # 替换占位符为实际的提示词内容
+                    placeholder = f"{{{{prompt@{prompt_id}}}}}"
+                    processed_prompt = processed_prompt.replace(placeholder, referenced_prompt.content)
+                else:
+                    logger.warning(f"提示词引用 {prompt_id} 不存在或无内容，保留占位符")
+        
+        user_prompt_message = {}
+        if processed_prompt:
+            user_prompt_message = {
+                'role': 'user',
+                'content': processed_prompt
+            }
         
         messages = [
             {'role': 'system', 'content': system_prompt},
@@ -1910,7 +1939,7 @@ class KnowledgebaseDocumentService:
             raise RuntimeError(f"无法创建模型实例: {model_id}")
         
         try:
-            result = llm_instance.generate_with_messages(messages)
+            result = llm_instance.generate_with_messages(messages,max_tokens = 0 , temperature = 0.5)
             
             if 'error' in result:
                 raise RuntimeError(f"模型调用失败: {result['error']}")
@@ -1937,6 +1966,231 @@ class KnowledgebaseDocumentService:
             "extracted_info": extracted_data,
             "raw_response": response
         }
+
+    @staticmethod
+    async def intelligent_extract_stream(
+        model_id: str,
+        prompt: Optional[str] = None,
+        category_id: str = None,
+        files: Optional[List] = None,
+        text_content: Optional[str] = None
+    ) -> Generator[Dict[str, Any], None, None]:
+        """
+        智能提取知识流式返回方法
+        
+        Args:
+            model_id: 模型ID
+            prompt: 提取提示词（可选）
+            category_id: 知识目录ID
+            files: 上传的文件列表（可选）
+            text_content: 文本内容（可选）
+            
+        Yields:
+            Dict: 流式返回的提取结果，包含thinking_content（思考过程）和text（正文）
+            
+        Raises:
+            ResourceNotFoundError: 知识目录不存在或模型不存在
+        """
+        import json
+        import re
+        import base64
+        from app.database.models import KnowledgebaseDocumentCategory, LLMModel
+        from app.core.llm_model.utils.llm_util import convert_query_to_message, format_prompt
+        from app.core.prompt.utils.system_prompt_builder import _load_prompt_file
+        from app.core.llm_model.factory import LLMFactory
+        from app.services.chat.dto import QueryItem
+        from starlette.datastructures import UploadFile
+        from app.services.prompt.service import PromptService
+        
+        # 获取知识目录配置
+        try:
+            category = KnowledgebaseDocumentCategory.get(KnowledgebaseDocumentCategory.id == category_id)
+            if not category or category.deleted:
+                raise ResourceNotFoundError(message=f"知识目录 {category_id} 不存在")
+        except KnowledgebaseDocumentCategory.DoesNotExist:
+            raise ResourceNotFoundError(message=f"知识目录 {category_id} 不存在")
+        
+        # 获取模型配置
+        try:
+            llm_model = LLMModel.get(LLMModel.id == model_id)
+            if not llm_model or llm_model.deleted:
+                raise ResourceNotFoundError(message=f"模型 {model_id} 不存在")
+        except LLMModel.DoesNotExist:
+            raise ResourceNotFoundError(message=f"模型 {model_id} 不存在")
+        
+        # 解析文档配置
+        try:
+            if isinstance(category.document_config, str) and category.document_config.strip():
+                document_config = json.loads(category.document_config)
+            else:
+                document_config = {}
+        except (json.JSONDecodeError, TypeError):
+            document_config = {}
+        
+        template_type = document_config.get('template_type', '')
+        custom_fields = document_config.get('custom_fields', [])
+        chapters = document_config.get('chapters', [])
+        chapter_type = document_config.get('chapter_type', '')
+        has_knowledge_content = document_config.get('has_knowledge_content', False)
+        
+        # 构建系统提示词
+        system_prompt_template = _load_prompt_file('knowledge_template_extract.md')
+        
+        params = {
+            'TEMPLATE_TYPE': template_type,
+            'HAS_CUSTOM_FIELDS': '是' if custom_fields else '否',
+            'CUSTOM_FIELDS': json.dumps(custom_fields, ensure_ascii=False) if custom_fields else '无',
+            'HAS_CHAPTERS': '是' if chapters else '否',
+            'CHAPTER_TYPE': chapter_type or '无',
+            'HAS_KNOWLEDGE_CONTENT': '是' if has_knowledge_content else '否'
+        }
+        
+        system_prompt = format_prompt(system_prompt_template, params)
+        
+        # 构建查询项
+        query_items = []
+        
+        if files:
+            for file in files:
+                if isinstance(file, UploadFile):
+                    file_content = await file.read()
+                    base64_content = base64.b64encode(file_content).decode('utf-8')
+                    
+                    from app.core.knowledgebase.utils.file_utils import get_mime_type
+                    mime_type = get_mime_type(file.filename)
+                    
+                    query_items.append(QueryItem(
+                        type='file_base64',
+                        content=base64_content,
+                        mime_type=mime_type,
+                        file_name=file.filename,
+                        file_size=len(file_content)
+                    ))
+        
+        if text_content:
+            query_items.append(QueryItem(
+                type='text',
+                content=text_content
+            ))
+        
+        # 转换为用户消息
+        user_message = convert_query_to_message(query_items, llm_model.model_type, model_id, chunk_method="one")
+        
+        # 处理 prompt 中的提示词引用占位符
+        processed_prompt = ""
+        if prompt:
+            processed_prompt = prompt.strip()
+            # 解析 {{prompt@prompt_id}} 占位符
+            pattern = r'\{\{prompt@([^}]+)\}\}'
+            matches = re.findall(pattern, processed_prompt)
+            
+            for prompt_id in matches:
+                # 查询提示词内容
+                referenced_prompt = PromptService.get_prompt(prompt_id)
+                if referenced_prompt and referenced_prompt.content:
+                    # 替换占位符为实际的提示词内容
+                    placeholder = f"{{{{prompt@{prompt_id}}}}}"
+                    processed_prompt = processed_prompt.replace(placeholder, referenced_prompt.content)
+                else:
+                    logger.warning(f"提示词引用 {prompt_id} 不存在或无内容，保留占位符")
+        
+        user_prompt_message = {}
+        if processed_prompt:
+            user_prompt_message = {
+                'role': 'user',
+                'content': processed_prompt
+            }
+        
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            user_message,
+            user_prompt_message
+        ]
+        
+        # 构建模型配置
+        model_config = {
+            "api_key": llm_model.api_key,
+            "endpoint": llm_model.endpoint,
+            "name": llm_model.name,
+            "provider": llm_model.provider,
+        }
+        
+        if llm_model.config:
+            try:
+                extra_config = json.loads(llm_model.config) if isinstance(llm_model.config, str) else llm_model.config
+                model_config.update(extra_config)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        
+        # 创建模型实例
+        llm_instance = LLMFactory.create_model(llm_model.model_type, model_config)
+        
+        if not llm_instance:
+            raise RuntimeError(f"无法创建模型实例: {model_id}")
+        
+        # 使用流式生成方法
+        try:
+            full_text = ""
+            full_reasoning = ""
+            
+            for chunk in llm_instance.stream_generate_with_messages(messages, max_tokens=0, temperature=0.5):
+                if 'error' in chunk:
+                    yield {
+                        'error': chunk['error'],
+                        'reasoning_content': '',
+                        'text': '',
+                        'extracted_data': None
+                    }
+                    return
+                
+                reasoning_content = chunk.get('reasoning_content', '')
+                text = chunk.get('text', '')
+                
+                full_reasoning += reasoning_content
+                full_text += text
+                
+                # 构建流式返回数据
+                result = {
+                    'reasoning_content': reasoning_content,
+                    'text': text,
+                    'finish_reason': chunk.get('finish_reason', None),
+                    'usage': chunk.get('usage', None),
+                    'extracted_data': None
+                }
+                
+                yield result
+            
+            # 解析最终结果，生成extracted_data
+            extracted_data = {}
+            
+            if full_text:
+                try:
+                    json_match = re.search(r'```json\s*(.*?)\s*```', full_text, re.DOTALL)
+                    if json_match:
+                        extracted_data = json.loads(json_match.group(1))
+                    else:
+                        extracted_data = json.loads(full_text)
+                except (json.JSONDecodeError, ValueError):
+                    extracted_data = {"content": full_text}
+            
+            # 最后返回包含extracted_data的结果
+            yield {
+                'reasoning_content': '',
+                'text': '',
+                'finish_reason': 'done',
+                'usage': None,
+                'extracted_data': extracted_data
+            }
+                
+        except Exception as e:
+            logger.error(f"模型调用失败: {e}")
+            yield {
+                'error': str(e),
+                'reasoning_content': '',
+                'text': '',
+                'extracted_data': None
+            }
+            return
 
 
 class KnowledgebaseDocumentCategoryService:
