@@ -36,6 +36,10 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
         tokenize_doc,
         is_english,
     )
+    from ..utils import ProgressCallback
+    
+    if not callback:
+        callback = ProgressCallback()
     
     parser_config = kwargs.get("parser_config", {
         "chunk_token_num": 512,

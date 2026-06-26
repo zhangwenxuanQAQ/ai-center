@@ -63,6 +63,9 @@ RUN rm -rf ./app/test
 
 COPY --from=frontend-builder /aicenter/web/dist /aicenter/web/dist
 
+# 复制资源文件到容器中
+COPY web/src/assets /aicenter/web/src/assets
+
 COPY docker/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY docker/nginx/aicenter.conf /etc/nginx/conf.d/aicenter.conf
 

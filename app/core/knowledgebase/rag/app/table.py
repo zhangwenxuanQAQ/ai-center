@@ -228,6 +228,10 @@ def chunk(filename, binary=None, from_page=0, to_page=10000000000, lang="Chinese
         list: 切片后的文档列表
     """
     from ..nlp import rag_tokenizer, tokenize_doc
+    from ..utils import ProgressCallback
+    
+    if not callback:
+        callback = ProgressCallback()
     
     if pd is None:
         raise ImportError("请安装pandas: pip install pandas")

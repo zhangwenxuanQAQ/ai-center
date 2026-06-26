@@ -126,7 +126,7 @@ def model_supports_audio(model_type: str) -> bool:
     return model_type in ('audio', 'multimodal')
 
 
-def convert_query_to_message(query: List[Any], model_type: Optional[str] = None, model_id: Optional[str] = None) -> Dict[str, Any]:
+def convert_query_to_message(query: List[Any], model_type: Optional[str] = None, model_id: Optional[str] = None, chunk_method: str = "naive") -> Dict[str, Any]:
     """
     将query数组转换为OpenAI格式的用户消息
     
@@ -134,16 +134,17 @@ def convert_query_to_message(query: List[Any], model_type: Optional[str] = None,
         query: 查询数组
         model_type: 模型类型，用于判断如何处理文件
         model_id: 模型ID，用于查询数据库中的support_image字段
+        chunk_method: 文件切片方法，默认naive
         
     Returns:
         Dict: OpenAI格式的用户消息
     """
     import os
-    from app.core.chat.chat_core import QueryItem
-    from app.core.util.file_util import filename_type, FileType
+    from app.services.chat.dto import QueryItem
+    from app.constants.knowledgebase_document_constants import FileType
+    from app.core.knowledgebase.utils.file_utils import filename_type, convert_base64_audio_to_wav, get_mime_type
     from app.services.chat.file_utils import get_file_from_datasource
     from app.core.prompt.utils.user_prompt_builder import build_user_prompt_with_documents
-    from app.core.knowledgebase.utils.file_utils import convert_base64_audio_to_wav, get_mime_type
     
     processed_query = []
     for item in query:
@@ -251,7 +252,7 @@ def convert_query_to_message(query: List[Any], model_type: Optional[str] = None,
         
         if has_other_files or has_unsupported_image or has_unsupported_audio:
             original_text = ' '.join(item.content for item in processed_query if isinstance(item, QueryItem) and item.type == 'text')
-            document_text = build_user_prompt_with_documents(processed_query, original_text)
+            document_text = build_user_prompt_with_documents(processed_query, original_text, chunk_method)
             return {
                 'role': 'user',
                 'content': document_text
@@ -263,7 +264,7 @@ def convert_query_to_message(query: List[Any], model_type: Optional[str] = None,
             }
     else:
         original_text = ' '.join(item.content for item in processed_query if isinstance(item, QueryItem) and item.type == 'text')
-        document_text = build_user_prompt_with_documents(processed_query, original_text)
+        document_text = build_user_prompt_with_documents(processed_query, original_text, chunk_method)
         return {
             'role': 'user',
             'content': document_text

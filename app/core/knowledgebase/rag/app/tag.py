@@ -113,6 +113,10 @@ def chunk(filename, binary=None, lang="Chinese", callback=None, **kwargs):
         list: 切片后的文档列表，每个元素包含内容和标签
     """
     from ..nlp import rag_tokenizer
+    from ..utils import ProgressCallback
+    
+    if not callback:
+        callback = ProgressCallback()
     
     eng = lang.lower() == "english"
     res = []

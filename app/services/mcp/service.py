@@ -45,10 +45,8 @@ def parse_mcp_config(config: str, transport_type: str) -> Dict[str, Any]:
                 first_server_key = next(iter(mcp_servers), None)
                 if first_server_key:
                     server_config = mcp_servers[first_server_key]
-                    result['command'] = server_config.get('command')
-                    result['args'] = server_config.get('args')
-                    result['env'] = server_config.get('env')
-                    result['cwd'] = server_config.get('cwd')
+                    for key, value in server_config.items():
+                        result[key] = value
         else:
             result['headers'] = config_data.get('headers')
             result['command'] = config_data.get('command')

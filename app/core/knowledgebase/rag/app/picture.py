@@ -60,6 +60,10 @@ def chunk(filename, binary, tenant_id="", lang="Chinese", callback=None, **kwarg
         list: 切片后的文档列表
     """
     from ..nlp import rag_tokenizer, tokenize_doc
+    from ..utils import ProgressCallback
+    
+    if not callback:
+        callback = ProgressCallback()
     
     doc = {
         "docnm_kwd": filename,
