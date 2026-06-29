@@ -1906,19 +1906,18 @@ class KnowledgebaseDocumentService:
                 else:
                     logger.warning(f"提示词引用 {prompt_id} 不存在或无内容，保留占位符")
         
-        user_prompt_message = {}
-        if processed_prompt:
-            user_prompt_message = {
-                'role': 'user',
-                'content': processed_prompt
-            }
         
         messages = [
             {'role': 'system', 'content': system_prompt},
             user_message,
-            user_prompt_message
         ]
         
+        if processed_prompt:
+            messages.append({
+                'role': 'user',
+                'content': processed_prompt
+            })
+
         model_config = {
             "api_key": llm_model.api_key,
             "endpoint": llm_model.endpoint,
@@ -2094,18 +2093,17 @@ class KnowledgebaseDocumentService:
                 else:
                     logger.warning(f"提示词引用 {prompt_id} 不存在或无内容，保留占位符")
         
-        user_prompt_message = {}
-        if processed_prompt:
-            user_prompt_message = {
-                'role': 'user',
-                'content': processed_prompt
-            }
-        
         messages = [
             {'role': 'system', 'content': system_prompt},
             user_message,
-            user_prompt_message
         ]
+
+        if processed_prompt:
+            messages.append({
+                'role': 'user',
+                'content': processed_prompt
+            })
+
         
         # 构建模型配置
         model_config = {

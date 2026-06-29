@@ -387,6 +387,14 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
       
       setExtractedResult(result);
       
+      // 处理富文本内容回填（存储在 customFieldValues.richTextContent 中）
+      if (result.content) {
+        setCustomFieldValues(prev => ({
+          ...prev,
+          richTextContent: result.content
+        }));
+      }
+      
       // 处理自定义字段回填（提取结果是数组，需要转换为对象）
       if (result.custom_fields && Array.isArray(result.custom_fields)) {
         const newFieldValues: Record<string, any> = {};
@@ -552,12 +560,59 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
 
     // 处理章节字段值
     if (customFieldValues.chapter_fields_values) {
-      result.chapterFieldsValues = customFieldValues.chapter_fields_values;
+      const extractedChapterFieldsValues = customFieldValues.chapter_fields_values;
+      
+      if (overrideExisting) {
+        // 覆盖模式：直接使用所有章节字段值
+        result.chapterFieldsValues = extractedChapterFieldsValues;
+      } else {
+        // 不覆盖模式：根据字段ID跳过已有值的字段
+        const currentChapterFieldsValues = currentCustomFieldValues?.chapter_fields_values || {};
+        const mergedChapterFieldsValues: Record<string, any> = {};
+        
+        for (const [chapterId, chapterValues] of Object.entries(extractedChapterFieldsValues)) {
+          const currentChapterValues = currentChapterFieldsValues[chapterId] || {};
+          const mergedValues: Record<string, any> = {};
+          
+          if (chapterValues && typeof chapterValues === 'object') {
+            for (const [fieldKey, fieldValue] of Object.entries(chapterValues)) {
+              // 跳过已有值的字段
+              const currentValue = currentChapterValues[fieldKey];
+              if (currentValue === undefined || 
+                  currentValue === null || 
+                  currentValue === '' ||
+                  (Array.isArray(currentValue) && currentValue.length === 0)) {
+                mergedValues[fieldKey] = fieldValue;
+              }
+            }
+          }
+          
+          if (Object.keys(mergedValues).length > 0) {
+            mergedChapterFieldsValues[chapterId] = mergedValues;
+          }
+        }
+        
+        if (Object.keys(mergedChapterFieldsValues).length > 0) {
+          result.chapterFieldsValues = mergedChapterFieldsValues;
+        }
+      }
     }
 
     // 处理动态章节
     if (dynamicChapters && dynamicChapters.length > 0) {
-      result.dynamicChapters = dynamicChapters;
+      if (overrideExisting) {
+        // 覆盖模式：使用所有动态章节
+        result.dynamicChapters = dynamicChapters;
+      } else {
+        // 不覆盖模式：跳过已有的章节（根据章节ID判断）
+        const currentChapterIds = new Set(
+          (currentDynamicChapters || []).map(ch => ch.id)
+        );
+        const newChapters = dynamicChapters.filter(ch => ch.id && !currentChapterIds.has(ch.id));
+        if (newChapters.length > 0) {
+          result.dynamicChapters = [...(currentDynamicChapters || []), ...newChapters];
+        }
+      }
     }
     
     // 处理富文本内容
