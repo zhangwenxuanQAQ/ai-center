@@ -793,55 +793,63 @@ export const knowledgebaseService = {
       content?: string;
       chapters?: any[];
     } = {};
+    let buffer = '';
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
 
       const chunk = decoder.decode(value, { stream: true });
-      const lines = chunk.split('\n');
+      buffer += chunk;
 
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6);
-          if (data === '[DONE]') {
-            break;
-          }
+      while (buffer.includes('\n\n')) {
+        const delimiterIndex = buffer.indexOf('\n\n');
+        const message = buffer.substring(0, delimiterIndex);
+        buffer = buffer.substring(delimiterIndex + 2);
 
-          try {
-            const parsed = JSON.parse(data);
-            
-            if (parsed.error) {
-              // 将错误消息显示到识别结果中
-              fullText += `\n\n[错误] ${parsed.error}`;
+        const lines = message.split('\n');
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') {
+              break;
+            }
+
+            try {
+              const parsed = JSON.parse(data);
+              
+              if (parsed.error) {
+                fullText += `\n\n[错误] ${parsed.error}`;
+                if (onProgress) {
+                  onProgress({
+                    reasoning_content: fullReasoningContent,
+                    text: fullText,
+                  });
+                }
+                throw new Error(parsed.error);
+              }
+
+              if (parsed.extracted_data) {
+                extractedData = parsed.extracted_data;
+              }
+
+              if (parsed.reasoning_content) {
+                fullReasoningContent += parsed.reasoning_content;
+              }
+              if (parsed.text) {
+                fullText += parsed.text;
+              }
+
               if (onProgress) {
                 onProgress({
                   reasoning_content: fullReasoningContent,
                   text: fullText,
                 });
               }
-              throw new Error(parsed.error);
+            } catch (e) {
+              console.error('解析流数据失败:', e);
+              console.error('原始数据:', data);
             }
-
-            if (parsed.extracted_data) {
-              extractedData = parsed.extracted_data;
-            }
-
-            if (parsed.reasoning_content) {
-              fullReasoningContent += parsed.reasoning_content;
-            }
-            if (parsed.text) {
-              fullText += parsed.text;
-            }
-
-            if (onProgress) {
-              onProgress({
-                reasoning_content: fullReasoningContent,
-                text: fullText,
-              });
-            }
-          } catch (e) {
-            console.error('解析流数据失败:', e);
           }
         }
       }
@@ -921,57 +929,63 @@ export const knowledgebaseService = {
       content?: string;
       chapters?: any[];
     } = {};
+    let buffer = '';
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
 
       const chunk = decoder.decode(value, { stream: true });
-      const lines = chunk.split('\n');
+      buffer += chunk;
 
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6);
-          if (data === '[DONE]') {
-            break;
-          }
+      while (buffer.includes('\n\n')) {
+        const delimiterIndex = buffer.indexOf('\n\n');
+        const message = buffer.substring(0, delimiterIndex);
+        buffer = buffer.substring(delimiterIndex + 2);
 
-          try {
-            const parsed = JSON.parse(data);
-            
-            if (parsed.error) {
-              // 将错误消息显示到识别结果中
-              fullText += `\n\n[错误] ${parsed.error}`;
-              // 调用进度回调显示错误
+        const lines = message.split('\n');
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') {
+              break;
+            }
+
+            try {
+              const parsed = JSON.parse(data);
+              
+              if (parsed.error) {
+                fullText += `\n\n[错误] ${parsed.error}`;
+                if (onProgress) {
+                  onProgress({
+                    reasoning_content: fullReasoningContent,
+                    text: fullText,
+                  });
+                }
+                throw new Error(parsed.error);
+              }
+
+              if (parsed.extracted_data) {
+                extractedData = parsed.extracted_data;
+              }
+
+              if (parsed.reasoning_content) {
+                fullReasoningContent += parsed.reasoning_content;
+              }
+              if (parsed.text) {
+                fullText += parsed.text;
+              }
+
               if (onProgress) {
                 onProgress({
                   reasoning_content: fullReasoningContent,
                   text: fullText,
                 });
               }
-              throw new Error(parsed.error);
+            } catch (e) {
+              console.error('解析流数据失败:', e);
+              console.error('原始数据:', data);
             }
-
-            if (parsed.extracted_data) {
-              extractedData = parsed.extracted_data;
-            }
-
-            if (parsed.reasoning_content) {
-              fullReasoningContent += parsed.reasoning_content;
-            }
-            if (parsed.text) {
-              fullText += parsed.text;
-            }
-
-            // 调用进度回调
-            if (onProgress) {
-              onProgress({
-                reasoning_content: fullReasoningContent,
-                text: fullText,
-              });
-            }
-          } catch (e) {
-            console.error('解析流数据失败:', e);
           }
         }
       }
