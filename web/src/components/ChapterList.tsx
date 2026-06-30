@@ -100,12 +100,23 @@ const ChapterList: React.FC<ChapterListProps> = ({
               justifyContent: 'space-between',
               width: '100%',
               paddingRight: 8,
+              paddingBottom: 4,
+              gap: 4,
+              overflow: 'hidden',
             }}
           >
-            <span>{chapter.name}</span>
+            <Tooltip title={chapter.name} placement="topLeft">
+              <span style={{ 
+                flex: 1, 
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                display: 'inline-block',
+              }}>{chapter.name}</span>
+            </Tooltip>
             {editable && (
               <span 
-                style={{ display: 'flex', gap: 4 }}
+                style={{ display: 'flex', gap: 4, flexShrink: 0 }}
                 onClick={(e) => e.stopPropagation()}
               >
                 <EditOutlined 
@@ -434,6 +445,7 @@ const ChapterList: React.FC<ChapterListProps> = ({
       ),
       dataIndex: field.id,
       key: field.id,
+      width: 150,
       render: (value: any, record: any, rowIndex: number) => {
         return renderFieldValueControl(
           field,
@@ -461,6 +473,9 @@ const ChapterList: React.FC<ChapterListProps> = ({
       ),
     });
 
+    // 计算表格横向滚动宽度
+    const totalWidth = fields.length * 150 + 80;
+
     return (
       <div style={{ padding: 16 }}>
         {!disabled && (
@@ -481,6 +496,7 @@ const ChapterList: React.FC<ChapterListProps> = ({
           pagination={false}
           size="small"
           bordered
+          scroll={{ x: Math.max(totalWidth, 600) }}
           locale={{ emptyText: disabled ? '' : '暂无数据，请点击"新增"添加数据' }}
           rowKey={(_, index) => `row_${index}`}
         />
@@ -547,27 +563,44 @@ const ChapterList: React.FC<ChapterListProps> = ({
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 16 }}>
-        <div style={{ width: 240, borderRight: '1px solid #e8e8e8', paddingRight: 16 }}>
+      <div style={{ display: 'flex', gap: 16, width: '100%', overflow: 'hidden' }}>
+        <div style={{ width: 200, borderRight: '1px solid #e8e8e8', paddingRight: 16, flexShrink: 0 }}>
           {chapters.length > 0 ? (
-            <Tree
-              showLine
-              selectedKeys={localSelectedId ? [localSelectedId] : []}
-              expandedKeys={expandedKeys}
-              onSelect={handleTreeSelect}
-              onExpand={handleTreeExpand}
-              treeData={buildTreeData}
-              style={{
-                background: 'transparent',
-                fontSize: 13,
-              }}
-            />
+            <>
+              <Tree
+                showLine
+                selectedKeys={localSelectedId ? [localSelectedId] : []}
+                expandedKeys={expandedKeys}
+                onSelect={handleTreeSelect}
+                onExpand={handleTreeExpand}
+                treeData={buildTreeData}
+                style={{
+                  background: 'transparent',
+                  fontSize: 13,
+                }}
+                className="chapter-tree"
+              />
+              <style>{`
+                .chapter-tree .ant-tree-node-content-wrapper {
+                  display: flex;
+                  align-items: center;
+                  flex: 1;
+                  overflow: hidden;
+                }
+                .chapter-tree .ant-tree-title {
+                  display: flex;
+                  flex: 1;
+                  text-align: left;
+                  overflow: hidden;
+                }
+              `}</style>
+            </>
           ) : (
             <div style={{ color: '#999', padding: '8px 12px' }}>暂无章节</div>
           )}
         </div>
 
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
           {selectedChapter ? (
             <div key={selectedChapter.id}>
               {renderChapterContent(selectedChapter)}

@@ -210,19 +210,18 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
     return () => observer.disconnect();
   }, []);
 
+  const [currentCategoryId, setCurrentCategoryId] = useState<string | undefined>();
+  
   // 弹窗打开时初始化状态（只在visible变化时触发）
   useEffect(() => {
     if (visible) {
       fetchModels();
-      // 初始化状态，保留已有的章节配置
-      setCustomFieldValues(prev => {
-        // 只重置普通字段值，保留 chapter_fields_values
-        const chapterFieldsValues = prev.chapter_fields_values || {};
-        return { chapter_fields_values: chapterFieldsValues };
-      });
+      // 初始化状态
+      setCustomFieldValues({});
       setExtractedResult(null);
       setOverrideExisting(true);
       setExtractPrompt('');
+      setCurrentCategoryId(selectedCategory?.id);
       
       // 初始化动态章节
       if (currentDynamicChapters) {
@@ -235,14 +234,15 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
     }
   }, [visible]); // 只依赖 visible，避免 selectedCategory 引用变化导致重置
 
-  // 知识目录变化时重置状态（使用 selectedCategory?.id 判断真正的变化）
+  // 知识目录变化时重置状态（比较前后的 categoryId）
   useEffect(() => {
-    if (visible && selectedCategory) {
-      // 使用函数式更新，避免依赖 selectedCategory 对象引用
+    // 只有当弹窗已经打开且 categoryId 真正变化时才重置
+    if (visible && selectedCategory?.id && selectedCategory.id !== currentCategoryId) {
+      setCurrentCategoryId(selectedCategory.id);
       setCustomFieldValues({});
       setDynamicChapters([]);
     }
-  }, [visible, selectedCategory?.id]); // 只依赖 selectedCategory.id，避免对象引用变化
+  }, [visible, selectedCategory?.id, currentCategoryId]);
 
   // 弹窗关闭时停止识别并清理
   useEffect(() => {
@@ -402,6 +402,11 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
       
       setExtractedResult(result);
       
+      // 判断是否是动态章节
+      const docConfig = selectedCategory?.document_config || {};
+      const chapterType = docConfig.chapter_type || 'fixed';
+      const isDynamicChapter = chapterType === 'dynamic';
+      
       // 处理富文本内容回填（存储在 customFieldValues.richTextContent 中）
       if (result.content) {
         setCustomFieldValues(prev => ({
@@ -420,25 +425,15 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
           }
         });
         
-        // 合并到现有的customFieldValues中
+        // 合并到现有的customFieldValues中（新值覆盖旧值）
         setCustomFieldValues(prev => ({
           ...prev,
           ...newFieldValues
         }));
       }
       
-      // 处理章节回填（合并到现有的dynamicChapters中）
+      // 处理章节回填
       if (result.chapters && Array.isArray(result.chapters)) {
-        setDynamicChapters(prev => {
-          // 如果prev为空，直接返回所有新章节
-          if (!prev || prev.length === 0) {
-            return result.chapters;
-          }
-          const existingChapterIds = new Set(prev.map(ch => ch.id));
-          const newChapters = result.chapters.filter((ch: any) => ch.id && !existingChapterIds.has(ch.id));
-          return [...prev, ...newChapters];
-        });
-
         // 处理章节字段值回填到 chapter_fields_values
         const newChapterFieldsValues: Record<string, any> = {};
         result.chapters.forEach((chapter: any) => {
@@ -448,10 +443,38 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
             // 根据章节类型处理value
             if (chapter.type === 'form' && typeof chapter.value === 'object' && !Array.isArray(chapter.value)) {
               // form类型：value是 { field_id: value } 对象
-              Object.assign(chapterValues, chapter.value);
+              // 需要将 field_code 转换为 field.id
+              if (chapter.fields && Array.isArray(chapter.fields)) {
+                const fieldCodeToId = new Map(chapter.fields.map((f: any) => [f.field_code, f.id]));
+                for (const [key, value] of Object.entries(chapter.value)) {
+                  const fieldId = fieldCodeToId.get(key) || key;
+                  chapterValues[fieldId] = value;
+                }
+              } else {
+                Object.assign(chapterValues, chapter.value);
+              }
             } else if (chapter.type === 'list' && Array.isArray(chapter.value)) {
-              // list类型：value是数组
-              chapterValues.list_data = chapter.value;
+              // list类型：value是数组，每个元素是 { field_code: value } 对象
+              // 需要将 field_code 转换为 field.id
+              const fieldCodeToId = new Map();
+              if (chapter.fields && Array.isArray(chapter.fields)) {
+                chapter.fields.forEach((f: any) => {
+                  if (f.field_code && f.id) {
+                    fieldCodeToId.set(f.field_code, f.id);
+                  }
+                });
+              }
+              
+              const convertedListData = chapter.value.map((item: any) => {
+                const convertedItem: Record<string, any> = {};
+                for (const [key, value] of Object.entries(item)) {
+                  const fieldId = fieldCodeToId.get(key) || key;
+                  convertedItem[fieldId] = value;
+                }
+                return convertedItem;
+              });
+              
+              chapterValues.list_data = convertedListData;
             } else if (chapter.type === 'rich_text' && typeof chapter.value === 'string') {
               // rich_text类型：value是字符串
               chapterValues.rich_text_content = chapter.value;
@@ -463,15 +486,33 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
           }
         });
 
-        // 合并到现有的 chapter_fields_values 中
-        if (Object.keys(newChapterFieldsValues).length > 0) {
+        if (isDynamicChapter) {
+          // 动态章节：全量覆盖章节和章节字段值
+          setDynamicChapters(result.chapters);
           setCustomFieldValues(prev => ({
             ...prev,
-            chapter_fields_values: {
-              ...(prev.chapter_fields_values || {}),
-              ...newChapterFieldsValues
-            }
+            chapter_fields_values: newChapterFieldsValues
           }));
+        } else {
+          // 非动态章节：增量合并到现有的dynamicChapters和chapter_fields_values中
+          setDynamicChapters(prev => {
+            if (!prev || prev.length === 0) {
+              return result.chapters;
+            }
+            const existingChapterIds = new Set(prev.map(ch => ch.id));
+            const newChapters = result.chapters.filter((ch: any) => ch.id && !existingChapterIds.has(ch.id));
+            return [...prev, ...newChapters];
+          });
+
+          if (Object.keys(newChapterFieldsValues).length > 0) {
+            setCustomFieldValues(prev => ({
+              ...prev,
+              chapter_fields_values: {
+                ...(prev.chapter_fields_values || {}),
+                ...newChapterFieldsValues
+              }
+            }));
+          }
         }
       }
       
@@ -832,9 +873,15 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
     // 根据template_type判断是否显示配置项
     const shouldShowConfig = templateType === 'custom_template';
     const shouldShowRichText = templateType === 'rich_text';
+    
+    // 动态章节在提取后也应该显示（即使 hasKnowledgeContent 为 false）
+    const shouldShowDynamicChapters = chapterType === 'dynamic' && (hasKnowledgeContent || dynamicChapters.length > 0);
+    
+    // 自定义字段在提取后也应该显示（即使目录配置中没有定义）
+    const shouldShowCustomFields = shouldShowConfig || (extractedResult?.custom_fields && extractedResult.custom_fields.length > 0);
 
-    // 如果不是自定义模板且不是富文本类型，则不显示任何内容
-    if (!shouldShowConfig && !shouldShowRichText) {
+    // 如果不是自定义模板且不是富文本类型且没有提取到动态章节，则不显示任何内容
+    if (!shouldShowConfig && !shouldShowRichText && !shouldShowDynamicChapters) {
       return (
         <div style={{
           padding: 24,
@@ -1007,7 +1054,7 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {shouldShowConfig && (
+        {shouldShowCustomFields && (
           <>
             <div style={{ fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
               知识配置
@@ -1065,7 +1112,7 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
               </div>
             )}
 
-            {hasKnowledgeContent && chapterType === 'dynamic' && (
+            {shouldShowDynamicChapters && (
               <div style={{
                 marginTop: customFields.length > 0 ? 16 : 0,
                 paddingTop: customFields.length > 0 ? 16 : 0,
@@ -1161,7 +1208,7 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
     >
       <div
         ref={containerRef}
-        style={{ flex: 1, overflowY: 'auto', display: 'flex', minHeight: 0, paddingBottom: 5 }}
+        style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', display: 'flex', minHeight: 0, paddingBottom: 5 }}
       >
         {/* 左侧配置区域 */}
         <div style={{ 
@@ -1207,7 +1254,9 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
           width: `${100 - leftWidth}%`, 
           padding: 5,
           paddingLeft: 12,
-          transition: isDragging ? 'none' : 'width 0.1s'
+          transition: isDragging ? 'none' : 'width 0.1s',
+          minWidth: 0,
+          overflow: 'hidden',
         }}>
           {renderRightContent()}
         </div>
