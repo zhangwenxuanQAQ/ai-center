@@ -5,6 +5,7 @@
 import json
 import logging
 import base64
+import asyncio
 from fastapi import APIRouter, Request, Query, Depends
 from fastapi.responses import StreamingResponse, Response
 from typing import Optional
@@ -339,7 +340,7 @@ async def chat_completions(
             async def generate():
                 current_chat_id = None
                 try:
-                    for chunk in ChatCoreService.chat_stream(
+                    async for chunk in ChatCoreService.chat_stream(
                         user_id=user_id,
                         query=chat_request.query,
                         model_id=chat_request.model_id,
@@ -355,9 +356,11 @@ async def chat_completions(
                         
                         if 'error' in chunk:
                             yield f"data: {json.dumps({'error': chunk['error'], 'chat_id': chunk.get('chat_id')}, ensure_ascii=False)}\n\n"
+                            await asyncio.sleep(0)
                             return
 
                         yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+                        await asyncio.sleep(0)
 
                     yield "data: [DONE]\n\n"
                 except GeneratorExit:

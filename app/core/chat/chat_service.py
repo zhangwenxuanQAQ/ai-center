@@ -11,7 +11,7 @@ import os
 import importlib.util
 import time
 import threading
-from typing import List, Dict, Any, Optional, Generator, Tuple, Union
+from typing import List, Dict, Any, Optional, Generator, AsyncGenerator, Tuple, Union
 
 from app.database.models import Chat, ChatMessage, LLMModel, Chatbot, ChatbotPrompt, ChatbotTool, MCPTool
 from app.services.chat.dto import QueryItem
@@ -725,7 +725,7 @@ class ChatCoreService:
         return None
     
     @staticmethod
-    def _execute_single_task(
+    async def _execute_single_task(
         model,
         task: TaskInfo,
         task_context: str,
@@ -739,7 +739,7 @@ class ChatCoreService:
         task_execution_step_id: str = '',
         avatar: Optional[str] = None,
         **model_params
-    ) -> Generator[Dict[str, Any], None, Tuple[str, str]]:
+    ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         执行单个子任务
         
@@ -759,7 +759,7 @@ class ChatCoreService:
             **model_params: 模型参数
             
         Returns:
-            Generator[Dict[str, Any], None, Tuple[str, str]]: 生成器，最后返回(完整响应, 推理内容)
+            AsyncGenerator[Dict[str, Any], None]: 异步生成器，yield流式响应数据
         """
         built_system_prompt = build_system_prompt(system_prompt)
         
@@ -840,7 +840,7 @@ class ChatCoreService:
                     'tool_calls': tool_calls_list
                 })
                 
-                for tool_result in process_tool_calls(tool_calls_list, tool_map, chat_id):
+                async for tool_result in process_tool_calls(tool_calls_list, tool_map, chat_id):
                     if ChatStopManager().is_stop_requested(chat_id):
                         yield ChatStreamResponse.text_response(
                             text='',
@@ -950,8 +950,6 @@ class ChatCoreService:
                         })
             else:
                 break
-        
-        return full_response, reasoning_content
     
     @staticmethod
     def _generate_result_summary(
@@ -1018,7 +1016,7 @@ class ChatCoreService:
                 ).to_dict()
     
     @staticmethod
-    def _execute_direct_answer(
+    async def _execute_direct_answer(
         model,
         messages: List[Dict[str, Any]],
         chat_id: str,
@@ -1034,7 +1032,7 @@ class ChatCoreService:
         reasoning_end_time: float,
         reasoning_content: str,
         full_response: str,** model_params
-    ) -> Generator[Union[Dict[str, Any], Tuple[None, List[Dict[str, Any]], List[Dict[str, Any]]]], None, None]:
+    ) -> AsyncGenerator[Union[Dict[str, Any], Tuple[None, List[Dict[str, Any]], List[Dict[str, Any]]]], None]:
         """
         执行直接回答逻辑（不需要子任务）
         
@@ -1179,7 +1177,7 @@ class ChatCoreService:
                     'tool_calls': tool_calls_list
                 })
 
-                for tool_result in process_tool_calls(tool_calls_list, tool_map, chat_id):
+                async for tool_result in process_tool_calls(tool_calls_list, tool_map, chat_id):
                     if ChatStopManager().is_stop_requested(chat_id):
                         yield ChatStreamResponse.text_response(
                             text='',
@@ -1354,7 +1352,7 @@ class ChatCoreService:
         yield (None, messages, planning_messages_history)
     
     @staticmethod
-    def chat_stream(
+    async def chat_stream(
         user_id: str,
         query: List[QueryItem],
         model_id: Optional[str] = None,
@@ -1364,7 +1362,7 @@ class ChatCoreService:
         message_id: Optional[str] = None,
         system_prompt: Optional[str] = None,
         assistant_message_id: Optional[str] = None
-    ) -> Generator[Dict[str, Any], None, None]:
+    ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         流式聊天
 
@@ -1649,7 +1647,7 @@ class ChatCoreService:
                         full_response=full_response,** model_params
                     )
                     
-                    for result in direct_answer_result:
+                    async for result in direct_answer_result:
                         if isinstance(result, dict):
                             if result.get('status') == MessageStatus.STOP:
                                 is_stopped = True
@@ -1827,7 +1825,7 @@ class ChatCoreService:
                         task_full_response = ''
                         task_reasoning_content = ''
                         
-                        for result in ChatCoreService._execute_single_task(
+                        async for result in ChatCoreService._execute_single_task(
                             model=model,
                             task=task,
                             task_context=task_context,

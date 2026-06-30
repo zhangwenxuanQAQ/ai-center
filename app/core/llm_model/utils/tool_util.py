@@ -9,7 +9,7 @@ import time
 import asyncio
 import nest_asyncio
 import concurrent.futures
-from typing import Dict, Any, List, Generator
+from typing import Dict, Any, List, Generator, AsyncGenerator
 
 
 def _call_mcp_tool(tool_id: str, function_args: Dict[str, Any]) -> Dict[str, Any]:
@@ -273,7 +273,7 @@ def _execute_single_tool(tool_call: Dict, tool_map: Dict[str, str]) -> Dict[str,
             }
 
 
-def process_tool_calls(tool_calls: List[Dict], tool_map: Dict[str, str], chat_id: str = '') -> Generator[Dict[str, Any], None, None]:
+async def process_tool_calls(tool_calls: List[Dict], tool_map: Dict[str, str], chat_id: str = '') -> AsyncGenerator[Dict[str, Any], None]:
     """
     处理工具调用，支持并行执行多个工具
 
@@ -293,78 +293,117 @@ def process_tool_calls(tool_calls: List[Dict], tool_map: Dict[str, str], chat_id
     """
     from app.core.chat.chat_service import ChatStopManager
     
-    tool_call_task_names = {}
-    tool_call_reasoning_contents = {}
-    for tool_call in tool_calls:
-        function_name = tool_call.get('function', {}).get('name', '')
-        tool_call_id = tool_call.get('id', '')
-        function_args_str = tool_call.get('function', {}).get('arguments', '{}')
-        task_name = ''
-        reasoning_content = ''
+    # 使用Queue在后台线程和异步主线程之间传递消息
+    queue: asyncio.Queue = asyncio.Queue()
+    loop = asyncio.get_event_loop()
+    
+    def _sync_process():
+        """在后台线程中执行的同步处理函数"""
         try:
-            function_args = json.loads(function_args_str)
-            task_name = function_args.get('task_name', '')
-            reasoning_content = function_args.get('reasoning_content', '')
-        except json.JSONDecodeError:
-            pass
-        tool_call_task_names[tool_call_id] = task_name
-        tool_call_reasoning_contents[tool_call_id] = reasoning_content
-        yield {
-            'tool_call_id': tool_call_id,
-            'tool_name': function_name,
-            'task_name': task_name,
-            'status': 'start',
-            'elapsed_ms': 0,
-            'reasoning_content': reasoning_content
-        }
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(tool_calls), 10)) as executor:
-        future_to_tool = {}
-        for tool_call in tool_calls:
-            function_name = tool_call.get('function', {}).get('name', '')
-            tool_call_id = tool_call.get('id', '')
+            tool_call_task_names = {}
+            tool_call_reasoning_contents = {}
             
-            future = executor.submit(_execute_single_tool, tool_call, tool_map)
-            future_to_tool[future] = tool_call
+            # 先yield每个工具的start状态
+            for tool_call in tool_calls:
+                function_name = tool_call.get('function', {}).get('name', '')
+                tool_call_id = tool_call.get('id', '')
+                function_args_str = tool_call.get('function', {}).get('arguments', '{}')
+                task_name = ''
+                reasoning_content = ''
+                try:
+                    function_args = json.loads(function_args_str)
+                    task_name = function_args.get('task_name', '')
+                    reasoning_content = function_args.get('reasoning_content', '')
+                except json.JSONDecodeError:
+                    pass
+                tool_call_task_names[tool_call_id] = task_name
+                tool_call_reasoning_contents[tool_call_id] = reasoning_content
+                
+                # 线程安全地放入队列
+                asyncio.run_coroutine_threadsafe(
+                    queue.put({
+                        'tool_call_id': tool_call_id,
+                        'tool_name': function_name,
+                        'task_name': task_name,
+                        'status': 'start',
+                        'elapsed_ms': 0,
+                        'reasoning_content': reasoning_content
+                    }),
+                    loop
+                )
             
-            yield {
-                'tool_call_id': tool_call_id,
-                'tool_name': function_name,
-                'task_name': tool_call_task_names.get(tool_call_id, ''),
-                'status': 'running',
-                'elapsed_ms': 0,
-                'reasoning_content': tool_call_reasoning_contents.get(tool_call_id, '')
-            }
+            # 并行执行所有工具
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(tool_calls), 10)) as executor:
+                future_to_tool = {}
+                for tool_call in tool_calls:
+                    function_name = tool_call.get('function', {}).get('name', '')
+                    tool_call_id = tool_call.get('id', '')
+                    
+                    future = executor.submit(_execute_single_tool, tool_call, tool_map)
+                    future_to_tool[future] = tool_call
+                    
+                    asyncio.run_coroutine_threadsafe(
+                        queue.put({
+                            'tool_call_id': tool_call_id,
+                            'tool_name': function_name,
+                            'task_name': tool_call_task_names.get(tool_call_id, ''),
+                            'status': 'running',
+                            'elapsed_ms': 0,
+                            'reasoning_content': tool_call_reasoning_contents.get(tool_call_id, '')
+                        }),
+                        loop
+                    )
 
-        try:
-            for future in concurrent.futures.as_completed(future_to_tool):
-                if chat_id and ChatStopManager().is_stop_requested(chat_id):
+                try:
+                    for future in concurrent.futures.as_completed(future_to_tool):
+                        if chat_id and ChatStopManager().is_stop_requested(chat_id):
+                            for pending_future in future_to_tool:
+                                if not pending_future.done():
+                                    pending_future.cancel()
+                            break
+                        
+                        try:
+                            result = future.result()
+                            tool_call = future_to_tool[future]
+                            tool_call_id = tool_call.get('id', '')
+                            result['status'] = 'error' if 'error' in result else 'success'
+                            result['reasoning_content'] = tool_call_reasoning_contents.get(tool_call_id, '')
+                            
+                            asyncio.run_coroutine_threadsafe(queue.put(result), loop)
+                        except Exception as e:
+                            tool_call = future_to_tool[future]
+                            function_name = tool_call.get('function', {}).get('name', '')
+                            tool_call_id = tool_call.get('id', '')
+                            
+                            asyncio.run_coroutine_threadsafe(
+                                queue.put({
+                                    'tool_call_id': tool_call_id,
+                                    'tool_name': function_name,
+                                    'task_name': tool_call_task_names.get(tool_call_id, ''),
+                                    'status': 'error',
+                                    'elapsed_ms': 0,
+                                    'error': str(e),
+                                    'reasoning_content': tool_call_reasoning_contents.get(tool_call_id, '')
+                                }),
+                                loop
+                            )
+                finally:
                     for pending_future in future_to_tool:
                         if not pending_future.done():
                             pending_future.cancel()
-                    break
-                
-                try:
-                    result = future.result()
-                    tool_call = future_to_tool[future]
-                    tool_call_id = tool_call.get('id', '')
-                    result['status'] = 'error' if 'error' in result else 'success'
-                    result['reasoning_content'] = tool_call_reasoning_contents.get(tool_call_id, '')
-                    yield result
-                except Exception as e:
-                    tool_call = future_to_tool[future]
-                    function_name = tool_call.get('function', {}).get('name', '')
-                    tool_call_id = tool_call.get('id', '')
-                    yield {
-                        'tool_call_id': tool_call_id,
-                        'tool_name': function_name,
-                        'task_name': tool_call_task_names.get(tool_call_id, ''),
-                        'status': 'error',
-                        'elapsed_ms': 0,
-                        'error': str(e),
-                        'reasoning_content': tool_call_reasoning_contents.get(tool_call_id, '')
-                    }
+        except Exception as e:
+            print(f"Error in _sync_process: {e}")
         finally:
-            for pending_future in future_to_tool:
-                if not pending_future.done():
-                    pending_future.cancel()
+            # 发送结束信号
+            asyncio.run_coroutine_threadsafe(queue.put(None), loop)
+    
+    # 在后台线程中运行同步处理
+    await loop.run_in_executor(None, _sync_process)
+    
+    # 从队列中异步获取结果
+    while True:
+        msg = await queue.get()
+        if msg is None:  # 结束信号
+            break
+        yield msg
+        await asyncio.sleep(0)
