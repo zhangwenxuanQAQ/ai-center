@@ -564,7 +564,7 @@ const ChapterList: React.FC<ChapterListProps> = ({
       )}
 
       <div style={{ display: 'flex', gap: 16, width: '100%', overflow: 'hidden' }}>
-        <div style={{ width: 200, borderRight: '1px solid #e8e8e8', paddingRight: 16, flexShrink: 0 }}>
+        <div style={{ width: 200, borderRight: '1px solid #e8e8e8', paddingRight: 16, flexShrink: 0, maxHeight: 400, overflowY: 'auto' }}>
           {chapters.length > 0 ? (
             <>
               <Tree
@@ -600,7 +600,7 @@ const ChapterList: React.FC<ChapterListProps> = ({
           )}
         </div>
 
-        <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+        <div style={{ flex: 1, minWidth: 0, maxHeight: 400, overflowY: 'auto' }}>
           {selectedChapter ? (
             <div key={selectedChapter.id}>
               {renderChapterContent(selectedChapter)}
