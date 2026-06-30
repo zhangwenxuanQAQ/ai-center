@@ -112,15 +112,22 @@ class TextModel(BaseLLM):
             
             params = self._handle_deep_thinking(params, kwargs)
             params.update(kwargs)
-            
+
             response = self.client.chat.completions.create(**params)
-            
+
+            # 检查response是否有效
+            if not response.choices or len(response.choices) == 0:
+                return {'error': '模型返回了无效响应：没有choices'}
+
+            if not response.choices[0].message:
+                return {'error': '模型返回了无效响应：message为空'}
+
             result = {
-                'text': response.choices[0].message.content,
+                'text': response.choices[0].message.content or '',
                 'usage': response.usage.model_dump() if response.usage else {},
                 'model': response.model
             }
-            
+
             if hasattr(response.choices[0].message, 'reasoning_content') and response.choices[0].message.reasoning_content:
                 result['reasoning_content'] = response.choices[0].message.reasoning_content
             
@@ -163,15 +170,22 @@ class TextModel(BaseLLM):
             
             params = self._handle_deep_thinking(params, kwargs)
             params.update(kwargs)
-            
+
             response = self.client.chat.completions.create(**params)
-            
+
+            # 检查response是否有效
+            if not response.choices or len(response.choices) == 0:
+                return {'error': '模型返回了无效响应：没有choices'}
+
+            if not response.choices[0].message:
+                return {'error': '模型返回了无效响应：message为空'}
+
             result = {
-                'text': response.choices[0].message.content,
+                'text': response.choices[0].message.content or '',
                 'usage': response.usage.model_dump() if response.usage else {},
                 'model': response.model
             }
-            
+
             if hasattr(response.choices[0].message, 'reasoning_content') and response.choices[0].message.reasoning_content:
                 result['reasoning_content'] = response.choices[0].message.reasoning_content
             

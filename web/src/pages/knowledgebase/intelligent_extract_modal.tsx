@@ -210,15 +210,21 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
     return () => observer.disconnect();
   }, []);
 
-  // 弹窗打开或知识目录变化时重置状态
+  // 弹窗打开时初始化状态（只在visible变化时触发）
   useEffect(() => {
     if (visible) {
       fetchModels();
-      setCustomFieldValues({});
+      // 初始化状态，保留已有的章节配置
+      setCustomFieldValues(prev => {
+        // 只重置普通字段值，保留 chapter_fields_values
+        const chapterFieldsValues = prev.chapter_fields_values || {};
+        return { chapter_fields_values: chapterFieldsValues };
+      });
       setExtractedResult(null);
       setOverrideExisting(true);
       setExtractPrompt('');
       
+      // 初始化动态章节
       if (currentDynamicChapters) {
         setDynamicChapters([...currentDynamicChapters]);
       } else if (selectedCategory) {
@@ -227,7 +233,16 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
         setDynamicChapters([...chapters]);
       }
     }
-  }, [visible, selectedCategory]);
+  }, [visible]); // 只依赖 visible，避免 selectedCategory 引用变化导致重置
+
+  // 知识目录变化时重置状态（使用 selectedCategory?.id 判断真正的变化）
+  useEffect(() => {
+    if (visible && selectedCategory) {
+      // 使用函数式更新，避免依赖 selectedCategory 对象引用
+      setCustomFieldValues({});
+      setDynamicChapters([]);
+    }
+  }, [visible, selectedCategory?.id]); // 只依赖 selectedCategory.id，避免对象引用变化
 
   // 弹窗关闭时停止识别并清理
   useEffect(() => {
@@ -746,13 +761,13 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
             开始提取
           </Button>
           
-          {extracting && (
+          {(extracting || extractedResult) && (
             <Button
               icon={<EyeOutlined />}
               onClick={() => setShowProcessModal(true)}
               style={{ width: 'auto', minWidth: 120 }}
             >
-              查看识别过程
+              查看识别结果
             </Button>
           )}
         </div>

@@ -292,11 +292,11 @@ def test_model_connection(llm_model_id: str):
 async def chat_with_model(llm_model_id: str, request: dict = Body(...)):
     """
     与模型进行对话（流式输出）
-    
+
     Args:
-        llm_model_id: LLM模型ID
-        request: 请求体，包含messages和config
-        
+        llm_model_id: 模型ID
+        request: 请求体，包含messages、config和可选的query参数
+
     Returns:
         StreamingResponse: 流式响应
     """
@@ -305,30 +305,35 @@ async def chat_with_model(llm_model_id: str, request: dict = Body(...)):
     import json
     import logging
     from app.core.llm_model.factory import LLMFactory
-    
+    from app.services.chat.dto import QueryItem
+    from app.core.chat.chat_service import ChatCoreService
+
     logger = logging.getLogger(__name__)
-    
+
     try:
         logger.info(f"Chat request for model {llm_model_id}")
         logger.info(f"Request body: {request}")
-        
+
         db_llm_model = LLMModelService.get_llm_model(llm_model_id)
         if not db_llm_model:
             logger.error(f"Model {llm_model_id} not found")
             raise HTTPException(status_code=404, detail="模型不存在")
-        
+
         messages = request.get('messages', [])
+        query = request.get('query', [])
         config = request.get('config', {})
-        
+
         logger.info(f"Messages: {messages}")
+        logger.info(f"Query: {query}")
         logger.info(f"Config: {config}")
-        
+
         if not messages:
             logger.error("Messages is empty")
             raise HTTPException(status_code=400, detail="消息不能为空")
-        
+
         from app.core.prompt.utils.system_prompt_builder import build_system_prompt
-        
+
+        # 处理系统消息和历史消息（包括文件格式）
         has_system_message = False
         processed_messages = []
         for msg in messages:
@@ -340,33 +345,161 @@ async def chat_with_model(llm_model_id: str, request: dict = Body(...)):
                 })
                 has_system_message = True
             else:
-                processed_messages.append(msg)
-        
+                # 处理历史消息中的文件格式
+                content = msg.get('content')
+
+                # 如果content是数组格式（包含文件），需要处理自定义文件格式
+                if isinstance(content, list):
+                    # 检查是否包含自定义文件格式（file_base64, document）
+                    has_custom_files = any(
+                        item.get('type') in ('file_base64', 'document')
+                        for item in content if isinstance(item, dict)
+                    )
+
+                    if has_custom_files:
+                        # 将自定义文件格式转换为文本内容
+                        # 提取文本部分
+                        text_parts = []
+                        file_items = []
+
+                        for item in content:
+                            if isinstance(item, dict):
+                                if item.get('type') == 'text':
+                                    text_parts.append(item.get('text', ''))
+                                elif item.get('type') in ('file_base64', 'document'):
+                                    # 将文件转换为QueryItem格式
+                                    from app.services.chat.dto import QueryItem
+                                    if item.get('type') == 'file_base64':
+                                        file_items.append(QueryItem(
+                                            type='file_base64',
+                                            content=item.get('content'),
+                                            mime_type=item.get('mime_type'),
+                                            file_name=item.get('file_name'),
+                                            file_size=item.get('file_size')
+                                        ))
+                                    elif item.get('type') == 'document':
+                                        file_items.append(QueryItem(
+                                            type='document',
+                                            content=item.get('content')
+                                        ))
+
+                        # 使用build_user_prompt_with_documents将文件转换为文本
+                        if file_items:
+                            from app.core.prompt.utils.user_prompt_builder import build_user_prompt_with_documents
+                            original_text = ' '.join(text_parts)
+                            document_text = build_user_prompt_with_documents(file_items, original_text, "naive")
+                            processed_messages.append({
+                                'role': msg.get('role'),
+                                'content': document_text
+                            })
+                        else:
+                            # 没有文件，只保留文本
+                            processed_messages.append({
+                                'role': msg.get('role'),
+                                'content': ' '.join(text_parts)
+                            })
+                    else:
+                        # 只包含标准格式（image_url, input_audio），直接使用
+                        processed_messages.append(msg)
+                else:
+                    # content是字符串，直接使用
+                    processed_messages.append(msg)
+
         if not has_system_message:
             built_system_prompt = build_system_prompt(None)
             processed_messages.insert(0, {
                 'role': 'system',
                 'content': built_system_prompt
             })
-        
+
+        # 如果有query参数，将其合并到最新的用户消息中
+        if query:
+            logger.info(f"Processing query parameter: {query}")
+            # 将query转换为QueryItem对象
+            query_items = [QueryItem(**item) if isinstance(item, dict) else item for item in query]
+            model_type = db_llm_model.model_type or 'text'
+
+            # 将query转换为用户消息格式
+            query_message = ChatCoreService.convert_query_to_message(query_items, model_type, llm_model_id)
+            logger.info(f"Converted query to message: {query_message}")
+
+            # 找到最新的用户消息并合并
+            last_user_message_index = -1
+            for i in range(len(processed_messages) - 1, -1, -1):
+                if processed_messages[i].get('role') == 'user':
+                    last_user_message_index = i
+                    break
+
+            if last_user_message_index >= 0:
+                # 合并最新用户消息的文本内容和query中的文件
+                last_user_message = processed_messages[last_user_message_index]
+
+                # 如果query_message是字符串，说明只有文本，合并文本内容
+                if isinstance(query_message.get('content'), str):
+                    # 将原用户消息的文本和query中的文本合并
+                    original_text = last_user_message.get('content', '')
+                    if isinstance(original_text, str):
+                        # 如果原消息也是字符串，合并文本
+                        query_text = query_message.get('content', '')
+                        new_content = original_text + '\n' + query_text if original_text else query_text
+                        processed_messages[last_user_message_index] = {
+                            'role': 'user',
+                            'content': new_content
+                        }
+                    else:
+                        # 如果原消息是复杂格式（包含图片等），需要特殊处理
+                        # 这里暂时直接替换为query_message
+                        processed_messages[last_user_message_index] = query_message
+                else:
+                    # query_message是复杂格式（包含图片、文件等）
+                    # 需要将原用户消息的文本添加到query_message中
+                    original_text = last_user_message.get('content', '')
+                    if isinstance(original_text, str) and original_text.strip():
+                        # 将原文本添加到query_message的content数组中
+                        if isinstance(query_message.get('content'), list):
+                            # 在content数组开头添加原文本
+                            query_message['content'].insert(0, {
+                                'type': 'text',
+                                'text': original_text
+                            })
+                            processed_messages[last_user_message_index] = query_message
+                        else:
+                            # 如果query_message.content不是数组，创建一个新的数组
+                            processed_messages[last_user_message_index] = {
+                                'role': 'user',
+                                'content': [
+                                    {'type': 'text', 'text': original_text},
+                                    query_message['content']
+                                ]
+                            }
+                    else:
+                        # 如果原消息没有文本，直接替换为query_message
+                        processed_messages[last_user_message_index] = query_message
+
+                logger.info(f"Merged query with last user message: {processed_messages[last_user_message_index]}")
+            else:
+                # 如果没有找到用户消息，将query_message添加到消息列表中
+                processed_messages.append(query_message)
+                logger.info(f"Added query as new user message")
+
         messages = processed_messages
-        logger.info(f"Processed messages: {messages}")
-        
+        logger.info(f"Final processed messages: {messages}")
+
         model_config = {
             'api_key': db_llm_model.api_key,
             'endpoint': db_llm_model.endpoint,
             'name': db_llm_model.name,
             'provider': db_llm_model.provider
         }
-        
+
         logger.info(f"Model config: {model_config}")
-        
+
         model_type = db_llm_model.model_type or 'text'
         logger.info(f"Model type: {model_type}")
-        
+
         model_instance = LLMFactory.create_model(model_type, model_config)
         logger.info(f"Model instance created successfully")
-        
+
         def generate():
             try:
                 logger.info("Starting stream generation")
@@ -381,7 +514,7 @@ async def chat_with_model(llm_model_id: str, request: dict = Body(...)):
             except Exception as e:
                 logger.error(f"Error in generate: {str(e)}", exc_info=True)
                 yield f"data: {json.dumps({'error': str(e)})}\n\n"
-        
+
         return StreamingResponse(
             generate(),
             media_type="text/event-stream",

@@ -1938,7 +1938,7 @@ class KnowledgebaseDocumentService:
             raise RuntimeError(f"无法创建模型实例: {model_id}")
         
         try:
-            result = llm_instance.generate_with_messages(messages,max_tokens = 0 , temperature = 0.5)
+            result = llm_instance.generate_with_messages(messages,max_tokens = 32000 , temperature = 0.5)
             
             if 'error' in result:
                 raise RuntimeError(f"模型调用失败: {result['error']}")
@@ -2131,7 +2131,7 @@ class KnowledgebaseDocumentService:
             full_text = ""
             full_reasoning = ""
             
-            for chunk in llm_instance.stream_generate_with_messages(messages, max_tokens=0, temperature=0.5):
+            for chunk in llm_instance.stream_generate_with_messages(messages, max_tokens=32000, temperature=0.5):
                 if 'error' in chunk:
                     yield {
                         'error': chunk['error'],

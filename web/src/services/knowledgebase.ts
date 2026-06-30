@@ -812,6 +812,14 @@ export const knowledgebaseService = {
             const parsed = JSON.parse(data);
             
             if (parsed.error) {
+              // 将错误消息显示到识别结果中
+              fullText += `\n\n[错误] ${parsed.error}`;
+              if (onProgress) {
+                onProgress({
+                  reasoning_content: fullReasoningContent,
+                  text: fullText,
+                });
+              }
               throw new Error(parsed.error);
             }
 
@@ -932,6 +940,15 @@ export const knowledgebaseService = {
             const parsed = JSON.parse(data);
             
             if (parsed.error) {
+              // 将错误消息显示到识别结果中
+              fullText += `\n\n[错误] ${parsed.error}`;
+              // 调用进度回调显示错误
+              if (onProgress) {
+                onProgress({
+                  reasoning_content: fullReasoningContent,
+                  text: fullText,
+                });
+              }
               throw new Error(parsed.error);
             }
 

@@ -34,25 +34,33 @@ class ModelTestUtils:
             # 先测试基本的文本生成能力
             test_prompt = "请简要介绍一下你自己"
             response = model.generate(test_prompt, max_tokens=10)
-            
+
             if 'error' in response:
                 return {
                     'success': False,
                     'message': f"测试失败: {response['error']}",
                     'support_image': False
                 }
-            
-            if not ('text' in response and response['text'].strip()):
+
+            if 'text' not in response:
                 return {
                     'success': False,
-                    'message': "测试失败: 模型返回了空结果",
+                    'message': "测试失败: 模型返回结果中缺少text字段",
                     'support_image': False
                 }
-            
+
+            # 文本生成成功（即使返回空内容也算连接成功）
+            if response['text'] is None or not response['text'].strip():
+                return {
+                    'success': True,
+                    'message': "测试成功！模型连接正常，但返回了空结果",
+                    'support_image': False
+                }
+
             # 文本生成成功，现在测试图片支持能力
             image_path = get_test_image_path('support_image_test.jpg')
             support_image = False
-            
+
             if image_path.exists():
                 # 测试图片识别
                 test_prompt = "请描述这张图片的内容"
@@ -62,16 +70,16 @@ class ModelTestUtils:
                     with open(image_path, 'rb') as f:
                         image_data = f.read()
                     image_base64 = base64.b64encode(image_data).decode('utf-8')
-                    
+
                     # 调用模型识别图片
                     response = model.generate(test_prompt, image=image_base64, max_tokens=10)
-                    
-                    if 'text' in response and response['text'].strip() and 'error' not in response:
+
+                    if 'text' in response and response['text'] and response['text'].strip() and 'error' not in response:
                         support_image = True
                 except Exception:
                     # 图片识别失败，不支持图片
                     pass
-            
+
             return {
                 'success': True,
                 'message': "测试成功！模型能够正常生成文本" + ("，并支持图片识别" if support_image else ""),
@@ -111,17 +119,29 @@ class ModelTestUtils:
                     'message': "测试失败: vision_test.jpg文件不存在"
                 }
             
-            # 这里需要根据实际的视觉模型接口调整参数
-            # 假设模型支持image_url参数
-            response = model.generate(test_prompt, image_url=f"file://{image_path}", max_tokens=10)
+            # 将图片转换为base64格式
+            import base64
+            with open(image_path, 'rb') as f:
+                image_data = f.read()
+            image_base64 = base64.b64encode(image_data).decode('utf-8')
+            # 构建data URL格式
+            image_url = f"data:image/jpeg;base64,{image_base64}"
             
+            response = model.generate(test_prompt, image_url=image_url, max_tokens=100)
+
             if 'error' in response:
                 return {
                     'success': False,
                     'message': f"测试失败: {response['error']}"
                 }
-            
-            if 'text' in response and response['text'].strip():
+
+            if 'text' not in response:
+                return {
+                    'success': False,
+                    'message': "测试失败: 模型返回结果中缺少text字段"
+                }
+
+            if response['text'] and response['text'].strip():
                 return {
                     'success': True,
                     'message': "测试成功！模型能够正常识别图像",
@@ -129,8 +149,8 @@ class ModelTestUtils:
                 }
             else:
                 return {
-                    'success': False,
-                    'message': "测试失败: 模型返回了空结果"
+                    'success': True,
+                    'message': "测试成功！模型连接正常，但返回了空结果"
                 }
         except Exception as e:
             return {
@@ -164,14 +184,20 @@ class ModelTestUtils:
             
             # 使用VoiceModel的接口，直接传入文件路径
             response = model.generate(audio_path)
-            
+
             if 'error' in response:
                 return {
                     'success': False,
                     'message': f"测试失败: {response['error']}"
                 }
-            
-            if 'text' in response and response['text'].strip():
+
+            if 'text' not in response:
+                return {
+                    'success': False,
+                    'message': "测试失败: 模型返回结果中缺少text字段"
+                }
+
+            if response['text'] and response['text'].strip():
                 return {
                     'success': True,
                     'message': "测试成功！模型能够正常处理音频",
@@ -179,8 +205,8 @@ class ModelTestUtils:
                 }
             else:
                 return {
-                    'success': False,
-                    'message': "测试失败: 模型返回了空结果"
+                    'success': True,
+                    'message': "测试成功！模型连接正常，但返回了空结果"
                 }
         except Exception as e:
             return {
@@ -256,14 +282,20 @@ class ModelTestUtils:
             
             # 使用generate方法，传入音频文件
             response = model.generate(audio_path)
-            
+
             if 'error' in response:
                 return {
                     'success': False,
                     'message': f"测试失败: {response['error']}"
                 }
-            
-            if 'text' in response and response['text'].strip():
+
+            if 'text' not in response:
+                return {
+                    'success': False,
+                    'message': "测试失败: 模型返回结果中缺少text字段"
+                }
+
+            if response['text'] and response['text'].strip():
                 # 统计字数
                 word_count = len(response['text'].replace(' ', '').replace('\n', ''))
                 return {
@@ -274,8 +306,8 @@ class ModelTestUtils:
                 }
             else:
                 return {
-                    'success': False,
-                    'message': "测试失败: 模型返回了空结果"
+                    'success': True,
+                    'message': "测试成功！模型连接正常，但返回了空结果"
                 }
         except Exception as e:
             return {
