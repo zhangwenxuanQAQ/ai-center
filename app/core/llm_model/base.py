@@ -172,5 +172,7 @@ class BaseLLM(ABC):
             # elif provider_lower == 'anthropic':
             #     params['extra_body']['thinking'] = bool(deep_thinking)
             else:
-                params['thinking'] = {"type": "disabled" if not bool(deep_thinking) else "enabled"}
+                params['extra_body'] = {}
+                params['extra_body']['thinking'] = {"type": "disabled" if not bool(deep_thinking) else "enabled"}
+                params['extra_body']['reasoning'] = bool(deep_thinking)
         return params
