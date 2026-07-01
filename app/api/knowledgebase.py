@@ -1551,6 +1551,7 @@ async def intelligent_extract(
     model_id: str = Form(...),
     prompt: Optional[str] = Form(default=None),
     category_id: str = Form(...),
+    deep_thinking: bool = Form(default=False),
     files: Optional[List[UploadFile]] = File(None),
     text_content: Optional[str] = Form(None)
 ):
@@ -1561,6 +1562,7 @@ async def intelligent_extract(
         model_id: 模型ID
         prompt: 提取提示词（可选）
         category_id: 知识目录ID
+        deep_thinking: 是否开启深度思考（默认False）
         files: 上传的文件列表（可选）
         text_content: 文本内容（可选）
         
@@ -1580,6 +1582,7 @@ async def intelligent_extract(
             model_id=model_id,
             prompt=prompt,
             category_id=category_id,
+            deep_thinking=deep_thinking,
             files=files,
             text_content=text_content
         )
@@ -1597,6 +1600,7 @@ async def intelligent_extract_stream(
     model_id: str = Form(...),
     prompt: Optional[str] = Form(default=None),
     category_id: str = Form(...),
+    deep_thinking: bool = Form(default=False),
     files: Optional[List[UploadFile]] = File(None),
     text_content: Optional[str] = Form(None)
 ):
@@ -1609,6 +1613,7 @@ async def intelligent_extract_stream(
         model_id: 模型ID
         prompt: 提取提示词（可选）
         category_id: 知识目录ID
+        deep_thinking: 是否开启深度思考（默认False）
         files: 上传的文件列表（可选）
         text_content: 文本内容（可选）
         
@@ -1642,6 +1647,7 @@ async def intelligent_extract_stream(
                     model_id=model_id,
                     prompt=prompt,
                     category_id=category_id,
+                    deep_thinking=deep_thinking,
                     files=files,
                     text_content=text_content
                 ):

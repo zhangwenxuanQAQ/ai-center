@@ -753,6 +753,7 @@ export const knowledgebaseService = {
     modelId: string,
     prompt: string,
     categoryId?: string,
+    deepThinking?: boolean,
     onProgress?: (data: { reasoning_content: string; text: string }) => void,
     signal?: AbortSignal
   ): Promise<{
@@ -767,6 +768,7 @@ export const knowledgebaseService = {
     formData.append('model_id', modelId);
     formData.append('prompt', prompt);
     formData.append('category_id', categoryId || '');
+    formData.append('deep_thinking', deepThinking ? 'true' : 'false');
 
     const response = await fetch('/aicenter/v1/knowledgebase/document/intelligent_extract_stream', {
       method: 'POST',
@@ -889,6 +891,7 @@ export const knowledgebaseService = {
     prompt: string,
     textContent: string,
     categoryId?: string,
+    deepThinking?: boolean,
     onProgress?: (data: { reasoning_content: string; text: string }) => void,
     signal?: AbortSignal
   ): Promise<{
@@ -903,6 +906,7 @@ export const knowledgebaseService = {
     formData.append('prompt', prompt);
     formData.append('text_content', textContent);
     formData.append('category_id', categoryId || '');
+    formData.append('deep_thinking', deepThinking ? 'true' : 'false');
 
     const response = await fetch('/aicenter/v1/knowledgebase/document/intelligent_extract_stream', {
       method: 'POST',

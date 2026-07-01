@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Modal, Form, Input, InputNumber, Button, Upload, message, Select, Radio, Checkbox, Tooltip, Spin, Row, Col, DatePicker, Space } from 'antd';
+import { Modal, Form, Input, InputNumber, Button, Upload, message, Select, Radio, Checkbox, Tooltip, Spin, Row, Col, DatePicker, Space, Switch } from 'antd';
 import { UploadOutlined, InfoCircleOutlined, InboxOutlined, ThunderboltOutlined, EyeOutlined, StopOutlined } from '@ant-design/icons';
 import PromptTipTapEditor from '../../components/PromptTipTapEditor';
 import MDEditorTheme from '../../components/MDEditorTheme';
@@ -193,6 +193,7 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
   const [leftWidth, setLeftWidth] = useState<number>(50);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [showProcessModal, setShowProcessModal] = useState<boolean>(false);
+  const [deepThinking, setDeepThinking] = useState<boolean>(false);
   
   const fileMapRef = useRef<Map<string, File>>(new Map());
   const containerRef = useRef<HTMLDivElement>(null);
@@ -382,6 +383,7 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
           selectedModelId,
           extractPrompt,
           selectedCategory?.id || undefined,
+          deepThinking,
           (data) => {
             ThinkingProcessDisplay.updateData(data);
           },
@@ -393,6 +395,7 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
           extractPrompt,
           textContent,
           selectedCategory?.id || undefined,
+          deepThinking,
           (data) => {
             ThinkingProcessDisplay.updateData(data);
           },
@@ -790,7 +793,7 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
           />
         </div>
 
-        <div style={{ display: 'flex', gap: 12 }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <Button
             type="primary"
             icon={<ThunderboltOutlined />}
@@ -801,6 +804,18 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
           >
             开始提取
           </Button>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ color: theme === 'dark' ? '#ccc' : '#666', fontSize: 13 }}>深度思考</span>
+            <Switch
+              checked={deepThinking}
+              onChange={setDeepThinking}
+              size="small"
+            />
+            <Tooltip title="开启后模型将进行更深度的思考分析，提高提取质量，但耗时更长">
+              <InfoCircleOutlined style={{ color: '#999', fontSize: 14 }} />
+            </Tooltip>
+          </div>
           
           {(extracting || extractedResult) && (
             <Button

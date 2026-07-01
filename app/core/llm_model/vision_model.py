@@ -27,22 +27,6 @@ class VisionModel(BaseLLM):
             base_url=self.endpoint
         )
     
-    def _handle_deep_thinking(self, params: dict, kwargs: dict) -> dict:
-        """
-        处理深度思考参数
-        
-        Args:
-            params: 当前参数字典
-            kwargs: 用户传入的参数
-            
-        Returns:
-            更新后的参数字典
-        """
-        deep_thinking = kwargs.pop('deep_thinking', False)
-        if self.provider and self.provider.lower() == 'qwen' and not bool(deep_thinking):
-            params['extra_body'] = {"enable_thinking": False}
-        return params
-    
     def generate(self, prompt: str, **kwargs) -> Dict[str, Any]:
         """
         分析图像（非流式）
@@ -98,13 +82,15 @@ class VisionModel(BaseLLM):
                 'usage': response.usage.model_dump() if response.usage else {},
                 'model': response.model
             }
-            
-            if hasattr(response.choices[0].message, 'reasoning_content') and response.choices[0].message.reasoning_content:
-                result['reasoning_content'] = response.choices[0].message.reasoning_content
-            
+
+            # 使用辅助方法提取思考内容
+            reasoning_content = self._extract_reasoning_content(response.choices[0].message)
+            if reasoning_content:
+                result['reasoning_content'] = reasoning_content
+
             if hasattr(response.choices[0].message, 'tool_calls') and response.choices[0].message.tool_calls:
                 result['tool_calls'] = response.choices[0].message.tool_calls
-            
+
             return result
         except Exception as e:
             return {'error': str(e)}
@@ -173,9 +159,12 @@ class VisionModel(BaseLLM):
                         'finish_reason': choice.finish_reason,
                         'usage': chunk.usage.model_dump() if chunk.usage else None
                     }
-                    if hasattr(choice.delta, 'reasoning_content') and choice.delta.reasoning_content:
-                        result['reasoning_content'] = choice.delta.reasoning_content
-                    
+
+                    # 使用辅助方法提取思考内容
+                    reasoning_content = self._extract_reasoning_content(choice.delta)
+                    if reasoning_content:
+                        result['reasoning_content'] = reasoning_content
+
                     if hasattr(choice.delta, 'tool_calls') and choice.delta.tool_calls:
                         for tool_call in choice.delta.tool_calls:
                             idx = tool_call.index
@@ -243,13 +232,15 @@ class VisionModel(BaseLLM):
                 'usage': response.usage.model_dump() if response.usage else {},
                 'model': response.model
             }
-            
-            if hasattr(response.choices[0].message, 'reasoning_content') and response.choices[0].message.reasoning_content:
-                result['reasoning_content'] = response.choices[0].message.reasoning_content
-            
+
+            # 使用辅助方法提取思考内容
+            reasoning_content = self._extract_reasoning_content(response.choices[0].message)
+            if reasoning_content:
+                result['reasoning_content'] = reasoning_content
+
             if hasattr(response.choices[0].message, 'tool_calls') and response.choices[0].message.tool_calls:
                 result['tool_calls'] = response.choices[0].message.tool_calls
-            
+
             return result
         except Exception as e:
             return {'error': str(e)}
@@ -299,9 +290,12 @@ class VisionModel(BaseLLM):
                         'finish_reason': choice.finish_reason,
                         'usage': chunk.usage.model_dump() if chunk.usage else None
                     }
-                    if hasattr(choice.delta, 'reasoning_content') and choice.delta.reasoning_content:
-                        result['reasoning_content'] = choice.delta.reasoning_content
-                    
+
+                    # 使用辅助方法提取思考内容
+                    reasoning_content = self._extract_reasoning_content(choice.delta)
+                    if reasoning_content:
+                        result['reasoning_content'] = reasoning_content
+
                     if hasattr(choice.delta, 'tool_calls') and choice.delta.tool_calls:
                         for tool_call in choice.delta.tool_calls:
                             idx = tool_call.index

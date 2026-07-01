@@ -128,6 +128,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
   const [loadingFiles, setLoadingFiles] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -326,8 +327,19 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     return msg;
   };
 
+  // 检测是否在底部
+  const isAtBottom = () => {
+    if (!messagesContainerRef.current) return true;
+    const container = messagesContainerRef.current;
+    const threshold = 100; // 容差阈值，距离底部100px以内视为在底部
+    return container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
+  };
+
   useEffect(() => {
-    scrollToBottom();
+    // 只有在底部时才自动滚动
+    if (isAtBottom()) {
+      scrollToBottom();
+    }
   }, [messages]);
 
   const scrollToBottom = () => {
@@ -2216,27 +2228,42 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 }) : ''}
               </span>
               <div className="message-actions">
-                {group.messages.some(m => m.content) && (
+                {group.assistantId && (
                   <>
-                    <Tooltip title="重新回答">
-                      <Button 
-                        type="text" 
-                        size="small"
-                        icon={<ReloadOutlined />} 
-                        onClick={() => handleRegenerate(groupIndex)}
-                      />
-                    </Tooltip>
-                    <Tooltip title="复制回答">
-                      <Button 
-                        type="text" 
-                        size="small"
-                        icon={<CopyOutlined />} 
-                        onClick={() => {
-                          const content = group.messages.map(m => m.content).filter(Boolean).join('\n');
-                          copyToClipboard(content, '回答');
-                        }}
-                      />
-                    </Tooltip>
+                    {/* 检查group中是否有消息还在运行中（status不是done或stop） */}
+                    {group.messages.some(m => m.status && m.status !== 'done' && m.status !== 'stop') ? (
+                      <Tooltip title="正在生成中">
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<LoadingOutlined spin />}
+                        />
+                      </Tooltip>
+                    ) : (
+                      group.messages.some(m => m.content) && (
+                        <>
+                          <Tooltip title="重新回答">
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<ReloadOutlined />}
+                              onClick={() => handleRegenerate(groupIndex)}
+                            />
+                          </Tooltip>
+                          <Tooltip title="复制回答">
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<CopyOutlined />}
+                              onClick={() => {
+                                const content = group.messages.map(m => m.content).filter(Boolean).join('\n');
+                                copyToClipboard(content, '回答');
+                              }}
+                            />
+                          </Tooltip>
+                        </>
+                      )
+                    )}
                   </>
                 )}
               </div>
@@ -3181,7 +3208,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         </div>
       </div>
 
-      <div className={`chat-messages ${theme === 'dark' ? 'dark' : 'light'}`}>
+      <div className={`chat-messages ${theme === 'dark' ? 'dark' : 'light'}`} ref={messagesContainerRef}>
         {loading && messages.length === 0 ? (
           <div className="loading-container">
             <LoadingOutlined style={{ fontSize: 32, color: '#667eea' }} />

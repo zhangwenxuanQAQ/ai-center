@@ -25,6 +25,7 @@ interface Message {
     total_tokens?: number;
   };
   files?: any[]; // 存储上传的文件信息
+  isComplete?: boolean; // 标记消息是否已完成（是否已接收到[DONE]）
 }
 
 interface ConfigParam {
@@ -78,6 +79,7 @@ const LLMModelSetting: React.FC = () => {
   const [selectedFiles, setSelectedFiles] = useState<any[]>([]);
   const [isDataSourceModalVisible, setIsDataSourceModalVisible] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const thinkingStartTimeRef = useRef<Record<string, number>>({});
 
@@ -103,8 +105,19 @@ const LLMModelSetting: React.FC = () => {
     }
   }, [id]);
 
+  // 检测是否在底部
+  const isAtBottom = () => {
+    if (!messagesContainerRef.current) return true;
+    const container = messagesContainerRef.current;
+    const threshold = 100; // 容差阈值，距离底部100px以内视为在底部
+    return container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
+  };
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // 只有在底部时才自动滚动
+    if (isAtBottom()) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
 
   const fetchModel = async (modelId: string) => {
@@ -479,7 +492,8 @@ const LLMModelSetting: React.FC = () => {
       id: assistantMessageId,
       role: 'assistant',
       content: '',
-      timestamp: new Date()
+      timestamp: new Date(),
+      isComplete: false // 标记为未完成，等待[DONE]消息
     };
     setMessages(prev => [...prev, assistantMessage]);
     setThinkingMessageId(assistantMessageId);
@@ -602,6 +616,12 @@ const LLMModelSetting: React.FC = () => {
             if (line.startsWith('data: ')) {
               const data = line.slice(6);
               if (data === '[DONE]') {
+                // 标记消息为已完成
+                setMessages(prev => prev.map(msg =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, isComplete: true }
+                    : msg
+                ));
                 setThinkingMessageId(null);
                 break;
               }
@@ -932,7 +952,8 @@ const LLMModelSetting: React.FC = () => {
       id: assistantMessageId,
       role: 'assistant',
       content: '',
-      timestamp: new Date()
+      timestamp: new Date(),
+      isComplete: false // 标记为未完成，等待[DONE]消息
     };
     setMessages(prev => [...prev, assistantMessage]);
     setThinkingMessageId(assistantMessageId);
@@ -1062,6 +1083,12 @@ const LLMModelSetting: React.FC = () => {
             if (line.startsWith('data: ')) {
               const data = line.slice(6);
               if (data === '[DONE]') {
+                // 标记消息为已完成
+                setMessages(prev => prev.map(msg =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, isComplete: true }
+                    : msg
+                ));
                 setThinkingMessageId(null);
                 break;
               }
@@ -1386,7 +1413,7 @@ const LLMModelSetting: React.FC = () => {
               </div>
             </div>
             
-            <div className="chat-messages">
+            <div className="chat-messages" ref={messagesContainerRef}>
               {messages.length === 0 ? (
                 <div className="empty-chat">
                   <div className="welcome-icon">💬</div>
@@ -1543,24 +1570,39 @@ const LLMModelSetting: React.FC = () => {
                           {msg.timestamp.toLocaleTimeString()}
                         </span>
                         <div className="message-actions">
-                          {msg.role === 'assistant' && msg.content && (
+                          {msg.role === 'assistant' && (
                             <>
-                              <Tooltip title="重新回答">
-                                <Button 
-                                  type="text" 
-                                  size="small"
-                                  icon={<ReloadOutlined />} 
-                                  onClick={() => handleRegenerate(index)}
-                                />
-                              </Tooltip>
-                              <Tooltip title="复制回答">
-                                <Button 
-                                  type="text" 
-                                  size="small"
-                                  icon={<CopyOutlined />} 
-                                  onClick={() => copyToClipboard(msg.content, '回答')}
-                                />
-                              </Tooltip>
+                              {/* 如果消息未完成，显示运行中图标 */}
+                              {!msg.isComplete ? (
+                                <Tooltip title="正在生成中">
+                                  <Button
+                                    type="text"
+                                    size="small"
+                                    icon={<LoadingOutlined spin />}
+                                  />
+                                </Tooltip>
+                              ) : (
+                                msg.content && (
+                                  <>
+                                    <Tooltip title="重新回答">
+                                      <Button
+                                        type="text"
+                                        size="small"
+                                        icon={<ReloadOutlined />}
+                                        onClick={() => handleRegenerate(index)}
+                                      />
+                                    </Tooltip>
+                                    <Tooltip title="复制回答">
+                                      <Button
+                                        type="text"
+                                        size="small"
+                                        icon={<CopyOutlined />}
+                                        onClick={() => copyToClipboard(msg.content, '回答')}
+                                      />
+                                    </Tooltip>
+                                  </>
+                                )
+                              )}
                             </>
                           )}
                           {msg.role === 'user' && !editingMessageId && (

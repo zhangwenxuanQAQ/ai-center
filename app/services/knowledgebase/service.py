@@ -1788,6 +1788,7 @@ class KnowledgebaseDocumentService:
         model_id: str,
         category_id: str,
         prompt: Optional[str] = None,
+        deep_thinking: bool = False,
         files: Optional[List[Any]] = None,
         text_content: Optional[str] = None
     ) -> Dict[str, Any]:
@@ -1798,6 +1799,7 @@ class KnowledgebaseDocumentService:
             model_id: 模型ID
             prompt: 提取提示词（可选）
             category_id: 知识目录ID
+            deep_thinking: 是否开启深度思考（默认False）
             files: 上传的文件列表（可选）
             text_content: 文本内容（可选）
             
@@ -1938,7 +1940,7 @@ class KnowledgebaseDocumentService:
             raise RuntimeError(f"无法创建模型实例: {model_id}")
         
         try:
-            result = llm_instance.generate_with_messages(messages,max_tokens = 32000 , temperature = 0.5)
+            result = llm_instance.generate_with_messages(messages, max_tokens=32000, temperature=0.5, deep_thinking=deep_thinking)
             
             if 'error' in result:
                 raise RuntimeError(f"模型调用失败: {result['error']}")
@@ -1971,6 +1973,7 @@ class KnowledgebaseDocumentService:
         model_id: str,
         prompt: Optional[str] = None,
         category_id: str = None,
+        deep_thinking: bool = False,
         files: Optional[List] = None,
         text_content: Optional[str] = None
     ) -> Generator[Dict[str, Any], None, None]:
@@ -1981,6 +1984,7 @@ class KnowledgebaseDocumentService:
             model_id: 模型ID
             prompt: 提取提示词（可选）
             category_id: 知识目录ID
+            deep_thinking: 是否开启深度思考（默认False）
             files: 上传的文件列表（可选）
             text_content: 文本内容（可选）
             
@@ -2131,7 +2135,7 @@ class KnowledgebaseDocumentService:
             full_text = ""
             full_reasoning = ""
             
-            for chunk in llm_instance.stream_generate_with_messages(messages, max_tokens=32000, temperature=0.5):
+            for chunk in llm_instance.stream_generate_with_messages(messages, max_tokens=32000, temperature=0.5, deep_thinking=deep_thinking):
                 if 'error' in chunk:
                     yield {
                         'error': chunk['error'],
