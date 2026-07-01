@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { Layout, Tree, Card, Row, Col, Avatar, Tag, Empty, Spin, Button, Modal, Form, Input, Select, TreeSelect, Upload, message, Dropdown, Popconfirm, Pagination } from 'antd';
 const { TextArea } = Input;
 import { RobotOutlined, HomeOutlined, PlusOutlined, UploadOutlined, MoreOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UpOutlined, DownOutlined, FolderOutlined, FolderOpenOutlined } from '@ant-design/icons';
@@ -840,7 +840,7 @@ const ChatbotManagement: React.FC = () => {
   return (
     <div 
       className={`chatbot-page-container ${theme === 'dark' ? 'dark' : 'light'}`}
-      style={{ padding: '16px', height: '100%', boxSizing: 'border-box' }}
+      style={{height: '100%', boxSizing: 'border-box' }}
     >
       <Layout className={`chatbot-layout ${theme === 'dark' ? 'dark' : 'light'}`}>
         <LeftSider
@@ -878,7 +878,7 @@ const ChatbotManagement: React.FC = () => {
               icon={<PlusOutlined />} 
               onClick={handleAddChatbot}
               style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)',
               }}
             >
               新增机器人

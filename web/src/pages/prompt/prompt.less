@@ -1,4 +1,4 @@
-// 提示词管理页面样式
+﻿// 提示词管理页面样式
 
 .prompt-layout {
   flex: 1;
@@ -20,7 +20,7 @@
     transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 
     &.dark {
-      background: rgb(30, 30, 30);
+      background: #1a1a2e;
       border-right: 1px solid rgba(255, 255, 255, 0.08);
 
       &::after {
@@ -30,7 +30,7 @@
         right: 0;
         width: 1px;
         height: 100%;
-        background: linear-gradient(180deg, transparent, rgba(120, 119, 198, 0.3), transparent);
+        background: linear-gradient(180deg, transparent, rgba(90, 111, 214, 0.3), transparent);
       }
     }
 
@@ -45,7 +45,7 @@
         right: 0;
         width: 1px;
         height: 100%;
-        background: linear-gradient(180deg, transparent, rgba(102, 126, 234, 0.3), transparent);
+        background: linear-gradient(180deg, transparent, rgba(90, 111, 214, 0.3), transparent);
       }
     }
 
@@ -70,8 +70,8 @@
       flex-shrink: 0;
 
       &.dark {
-        color: rgba(255, 255, 255, 0.9);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        color: #e0e0e0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
       }
 
       &.light {
@@ -95,13 +95,13 @@
       }
 
       &.dark {
-        color: rgba(255, 255, 255, 0.9);
+        color: #e0e0e0;
         :global {
           .ant-tree {
-            color: rgba(255, 255, 255, 0.9);
+            color: #e0e0e0;
           }
           .ant-tree-node-content-wrapper {
-            color: rgba(255, 255, 255, 0.9);
+            color: #e0e0e0;
             transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
             position: relative;
             font-size: 14px;
@@ -127,7 +127,7 @@
               transform: translateX(4px);
 
               &::before {
-                background: linear-gradient(180deg, #667eea, #764ba2);
+                background: linear-gradient(180deg, ~"var(--primary-color)", #6b7fe6);
               }
             }
           }
@@ -138,13 +138,13 @@
             font-weight: 600;
 
             &::before {
-              background: linear-gradient(180deg, #667eea, #764ba2);
-              box-shadow: 0 0 12px rgba(102, 126, 234, 0.8);
+              background: linear-gradient(180deg, ~"var(--primary-color)", #6b7fe6);
+              box-shadow: 0 0 12px rgba(90, 111, 214, 0.8);
             }
           }
 
           .ant-tree-switcher {
-            color: rgba(255, 255, 255, 0.6);
+            color: #a0a0b0;
             transition: all 0.3s ease;
             background: transparent;
             border-radius: 8px 0 0 8px;
@@ -157,17 +157,17 @@
           }
 
           .ant-tree-treenode:hover {
-            background: rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.05);
             border-radius: 8px;
 
             .ant-tree-switcher,
             .ant-tree-indent {
-              background: rgba(255, 255, 255, 0.08);
+              background: rgba(255, 255, 255, 0.05);
             }
           }
 
           .ant-tree-treenode-selected {
-            background: linear-gradient(90deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2)) !important;
+            background: linear-gradient(90deg, rgba(90, 111, 214, 0.2), rgba(90, 111, 214, 0.1)) !important;
             border-radius: 8px;
           }
         }
@@ -201,18 +201,18 @@
               transform: translateX(4px);
 
               &::before {
-                background: linear-gradient(180deg, #667eea, #764ba2);
+                background: linear-gradient(180deg, ~"var(--primary-color)", #6b7fe6);
               }
             }
           }
 
           .ant-tree-node-selected {
-            color: #667eea !important;
+            color: ~"var(--primary-color)" !important;
             background: transparent !important;
             font-weight: 500;
 
             &::before {
-              background: linear-gradient(180deg, #667eea, #764ba2);
+              background: linear-gradient(180deg, ~"var(--primary-color)", #6b7fe6);
             }
           }
 
@@ -281,7 +281,7 @@
             transition: all 0.3s ease;
 
             &:hover {
-              border-color: rgba(102, 126, 234, 0.3);
+              border-color: rgba(90, 111, 214, 0.3);
               transform: scale(1.05);
             }
 
@@ -356,7 +356,7 @@
 
       :global {
         .ant-spin-dot-item {
-          background-color: #667eea;
+          background-color: ~"var(--primary-color)";
         }
       }
     }
@@ -425,21 +425,21 @@
 .dark {
   .category-tree {
     .ant-tree {
-      color: rgba(255, 255, 255, 0.85);
+      color: #e0e0e0;
       background: transparent;
 
       .ant-tree-node-content-wrapper {
         &:hover {
-          background: rgba(255, 255, 255, 0.1);
+          background: rgba(255, 255, 255, 0.05);
         }
       }
 
       .ant-tree-node-selected {
-        background: rgba(102, 126, 234, 0.3) !important;
+        background: linear-gradient(90deg, rgba(90, 111, 214, 0.2), rgba(90, 111, 214, 0.1)) !important;
       }
 
       .ant-tree-switcher {
-        color: rgba(255, 255, 255, 0.6);
+        color: #a0a0b0;
       }
     }
   }
@@ -459,7 +459,7 @@
       }
 
       .ant-tree-node-selected {
-        background: rgba(102, 126, 234, 0.15) !important;
+        background: rgba(90, 111, 214, 0.15) !important;
       }
 
       .ant-tree-switcher {
@@ -504,7 +504,7 @@
       }
       
       a {
-        color: #667eea !important;
+        color: ~"var(--primary-color)" !important;
       }
       
       .anchor {
@@ -512,7 +512,7 @@
       }
       
       blockquote {
-        border-left-color: #667eea !important;
+        border-left-color: ~"var(--primary-color)" !important;
         color: rgba(255, 255, 255, 0.85) !important;
       }
       
@@ -554,7 +554,7 @@
       text-align: left;
 
       a {
-        color: #667eea !important;
+        color: ~"var(--primary-color)" !important;
       }
 
       .anchor {

@@ -1,4 +1,4 @@
-/* 机器人管理页面样式 - 参考聊天界面设计 */
+﻿/* 机器人管理页面样式 - 参考聊天界面设计 */
 
 .chatbot-page-container {
   height: 100%;
@@ -22,7 +22,6 @@
   overflow: hidden;
   position: relative;
   min-height: 0;
-  border-radius: 12px;
   margin: 0;
 
   &.dark {
@@ -218,15 +217,15 @@ body.dark-mode .no-border-input .ant-input-affix-wrapper-focused {
         }
         
         &:hover {
-          border-color: var(--primary-color);
+          border-color: ~"var(--primary-color)";
           
           a {
-            color: var(--primary-color);
+            color: ~"var(--primary-color)";
           }
         }
         
         &.ant-pagination-item-active {
-          background: var(--primary-color);
+          background: ~"var(--primary-color)";
           border: none;
           
           a {
@@ -246,8 +245,8 @@ body.dark-mode .no-border-input .ant-input-affix-wrapper-focused {
         }
         
         &:hover .ant-pagination-item-link {
-          color: var(--primary-color);
-          border-color: var(--primary-color);
+          color: ~"var(--primary-color)";
+          border-color: ~"var(--primary-color)";
         }
       }
       
@@ -591,7 +590,7 @@ body.dark-mode .no-border-input .ant-input-affix-wrapper-focused {
 
       :global {
         .ant-spin-dot-item {
-          background-color: var(--primary-color);
+          background-color: ~"var(--primary-color)";
         }
       }
     }
@@ -777,7 +776,7 @@ body.dark-mode .no-border-input .ant-input-affix-wrapper-focused {
           align-items: center;
           justify-content: center;
           padding: 0;
-          color: var(--primary-color);
+          color: ~"var(--primary-color)";
           background: rgba(255, 255, 255, 0.1);
 
           &:hover {
@@ -825,7 +824,7 @@ body.dark-mode .no-border-input .ant-input-affix-wrapper-focused {
         }
 
         .card-avatar {
-          background: linear-gradient(135deg, var(--primary-color), #7c8fe8);
+          background: linear-gradient(135deg, ~"var(--primary-color)", #7c8fe8);
           color: white;
           box-shadow: 0 6px 16px rgba(90, 111, 214, 0.4);
           transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
@@ -934,7 +933,7 @@ body.dark-mode .no-border-input .ant-input-affix-wrapper-focused {
         }
 
         &:focus {
-          border-color: var(--primary-color);
+          border-color: ~"var(--primary-color)";
           box-shadow: 0 0 0 3px rgba(90, 111, 214, 0.2);
         }
       }
@@ -983,7 +982,7 @@ body.dark-mode .no-border-input .ant-input-affix-wrapper-focused {
             font-weight: 500 !important;
 
             &.ant-btn-primary {
-              background: var(--primary-color) !important;
+              background: ~"var(--primary-color)" !important;
               border: none !important;
               color: white !important;
 
@@ -1047,7 +1046,7 @@ body.dark-mode .no-border-input .ant-input-affix-wrapper-focused {
         transition: all 0.3s ease;
 
         &:hover {
-          border-color: var(--primary-color);
+          border-color: ~"var(--primary-color)";
           background: rgba(255, 255, 255, 0.08);
         }
       }
@@ -1058,7 +1057,7 @@ body.dark-mode .no-border-input .ant-input-affix-wrapper-focused {
         transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 
         &.ant-btn-primary {
-          background: var(--primary-color);
+          background: ~"var(--primary-color)";
           border: none;
 
           &:hover {
@@ -1124,11 +1123,11 @@ body.dark-mode .no-border-input .ant-input-affix-wrapper-focused {
         transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 
         &:hover {
-          border-color: var(--primary-color);
+          border-color: ~"var(--primary-color)";
         }
 
         &:focus {
-          border-color: var(--primary-color);
+          border-color: ~"var(--primary-color)";
           box-shadow: 0 0 0 3px rgba(90, 111, 214, 0.1);
         }
       }
@@ -1139,7 +1138,7 @@ body.dark-mode .no-border-input .ant-input-affix-wrapper-focused {
         transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 
         &:hover {
-          border-color: var(--primary-color) !important;
+          border-color: ~"var(--primary-color)" !important;
         }
       }
 
@@ -1149,7 +1148,7 @@ body.dark-mode .no-border-input .ant-input-affix-wrapper-focused {
         transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 
         &.ant-btn-primary {
-          background: var(--primary-color);
+          background: ~"var(--primary-color)";
           border: none;
 
           &:hover {

@@ -1,5 +1,5 @@
-import { Layout, Menu, Button, Breadcrumb } from 'antd';
-import { HomeOutlined, MessageOutlined, SettingOutlined, RobotOutlined, BookOutlined, DatabaseOutlined, CommentOutlined, MoonOutlined, SunOutlined, MenuFoldOutlined, MenuUnfoldOutlined, HistoryOutlined, TeamOutlined, ToolOutlined, FileTextOutlined, CloudServerOutlined, DashboardOutlined, DesktopOutlined, ApartmentOutlined } from '@ant-design/icons';
+﻿import { Layout, Menu, Button, Breadcrumb } from 'antd';
+import { HomeOutlined, MessageOutlined, SettingOutlined, RobotOutlined, BookOutlined, DatabaseOutlined, CommentOutlined, MoonOutlined, SunOutlined, MenuFoldOutlined, MenuUnfoldOutlined, HistoryOutlined, TeamOutlined, ToolOutlined, FileTextOutlined, CloudServerOutlined, DashboardOutlined, DesktopOutlined, ApartmentOutlined, SearchOutlined, BellOutlined } from '@ant-design/icons';
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
@@ -91,7 +91,8 @@ function AppLayout({ children }: LayoutProps) {
             alt="AI Center Logo" 
             style={{ height: 36, marginRight: 12 }}
           />
-          <h1 style={{ color: theme === 'dark' ? 'white' : '#000000', margin: 0, fontSize: '1.2em', fontWeight: 'normal', whiteSpace: 'nowrap' }}>AI Center</h1>
+          <h1 style={{ color: theme === 'dark' ? 'white' : '#000000', margin: 0, fontSize: '1.2em', fontWeight: 'normal', whiteSpace: 'nowrap' }}>
+            AI Center</h1>
         </div>
         
         {/* 左侧菜单栏 */}
@@ -157,7 +158,7 @@ function AppLayout({ children }: LayoutProps) {
       
       {/* 右侧区域 */}
       <Layout style={{ padding: '0', overflow: 'hidden', height: '100%' }}>
-        {/* 右侧顶部：面包屑 + 主题切换 */}
+        {/* 右侧顶部：面包屑 + 搜索 + 主题切换 + 通知 + 用户信息 */}
         <Header 
           style={{ 
             display: 'flex', 
@@ -166,28 +167,100 @@ function AppLayout({ children }: LayoutProps) {
             background: theme === 'dark' ? '#1a1a1a' : '#ffffff', 
             height: 64, 
             padding: '0 24px',
-            borderBottom: theme === 'dark' ? '1px solid #333' : '1px solid #e8e8e8'
+            borderBottom: theme === 'dark' ? '1px solid #333' : '1px solid #e8e8e8',
+            boxShadow: theme === 'dark' ? 'none' : '0 2px 8px rgba(0, 0, 0, 0.05)'
           }}
         >
-          <Breadcrumb style={{ color: theme === 'dark' ? '#ffffff' : '#000000' }}>
-            {getBreadcrumbItems().map((item, index) => (
-              <Breadcrumb.Item key={index}>
-                {item.path ? (
-                  <Link to={item.path} style={{ color: theme === 'dark' ? '#999' : '#666' }}>
-                    {item.title}
-                  </Link>
-                ) : (
-                  <span style={{ color: theme === 'dark' ? '#ffffff' : '#000000' }}>{item.title}</span>
-                )}
-              </Breadcrumb.Item>
-            ))}
-          </Breadcrumb>
-          <Button 
-            type="text" 
-            icon={theme === 'dark' ? <SunOutlined /> : <MoonOutlined />} 
-            onClick={toggleTheme}
-            style={{ color: theme === 'dark' ? 'white' : '#000000' }}
-          />
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <Breadcrumb style={{ color: theme === 'dark' ? '#ffffff' : '#000000', fontSize: 14 }}>
+              {getBreadcrumbItems().map((item, index) => (
+                <Breadcrumb.Item key={index}>
+                  {item.path ? (
+                    <Link to={item.path} style={{ color: theme === 'dark' ? '#999' : '#666' }}>
+                      {item.title}
+                    </Link>
+                  ) : (
+                    <span style={{ color: theme === 'dark' ? '#ffffff' : '#333', fontWeight: 500 }}>{item.title}</span>
+                  )}
+                </Breadcrumb.Item>
+              ))}
+            </Breadcrumb>
+          </div>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <Button 
+              type="text" 
+              icon={<SearchOutlined />} 
+              onClick={() => {}}
+              style={{ 
+                color: theme === 'dark' ? '#999' : '#666',
+                width: 36,
+                height: 36,
+                borderRadius: 8,
+                background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f7fa'
+              }}
+            />
+            
+            <Button 
+              type="text" 
+              icon={theme === 'dark' ? <SunOutlined /> : <MoonOutlined />} 
+              onClick={toggleTheme}
+              style={{ 
+                color: theme === 'dark' ? '#999' : '#666',
+                width: 36,
+                height: 36,
+                borderRadius: 8,
+                background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f7fa'
+              }}
+            />
+            
+            <Button 
+              type="text" 
+              icon={<BellOutlined />} 
+              onClick={() => {}}
+              style={{ 
+                color: theme === 'dark' ? '#999' : '#666',
+                width: 36,
+                height: 36,
+                borderRadius: 8,
+                background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f7fa',
+                position: 'relative'
+              }}
+            >
+              <span style={{
+                position: 'absolute',
+                top: -4,
+                right: -4,
+                minWidth: 16,
+                height: 16,
+                background: '#ff4d4f',
+                color: '#fff',
+                fontSize: 10,
+                borderRadius: 8,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '0 4px'
+              }}>3</span>
+            </Button>
+            
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 8, 
+              padding: '6px 12px',
+              background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f7fa',
+              borderRadius: 20,
+              cursor: 'pointer'
+            }}>
+              <img 
+                src="https://trae-api-cn.mchost.guru/api/text_to_image?prompt=professional%20business%20avatar%20portrait&image_size=square" 
+                alt="User Avatar"
+                style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }}
+              />
+              <span style={{ fontSize: 14, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333' }}>管理员</span>
+            </div>
+          </div>
         </Header>
         
         {/* 右侧内容区域 */}

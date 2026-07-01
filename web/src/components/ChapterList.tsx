@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+﻿import React, { useState, useMemo, useEffect } from 'react';
 import { Button, Table, Input, Select, Tree, Tooltip, InputNumber, DatePicker, Space } from 'antd';
 const { RangePicker } = DatePicker;
 import { PlusOutlined, EditOutlined, DeleteOutlined, QuestionCircleOutlined } from '@ant-design/icons';
@@ -109,7 +109,7 @@ const ChapterList: React.FC<ChapterListProps> = ({
                 onClick={(e) => e.stopPropagation()}
               >
                 <EditOutlined 
-                  style={{ fontSize: 12, color: '#667eea' }} 
+                  style={{ fontSize: 12, color: 'var(--primary-color)' }} 
                   onClick={(e) => {
                     e.stopPropagation();
                     setEditingChapter(chapter);
@@ -538,7 +538,7 @@ const ChapterList: React.FC<ChapterListProps> = ({
             icon={<PlusOutlined />}
             onClick={() => setShowAddModal(true)}
             style={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)',
               border: 'none',
             }}
           >

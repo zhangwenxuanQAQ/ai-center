@@ -1,4 +1,4 @@
-.ragNode {
+﻿.ragNode {
   padding: 8px 12px;
   border-radius: 8px;
   background: #fff;
@@ -34,8 +34,8 @@
   color: #e0e0e0;
   
   &:hover {
-    border-color: #667eea;
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    border-color: ~"var(--primary-color)";
+    box-shadow: 0 4px 12px rgba(90, 111, 214, 0.2);
   }
 }
 
@@ -44,8 +44,8 @@
   box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2) !important;
   
   &.dark {
-    border-color: #667eea !important;
-    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.3) !important;
+    border-color: ~"var(--primary-color)" !important;
+    box-shadow: 0 0 0 2px rgba(90, 111, 214, 0.3) !important;
   }
 }
 
@@ -276,7 +276,7 @@
   border-color: #1890ff !important;
   
   &.dark {
-    border-color: #667eea !important;
+    border-color: ~"var(--primary-color)" !important;
   }
 }
 
@@ -284,6 +284,6 @@
   border-color: #1890ff !important;
   
   &.dark {
-    border-color: #667eea !important;
+    border-color: ~"var(--primary-color)" !important;
   }
 }

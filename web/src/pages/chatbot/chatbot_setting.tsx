@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Form, Input, Select, TreeSelect, Button, message, Row, Col, Upload, Spin, Tag, Avatar, Modal, Table, Slider, InputNumber, Switch, Drawer, Descriptions, Dropdown, Tooltip } from 'antd';
 const { TextArea } = Input;
@@ -1656,8 +1656,8 @@ const ChatbotSetting: React.FC = () => {
                 }}
                 onClick={handleSelectTool}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = '#667eea';
-                  e.currentTarget.style.color = '#667eea';
+                  e.currentTarget.style.borderColor = 'var(--primary-color)';
+                  e.currentTarget.style.color = 'var(--primary-color)';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.borderColor = theme === 'dark' ? 'rgba(255, 255, 255, 0.2)' : '#d9d9d9';
@@ -1692,7 +1692,7 @@ const ChatbotSetting: React.FC = () => {
                         size={24} 
                         src={server.server_avatar} 
                         icon={<ApiOutlined />}
-                        style={{ backgroundColor: '#667eea', flexShrink: 0 }}
+                        style={{ backgroundColor: 'var(--primary-color)', flexShrink: 0 }}
                       />
                       <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>
@@ -2328,7 +2328,7 @@ const ChatbotSetting: React.FC = () => {
                         size={24} 
                         src={server.avatar} 
                         icon={<ApiOutlined />}
-                        style={{ backgroundColor: '#667eea', flexShrink: 0 }}
+                        style={{ backgroundColor: 'var(--primary-color)', flexShrink: 0 }}
                       />
                       <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <div style={{ fontSize: '14px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>
@@ -2402,7 +2402,7 @@ const ChatbotSetting: React.FC = () => {
                                     checked={(selectedTools[server.id] || []).includes(tool.id)}
                                     onChange={() => handleToolSelect(server.id, tool.id)}
                                     style={{
-                                      accentColor: '#667eea',
+                                      accentColor: 'var(--primary-color)',
                                       marginTop: '2px'
                                     }}
                                   />

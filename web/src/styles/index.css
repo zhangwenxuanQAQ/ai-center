@@ -1,4 +1,4 @@
-/* ==================== 全局基础样式 ==================== */
+﻿/* ==================== 全局基础样式 ==================== */
 
 #root {
   width: 100%;
@@ -93,7 +93,8 @@
 
 /* 内容区域样式 */
 .dark-theme .ant-layout-content {
-  background-color: #000000;
+  /* background-color: rgb(26, 26, 46);; */
+   /* background: linear-gradient(180deg, #0f0f1a 0%, #1a1a2e 100%) !important; */
   color: #ffffff;
 }
 
@@ -122,7 +123,7 @@
 
 /* 夜间模式 */
 .dark-theme .ant-tooltip .ant-tooltip-inner {
-  background: #667eea;
+  background: var(--primary-color);
   color: #ffffff;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
@@ -132,7 +133,7 @@
 }
 
 .dark-theme .ant-tooltip .ant-tooltip-arrow::before {
-  background: #667eea;
+  background: var(--primary-color);
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 

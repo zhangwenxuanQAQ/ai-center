@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Form, Input, Select, TreeSelect, Button, Table, Switch, Modal, message, Popconfirm, Space, Card, Row, Col, Upload, Spin, Pagination, Dropdown, Tooltip, Radio } from 'antd';
 const { TextArea } = Input;
@@ -1159,7 +1159,7 @@ const MCPSetting: React.FC = () => {
                 onClick={handleSave}
                 loading={saving}
                 disabled={!hasChanges}
-                style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', color: '#fff' }}
+                style={{ background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)', border: 'none', color: '#fff' }}
               >
                 保存
               </Button>

@@ -56,6 +56,7 @@ const LLMModelManagement: React.FC = () => {
   const [tagsByModelType, setTagsByModelType] = useState<Record<string, string[]>>({});
   const [hoveredModelType, setHoveredModelType] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('');
+  const [filterConnection, setFilterConnection] = useState<string>('');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(12);
   const [totalModels, setTotalModels] = useState<number>(0);
@@ -104,7 +105,7 @@ const LLMModelManagement: React.FC = () => {
   useEffect(() => {
     setCurrentPage(1);
     fetchModels(selectedCategory, 1, pageSize);
-  }, [selectedCategory, searchName, searchTag, filterModelTypes, filterTags, filterStatus]);
+  }, [selectedCategory, searchName, searchTag, filterModelTypes, filterTags, filterStatus, filterConnection]);
 
   useEffect(() => {
     fetchModels(selectedCategory, currentPage, pageSize);
@@ -176,7 +177,8 @@ const LLMModelManagement: React.FC = () => {
         searchName || undefined,
         filterModelTypes.length > 0 ? filterModelTypes.join(',') : undefined,
         filterStatus || undefined,
-        (searchTag || filterTags.length > 0) ? [...new Set([...filterTags, searchTag].filter(Boolean))].join(',') : undefined
+        (searchTag || filterTags.length > 0) ? [...new Set([...filterTags, searchTag].filter(Boolean))].join(',') : undefined,
+        filterConnection || undefined
       );
       
       // 确保标签数据已经从后端获取
@@ -642,7 +644,7 @@ const LLMModelManagement: React.FC = () => {
     <div className={`page-container ${theme === 'dark' ? 'dark' : 'light'}`}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <div style={{ fontWeight: '600', fontSize: '16px', color: theme === 'dark' ? '#ffffff' : '#000000' }}>模型管理</div>
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAddModel} style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', fontWeight: '500' }}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAddModel} style={{ background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)', border: 'none', fontWeight: '500' }}>
           新增模型
         </Button>
       </div>
@@ -668,7 +670,7 @@ const LLMModelManagement: React.FC = () => {
                   height: '32px',
                   fontWeight: '500',
                   background: filterModelTypes.length === 0 
-                    ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' 
+                    ? 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)' 
                     : (theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#f5f5f5'),
                   border: 'none',
                   color: filterModelTypes.length === 0 ? '#ffffff' : (theme === 'dark' ? '#ffffff' : '#000000')
@@ -712,14 +714,14 @@ const LLMModelManagement: React.FC = () => {
                                 style={{
                                   cursor: 'pointer',
                                   background: isSelected
-                                    ? '#667eea'
+                                    ? 'var(--primary-color)'
                                     : (theme === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.06)'),
                                   color: isSelected
                                     ? '#ffffff'
                                     : (theme === 'dark' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.65)'),
                                   borderRadius: '4px',
                                   border: isSelected
-                                    ? '1px solid #667eea'
+                                    ? '1px solid var(--primary-color)'
                                     : (theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.2)' : '1px solid rgba(0, 0, 0, 0.1)'),
                                   transition: 'all 0.2s ease'
                                 }}
@@ -800,6 +802,7 @@ const LLMModelManagement: React.FC = () => {
             <Button type="primary" onClick={() => fetchModels(selectedCategory, 1, pageSize)} style={{ borderRadius: '8px' }}>
               <SearchOutlined />
             </Button>
+            <span style={{ fontWeight: '500', color: theme === 'dark' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.75)', whiteSpace: 'nowrap', marginRight: '8px', lineHeight: '36px' }}>模型状态:</span>
             <Select
               placeholder="全部状态"
               value={filterStatus}
@@ -816,6 +819,24 @@ const LLMModelManagement: React.FC = () => {
               <Option value="">全部状态</Option>
               <Option value="true">启用</Option>
               <Option value="false">禁用</Option>
+            </Select>
+            <span style={{ fontWeight: '500', color: theme === 'dark' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.75)', whiteSpace: 'nowrap', marginRight: '8px', lineHeight: '36px', marginLeft: '16px' }}>连接状态:</span>
+            <Select
+              placeholder="连接状态"
+              value={filterConnection}
+              onChange={setFilterConnection}
+              style={{
+                width: '120px',
+                borderRadius: '8px',
+                background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
+                border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #d9d9d9',
+                color: theme === 'dark' ? '#ffffff' : '#000000',
+                height: '36px'
+              }}
+            >
+              <Option value="">全部</Option>
+              <Option value="success">连接成功</Option>
+              <Option value="failed">连接失败</Option>
             </Select>
           </div>
           
@@ -837,44 +858,50 @@ const LLMModelManagement: React.FC = () => {
                   <Col key={model.id} xs={24} sm={12} md={8} lg={6} style={{ animationDelay: `${index * 0.1}s`, animationFillMode: 'both' }}>
                     <div ref={(el) => { if (el) cardRefs.current[model.id] = el; }} onMouseMove={(e) => handleCardMouseMove(model.id, e)}>
                       <Card 
-                        hoverable 
                         className={`llm-model-card ${theme === 'dark' ? 'dark' : 'light'}`} 
-                        bodyStyle={{ padding: '16px', position: 'relative', minHeight: '200px' }}
+                        data-card-type="model"
+                        style={{ 
+                          background: theme === 'dark' ? '#1a1a2e' : '#fff',
+                          border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #f0f0f0',
+                          borderRadius: '16px',
+                          boxShadow: '0 2px 12px rgba(0, 0, 0, 0.04)'
+                        }}
+                        bodyStyle={{ padding: '24px', display: 'flex', flexDirection: 'column' ,height:262}}
                         onClick={() => handleCardClick(model.id)}
                       >
                         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                           {/* 顶部区域：图片+信息 | 状态 */}
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
                             {/* 左上：图片 + 模型名称 + 类型 */}
-                            <div style={{ display: 'flex', gap: '12px' }}>
+                            <div style={{ display: 'flex', gap: '16px' }}>
                               <img 
                                 src={getProviderAvatar(model.provider || '')} 
                                 alt={model.provider} 
                                 style={{ 
-                                  width: '44px', 
-                                  height: '44px', 
-                                  borderRadius: '8px',
+                                  width: '52px', 
+                                  height: '52px', 
+                                  borderRadius: '14px',
                                   objectFit: 'cover'
                                 }} 
                               />
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                 <div style={{ 
                                   fontWeight: '600', 
-                                  fontSize: '15px',
-                                  color: theme === 'dark' ? '#ffffff' : '#000000'
+                                  fontSize: '17px',
+                                  color: theme === 'dark' ? '#ffffff' : '#1f2329'
                                 }}>
                                   {model.name}
                                 </div>
                                 <div style={{ 
-                                  fontSize: '12px',
-                                  color: theme === 'dark' ? 'rgba(255, 255, 255, 0.55)' : 'rgba(0, 0, 0, 0.55)'
+                                  fontSize: '13px',
+                                  color: theme === 'dark' ? 'rgba(255, 255, 255, 0.55)' : '#8f959e'
                                 }}>
                                   {getModelTypeLabel(model.model_type)}
                                 </div>
                               </div>
                             </div>
                             {/* 右上：状态标签 */}
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
                               <Tag 
                                 icon={model.status ? <CheckCircleOutlined /> : <CloseCircleOutlined />} 
                                 color={model.status ? 'success' : 'error'}
@@ -892,25 +919,31 @@ const LLMModelManagement: React.FC = () => {
                           </div>
                           
                           {/* 中间区域：标签 */}
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '20px' }}>
                             {parseTags(model.tags).slice(0, 3).map((tag, idx) => (
-                              <Tag key={idx} style={{ marginBottom: 0, fontSize: '12px', padding: '2px 8px', borderRadius: '4px', background: theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#f5f5f5', color: theme === 'dark' ? 'rgba(255, 255, 255, 0.75)' : 'rgba(0, 0, 0, 0.65)' }}>
+                              <Tag key={idx} style={{ marginBottom: 0, fontSize: '12px', padding: '5px 12px', borderRadius: '6px', fontWeight: '500', background: theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#f5f5f5', color: theme === 'dark' ? 'rgba(255, 255, 255, 0.75)' : 'rgba(0, 0, 0, 0.65)' }}>
                                 {tag}
                               </Tag>
                             ))}
                             {parseTags(model.tags).length > 3 && (
-                              <Tag style={{ marginBottom: 0, fontSize: '12px', padding: '2px 8px', borderRadius: '4px', background: theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#f5f5f5', color: theme === 'dark' ? 'rgba(255, 255, 255, 0.75)' : 'rgba(0, 0, 0, 0.65)' }}>
+                              <Tag style={{ marginBottom: 0, fontSize: '12px', padding: '5px 12px', borderRadius: '6px', fontWeight: '500', background: theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#f5f5f5', color: theme === 'dark' ? 'rgba(255, 255, 255, 0.75)' : 'rgba(0, 0, 0, 0.65)' }}>
                                 +{parseTags(model.tags).length - 3}
                               </Tag>
                             )}
                           </div>
                           
                           {/* 底部区域：时间 + 操作按钮 */}
-                          <div style={{ display: 'flex', flexDirection: 'column', marginTop: 'auto' }}>
+                          <div style={{ 
+                            display: 'flex', 
+                            flexDirection: 'column', 
+                            marginTop: 'auto',
+                            borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #f0f0f0',
+                            paddingTop: '16px'
+                          }}>
                             <div style={{ 
                               fontSize: '12px',
                               color: theme === 'dark' ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.4)',
-                              marginBottom: '12px',
+                              marginBottom: '16px',
                               display: 'flex',
                               alignItems: 'center',
                               gap: '4px'
@@ -918,57 +951,74 @@ const LLMModelManagement: React.FC = () => {
                               <ClockCircleOutlined />
                               最近更新: {formatDate(model.created_at)}
                             </div>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                              <Button 
+                            <div style={{ display: 'flex', gap: '12px' }}>
+                              <button 
                                 onClick={(e) => { e.stopPropagation(); handleTestConnection(model); }} 
                                 style={{ 
                                   flex: 1, 
-                                  height: '32px', 
-                                  borderRadius: '8px', 
-                                  background: '#e6f7ff', 
-                                  border: '1px solid #91d5ff',
-                                  color: '#1890ff',
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  justifyContent: 'center', 
+                                  gap: '6px',
+                                  padding: '10px 16px',
+                                  border: 'none',
+                                  borderRadius: '10px',
+                                  fontSize: '13px',
                                   fontWeight: '500',
-                                  fontSize: '12px'
+                                  background: 'rgba(90, 111, 214, 0.08)',
+                                  color: '#5a6fd6',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.2s ease'
                                 }}
                               >
                                 <ApiTwoTone />
                                 测试连接
-                              </Button>
-                              <Button 
+                              </button>
+                              <button 
                                 onClick={(e) => { e.stopPropagation(); handleEditModel(model); }} 
                                 style={{ 
                                   flex: 1, 
-                                  height: '32px', 
-                                  borderRadius: '8px', 
-                                  background: '#f6ffed', 
-                                  border: '1px solid #b7eb8f',
-                                  color: '#52c41a',
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  justifyContent: 'center', 
+                                  gap: '6px',
+                                  padding: '10px 16px',
+                                  border: 'none',
+                                  borderRadius: '10px',
+                                  fontSize: '13px',
                                   fontWeight: '500',
-                                  fontSize: '12px'
+                                  background: 'rgba(46, 164, 79, 0.08)',
+                                  color: '#2ea44f',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.2s ease'
                                 }}
                               >
                                 <EditOutlined />
                                 编辑
-                              </Button>
+                              </button>
                               <Popconfirm title="确认删除" description="确定要删除这个模型吗？" onConfirm={(e) => { e.stopPropagation(); handleDeleteModel(model.id); }} okText="确认" cancelText="取消">
-                                <Button 
+                                <button 
                                   onClick={(e) => e.stopPropagation()}
-                                  danger 
                                   style={{ 
                                     flex: 1, 
-                                    height: '32px', 
-                                    borderRadius: '8px', 
-                                    background: '#fff2f0', 
-                                    border: '1px solid #ffccc7',
-                                    color: '#ff4d4f',
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    justifyContent: 'center', 
+                                    gap: '6px',
+                                    padding: '10px 16px',
+                                    border: 'none',
+                                    borderRadius: '10px',
+                                    fontSize: '13px',
                                     fontWeight: '500',
-                                    fontSize: '12px'
+                                    background: 'rgba(255, 102, 102, 0.08)',
+                                    color: '#ff6666',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease'
                                   }}
                                 >
                                   <DeleteOutlined />
                                   删除
-                                </Button>
+                                </button>
                               </Popconfirm>
                             </div>
                           </div>

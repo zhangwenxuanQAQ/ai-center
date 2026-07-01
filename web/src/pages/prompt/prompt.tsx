@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layout, Tree, Empty, Spin, Button, Modal, Form, Input, Select, Tag, message, Popconfirm, Table, Pagination, Switch, Space, TreeSelect, Checkbox, Tooltip, Drawer, Descriptions, Row, Col } from 'antd';
 const { TextArea } = Input;
@@ -615,7 +615,7 @@ const PromptManagement: React.FC = () => {
             form.resetFields();
             setIsPromptModalVisible(true);
           }}
-          style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none'}}
+          style={{ background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)', border: 'none'}}
         >
           新增提示词
         </Button>
@@ -639,7 +639,7 @@ const PromptManagement: React.FC = () => {
                 setIsCategoryModalVisible(true);
               }} 
               // size="small" 
-              // style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none'}}
+              // style={{ background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)', border: 'none'}}
             >
               新增分类
             </Button>
@@ -669,7 +669,7 @@ const PromptManagement: React.FC = () => {
                 setPromptDescription('');
                 setIsFullPromptModalVisible(true);
               }}
-              style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
+              style={{ background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)' }}
             >
               新增提示词
             </Button>

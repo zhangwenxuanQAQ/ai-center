@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import classNames from 'classnames';
 import styles from './node.module.less';
 import { getComponentIcon, getDefaultComponentIcon } from '../../../utils/component_icon';

@@ -1,4 +1,4 @@
-/* ==================== 公共页面头部样式 ==================== */
+﻿/* ==================== 公共页面头部样式 ==================== */
 
 .page-header {
   display: flex;
@@ -153,15 +153,15 @@ body[data-theme="light"] .page-header .ant-breadcrumb-item span {
 
 /* 夜间模式按钮样式 */
 body[data-theme="dark"] .page-header .ant-btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  background: linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%) !important;
   border: none !important;
   color: white !important;
 }
 
 body[data-theme="dark"] .page-header .ant-btn-primary:hover {
-  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
+  background: linear-gradient(135deg, #6b7fe6 0%, var(--primary-color) 100%) !important;
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 8px 24px rgba(90, 111, 214, 0.4);
 }
 
 body[data-theme="dark"] .page-header .ant-btn-default {
@@ -179,13 +179,13 @@ body[data-theme="dark"] .page-header .ant-btn-default:hover {
 
 /* 白天模式按钮样式 */
 body[data-theme="light"] .page-header .ant-btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  background: linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%) !important;
   border: none !important;
   color: white !important;
 }
 
 body[data-theme="light"] .page-header .ant-btn-primary:hover {
-  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
+  background: linear-gradient(135deg, #6b7fe6 0%, var(--primary-color) 100%) !important;
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 8px 24px rgba(90, 111, 214, 0.4);
 }

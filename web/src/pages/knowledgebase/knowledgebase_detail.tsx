@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Tabs, Spin, message, Drawer, Tag, Descriptions } from 'antd';
 import { DatabaseOutlined, SettingOutlined, FolderOutlined, SearchOutlined } from '@ant-design/icons';
@@ -146,7 +146,7 @@ const KnowledgebaseDetail: React.FC = () => {
 
   return (
     <div className={`page-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-      <PageHeader
+      {/* <PageHeader
         items={[
           { 
             title: '知识库管理', 
@@ -155,7 +155,7 @@ const KnowledgebaseDetail: React.FC = () => {
           },
           { title: knowledgebase.name }
         ]}
-      />
+      /> */}
 
       <Tabs
         activeKey={activeTab}
@@ -164,7 +164,7 @@ const KnowledgebaseDetail: React.FC = () => {
         type="card"
         className={`knowledgebase-detail-tabs ${theme === 'dark' ? 'dark' : 'light'}`}
         style={{
-          height: 'calc(100% - 80px)', 
+          // height: 'calc(100% - 80px)', 
           display: 'flex', 
           flexDirection: 'column',
           padding: '8px',

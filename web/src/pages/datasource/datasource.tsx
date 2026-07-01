@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { Layout, Tree, Card, Row, Col, Avatar, Tag, Empty, Spin, Button, Modal, Form, Input, Select, TreeSelect, Popconfirm, Pagination, Switch, message, Tabs, Table, Badge, InputNumber } from 'antd';
 const { TextArea, Password } = Input;
-import { CloudServerOutlined, PlusOutlined, MoreOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UpOutlined, DownOutlined, CheckCircleOutlined, CloseCircleOutlined, DatabaseOutlined, LinkOutlined, LoadingOutlined } from '@ant-design/icons';
+import { CloudServerOutlined, PlusOutlined, MoreOutlined, EditOutlined, DeleteOutlined, SearchOutlined, CheckCircleOutlined, CloseCircleOutlined, DatabaseOutlined, LinkOutlined, LoadingOutlined, ChevronRightOutlined, ChevronDownOutlined, FolderOutlined, FolderOpenOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import type { TreeDataNode, TreeProps } from 'antd';
 import { datasourceService, Datasource, DatasourceCategory, DatasourceType } from '../../services/datasource';
@@ -40,6 +40,8 @@ const DatasourceManagement: React.FC = () => {
   const [searchKeyword, setSearchKeyword] = useState<string>('');
   const [searchCode, setSearchCode] = useState<string>('');
   const [searchDatasourceType, setSearchDatasourceType] = useState<string>('');
+  const [searchDatasourceStatus, setSearchDatasourceStatus] = useState<string>('');
+  const [searchConnectionStatus, setSearchConnectionStatus] = useState<string>('');
   const [filteredDatasources, setFilteredDatasources] = useState<Datasource[]>([]);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(12);
@@ -180,6 +182,36 @@ const DatasourceManagement: React.FC = () => {
     return result;
   };
 
+  const getCategoryName = (categoryId: string | null): string => {
+    if (!categoryId) {
+      return '全部数据源';
+    }
+    const allCategories = flattenAllCategories(categories);
+    const category = allCategories.find(c => c.id === categoryId);
+    return category ? category.name : '全部数据源';
+  };
+
+  const getCategoryInfo = (categoryId: string | null): DatasourceCategory | null => {
+    if (!categoryId) {
+      return null;
+    }
+    const allCategories = flattenAllCategories(categories);
+    const category = allCategories.find(c => c.id === categoryId);
+    return category || null;
+  };
+
+  const formatDateTime = (dateString?: string): string => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
+  };
+
   const handleCategorySort = async (category: DatasourceCategory, direction: 'up' | 'down') => {
     try {
       const allCategories = flattenAllCategories(categories);
@@ -270,54 +302,29 @@ const DatasourceManagement: React.FC = () => {
             <div className="category-actions">
               <Button
                 type="text"
-                icon={<UpOutlined />}
+                icon={<PlusOutlined />}
                 size="small"
-                title="上移"
+                title="添加子分类"
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleCategorySort(category, 'up');
+                  categoryForm.resetFields();
+                  categoryForm.setFieldsValue({ parent_id: category.id });
+                  const maxSortOrder = category.children?.length > 0 
+                    ? Math.max(...category.children.map(c => c.sort_order || 0)) 
+                    : 0;
+                  categoryForm.setFieldsValue({ sort_order: maxSortOrder + 1 });
+                  setIsCategoryModalVisible(true);
                 }}
               />
               <Button
                 type="text"
-                icon={<DownOutlined />}
+                icon={<MoreOutlined />}
                 size="small"
-                title="下移"
+                title="更多操作"
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleCategorySort(category, 'down');
                 }}
               />
-              <Button
-                type="text"
-                icon={<EditOutlined />}
-                size="small"
-                title="编辑"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleEditCategory(category);
-                }}
-              />
-              <Popconfirm
-                title="确认删除"
-                description="确定要删除这个分类吗？"
-                onConfirm={(e) => {
-                  e.stopPropagation();
-                  handleDeleteCategory(category);
-                }}
-                okText="确认"
-                cancelText="取消"
-              >
-                <Button
-                  type="text"
-                  icon={<DeleteOutlined />}
-                  size="small"
-                  danger
-                  title="删除"
-                  className="delete-category-btn"
-                  onClick={(e) => e.stopPropagation()}
-                />
-              </Popconfirm>
             </div>
           </div>
         ),
@@ -736,11 +743,7 @@ const DatasourceManagement: React.FC = () => {
 
   return (
     <div className={`page-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-      <PageHeader 
-        items={[
-          { title: '数据源管理', icon: <CloudServerOutlined /> }
-        ]} 
-      />
+     
 
       <Layout className="datasource-layout">
         <LeftSider
@@ -748,26 +751,31 @@ const DatasourceManagement: React.FC = () => {
           className={`category-sider ${theme === 'dark' ? 'dark' : 'light'}`}
         >
           <div className={`sider-header ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>分类</span>
+            <span>数据源分类</span>
             <Button
               type="primary"
               icon={<PlusOutlined />}
               onClick={handleAddCategory}
-              size="small"
-              style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                border: 'none',
-                borderRadius: '12px',
-                padding: '0 12px',
-                height: '28px',
-                fontSize: '12px'
-              }}
+              // size="small"
             >
-              新增分类
+              添加分类
             </Button>
           </div>
+          <div className={`sidebar-search ${theme === 'dark' ? 'dark' : 'light'}`}>
+            <Input
+              placeholder="请输入"
+              prefix={<SearchOutlined />}
+              style={{
+                background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5',
+                border: 'none',
+                borderRadius: '8px',
+                height: '32px',
+                color: theme === 'dark' ? '#ffffff' : '#000000'
+              }}
+            />
+          </div>
           <Tree
-            showIcon
+            showIcon={false}
             selectedKeys={selectedKeys}
             expandedKeys={expandedKeys}
             onSelect={handleTreeSelect}
@@ -778,86 +786,158 @@ const DatasourceManagement: React.FC = () => {
         </LeftSider>
 
         <Content className={`datasource-content ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap', alignItems: 'center' }}>
-            <Button 
-              type="primary" 
-              icon={<PlusOutlined />} 
-              onClick={handleAddDatasource}
-              style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                border: 'none',
-                borderRadius: '18px',
-                padding: '0 20px',
-                height: '36px'
-              }}
-            >
-              新增数据源
-            </Button>
-            <Input
-              placeholder="搜索数据源名称"
-              value={searchKeyword}
-              onChange={(e) => setSearchKeyword(e.target.value)}
-              prefix={<SearchOutlined />}
-              style={{
-                width: '200px',
-                height: '36px',
-                borderRadius: '18px',
-                background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
-                border: 'none',
-                boxShadow: 'none',
-                outline: 'none',
-                color: theme === 'dark' ? '#ffffff' : '#000000'
-              }}
-              className="no-border-input"
-            />
-            <Input
-              placeholder="搜索数据源编码"
-              value={searchCode}
-              onChange={(e) => setSearchCode(e.target.value)}
-              prefix={<SearchOutlined />}
-              style={{
-                width: '200px',
-                height: '36px',
-                borderRadius: '18px',
-                background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
-                border: 'none',
-                boxShadow: 'none',
-                outline: 'none',
-                color: theme === 'dark' ? '#ffffff' : '#000000'
-              }}
-              className="no-border-input"
-            />
-            <Select
-              placeholder="按类型筛选"
-              value={searchDatasourceType}
-              onChange={setSearchDatasourceType}
-              style={{
-                width: '200px',
-                borderRadius: '18px',
-                background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
-                border: 'none',
-                color: theme === 'dark' ? '#ffffff' : '#000000',
-                height: '36px'
-              }}
-            >
-              <Option value="">全部类型</Option>
-              {datasourceTypes.map(type => (
-                <Option key={type.datasource_type} value={type.datasource_type}>
-                  {type.datasource_name}
-                </Option>
-              ))}
-            </Select>
-          </div>
-          
-          <div style={{ 
-            flex: 1, 
+          <div className="ds-list-section">
+            <div className={`category-info-bar ${theme === 'dark' ? 'dark' : 'light'}`}>
+              <div className={`info-header ${theme === 'dark' ? 'dark' : 'light'}`}>
+                <h2>{getCategoryName(selectedCategory)}</h2>
+                <div className="info-row">
+                  <span className="info-label">描述:</span>
+                  <span className="info-value">{getCategoryInfo(selectedCategory)?.description || '所有数据源的集合'}</span>
+                  <span className="info-label">操作时间:</span>
+                  <span className="info-value">{getCategoryInfo(selectedCategory) ? formatDateTime(getCategoryInfo(selectedCategory)?.updated_at) : '-'}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className={`ds-list-content ${theme === 'dark' ? 'dark' : 'light'}`}>
+              <h3>数据源列表</h3>
+              <div className={`ds-search-bar ${theme === 'dark' ? 'dark' : 'light'}`}>
+              <div className="search-group">
+                <label>数据源名称:</label>
+                <Input
+                  placeholder="请输入"
+                  value={searchKeyword}
+                  onChange={(e) => setSearchKeyword(e.target.value)}
+                  style={{
+                    flex: 1,
+                    background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: theme === 'dark' ? '#ffffff' : '#000000'
+                  }}
+                />
+              </div>
+              <div className="search-group">
+                <label>数据源编码:</label>
+                <Input
+                  placeholder="请输入"
+                  value={searchCode}
+                  onChange={(e) => setSearchCode(e.target.value)}
+                  style={{
+                    flex: 1,
+                    background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: theme === 'dark' ? '#ffffff' : '#000000'
+                  }}
+                />
+              </div>
+              <div className="search-group">
+                <label>数据源类型:</label>
+                <Select
+                  placeholder="全部"
+                  value={searchDatasourceType}
+                  onChange={setSearchDatasourceType}
+                  style={{
+                    flex: 1,
+                    background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: theme === 'dark' ? '#ffffff' : '#000000'
+                  }}
+                >
+                  <Option value="">全部</Option>
+                  {datasourceTypes.map(type => (
+                    <Option key={type.datasource_type} value={type.datasource_type}>
+                      {type.datasource_name}
+                    </Option>
+                  ))}
+                </Select>
+              </div>
+              <div className="search-group">
+                <label>数据源状态:</label>
+                <Select
+                  placeholder="全部"
+                  value={searchDatasourceStatus}
+                  onChange={setSearchDatasourceStatus}
+                  style={{
+                    flex: 1,
+                    background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: theme === 'dark' ? '#ffffff' : '#000000'
+                  }}
+                >
+                  <Option value="">全部</Option>
+                  <Option value="enabled">已启用</Option>
+                  <Option value="disabled">已禁用</Option>
+                </Select>
+              </div>
+              <div className="search-group">
+                <label>连接状态:</label>
+                <Select
+                  placeholder="全部"
+                  value={searchConnectionStatus}
+                  onChange={setSearchConnectionStatus}
+                  style={{
+                    flex: 1,
+                    background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: theme === 'dark' ? '#ffffff' : '#000000'
+                  }}
+                >
+                  <Option value="">全部</Option>
+                  <Option value="success">测试连接成功</Option>
+                  <Option value="failed">测试连接失败</Option>
+                </Select>
+              </div>
+              <Button
+                type="primary"
+                onClick={() => fetchDatasources(selectedCategory, 1, pageSize)}
+                style={{
+                  background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '0 20px',
+                  height: '32px'
+                }}
+              >
+                查询
+              </Button>
+              <Button
+                onClick={() => {
+                  setSearchKeyword('');
+                  setSearchCode('');
+                  setSearchDatasourceType('');
+                  setSearchDatasourceStatus('');
+                  setSearchConnectionStatus('');
+                  fetchDatasources(selectedCategory, 1, pageSize);
+                }}
+                style={{
+                  borderRadius: '8px',
+                  padding: '0 20px',
+                  height: '32px',
+                  background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5',
+                  border: 'none',
+                  color: theme === 'dark' ? '#ffffff' : '#000000'
+                }}
+              >
+                重置
+              </Button>
+            </div>
+
+          <div style={{
+            flex: 1,
             minHeight: 0,
-            overflowY: 'auto', 
+            overflowY: 'auto',
             marginBottom: '0',
             scrollbarWidth: 'none',
-            msOverflowStyle: 'none'
+            msOverflowStyle: 'none',
+            marginTop:24
           }} className="hide-scrollbar">
             <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; }`}</style>
+            <div style={{ padding: '0 24px 24px 24px' }}>
             {loading ? (
               <div className="loading-container">
                 <Spin size="large" />
@@ -869,14 +949,28 @@ const DatasourceManagement: React.FC = () => {
               />
             ) : (
               <Row gutter={[16, 16]}>
+                <Col
+                  xs={24}
+                  sm={12}
+                  md={8}
+                  lg={8}
+                >
+                  <div
+                    className={`ds-add-card ${theme === 'dark' ? 'dark' : 'light'}`}
+                    onClick={() => handleAddDatasource()}
+                  >
+                    <PlusOutlined style={{ fontSize: '28px' }} />
+                    <span>新增数据源</span>
+                  </div>
+                </Col>
                 {filteredDatasources.map((datasource, index) => (
-                  <Col 
-                    key={datasource.id} 
-                    xs={24} 
-                    sm={12} 
-                    md={8} 
-                    lg={6}
-                    style={{ 
+                  <Col
+                    key={datasource.id}
+                    xs={24}
+                    sm={12}
+                    md={8}
+                    lg={8}
+                    style={{
                       animationDelay: `${index * 0.1}s`,
                       animationFillMode: 'both'
                     }}
@@ -884,30 +978,66 @@ const DatasourceManagement: React.FC = () => {
                     <Card
                       hoverable
                       className={`datasource-card ${theme === 'dark' ? 'dark' : 'light'}`}
-                      bodyStyle={{ padding: '16px' }}
+                      bodyStyle={{ padding: '0' }}
+                      style={{
+                        background: theme === 'dark' ? '#1a1a2e' : '#fff',
+                        border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #f0f0f0',
+                        borderRadius: '16px',
+                        boxShadow: '0 2px 12px rgba(0, 0, 0, 0.04)',
+                        transition: 'all 0.3s ease'
+                      }}
                     >
-                      <div className="card-content">
-                        <div className="card-actions">
+                      <div className="ds-card-content">
+                        <div className="ds-header">
+                          <div className={`ds-icon ${index % 2 === 0 ? 'blue-icon' : 'red-icon'}`}>
+                            <DatabaseOutlined style={{ fontSize: '24px', color: '#fff' }} />
+                          </div>
+                          <div className="ds-info">
+                            <h3 className="ds-title">{datasource.name}</h3>
+                            <span className="ds-category">{getDatasourceTypeLabel(datasource.type)}</span>
+                          </div>
+                          <div className="ds-status-badges">
+                            <span className={`status-badge ds-status ${datasource.status ? 'enabled' : 'disabled'}`}>
+                              {datasource.status ? '已启用' : '已禁用'}
+                            </span>
+                            <span className={`status-badge conn-status ${datasource.status ? 'available' : 'unavailable'}`}>
+                              {datasource.status ? '测试连接成功' : '测试连接失败'}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="ds-tags">
+                          <span className="tag">{getDatasourceTypeLabel(datasource.type)}</span>
+                          <span className="tag">测试环境</span>
+                        </div>
+                        <div className={`ds-meta ${theme === 'dark' ? 'dark' : ''}`}>
+                          <span className="meta-item">
+                            <span>最近更新: {formatDate(datasource.created_at)}</span>
+                          </span>
+                        </div>
+                        <div className="ds-actions">
                           <Button 
-                            type="text" 
                             icon={<LinkOutlined />}
                             onClick={(e) => {
                               e.stopPropagation();
                               handleTestConnection(datasource);
                             }}
-                            className="action-button"
+                            className={`action-btn test ${!datasource.status ? 'disabled' : ''}`}
                             title="测试连接"
-                          />
+                            disabled={!datasource.status}
+                          >
+                            <span>测试连接</span>
+                          </Button>
                           <Button 
-                            type="text" 
                             icon={<EditOutlined />}
                             onClick={(e) => {
                               e.stopPropagation();
                               handleEditDatasource(datasource);
                             }}
-                            className="action-button"
+                            className="action-btn edit"
                             title="编辑"
-                          />
+                          >
+                            <span>编辑</span>
+                          </Button>
                           <Popconfirm
                               title="确认删除"
                               description="确定要删除这个数据源吗？"
@@ -919,52 +1049,13 @@ const DatasourceManagement: React.FC = () => {
                               cancelText="取消"
                             >
                               <Button 
-                                type="text" 
                                 icon={<DeleteOutlined />}
-                                danger
-                                className="action-button"
+                                className="action-btn delete"
                                 title="删除"
-                              />
+                              >
+                                <span>删除</span>
+                              </Button>
                             </Popconfirm>
-                        </div>
-                        <div className="card-main">
-                          <div className="card-avatar-container">
-                            <img 
-                              src={getDatasourceAvatar(datasource.type)} 
-                              alt={datasource.type}
-                              className="card-avatar"
-                              style={{
-                                width: '32px',
-                                height: '32px',
-                                borderRadius: '50%',
-                                objectFit: 'cover',
-                                opacity: datasource.status ? 1 : 0.6
-                              }}
-                              onError={(e) => {
-                                const target = e.target as HTMLImageElement;
-                                target.src = getDefaultDatasourceIcon();
-                              }}
-                            />
-                          </div>
-                          <div className="card-title">
-                            {datasource.name}
-                          </div>
-                          <div className="card-meta">
-                            <div className="card-type">
-                              {getDatasourceTypeIcon(datasource.type)}
-                              <span style={{ marginLeft: '4px' }}>{getDatasourceTypeLabel(datasource.type)}</span>
-                            </div>
-                            <div className="card-status">
-                              {datasource.status ? (
-                                <Tag icon={<CheckCircleOutlined />} color="success">启用</Tag>
-                              ) : (
-                                <Tag icon={<CloseCircleOutlined />} color="error">禁用</Tag>
-                              )}
-                            </div>
-                          </div>
-                          <div className="card-bottom">
-                            <div className="card-date">{formatDate(datasource.created_at)}</div>
-                          </div>
                         </div>
                       </div>
                     </Card>
@@ -973,7 +1064,9 @@ const DatasourceManagement: React.FC = () => {
               </Row>
             )}
           </div>
-          
+        </div>
+      </div>
+
           <div style={{ paddingTop: '24px', borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(0, 0, 0, 0.1)', display: 'flex', justifyContent: 'center' }}>
             <Pagination
               current={currentPage}
@@ -1017,31 +1110,32 @@ const DatasourceManagement: React.FC = () => {
               }}
             />
           </div>
-        </Content>
-      </Layout>
+        </div>
+      </Content>
+    </Layout>
 
-      <Modal
-        title="新增数据源"
-        open={isModalVisible}
-        onOk={handleSubmit}
-        onCancel={() => { setIsModalVisible(false); setConnectionTestResult(null); }}
-        width={700}
-        okText="保存"
-        cancelText="取消"
-        className={`datasource-modal ${theme === 'dark' ? 'dark' : 'light'}`}
-        footer={[
-          <Button key="cancel" onClick={() => { setIsModalVisible(false); setConnectionTestResult(null); }}>
-            取消
-          </Button>,
-          <Button 
-            key="test" 
-            type="default" 
-            icon={testingConnection ? <LoadingOutlined /> : <LinkOutlined />}
-            onClick={() => handleTestConnectionModal(form, selectedDatasourceType)}
-            loading={testingConnection}
-            style={{ marginRight: '8px' }}
-            disabled={!selectedDatasourceType}
-          >
+    <Modal
+      title="新增数据源"
+      open={isModalVisible}
+      onOk={handleSubmit}
+      onCancel={() => { setIsModalVisible(false); setConnectionTestResult(null); }}
+      width={700}
+      okText="保存"
+      cancelText="取消"
+      className={`datasource-modal ${theme === 'dark' ? 'dark' : 'light'}`}
+      footer={[
+        <Button key="cancel" onClick={() => { setIsModalVisible(false); setConnectionTestResult(null); }}>
+          取消
+        </Button>,
+        <Button 
+          key="test" 
+          type="default" 
+          icon={testingConnection ? <LoadingOutlined /> : <LinkOutlined />}
+          onClick={() => handleTestConnectionModal(form, selectedDatasourceType)}
+          loading={testingConnection}
+          style={{ marginRight: '8px' }}
+          disabled={!selectedDatasourceType}
+        >
             {testingConnection ? '测试中...' : '测试连接'}
           </Button>,
           <Button key="submit" type="primary" onClick={handleSubmit}>

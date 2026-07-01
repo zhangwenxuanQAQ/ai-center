@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+﻿import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Button, Input, Select, Tag, Upload, message, Slider, InputNumber, Tooltip, Form, Switch, TreeSelect, Spin, Empty, Row, Col, List, DatePicker, Space, Descriptions } from 'antd';
 const { RangePicker } = DatePicker;
 import type { RangePickerProps } from 'antd/es/date-picker';
@@ -1502,7 +1502,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
                       width: cardWidth,
                       padding: '16px 12px',
                       borderRadius: 8,
-                      border: `2px solid ${isSelected ? '#667eea' : theme === 'dark' ? 'rgba(255,255,255,0.15)' : '#e8e8e8'}`,
+                      border: `2px solid ${isSelected ? 'var(--primary-color)' : theme === 'dark' ? 'rgba(255,255,255,0.15)' : '#e8e8e8'}`,
                       background: isSelected
                         ? theme === 'dark' ? 'rgba(102,126,234,0.15)' : 'rgba(102,126,234,0.08)'
                         : theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#fafafa',
@@ -1515,12 +1515,12 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
                       transition: 'all 0.2s',
                     }}
                   >
-                    <div style={{ color: isSelected ? '#667eea' : theme === 'dark' ? '#aaa' : '#666' }}>
+                    <div style={{ color: isSelected ? 'var(--primary-color)' : theme === 'dark' ? '#aaa' : '#666' }}>
                       {SOURCE_TYPE_ICONS[st.key]}
                     </div>
                     <div style={{
                       fontSize: 13,
-                      color: isSelected ? '#667eea' : theme === 'dark' ? '#ccc' : '#666',
+                      color: isSelected ? 'var(--primary-color)' : theme === 'dark' ? '#ccc' : '#666',
                       fontWeight: isSelected ? 600 : 400,
                     }}>
                       {st.label}
@@ -1573,7 +1573,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
               }}
             >
               <p className="ant-upload-drag-icon">
-                <InboxOutlined style={{ color: '#667eea', fontSize: 40 }} />
+                <InboxOutlined style={{ color: 'var(--primary-color)', fontSize: 40 }} />
               </p>
               <p style={{ color: theme === 'dark' ? '#ccc' : '#666' }}>
                 点击或拖拽文件到此区域上传
@@ -1873,7 +1873,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
                         transition: 'all 0.2s',
                       }}
                     >
-                      <FolderOutlined style={{ color: '#667eea' }} />
+                      <FolderOutlined style={{ color: 'var(--primary-color)' }} />
                       <span style={{ flex: 1, color: theme === 'dark' ? '#ccc' : '#666' }}>
                         {dir.name}
                       </span>
@@ -2783,7 +2783,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       overflowY: 'hidden',
       backgroundColor: theme === 'dark' ? '#1e1e1e' : '#ffffff',
     }}>
-      <PageHeader
+      {/* <PageHeader
         items={[
           {
             title: isEdit ? '编辑知识' : '新增知识'
@@ -2799,7 +2799,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         }
         showHome={false}
         className="compact"
-      />
+      /> */}
       <div style={{ 
         flex: 1, 
         minHeight: 0,
@@ -2862,7 +2862,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
                 width: 8,
                 height: 40,
                 background: isDragging 
-                  ? '#667eea' 
+                  ? 'var(--primary-color)' 
                   : theme === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)',
                 borderRadius: 4,
                 cursor: 'col-resize',

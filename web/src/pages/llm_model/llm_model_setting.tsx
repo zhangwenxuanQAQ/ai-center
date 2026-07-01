@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Form, Input, Select, TreeSelect, Button, Switch, message, Row, Col, Spin, Slider, InputNumber, Tooltip, Tag } from 'antd';
 const { TextArea } = Input;
@@ -914,7 +914,7 @@ const LLMModelSetting: React.FC = () => {
 
   return (
     <div className={`page-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-      <PageHeader
+      {/* <PageHeader
         items={[
           { title: '模型列表', icon: <SettingOutlined />, onClick: () => navigate('/llm_models') },
           { title: '模型配置' },
@@ -925,7 +925,7 @@ const LLMModelSetting: React.FC = () => {
             返回列表
           </Button>
         }
-      />
+      /> */}
 
       <div className="llm-model-setting-container">
         <div className="setting-left-panel">
@@ -970,7 +970,7 @@ const LLMModelSetting: React.FC = () => {
                     </Col>
                     <Col span={12}>
                       <Form.Item name="model_type" label="模型类型">
-                        <Select disabled placeholder="请选择模型类型">
+                        <Select disabled placeholder="请选择模型类型" style={{ color: theme === 'dark' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.65)' }}>
                           {Object.entries(modelTypes).map(([key, value]) => (
                             <Option key={key} value={key}>{value}</Option>
                           ))}
@@ -1020,7 +1020,7 @@ const LLMModelSetting: React.FC = () => {
                               setTags(newTags);
                               setHasChanges(true);
                             }}
-                            style={{ marginBottom: 4 }}
+                            style={{ marginBottom: 4, background: theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#f0f0f0', color: theme === 'dark' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.65)' }}
                           >
                             {tag}
                           </Tag>
@@ -1035,10 +1035,10 @@ const LLMModelSetting: React.FC = () => {
                               onChange={(e) => setNewTag(e.target.value)}
                               onKeyPress={(e) => e.key === 'Enter' && handleAddTag()}
                               placeholder="输入标签"
-                              style={{ width: 120, height: 24 }}
+                              style={{ width: 120, height: 24, background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff' }}
                             />
-                            <Button size="small" onClick={handleAddTag} style={{ height: 24 }}>添加</Button>
-                            <Button size="small" onClick={() => setShowTagInput(false)} style={{ height: 24 }}>取消</Button>
+                            <Button size="small" onClick={handleAddTag} style={{ height: 24, background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff' }}>添加</Button>
+                            <Button size="small" onClick={() => setShowTagInput(false)} style={{ height: 24, background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff' }}>取消</Button>
                           </div>
                         ) : (
                           <Button 
@@ -1048,7 +1048,7 @@ const LLMModelSetting: React.FC = () => {
                               setShowTagInput(true);
                               setTimeout(() => tagInputRef.current?.focus(), 100);
                             }}
-                            style={{ borderStyle: 'dashed', height: 24, minWidth: 80 }}
+                            style={{ borderStyle: 'dashed', height: 24, minWidth: 80, background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'transparent', borderColor: theme === 'dark' ? 'rgba(255, 255, 255, 0.2)' : '#d9d9d9', color: theme === 'dark' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.65)' }}
                           >
                             添加标签
                           </Button>
@@ -1093,7 +1093,7 @@ const LLMModelSetting: React.FC = () => {
                 onClick={handleSave}
                 loading={saving}
                 disabled={!canSave}
-                style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', color: '#fff' }}
+                style={{ background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)', border: 'none', color: '#fff' }}
               >
                 保存
               </Button>

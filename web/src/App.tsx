@@ -1,9 +1,10 @@
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { Layout, Menu, Button, Card, ConfigProvider, theme as antTheme } from 'antd';
+﻿import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { Layout, Menu, Button, Card, Breadcrumb, ConfigProvider, theme as antTheme } from 'antd';
 import { HomeOutlined, MessageOutlined, SettingOutlined, LogoutOutlined, RobotOutlined, BookOutlined, DatabaseOutlined, CommentOutlined, MoonOutlined, SunOutlined, MenuFoldOutlined, MenuUnfoldOutlined, HistoryOutlined, TeamOutlined, ToolOutlined, FileTextOutlined, CloudServerOutlined, DashboardOutlined, DesktopOutlined, ApartmentOutlined } from '@ant-design/icons';
 import { useState, useEffect } from 'react';
 import './styles/index.css';
 import './styles/common.css';
+import './styles/variables.css';
 import './styles/themes/dark.css';
 import './styles/themes/light.css';
 import Home from './pages/home/home.tsx';
@@ -27,8 +28,40 @@ import AgentSetting from './pages/agent/agent_setting.tsx';
 
 const { Header, Content, Sider } = Layout;
 
-function App() {
-  // 从localStorage获取主题，如果没有则使用默认值'dark'
+const breadcrumbMap: Record<string, { title: string; path?: string }[]> = {
+  '/': [{ title: '首页' }],
+  '/chatbots': [{ title: '首页', path: '/' }, { title: '机器人' }],
+  '/chatbot/setting/:id': [{ title: '首页', path: '/' }, { title: '机器人', path: '/chatbots' }, { title: '机器人配置' }],
+  '/mcps': [{ title: '首页', path: '/' }, { title: 'MCP' }],
+  '/mcp/setting/:id': [{ title: '首页', path: '/' }, { title: 'MCP', path: '/mcps' }, { title: 'MCP配置' }],
+  '/knowledgebases': [{ title: '首页', path: '/' }, { title: '知识库' }],
+  '/knowledgebase/create': [{ title: '首页', path: '/' }, { title: '知识库', path: '/knowledgebases' }, { title: '创建知识库' }],
+  '/knowledgebase/detail/:id': [{ title: '首页', path: '/' }, { title: '知识库', path: '/knowledgebases' }, { title: '知识库详情' }],
+  '/llm_models': [{ title: '首页', path: '/' }, { title: '模型管理' }],
+  '/llm_model/setting/:id': [{ title: '首页', path: '/' }, { title: '模型管理', path: '/llm_models' }, { title: '模型配置' }],
+  '/prompts': [{ title: '首页', path: '/' }, { title: '提示词' }],
+  '/prompt/setting/:id': [{ title: '首页', path: '/' }, { title: '提示词', path: '/prompts' }, { title: '提示词配置' }],
+  '/users': [{ title: '首页', path: '/' }, { title: '用户' }],
+  '/chats': [{ title: '首页', path: '/' }, { title: '聊天' }],
+  '/datasources': [{ title: '首页', path: '/' }, { title: '数据源' }],
+  '/system/monitor': [{ title: '首页', path: '/' }, { title: '系统监控' }],
+  '/agents': [{ title: '首页', path: '/' }, { title: '智能体' }],
+  '/agent/setting/:id': [{ title: '首页', path: '/' }, { title: '智能体', path: '/agents' }, { title: '智能体配置' }],
+};
+
+const getBreadcrumbItems = (path: string) => {
+  const matchedKey = Object.keys(breadcrumbMap).find(key => {
+    if (key.includes(':id')) {
+      const regex = new RegExp(`^${key.replace(':id', '[^/]+')}$`);
+      return regex.test(path);
+    }
+    return key === path;
+  });
+  return breadcrumbMap[matchedKey || '/'] || breadcrumbMap['/'];
+};
+
+function AppContent() {
+  const location = useLocation();
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const savedTheme = localStorage.getItem('theme');
     return (savedTheme as 'light' | 'dark') || 'dark';
@@ -37,7 +70,6 @@ function App() {
 
   useEffect(() => {
     document.body.setAttribute('data-theme', theme);
-    // 将主题保存到localStorage
     localStorage.setItem('theme', theme);
   }, [theme]);
 
@@ -50,11 +82,186 @@ function App() {
   };
 
   return (
+    <Layout style={{ height: '100vh', overflow: 'hidden' }} className={theme === 'dark' ? 'dark-theme' : 'light-theme'}>
+     
+      <Layout style={{ height: 'calc(100vh - 64px)', overflow: 'hidden' }}>
+        <Sider 
+          width={220} 
+          collapsedWidth={60} 
+          className={theme === 'dark' ? 'dark-theme-sider' : 'light-theme-sider'}
+          collapsed={collapsed}
+          style={{ overflow: 'hidden', height: '100%', display: 'flex', flexDirection: 'column' }}
+        >
+           <div style={{ display: 'flex', alignItems: 'center', gap: 12,height:69,paddingLeft:24,borderBottom:'1px solid', borderBottomColor: theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#e8eaed' }}>  
+            <img 
+            src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=modern%20AI%20logo%20with%20blue%20and%20green%20colors%2C%20simple%20and%20clean%2C%20technology%20theme%2C%20transparent%20background&image_size=square" 
+            alt="AI Center Logo" 
+            style={{ height: 36 }}
+          />
+          <h1 style={{ color: theme === 'dark' ? '#e0e0e0' : '#333333', margin: 0, fontSize: '1.2em', fontWeight: 'normal' }}>AI Center</h1>
+          </div>
+          <Menu
+            mode="inline"
+            style={{ flex: 1, borderRight: 0, textAlign: 'left' }}
+            defaultSelectedKeys={['1']}
+            defaultOpenKeys={['sub1', 'sub2', 'sub3', 'sub4']}
+          >
+            <Menu.Item key="1" icon={<HomeOutlined />}>
+              <Link to="/">首页</Link>
+            </Menu.Item>
+            <Menu.SubMenu key="sub1" title="聊天" icon={<TeamOutlined />}>
+              <Menu.Item key="2" icon={<MessageOutlined />}>
+                <Link to="/chats">聊天</Link>
+              </Menu.Item>
+            </Menu.SubMenu>
+            <Menu.SubMenu key="sub2" title="配置" icon={<ToolOutlined />}>
+              <Menu.Item key="3" icon={<RobotOutlined />}>
+                <Link to="/chatbots">机器人</Link>
+              </Menu.Item>
+              <Menu.Item key="4" icon={<BookOutlined />}>
+                <Link to="/knowledgebases">知识库</Link>
+              </Menu.Item>
+              <Menu.Item key="agent" icon={<ApartmentOutlined />}>
+                <Link to="/agents">智能体</Link>
+              </Menu.Item>
+              <Menu.Item key="5" icon={<DatabaseOutlined />}>
+                <Link to="/mcps">MCP</Link>
+              </Menu.Item>
+              <Menu.Item key="6" icon={<CommentOutlined />}>
+                <Link to="/prompts">提示词</Link>
+              </Menu.Item>
+              <Menu.Item key="7" icon={<SettingOutlined />}>
+                <Link to="/llm_models">模型管理</Link>
+              </Menu.Item>
+              <Menu.Item key="8" icon={<CloudServerOutlined />}>
+                <Link to="/datasources">数据源</Link>
+              </Menu.Item>
+            </Menu.SubMenu>
+            <Menu.SubMenu key="sub3" title="日志" icon={<FileTextOutlined />}>
+              <Menu.Item key="9" icon={<HistoryOutlined />}>
+                <Link to="/chats">问答日志</Link>
+              </Menu.Item>
+            </Menu.SubMenu>
+            <Menu.SubMenu key="sub4" title="系统" icon={<DesktopOutlined />}>
+              <Menu.Item key="10" icon={<DashboardOutlined />}>
+                <Link to="/system/monitor">监控</Link>
+              </Menu.Item>
+            </Menu.SubMenu>
+          </Menu>
+          <div style={{ position: 'absolute', bottom: 0, width: '100%', padding: '12px', textAlign: 'center', background: theme === 'dark' ? '#1a1a2e' : '#ffffff', borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #e8eaed' }}>
+            <Button 
+              type="text" 
+              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} 
+              onClick={toggleCollapsed}
+              style={{ color: theme === 'dark' ? '#a0a0b0' : '#666666' }}
+            />
+          </div>
+        </Sider>
+        <Layout style={{ padding: '0', overflow: 'hidden', height: '100%', background: theme === 'dark' ? 'linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%)' : '#f5f7fa', }}>
+           <Header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: theme === 'dark' ? '#1a1a2e' : '#ffffff', height: 69, flexShrink: 0, borderBottom: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #e8e8e8' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+        
+          {/* <div style={{ width: 1, height: 24, background: theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#e8eaed' }} /> */}
+          <Breadcrumb style={{ color: theme === 'dark' ? '#e0e0e0' : '#333333', fontSize: 14 }}>
+            {getBreadcrumbItems(location.pathname).map((item, index) => (
+              <Breadcrumb.Item key={index}>
+                {item.path ? (
+                  <Link to={item.path} style={{ color: theme === 'dark' ? '#a0a0b0' : '#666666' }}>
+                    {item.title}
+                  </Link>
+                ) : (
+                  <span style={{ color: theme === 'dark' ? '#e0e0e0' : '#333333', fontWeight: 500 }}>{item.title}</span>
+                )}
+              </Breadcrumb.Item>
+            ))}
+          </Breadcrumb>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', marginRight: 24 }}>
+          <Button 
+            type="text" 
+            icon={theme === 'dark' ? <SunOutlined /> : <MoonOutlined />} 
+            onClick={toggleTheme}
+            style={{ 
+              color: theme === 'dark' ? '#a0a0b0' : '#666',
+              width: 36,
+              height: 36,
+              borderRadius: 8,
+              background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f7fa'
+            }}
+          />
+        </div>
+      </Header>
+          <Content
+            style={{
+             
+              padding: 16,
+              margin: 16,
+              height: '100%',
+              color: theme === 'dark' ? '#e0e0e0' : '#333333',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden'
+            }}
+          >
+            <Card 
+              style={{ 
+                background: 'transparent',
+                borderColor: 'transparent',
+                borderRadius: 0,
+                flex: 1,
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+                height: '100%'
+              }}
+              bodyStyle={{ 
+                background: 'transparent',
+                color: theme === 'dark' ? '#e0e0e0' : '#333333',
+                height: '100%',
+                overflow: 'hidden',
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                padding: 0
+              }}
+            >
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/chatbots" element={<Chatbot />} />
+                <Route path="/chatbot/setting/:id" element={<ChatbotSetting />} />
+                <Route path="/mcps" element={<MCP />} />
+                <Route path="/mcp/setting/:id" element={<MCPSetting />} />
+                <Route path="/knowledgebases" element={<Knowledgebase />} />
+                <Route path="/knowledgebase/create" element={<KnowledgebaseCreate />} />
+                <Route path="/knowledgebase/detail/:id" element={<KnowledgebaseDetail />} />
+                <Route path="/llm_models" element={<LLMModel />} />
+                <Route path="/llm_model/setting/:id" element={<LLMModelSetting />} />
+                <Route path="/prompts" element={<Prompt />} />
+                <Route path="/prompt/setting/:id" element={<PromptSetting />} />
+                <Route path="/users" element={<User />} />
+                <Route path="/chats" element={<Chat />} />
+                <Route path="/datasources" element={<Datasource />} />
+                <Route path="/system/monitor" element={<SystemMonitor />} />
+                <Route path="/agents" element={<Agent />} />
+                <Route path="/agent/setting/:id" element={<AgentSetting />} />
+              </Routes>
+            </Card>
+          </Content>
+        </Layout>
+      </Layout>
+    </Layout>
+  );
+}
+
+function App() {
+  return (
     <ConfigProvider
       theme={{
-        algorithm: theme === 'dark' ? antTheme.darkAlgorithm : antTheme.defaultAlgorithm,
+        algorithm: localStorage.getItem('theme') === 'dark' ? antTheme.darkAlgorithm : antTheme.defaultAlgorithm,
         token: {
-          colorPrimary: '#667eea',
+          colorPrimary: '#5a6fd6',
+          colorPrimaryHover: '#6b7fe6',
+          colorPrimaryActive: '#4a5fc6',
           borderRadius: 8,
         },
       }}
@@ -62,146 +269,7 @@ function App() {
       hashed={false}
     >
     <Router>
-      <Layout style={{ height: '100vh', overflow: 'hidden' }} className={theme === 'dark' ? 'dark-theme' : 'light-theme'}>
-        <Header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: theme === 'dark' ? 'rgb(30, 30, 30)' : '#ffffff', height: 64, flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <img 
-              src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=modern%20AI%20logo%20with%20blue%20and%20green%20colors%2C%20simple%20and%20clean%2C%20technology%20theme%2C%20transparent%20background&image_size=square" 
-              alt="AI Center Logo" 
-              style={{ height: 40, marginRight: 16 }}
-            />
-            <h1 style={{ color: theme === 'dark' ? 'white' : '#000000', margin: 0, fontSize: '1.5em', fontWeight: 'normal' }}>AI Center</h1>
-          </div>
-          <Button 
-            type="text" 
-            icon={theme === 'dark' ? <SunOutlined /> : <MoonOutlined />} 
-            onClick={toggleTheme}
-            style={{ color: theme === 'dark' ? 'white' : '#000000' }}
-          />
-        </Header>
-        <Layout style={{ height: 'calc(100vh - 64px)', overflow: 'hidden' }}>
-          <Sider 
-            width={250} 
-            collapsedWidth={80} 
-            className={theme === 'dark' ? 'dark-theme-sider' : 'light-theme-sider'}
-            collapsed={collapsed}
-            style={{ overflow: 'hidden', height: '100%' }}
-          >
-            <Menu
-              mode="inline"
-              style={{ height: 'calc(100% - 48px)', borderRight: 0, textAlign: 'left' }}
-              defaultSelectedKeys={['1']}
-              defaultOpenKeys={['sub1', 'sub2', 'sub3', 'sub4']}
-            >
-              <Menu.Item key="1" icon={<HomeOutlined />}>
-                <Link to="/">首页</Link>
-              </Menu.Item>
-              <Menu.SubMenu key="sub1" title="聊天" icon={<TeamOutlined />}>
-                <Menu.Item key="2" icon={<MessageOutlined />}>
-                  <Link to="/chats">聊天</Link>
-                </Menu.Item>
-              </Menu.SubMenu>
-              <Menu.SubMenu key="sub2" title="配置" icon={<ToolOutlined />}>
-                <Menu.Item key="3" icon={<RobotOutlined />}>
-                  <Link to="/chatbots">机器人</Link>
-                </Menu.Item>
-                <Menu.Item key="4" icon={<BookOutlined />}>
-                  <Link to="/knowledgebases">知识库</Link>
-                </Menu.Item>
-                <Menu.Item key="agent" icon={<ApartmentOutlined />}>
-                  <Link to="/agents">智能体</Link>
-                </Menu.Item>
-                <Menu.Item key="5" icon={<DatabaseOutlined />}>
-                  <Link to="/mcps">MCP</Link>
-                </Menu.Item>
-                <Menu.Item key="6" icon={<CommentOutlined />}>
-                  <Link to="/prompts">提示词</Link>
-                </Menu.Item>
-                <Menu.Item key="7" icon={<SettingOutlined />}>
-                  <Link to="/llm_models">模型管理</Link>
-                </Menu.Item>
-                <Menu.Item key="8" icon={<CloudServerOutlined />}>
-                  <Link to="/datasources">数据源</Link>
-                </Menu.Item>
-              </Menu.SubMenu>
-              <Menu.SubMenu key="sub3" title="日志" icon={<FileTextOutlined />}>
-                <Menu.Item key="9" icon={<HistoryOutlined />}>
-                  <Link to="/chats">问答日志</Link>
-                </Menu.Item>
-              </Menu.SubMenu>
-              <Menu.SubMenu key="sub4" title="系统" icon={<DesktopOutlined />}>
-                <Menu.Item key="10" icon={<DashboardOutlined />}>
-                  <Link to="/system/monitor">监控</Link>
-                </Menu.Item>
-              </Menu.SubMenu>
-            </Menu>
-            <div style={{ position: 'absolute', bottom: 0, width: '100%', padding: '12px', textAlign: 'center' }}>
-              <Button 
-                type="text" 
-                icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} 
-                onClick={toggleCollapsed}
-                style={{ color: theme === 'dark' ? 'white' : '#000000' }}
-              />
-            </div>
-          </Sider>
-          <Layout style={{ padding: '0', overflow: 'hidden', height: '100%' }}>
-            <Content
-              style={{
-                background: theme === 'dark' ? '#000000' : '#f5f5f5',
-                padding: 16,
-                margin: 0,
-                height: '100%',
-                color: theme === 'dark' ? '#ffffff' : '#000000',
-                display: 'flex',
-                flexDirection: 'column',
-                overflow: 'hidden'
-              }}
-            >
-              <Card 
-                style={{ 
-                  background: theme === 'dark' ? '#000000' : '#ffffff',
-                  borderColor: theme === 'dark' ? '#333333' : '#e8e8e8',
-                  flex: 1,
-                  overflow: 'hidden',
-                  display: 'flex',
-                  flexDirection: 'column'
-                }}
-                bodyStyle={{ 
-                  background: theme === 'dark' ? '#000000' : '#ffffff',
-                  color: theme === 'dark' ? '#ffffff' : '#000000',
-                  height: '100%',
-                  overflow: 'hidden',
-                  flex: 1,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  padding: 0
-                }}
-              >
-                <Routes>
-                  <Route path="/" element={<Home />} />
-                  <Route path="/chatbots" element={<Chatbot />} />
-                  <Route path="/chatbot/setting/:id" element={<ChatbotSetting />} />
-                  <Route path="/mcps" element={<MCP />} />
-                  <Route path="/mcp/setting/:id" element={<MCPSetting />} />
-                  <Route path="/knowledgebases" element={<Knowledgebase />} />
-                  <Route path="/knowledgebase/create" element={<KnowledgebaseCreate />} />
-                  <Route path="/knowledgebase/detail/:id" element={<KnowledgebaseDetail />} />
-                  <Route path="/llm_models" element={<LLMModel />} />
-                  <Route path="/llm_model/setting/:id" element={<LLMModelSetting />} />
-                  <Route path="/prompts" element={<Prompt />} />
-                  <Route path="/prompt/setting/:id" element={<PromptSetting />} />
-                  <Route path="/users" element={<User />} />
-                  <Route path="/chats" element={<Chat />} />
-                  <Route path="/datasources" element={<Datasource />} />
-                  <Route path="/system/monitor" element={<SystemMonitor />} />
-                  <Route path="/agents" element={<Agent />} />
-                  <Route path="/agent/setting/:id" element={<AgentSetting />} />
-                </Routes>
-              </Card>
-            </Content>
-          </Layout>
-        </Layout>
-      </Layout>
+      <AppContent />
     </Router>
     </ConfigProvider>
   );

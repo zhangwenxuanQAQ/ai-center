@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Modal, List, Button, message, Spin, Empty, Pagination, Breadcrumb } from 'antd';
 
 // 样式
@@ -9,7 +9,7 @@ const styles = `
   }
   
   .breadcrumb-item-hover:hover {
-    color: #667eea;
+    color: var(--primary-color);
   }
 `;
 import {
@@ -197,7 +197,7 @@ const DataSourceFileSelector: React.FC<DataSourceFileSelectorProps> = ({
                 style={{ 
                   cursor: 'pointer',
                   backgroundColor: selectedDataSource?.id === ds.id 
-                    ? (theme === 'dark' ? 'rgba(102, 126, 234, 0.2)' : 'rgba(102, 126, 234, 0.1)')
+                    ? (theme === 'dark' ? 'rgba(90, 111, 214, 0.2)' : 'rgba(90, 111, 214, 0.1)')
                     : 'transparent',
                   padding: '12px',
                   borderRadius: 6,
@@ -336,9 +336,9 @@ const DataSourceFileSelector: React.FC<DataSourceFileSelectorProps> = ({
                     width: 36,
                     height: 36,
                     borderRadius: '50%',
-                    backgroundColor: theme === 'dark' ? 'rgba(102, 126, 234, 0.2)' : 'rgba(102, 126, 234, 0.1)'
+                    backgroundColor: theme === 'dark' ? 'rgba(90, 111, 214, 0.2)' : 'rgba(90, 111, 214, 0.1)'
                   }}>
-                    <FolderOpenOutlined style={{ fontSize: 20, color: '#667eea' }} />
+                    <FolderOpenOutlined style={{ fontSize: 20, color: 'var(--primary-color)' }} />
                   </div>
                 }
                 title={
@@ -441,7 +441,7 @@ const DataSourceFileSelector: React.FC<DataSourceFileSelectorProps> = ({
                   marginBottom: 6,
                   transition: 'all 0.3s ease',
                   backgroundColor: isSelected 
-                    ? (theme === 'dark' ? 'rgba(102, 126, 234, 0.2)' : 'rgba(102, 126, 234, 0.1)')
+                    ? (theme === 'dark' ? 'rgba(90, 111, 214, 0.2)' : 'rgba(90, 111, 214, 0.1)')
                     : (theme === 'dark' ? 'rgba(255, 255, 255, 0.02)' : '#fafafa')
                 }}
                 hoverable
@@ -456,11 +456,11 @@ const DataSourceFileSelector: React.FC<DataSourceFileSelectorProps> = ({
                       height: 36,
                       borderRadius: '50%',
                       backgroundColor: item.isDirectory 
-                        ? (theme === 'dark' ? 'rgba(102, 126, 234, 0.2)' : 'rgba(102, 126, 234, 0.1)')
+                        ? (theme === 'dark' ? 'rgba(90, 111, 214, 0.2)' : 'rgba(90, 111, 214, 0.1)')
                         : (theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)')
                     }}>
                       {item.isDirectory ? (
-                        <FolderOpenOutlined style={{ fontSize: 20, color: '#667eea' }} />
+                        <FolderOpenOutlined style={{ fontSize: 20, color: 'var(--primary-color)' }} />
                       ) : (
                         getFileIcon(item.name)
                       )}

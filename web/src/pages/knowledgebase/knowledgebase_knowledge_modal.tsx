@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { Modal, Form, Input, Button, Upload, message, Select, Radio, Checkbox, DatePicker, Tooltip } from 'antd';
 import { UploadOutlined, InfoCircleOutlined, InboxOutlined } from '@ant-design/icons';
 import MDEditorTheme from '../../components/MDEditorTheme';
@@ -381,7 +381,7 @@ const KnowledgeModal: React.FC<KnowledgeModalProps> = ({
           }}
         >
           <p className="ant-upload-drag-icon">
-            <InboxOutlined style={{ color: '#667eea', fontSize: 40 }} />
+            <InboxOutlined style={{ color: 'var(--primary-color)', fontSize: 40 }} />
           </p>
           <p style={{ color: '#666' }}>
             点击或拖拽文件到此区域上传

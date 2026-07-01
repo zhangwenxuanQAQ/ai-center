@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+﻿import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layout, Tree, Card, Row, Col, Avatar, Empty, Spin, Button, Modal, Form, Input, message, Popconfirm, TreeSelect, Upload, Pagination, Select, Switch, Tag } from 'antd';
 import { ApartmentOutlined, PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UpOutlined, DownOutlined, CheckCircleOutlined, CloseCircleOutlined, UploadOutlined } from '@ant-design/icons';
@@ -692,7 +692,7 @@ const AgentManagement: React.FC = () => {
               onClick={handleAddCategory}
               size="small"
               style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)',
                 border: 'none',
                 borderRadius: '12px',
                 padding: '0 12px',
@@ -721,7 +721,7 @@ const AgentManagement: React.FC = () => {
               icon={<PlusOutlined />} 
               onClick={handleAddAgent}
               style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)',
                 border: 'none',
                 borderRadius: '18px',
                 padding: '0 20px',

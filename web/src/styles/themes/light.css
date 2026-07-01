@@ -1,4 +1,8 @@
-/* ==================== 白天模式主题样式 ==================== */
+﻿/* ==================== 白天模式主题样式 ==================== */
+
+body[data-theme="light"] .ant-card-bordered:not([data-card-type="model"]) {
+  border-radius: 0 !important;
+}
 
 /* 布局背景色 */
 body[data-theme="light"] {
@@ -56,14 +60,15 @@ body[data-theme="light"] .light-theme .ant-layout-content {
 }
 
 body[data-theme="light"] .ant-layout-content {
-  background-color: #ffffff;
+  background-color: #f5f7fa;
   color: #000000;
 }
 
 /* Card 样式 */
-body[data-theme="light"] .ant-card {
-  background-color: #ffffff !important;
-  border-color: #e8e8e8 !important;
+body[data-theme="light"] .ant-card:not([data-card-type="model"]) {
+  background: transparent !important;
+  border-color: transparent !important;
+  border-radius: 0 !important;
 }
 
 body[data-theme="light"] .ant-card-body {
@@ -241,15 +246,15 @@ body[data-theme="light"] .ant-input-affix-wrapper:hover,
 body[data-theme="light"] span.ant-input-affix-wrapper:hover,
 body[data-theme="light"] .ant-textarea:hover,
 body[data-theme="light"] textarea.ant-textarea:hover {
-  border-color: #667eea !important;
+  border-color: var(--primary-color) !important;
 }
 
 body[data-theme="light"] .ant-input-affix-wrapper-focused,
 body[data-theme="light"] span.ant-input-affix-wrapper-focused,
 body[data-theme="light"] .ant-textarea:focus,
 body[data-theme="light"] textarea.ant-textarea:focus {
-  border-color: #667eea !important;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1) !important;
+  border-color: var(--primary-color) !important;
+  box-shadow: 0 0 0 2px rgba(90, 111, 214, 0.1) !important;
 }
 
 /* Select 样式 */
@@ -262,12 +267,12 @@ body[data-theme="light"] div.ant-select-selector {
 
 body[data-theme="light"] .ant-select:hover .ant-select-selector,
 body[data-theme="light"] div.ant-select:hover div.ant-select-selector {
-  border-color: #667eea !important;
+  border-color: var(--primary-color) !important;
 }
 
 body[data-theme="light"] .ant-select-focused .ant-select-selector,
 body[data-theme="light"] div.ant-select-focused div.ant-select-selector {
-  border-color: #667eea !important;
+  border-color: var(--primary-color) !important;
 }
 
 /* Select Dropdown 样式 */
@@ -283,13 +288,13 @@ body[data-theme="light"] div.ant-select-dropdown {
 
 body[data-theme="light"] .ant-btn-primary,
 body[data-theme="light"] button.ant-btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  background: var(--primary-gradient) !important;
   border: none !important;
 }
 
 body[data-theme="light"] .ant-btn-primary:hover,
 body[data-theme="light"] button.ant-btn-primary:hover {
-  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
+  background: var(--primary-gradient-hover) !important;
 }
 
 body[data-theme="light"] .ant-btn-danger,
@@ -323,13 +328,13 @@ body[data-theme="light"] div.ant-picker {
 
 body[data-theme="light"] .ant-picker:hover,
 body[data-theme="light"] div.ant-picker:hover {
-  border-color: #667eea !important;
+  border-color: var(--primary-color) !important;
 }
 
 body[data-theme="light"] .ant-picker-focused,
 body[data-theme="light"] div.ant-picker-focused {
-  border-color: #667eea !important;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1) !important;
+  border-color: var(--primary-color) !important;
+  box-shadow: 0 0 0 2px rgba(90, 111, 214, 0.1) !important;
 }
 
 body[data-theme="light"] .ant-picker-dropdown,
@@ -366,7 +371,7 @@ body[data-theme="light"] tbody.ant-table-tbody > tr:hover > td {
 /* Pagination 样式 */
 body[data-theme="light"] .ant-pagination-item-active,
 body[data-theme="light"] li.ant-pagination-item-active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  background: linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%) !important;
   border: none !important;
 }
 
@@ -378,25 +383,25 @@ body[data-theme="light"] li.ant-pagination-item-active a {
 /* Switch 样式 */
 body[data-theme="light"] .ant-switch-checked,
 body[data-theme="light"] button.ant-switch-checked {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  background: linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%) !important;
 }
 
 /* Radio 样式 */
 body[data-theme="light"] .ant-radio-checked .ant-radio-inner,
 body[data-theme="light"] span.ant-radio-checked span.ant-radio-inner {
-  border-color: #667eea !important;
+  border-color: var(--primary-color) !important;
 }
 
 body[data-theme="light"] .ant-radio-inner::after,
 body[data-theme="light"] span.ant-radio-inner::after {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  background: linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%) !important;
 }
 
 /* Checkbox 样式 */
 body[data-theme="light"] .ant-checkbox-checked .ant-checkbox-inner,
 body[data-theme="light"] span.ant-checkbox-checked span.ant-checkbox-inner {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-  border-color: #667eea !important;
+  background: linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%) !important;
+  border-color: var(--primary-color) !important;
 }
 
 

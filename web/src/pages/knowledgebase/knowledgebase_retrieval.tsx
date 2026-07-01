@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Layout, Slider, Select, Input, Button, Card, Tag, Spin, Empty, Pagination, Image, Popover, InputNumber, Tooltip, message, Switch, DatePicker, Space } from 'antd';
 import { SearchOutlined, FileTextOutlined, DownOutlined, UpOutlined, QuestionCircleOutlined, FilterOutlined } from '@ant-design/icons';
 import MDEditor from '@uiw/react-md-editor';
@@ -93,7 +93,7 @@ const ChunkCard: React.FC<{
       }}
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <FileTextOutlined style={{ color: '#667eea' }} />
+          <FileTextOutlined style={{ color: 'var(--primary-color)' }} />
           <span style={{ fontWeight: 500, fontSize: 13 }}>
             {chunk.docnm_kwd || '未命名文档'}
           </span>
@@ -688,7 +688,7 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
               onClick={handleSaveConfig}
               loading={savingConfig}
               style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)',
                 border: 'none',
                 boxShadow: 'none',
                 borderRadius: '4px',
@@ -762,7 +762,7 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
               height: '44px',
               padding: '0 32px',
               borderRadius: '22px',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)',
               border: 'none',
               boxShadow: 'none',
               fontSize: '16px'

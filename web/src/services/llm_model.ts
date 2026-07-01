@@ -80,13 +80,14 @@ export const llmModelService = {
   /**
    * 获取LLM模型列表（分页）
    */
-  getLLMModels: async (page: number = 1, pageSize: number = 12, category_id?: string, name?: string, model_type?: string, status?: string, tags?: string): Promise<{ data: LLMModel[], total: number }> => {
+  getLLMModels: async (page: number = 1, pageSize: number = 12, category_id?: string, name?: string, model_type?: string, status?: string, tags?: string, connection_status?: string): Promise<{ data: LLMModel[], total: number }> => {
     let params = [`page=${page}`, `page_size=${pageSize}`];
     if (category_id) params.push(`category_id=${category_id}`);
     if (name) params.push(`name=${encodeURIComponent(name)}`);
     if (model_type) params.push(`model_type=${encodeURIComponent(model_type)}`);
     if (status !== undefined && status !== '') params.push(`status=${status}`);
     if (tags) params.push(`tags=${encodeURIComponent(tags)}`);
+    if (connection_status) params.push(`connection_status=${connection_status}`);
     return http.get<{ data: LLMModel[], total: number }>(`/aicenter/v1/llm_model?${params.join('&')}`);
   },
 

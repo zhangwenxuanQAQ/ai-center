@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+﻿import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Form, Input, Select, TreeSelect, Button, message, Row, Col, Switch, Modal, Spin, Drawer, Tag, Popover, Slider, InputNumber, Tooltip } from 'antd';
 const { TextArea } = Input;
@@ -1414,7 +1414,7 @@ const PromptSetting: React.FC = () => {
                     right: '8px', 
                     bottom: '8px', 
                     borderRadius: '8px',
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)',
                     border: 'none'
                   }}
                 />

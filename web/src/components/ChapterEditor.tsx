@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Button, Table, Input, Select, Form, Popconfirm } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, SaveOutlined, CancelOutlined } from '@ant-design/icons';
 import MDEditorTheme from './MDEditorTheme';
@@ -445,7 +445,7 @@ const ChapterEditor: React.FC<ChapterEditorProps> = ({
                   icon={<PlusOutlined />}
                   onClick={() => setShowAddModal(true)}
                   style={{
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)',
                     border: 'none',
                     fontSize: 12,
                     padding: '4px 12px',
@@ -462,7 +462,7 @@ const ChapterEditor: React.FC<ChapterEditorProps> = ({
                   onClick={() => handleSelect(chapter.id)}
                   style={{
                     padding: '8px 12px',
-                    background: localSelectedId === chapter.id ? '#667eea' : undefined,
+                    background: localSelectedId === chapter.id ? 'var(--primary-color)' : undefined,
                     color: localSelectedId === chapter.id ? '#fff' : undefined,
                     border: localSelectedId === chapter.id ? '1px solid #fff' : undefined,
                     borderRadius: 4,
