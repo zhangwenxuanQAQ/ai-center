@@ -1271,9 +1271,18 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
           paddingLeft: 12,
           transition: isDragging ? 'none' : 'width 0.1s',
           minWidth: 0,
-          overflow: 'hidden',
+          overflowY: 'auto',
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
         }}>
-          {renderRightContent()}
+          <style>{`
+            .right-config-area::-webkit-scrollbar {
+              display: none;
+            }
+          `}</style>
+          <div className="right-config-area" style={{ height: '100%' }}>
+            {renderRightContent()}
+          </div>
         </div>
       </div>
 

@@ -459,7 +459,7 @@ const ChapterList: React.FC<ChapterListProps> = ({
     columns.push({
       title: '操作',
       key: 'action',
-      width: 80,
+      width: 50,
       fixed: 'right',
       render: (_: any, __: any, rowIndex: number) => (
         <Button
@@ -474,10 +474,10 @@ const ChapterList: React.FC<ChapterListProps> = ({
     });
 
     // 计算表格横向滚动宽度
-    const totalWidth = fields.length * 150 + 80;
+    const totalWidth = fields.length * 150 + 50;
 
     return (
-      <div style={{ padding: 16 }}>
+      <div style={{ padding: 16, maxHeight: 350, overflowY: 'auto', boxSizing: 'border-box' }}>
         {!disabled && (
           <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'flex-end' }}>
             <Button
@@ -496,7 +496,7 @@ const ChapterList: React.FC<ChapterListProps> = ({
           pagination={false}
           size="small"
           bordered
-          scroll={{ x: Math.max(totalWidth, 600) }}
+          scroll={{ x: Math.max(totalWidth, 600), y: 250 }}
           locale={{ emptyText: disabled ? '' : '暂无数据，请点击"新增"添加数据' }}
           rowKey={(_, index) => `row_${index}`}
         />
@@ -564,7 +564,14 @@ const ChapterList: React.FC<ChapterListProps> = ({
       )}
 
       <div style={{ display: 'flex', gap: 16, width: '100%', overflow: 'hidden' }}>
-        <div style={{ width: 200, borderRight: '1px solid #e8e8e8', paddingRight: 16, flexShrink: 0, maxHeight: 400, overflowY: 'auto' }}>
+        <div style={{ 
+          width: 200, 
+          borderRight: '1px solid #e8e8e8', 
+          paddingRight: 16, 
+          flexShrink: 0,
+          overflowY: 'auto',
+          boxSizing: 'border-box'
+        }}>
           {chapters.length > 0 ? (
             <>
               <Tree
@@ -600,7 +607,12 @@ const ChapterList: React.FC<ChapterListProps> = ({
           )}
         </div>
 
-        <div style={{ flex: 1, minWidth: 0, maxHeight: 400, overflowY: 'auto' }}>
+        <div style={{ 
+          flex: 1, 
+          minWidth: 0,
+          overflowY: 'auto',
+          boxSizing: 'border-box'
+        }}>
           {selectedChapter ? (
             <div key={selectedChapter.id}>
               {renderChapterContent(selectedChapter)}
