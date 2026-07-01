@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
-import { Layout, Tree, Card, Row, Col, Avatar, Tag, Empty, Spin, Button, Modal, Form, Input, Select, TreeSelect, Popconfirm, Pagination, Switch, message, Tabs, Table, Badge, InputNumber } from 'antd';
+import { Layout, Tree, Card, Row, Col, Avatar, Tag, Empty, Spin, Button, Modal, Form, Input, Select, TreeSelect, Popconfirm, Pagination, Switch, message, Tabs, Table, Badge, InputNumber, Dropdown } from 'antd';
 const { TextArea, Password } = Input;
 import { CloudServerOutlined, PlusOutlined, MoreOutlined, EditOutlined, DeleteOutlined, SearchOutlined, CheckCircleOutlined, CloseCircleOutlined, DatabaseOutlined, LinkOutlined, LoadingOutlined, ChevronRightOutlined, ChevronDownOutlined, FolderOutlined, FolderOpenOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
@@ -316,15 +316,41 @@ const DatasourceManagement: React.FC = () => {
                   setIsCategoryModalVisible(true);
                 }}
               />
-              <Button
-                type="text"
-                icon={<MoreOutlined />}
-                size="small"
-                title="更多操作"
-                onClick={(e) => {
-                  e.stopPropagation();
+              <Dropdown
+                menu={{
+                  items: [
+                    {
+                      key: 'edit',
+                      icon: <EditOutlined />,
+                      label: '编辑',
+                      onClick: () => handleEditCategory(category)
+                    },
+                    {
+                      key: 'delete',
+                      icon: <DeleteOutlined />,
+                      label: (
+                        <Popconfirm
+                          title="确认删除"
+                          description="确定要删除这个分类吗？"
+                          onConfirm={() => handleDeleteCategory(category)}
+                          okText="确认"
+                          cancelText="取消"
+                        >
+                          <span>删除</span>
+                        </Popconfirm>
+                      )
+                    }
+                  ]
                 }}
-              />
+              >
+                <Button
+                  type="text"
+                  icon={<MoreOutlined />}
+                  size="small"
+                  title="更多操作"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </Dropdown>
             </div>
           </div>
         ),
@@ -942,19 +968,9 @@ const DatasourceManagement: React.FC = () => {
               <div className="loading-container">
                 <Spin size="large" />
               </div>
-            ) : filteredDatasources.length === 0 ? (
-              <Empty 
-                description="暂无数据源" 
-                className={`empty-container ${theme === 'dark' ? 'dark' : 'light'}`} 
-              />
             ) : (
               <Row gutter={[16, 16]}>
-                <Col
-                  xs={24}
-                  sm={12}
-                  md={8}
-                  lg={8}
-                >
+                <Col xs={24} sm={12} md={8} lg={8}>
                   <div
                     className={`ds-add-card ${theme === 'dark' ? 'dark' : 'light'}`}
                     onClick={() => handleAddDatasource()}
@@ -963,88 +979,87 @@ const DatasourceManagement: React.FC = () => {
                     <span>新增数据源</span>
                   </div>
                 </Col>
-                {filteredDatasources.map((datasource, index) => (
-                  <Col
-                    key={datasource.id}
-                    xs={24}
-                    sm={12}
-                    md={8}
-                    lg={8}
-                    style={{
-                      animationDelay: `${index * 0.1}s`,
-                      animationFillMode: 'both'
-                    }}
-                  >
-                    <Card
-                      hoverable
-                      className={`datasource-card ${theme === 'dark' ? 'dark' : 'light'}`}
-                      bodyStyle={{ padding: '0' }}
+                {filteredDatasources.length === 0 ? (
+                  <Col xs={24}>
+                    <Empty 
+                      description="暂无数据源" 
+                      className={`empty-container ${theme === 'dark' ? 'dark' : 'light'}`} 
+                    />
+                  </Col>
+                ) : (
+                  filteredDatasources.map((datasource, index) => (
+                    <Col
+                      key={datasource.id}
+                      xs={24}
+                      sm={12}
+                      md={8}
+                      lg={8}
                       style={{
-                        background: theme === 'dark' ? '#1a1a2e' : '#fff',
-                        border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #f0f0f0',
-                        borderRadius: '16px',
-                        boxShadow: '0 2px 12px rgba(0, 0, 0, 0.04)',
-                        transition: 'all 0.3s ease'
+                        animationDelay: `${index * 0.1}s`,
+                        animationFillMode: 'both'
                       }}
                     >
-                      <div className="ds-card-content">
-                        <div className="ds-header">
-                          <div className={`ds-icon ${index % 2 === 0 ? 'blue-icon' : 'red-icon'}`}>
-                            <DatabaseOutlined style={{ fontSize: '24px', color: '#fff' }} />
+                      <Card
+                        hoverable
+                        className={`datasource-card ${theme === 'dark' ? 'dark' : 'light'}`}
+                        bodyStyle={{ padding: '0' }}
+                        style={{
+                          background: theme === 'dark' ? '#1a1a2e' : '#fff',
+                          border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #f0f0f0',
+                          borderRadius: '16px',
+                          boxShadow: '0 2px 12px rgba(0, 0, 0, 0.04)',
+                          transition: 'all 0.3s ease'
+                        }}
+                      >
+                        <div className="ds-card-content">
+                          <div className="ds-header">
+                            <div className={`ds-icon ${index % 2 === 0 ? 'blue-icon' : 'red-icon'}`}>
+                              <DatabaseOutlined style={{ fontSize: '24px', color: '#fff' }} />
+                            </div>
+                            <div className="ds-info">
+                              <h3 className="ds-title">{datasource.name}</h3>
+                              <span className="ds-category">{getDatasourceTypeLabel(datasource.type)}</span>
+                            </div>
+                            <div className="ds-status-badges">
+                              <span className={`status-badge ds-status ${datasource.status ? 'enabled' : 'disabled'}`}>
+                                {datasource.status ? '已启用' : '已禁用'}
+                              </span>
+                              <span className={`status-badge conn-status ${datasource.status ? 'available' : 'unavailable'}`}>
+                                {datasource.status ? '测试连接成功' : '测试连接失败'}
+                              </span>
+                            </div>
                           </div>
-                          <div className="ds-info">
-                            <h3 className="ds-title">{datasource.name}</h3>
-                            <span className="ds-category">{getDatasourceTypeLabel(datasource.type)}</span>
+                          <div className="ds-tags">
+                            <span className="tag">{getDatasourceTypeLabel(datasource.type)}</span>
+                            <span className="tag">测试环境</span>
                           </div>
-                          <div className="ds-status-badges">
-                            <span className={`status-badge ds-status ${datasource.status ? 'enabled' : 'disabled'}`}>
-                              {datasource.status ? '已启用' : '已禁用'}
+                          <div className={`ds-meta ${theme === 'dark' ? 'dark' : ''}`}>
+                            <span className="meta-item">
+                              <span>最近更新: {formatDate(datasource.created_at)}</span>
                             </span>
-                            <span className={`status-badge conn-status ${datasource.status ? 'available' : 'unavailable'}`}>
-                              {datasource.status ? '测试连接成功' : '测试连接失败'}
-                            </span>
                           </div>
-                        </div>
-                        <div className="ds-tags">
-                          <span className="tag">{getDatasourceTypeLabel(datasource.type)}</span>
-                          <span className="tag">测试环境</span>
-                        </div>
-                        <div className={`ds-meta ${theme === 'dark' ? 'dark' : ''}`}>
-                          <span className="meta-item">
-                            <span>最近更新: {formatDate(datasource.created_at)}</span>
-                          </span>
-                        </div>
-                        <div className="ds-actions">
-                          <Button 
-                            icon={<LinkOutlined />}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleTestConnection(datasource);
-                            }}
-                            className={`action-btn test ${!datasource.status ? 'disabled' : ''}`}
-                            title="测试连接"
-                            disabled={!datasource.status}
-                          >
-                            <span>测试连接</span>
-                          </Button>
-                          <Button 
-                            icon={<EditOutlined />}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEditDatasource(datasource);
-                            }}
-                            className="action-btn edit"
-                            title="编辑"
-                          >
-                            <span>编辑</span>
-                          </Button>
-                          <Popconfirm
+                          <div className="ds-actions">
+                            <Button 
+                              icon={<LinkOutlined />}
+                              onClick={(e) => { e.stopPropagation(); handleTestConnection(datasource); }}
+                              className={`action-btn test ${!datasource.status ? 'disabled' : ''}`}
+                              title="测试连接"
+                              disabled={!datasource.status}
+                            >
+                              <span>测试连接</span>
+                            </Button>
+                            <Button 
+                              icon={<EditOutlined />}
+                              onClick={(e) => { e.stopPropagation(); handleEditDatasource(datasource); }}
+                              className="action-btn edit"
+                              title="编辑"
+                            >
+                              <span>编辑</span>
+                            </Button>
+                            <Popconfirm
                               title="确认删除"
                               description="确定要删除这个数据源吗？"
-                              onConfirm={(e) => {
-                                e.stopPropagation();
-                                handleDeleteDatasource(datasource.id);
-                              }}
+                              onConfirm={(e) => { e.stopPropagation(); handleDeleteDatasource(datasource.id); }}
                               okText="确认"
                               cancelText="取消"
                             >
@@ -1056,11 +1071,12 @@ const DatasourceManagement: React.FC = () => {
                                 <span>删除</span>
                               </Button>
                             </Popconfirm>
+                          </div>
                         </div>
-                      </div>
-                    </Card>
-                  </Col>
-                ))}
+                      </Card>
+                    </Col>
+                  ))
+                )}
               </Row>
             )}
           </div>
