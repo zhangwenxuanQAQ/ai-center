@@ -507,22 +507,25 @@ const PromptTipTapEditor = forwardRef<PromptTipTapEditorRef, PromptTipTapEditorP
           editor.commands.setContent(contentToSet, false);
         }
       }
-    }, [value, editor, prompts]);
+    }, [editor]);
     
     useEffect(() => {
       if (editor && prompts.length > 0 && value && value.includes('{{prompt@')) {
-        let contentToSet = value;
-        const promptPlaceholderRegex = /\{\{prompt@([^}]+)\}\}/g;
-        
-        contentToSet = contentToSet.replace(promptPlaceholderRegex, (match, promptId) => {
-          const prompt = prompts.find(p => p.id === promptId);
-          const label = prompt?.name || promptId;
-          return `<span data-type="mention" data-id="${promptId}" data-label="${label}">${label}</span>`;
-        });
-        
-        editor.commands.setContent(contentToSet, false);
+        const currentMarkdown = editor.storage.markdown.getMarkdown();
+        if (currentMarkdown !== value) {
+          let contentToSet = value;
+          const promptPlaceholderRegex = /\{\{prompt@([^}]+)\}\}/g;
+          
+          contentToSet = contentToSet.replace(promptPlaceholderRegex, (match, promptId) => {
+            const prompt = prompts.find(p => p.id === promptId);
+            const label = prompt?.name || promptId;
+            return `<span data-type="mention" data-id="${promptId}" data-label="${label}">${label}</span>`;
+          });
+          
+          editor.commands.setContent(contentToSet, false);
+        }
       }
-    }, [prompts]);
+    }, [editor, prompts]);
 
     useImperativeHandle(ref, () => ({
       insertPromptReference: () => {
