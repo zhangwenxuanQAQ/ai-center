@@ -320,10 +320,8 @@ class ChatService:
         except Chat.DoesNotExist:
             raise ResourceNotFoundError(message=f"对话 {chat_id} 不存在")
         
-        if model_id is not None:
-            db_chat.model_id = model_id
-        if chatbot_id is not None:
-            db_chat.chatbot_id = chatbot_id
+        db_chat.model_id = model_id
+        db_chat.chatbot_id = chatbot_id
         if config is not None:
             # 确保config作为JSON字符串保存
             if isinstance(config, dict):
@@ -541,7 +539,10 @@ class ChatMessageService:
         reasoning_content: Optional[str] = None,
         reasoning_time: Optional[int] = None,
         avatar: Optional[str] = None,
-        message_id: Optional[str] = None
+        message_id: Optional[str] = None,
+        extra_content: Optional[str] = None,
+        step: Optional[str] = None,
+        step_id: Optional[str] = None
     ) -> ChatMessage:
         """
         创建助手消息
@@ -556,23 +557,41 @@ class ChatMessageService:
             reasoning_time: 思考耗时（毫秒）
             avatar: 头像URL
             message_id: 消息ID，如果不传则自动生成
+            extra_content: 额外内容JSON
+            step: 当前步骤名称（如task_planning, model_answer, task_execution, result_summary）
+            step_id: 当前步骤ID
             
         Returns:
             ChatMessage: 助手消息对象
         """
-        # 确保助手消息的创建时间总是晚于用户消息
-        # 使用当前时间，并添加一个微小的延迟以确保时间戳不同
         import time
         import json
-        time.sleep(0.001)  # 1毫秒延迟
+        time.sleep(0.001)
         
-        # 确保config是JSON字符串
         config_str = None
         if config is not None:
             if isinstance(config, (dict, list)):
                 config_str = json.dumps(config, ensure_ascii=False)
             else:
                 config_str = str(config)
+        
+        extra_content_dict = {}
+        if extra_content is not None:
+            if isinstance(extra_content, (dict, list)):
+                extra_content_dict = extra_content if isinstance(extra_content, dict) else {}
+            else:
+                try:
+                    extra_content_dict = json.loads(extra_content)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+        
+        if step is not None:
+            extra_content_dict['step'] = step
+        if step_id is not None:
+            extra_content_dict['step_id'] = step_id
+        extra_content_dict['step_status'] = 'running'
+        
+        extra_content_str = json.dumps(extra_content_dict, ensure_ascii=False) if extra_content_dict else None
         
         assistant_message = ChatMessage(
             message_id=message_id or uuid.uuid4().hex,
@@ -585,10 +604,331 @@ class ChatMessageService:
             avatar=avatar,
             model_id=model_id,
             chatbot_id=chatbot_id,
+            extra_content=extra_content_str,
             created_at=datetime.now().astimezone()
         )
         assistant_message.save(force_insert=True)
         return assistant_message
+    
+    @staticmethod
+    @handle_transaction
+    def upsert_assistant_message(
+        chat_id: str,
+        assistant_content: str,
+        step_id: str,
+        model_id: Optional[str] = None,
+        chatbot_id: Optional[str] = None,
+        config: Optional[str] = None,
+        reasoning_content: Optional[str] = None,
+        reasoning_time: Optional[int] = None,
+        avatar: Optional[str] = None,
+        step: Optional[str] = None,
+        message_id: Optional[str] = None,
+        extra_content: Optional[str] = None
+    ) -> ChatMessage:
+        """
+        新增或更新助手消息
+        
+        根据step_id查找现有消息，如果存在则更新，不存在则创建新消息。
+        
+        Args:
+            chat_id: 对话ID
+            assistant_content: 助手消息内容
+            step_id: 步骤ID，用于匹配和更新消息
+            model_id: 模型ID
+            chatbot_id: 机器人ID
+            config: 配置JSON
+            reasoning_content: 思考过程内容
+            reasoning_time: 思考耗时（毫秒）
+            avatar: 头像URL
+            step: 当前步骤名称
+            message_id: 消息ID，如果传入则使用它
+            extra_content: 额外内容JSON，会与step和step_id合并
+            
+        Returns:
+            ChatMessage: 更新或创建的消息对象
+        """
+        import json
+        
+        config_str = None
+        if config is not None:
+            if isinstance(config, (dict, list)):
+                config_str = json.dumps(config, ensure_ascii=False)
+            else:
+                config_str = str(config)
+        
+        extra_content_dict = {}
+        # 先解析传入的extra_content
+        if extra_content is not None:
+            if isinstance(extra_content, (dict, list)):
+                extra_content_dict = extra_content if isinstance(extra_content, dict) else {}
+            else:
+                try:
+                    extra_content_dict = json.loads(extra_content)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+        
+        # 添加或覆盖step和step_id
+        if step is not None:
+            extra_content_dict['step'] = step
+        if step_id is not None:
+            extra_content_dict['step_id'] = step_id
+        extra_content_dict['step_status'] = 'running'
+        
+        extra_content_str = json.dumps(extra_content_dict, ensure_ascii=False) if extra_content_dict else None
+        
+        try:
+            import logging
+            import json
+            logger = logging.getLogger(__name__)
+            logger.info(f"upsert_assistant_message query - chat_id: {chat_id}, step_id: {step_id}, message_id: {message_id}")
+
+            # 使用step_id查找，将message_id作为查询条件（但不精确匹配）
+            query_conditions = [
+                (ChatMessage.chat_id == chat_id) &
+                (ChatMessage.role == 'assistant') &
+                (ChatMessage.deleted == False)
+            ]
+            
+            # 如果有message_id，添加到查询条件中
+            if message_id:
+                query_conditions.append(ChatMessage.message_id == message_id)
+            
+            messages = ChatMessage.select().where(*query_conditions)
+            logger.info(f"Found {len(messages)} messages with query conditions")
+
+            found_matching_message = None
+            for msg in messages:
+                logger.info(f"Checking message - message_id: {msg.message_id}, extra_content: {msg.extra_content}")
+                # 尝试解析extra_content并检查step_id
+                if msg.extra_content:
+                    try:
+                        extra_data = json.loads(msg.extra_content)
+                        if isinstance(extra_data, dict) and extra_data.get('step_id') == step_id:
+                            found_matching_message = msg
+                            logger.info(f"Found matching message by step_id: {msg.message_id}")
+                            break
+                    except json.JSONDecodeError:
+                        logger.info(f"Failed to parse extra_content: {msg.extra_content}")
+
+            if not found_matching_message:
+                # 如果通过JSON解析没找到，尝试使用contains查询
+                try:
+                    contains_conditions = [
+                        (ChatMessage.chat_id == chat_id) &
+                        (ChatMessage.role == 'assistant') &
+                        (ChatMessage.extra_content.contains(f'"step_id":"{step_id}"')) &
+                        (ChatMessage.deleted == False)
+                    ]
+                    if message_id:
+                        contains_conditions.append(ChatMessage.message_id == message_id)
+                    
+                    found_matching_message = ChatMessage.get(*contains_conditions)
+                except ChatMessage.DoesNotExist:
+                    logger.info(f"No message found by step_id contains: {step_id}")
+
+            if not found_matching_message:
+                raise ChatMessage.DoesNotExist()
+
+            existing_message = found_matching_message
+
+            # 更新字段：用户传的参数不为空则覆盖原值，否则保留原值
+            if assistant_content is not None:
+                existing_message.content = assistant_content
+            if reasoning_content is not None:
+                existing_message.reasoning_content = reasoning_content
+            if reasoning_time is not None:
+                existing_message.reasoning_time = reasoning_time
+            if extra_content_str is not None:
+                existing_message.extra_content = extra_content_str
+            if config_str is not None:
+                existing_message.config = config_str
+            if avatar is not None:
+                existing_message.avatar = avatar
+            if model_id is not None:
+                existing_message.model_id = model_id
+            if chatbot_id is not None:
+                existing_message.chatbot_id = chatbot_id
+            existing_message.updated_at = datetime.now()
+            existing_message.save()
+            return existing_message
+        except ChatMessage.DoesNotExist:
+            assistant_message = ChatMessage(
+                message_id=message_id or uuid.uuid4().hex,
+                chat_id=chat_id,
+                config=config_str,
+                role='assistant',
+                content=assistant_content,
+                reasoning_content=reasoning_content,
+                reasoning_time=reasoning_time,
+                avatar=avatar,
+                model_id=model_id,
+                chatbot_id=chatbot_id,
+                extra_content=extra_content_str,
+                created_at=datetime.now().astimezone()
+            )
+            assistant_message.save(force_insert=True)
+            return assistant_message
+
+    @staticmethod
+    @handle_transaction
+    def upsert_tool_message(
+        chat_id: str,
+        tool_content: str,
+        step_id: str,
+        model_id: Optional[str] = None,
+        chatbot_id: Optional[str] = None,
+        config: Optional[str] = None,
+        reasoning_content: Optional[str] = None,
+        reasoning_time: Optional[int] = None,
+        avatar: Optional[str] = None,
+        step: Optional[str] = None,
+        message_id: Optional[str] = None,
+        extra_content: Optional[str] = None
+    ) -> ChatMessage:
+        """
+        新增或更新工具消息
+        
+        根据step_id查找现有消息，如果存在则更新，不存在则创建新消息。
+        
+        Args:
+            chat_id: 对话ID
+            tool_content: 工具消息内容
+            step_id: 步骤ID，用于匹配和更新消息
+            model_id: 模型ID
+            chatbot_id: 机器人ID
+            config: 配置JSON
+            reasoning_content: 思考过程内容
+            reasoning_time: 思考耗时（毫秒）
+            avatar: 头像URL
+            step: 当前步骤名称
+            message_id: 消息ID，如果传入则使用它
+            extra_content: 额外内容JSON，会与step和step_id合并
+            
+        Returns:
+            ChatMessage: 更新或创建的消息对象
+        """
+        import json
+        
+        config_str = None
+        if config is not None:
+            if isinstance(config, (dict, list)):
+                config_str = json.dumps(config, ensure_ascii=False)
+            else:
+                config_str = str(config)
+        
+        extra_content_dict = {}
+        # 先解析传入的extra_content
+        if extra_content is not None:
+            if isinstance(extra_content, (dict, list)):
+                extra_content_dict = extra_content if isinstance(extra_content, dict) else {}
+            else:
+                try:
+                    extra_content_dict = json.loads(extra_content)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+        
+        # 添加或覆盖step和step_id
+        if step is not None:
+            extra_content_dict['step'] = step
+        if step_id is not None:
+            extra_content_dict['step_id'] = step_id
+        extra_content_dict['step_status'] = 'running'
+        
+        extra_content_str = json.dumps(extra_content_dict, ensure_ascii=False) if extra_content_dict else None
+        
+        try:
+            import logging
+            import json
+            logger = logging.getLogger(__name__)
+            logger.info(f"upsert_tool_message query - chat_id: {chat_id}, step_id: {step_id}, message_id: {message_id}")
+
+            # 使用step_id查找，将message_id作为查询条件（但不精确匹配）
+            query_conditions = [
+                (ChatMessage.chat_id == chat_id) &
+                (ChatMessage.role == 'tool') &
+                (ChatMessage.deleted == False)
+            ]
+            
+            # 如果有message_id，添加到查询条件中
+            if message_id:
+                query_conditions.append(ChatMessage.message_id == message_id)
+            
+            messages = ChatMessage.select().where(*query_conditions)
+            logger.info(f"Found {len(messages)} messages with query conditions")
+
+            found_matching_message = None
+            for msg in messages:
+                logger.info(f"Checking message - message_id: {msg.message_id}, extra_content: {msg.extra_content}")
+                # 尝试解析extra_content并检查step_id
+                if msg.extra_content:
+                    try:
+                        extra_data = json.loads(msg.extra_content)
+                        if isinstance(extra_data, dict) and extra_data.get('step_id') == step_id:
+                            found_matching_message = msg
+                            logger.info(f"Found matching message by step_id: {msg.message_id}")
+                            break
+                    except json.JSONDecodeError:
+                        logger.info(f"Failed to parse extra_content: {msg.extra_content}")
+
+            if not found_matching_message:
+                # 如果通过JSON解析没找到，尝试使用contains查询
+                try:
+                    contains_conditions = [
+                        (ChatMessage.chat_id == chat_id) &
+                        (ChatMessage.role == 'tool') &
+                        (ChatMessage.extra_content.contains(f'"step_id":"{step_id}"')) &
+                        (ChatMessage.deleted == False)
+                    ]
+                    if message_id:
+                        contains_conditions.append(ChatMessage.message_id == message_id)
+                    
+                    found_matching_message = ChatMessage.get(*contains_conditions)
+                except ChatMessage.DoesNotExist:
+                    logger.info(f"No message found by step_id contains: {step_id}")
+
+            if not found_matching_message:
+                raise ChatMessage.DoesNotExist()
+
+            existing_message = found_matching_message
+
+            # 更新字段：用户传的参数不为空则覆盖原值，否则保留原值
+            if tool_content is not None:
+                existing_message.content = tool_content
+            if reasoning_content is not None:
+                existing_message.reasoning_content = reasoning_content
+            if reasoning_time is not None:
+                existing_message.reasoning_time = reasoning_time
+            if extra_content_str is not None:
+                existing_message.extra_content = extra_content_str
+            if config_str is not None:
+                existing_message.config = config_str
+            if avatar is not None:
+                existing_message.avatar = avatar
+            if model_id is not None:
+                existing_message.model_id = model_id
+            if chatbot_id is not None:
+                existing_message.chatbot_id = chatbot_id
+            existing_message.updated_at = datetime.now()
+            existing_message.save()
+            return existing_message
+        except ChatMessage.DoesNotExist:
+            tool_message = ChatMessage(
+                message_id=message_id or uuid.uuid4().hex,
+                chat_id=chat_id,
+                config=config_str,
+                role='tool',
+                content=tool_content,
+                reasoning_content=reasoning_content,
+                reasoning_time=reasoning_time,
+                avatar=avatar,
+                model_id=model_id,
+                chatbot_id=chatbot_id,
+                extra_content=extra_content_str,
+                created_at=datetime.now().astimezone()
+            )
+            tool_message.save(force_insert=True)
+            return tool_message
     
     @staticmethod
     @handle_transaction
@@ -597,7 +937,14 @@ class ChatMessageService:
         tool_content: str,
         model_id: Optional[str] = None,
         chatbot_id: Optional[str] = None,
-        config: Optional[str] = None
+        config: Optional[str] = None,
+        message_id: Optional[str] = None,
+        reasoning_content: Optional[str] = None,
+        reasoning_time: Optional[int] = None,
+        avatar: Optional[str] = None,
+        extra_content: Optional[str] = None,
+        step: Optional[str] = None,
+        step_id: Optional[str] = None
     ) -> ChatMessage:
         """
         创建工具消息
@@ -608,6 +955,13 @@ class ChatMessageService:
             model_id: 模型ID
             chatbot_id: 机器人ID
             config: 配置JSON
+            message_id: 消息ID，用于关联助手消息
+            reasoning_content: 思考过程内容
+            reasoning_time: 思考耗时（毫秒）
+            avatar: 头像URL
+            extra_content: 额外内容JSON
+            step: 当前步骤名称
+            step_id: 当前步骤ID
             
         Returns:
             ChatMessage: 工具消息对象
@@ -625,18 +979,92 @@ class ChatMessageService:
             else:
                 config_str = str(config)
         
+        # 处理extra_content
+        extra_content_dict = {}
+        if extra_content is not None:
+            if isinstance(extra_content, (dict, list)):
+                extra_content_dict = extra_content if isinstance(extra_content, dict) else {}
+            else:
+                try:
+                    extra_content_dict = json.loads(extra_content)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+        
+        if step is not None:
+            extra_content_dict['step'] = step
+        if step_id is not None:
+            extra_content_dict['step_id'] = step_id
+        extra_content_dict['step_status'] = 'running'
+        
+        extra_content_str = json.dumps(extra_content_dict, ensure_ascii=False) if extra_content_dict else None
+        
         tool_message = ChatMessage(
-            message_id=uuid.uuid4().hex,
+            message_id=message_id if message_id else uuid.uuid4().hex,
             chat_id=chat_id,
             config=config_str,
             role='tool',
             content=tool_content,
+            reasoning_content=reasoning_content,
+            reasoning_time=reasoning_time,
+            avatar=avatar,
             model_id=model_id,
             chatbot_id=chatbot_id,
+            extra_content=extra_content_str,
             created_at=datetime.now().astimezone()
         )
         tool_message.save(force_insert=True)
         return tool_message
+
+    @staticmethod
+    @handle_transaction
+    def stop_chat_messages(chat_id: str) -> int:
+        """
+        停止对话中正在运行的消息
+        
+        将所有正在运行的消息更新为stop状态，
+        保留思考内容和正文内容，在content末尾拼接"已停止"
+        
+        Args:
+            chat_id: 对话ID
+            
+        Returns:
+            int: 更新的消息数量
+        """
+        import json
+        
+        messages = ChatMessage.select().where(
+            (ChatMessage.chat_id == chat_id) &
+            (ChatMessage.deleted == False) &
+            (ChatMessage.role << ['assistant', 'tool'])
+        ).order_by(ChatMessage.created_at.desc())
+        
+        updated_count = 0
+        for msg in messages:
+            extra_data = {}
+            if msg.extra_content:
+                try:
+                    extra_data = json.loads(msg.extra_content)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            
+            step_status = extra_data.get('step_status', '')
+            
+            if step_status in ('running', 'start') or (not step_status and msg.content):
+                extra_data['step_status'] = 'stop'
+                msg.extra_content = json.dumps(extra_data, ensure_ascii=False)
+                
+                if msg.content:
+                    if not msg.content.endswith('\n'):
+                        msg.content += '\n'
+                    msg.content += '已停止'
+                else:
+                    msg.content = '已停止'
+                
+                msg.updated_at = datetime.now().astimezone()
+                msg.save()
+                updated_count += 1
+        
+        return updated_count
 
     @staticmethod
     @handle_transaction

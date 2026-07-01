@@ -17,10 +17,10 @@ def get_provider_avatar_url(provider: str) -> str:
         头像URL路径
     """
     if not provider:
-        return '/assets/default.svg'
+        return '/assets/llm/default.svg'
     
     lowercase_provider = provider.lower()
-    return f'/assets/{lowercase_provider}.svg'
+    return f'/assets/llm/{lowercase_provider}.svg'
 
 def get_default_avatar_url() -> str:
     """
@@ -29,7 +29,7 @@ def get_default_avatar_url() -> str:
     Returns:
         默认头像URL路径
     """
-    return '/assets/default.svg'
+    return '/assets/llm/default.svg'
 
 def get_file_icon_path(extension: str) -> Path:
     """

@@ -64,7 +64,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
     
     将整个文档作为一个chunk，保持原始文本顺序
     
-    支持的文件格式: DOCX, PDF, Excel, TXT, Markdown, HTML, DOC
+    支持的文件格式: DOCX, PDF, Excel, TXT, Markdown, HTML, DOC, JSON
     
     Args:
         filename: 文件名或文件路径
@@ -79,12 +79,16 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
         list: 包含单个文档元素的列表
     """
     from ..nlp import rag_tokenizer, tokenize_doc
+    from ..utils import ProgressCallback
     
     parser_config = kwargs.get("parser_config", {
         "chunk_token_num": 512,
         "delimiter": "\n!?。；！？",
         "layout_recognize": "DeepDOC",
     })
+    
+    if not callback:
+        callback = ProgressCallback()
     
     eng = lang.lower() == "english"
     sections = []
@@ -162,6 +166,13 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
         html_sections = _parse_html(filename, binary)
         sections = [s for s in html_sections if s]
         callback(0.8, "HTML解析完成")
+    
+    # JSON文件处理
+    elif re.search(r"\.(json|jsonl|ldjson)$", filename, re.IGNORECASE):
+        callback(0.1, "开始解析JSON文件")
+        json_sections = _parse_json(binary, parser_config.get("chunk_token_num", 512))
+        sections = [s for s in json_sections if s]
+        callback(0.8, "JSON解析完成")
         
     # DOC文件处理（旧版Word）
     elif re.search(r"\.doc$", filename, re.IGNORECASE):
@@ -171,7 +182,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
         callback(0.8, "DOC解析完成")
         
     else:
-        raise NotImplementedError(f"不支持的文件类型: {filename} (支持: doc, docx, pdf, txt, md, html, xlsx)")
+        raise NotImplementedError(f"不支持的文件类型: {filename} (支持: doc, docx, pdf, txt, md, html, xlsx, json)")
     
     # 构建单一文档
     doc = {
@@ -315,6 +326,19 @@ def _parse_doc_old(binary=None):
     if doc_parsed.get("content") is not None:
         return doc_parsed["content"].split("\n")
     return []
+
+
+def _parse_json(binary, chunk_token_num):
+    """解析JSON文件"""
+    from app.core.knowledgebase.deepdoc.parser import JsonParser
+    
+    try:
+        json_parser = JsonParser(chunk_token_num)
+        sections = json_parser(binary)
+        return sections
+    except Exception as e:
+        logger.error(f"Failed to parse JSON file: {e}")
+        return []
 
 
 if __name__ == "__main__":

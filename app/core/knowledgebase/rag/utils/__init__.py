@@ -201,11 +201,11 @@ class ProgressCallback:
     def __init__(self, callback_func=None):
         self.callback = callback_func or self._default_callback
         
-    def __call__(self, progress=None, msg=""):
-        self.callback(progress, msg)
+    def __call__(self, progress=None, msg="", append=True):
+        self.callback(progress, msg, append=append)
         
     @staticmethod
-    def _default_callback(progress=None, msg=""):
+    def _default_callback(progress=None, msg="", append=True):
         """默认回调实现"""
         if progress is not None and progress >= 0:
             logger.info(f"[{progress:.1%}] {msg}")

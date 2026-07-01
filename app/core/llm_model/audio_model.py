@@ -114,7 +114,9 @@ class AudioModel(BaseLLM):
                 cleanup_temp_files(temp_file_path, converted_audio_path)
     
     def stream_generate(self, prompt: str, **kwargs) -> Generator[Dict[str, Any], None, None]:
-        """流式转录语音（语音转录暂不支持流式）"""
+        """
+        流式转录语音（语音转录暂不支持流式）
+        """
         if not self._validate_config():
             yield {'error': 'Invalid configuration'}
             return
@@ -126,8 +128,23 @@ class AudioModel(BaseLLM):
         except Exception as e:
             yield {'error': str(e)}
     
+    def generate_with_messages(self, messages: list, **kwargs) -> Dict[str, Any]:
+        """
+        使用消息列表生成文本（音频模型不支持）
+        
+        Args:
+            messages: 消息列表
+            **kwargs: 其他参数
+            
+        Returns:
+            包含错误信息的字典
+        """
+        return {'error': 'Audio model does not support chat messages'}
+    
     def stream_generate_with_messages(self, messages: list, **kwargs) -> Generator[Dict[str, Any], None, None]:
-        """使用消息列表流式生成（音频模型不支持）"""
+        """
+        使用消息列表流式生成（音频模型不支持）
+        """
         yield {'error': 'Audio model does not support chat messages'}
     
     def get_model_info(self) -> Dict[str, Any]:

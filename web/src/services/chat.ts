@@ -269,8 +269,7 @@ export const chatService = {
       }
 
       const decoder = new TextDecoder();
-      let fullResponse = '';
-      let fullReasoning = '';
+      let buffer = '';
 
       try {
         while (true) {
@@ -279,8 +278,10 @@ export const chatService = {
             break;
           }
           
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n');
+          buffer += decoder.decode(value, { stream: true });
+          
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
           
           for (const line of lines) {
             if (line.startsWith('data: ')) {
@@ -301,23 +302,43 @@ export const chatService = {
                   return;
                 }
                 
-                if (data.text) {
-                  fullResponse += data.text;
-                }
-                
-                if (data.reasoning_content) {
-                  fullReasoning += data.reasoning_content;
-                }
-                
                 if (onMessage) {
-                  onMessage({
-                    ...data,
-                    full_text: fullResponse,
-                    full_reasoning: fullReasoning
-                  });
+                  onMessage(data);
                 }
               } catch (error) {
                 console.error('Error parsing SSE data:', error);
+              }
+            }
+          }
+        }
+        
+        // 处理缓冲区中剩余的数据
+        if (buffer.trim()) {
+          const lines = buffer.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const dataStr = line.substring(6);
+              if (dataStr === '[DONE]') {
+                if (onComplete) {
+                  onComplete();
+                }
+                return;
+              }
+              
+              try {
+                const data = JSON.parse(dataStr);
+                if (data.error) {
+                  if (onError) {
+                    onError(data.error);
+                  }
+                  return;
+                }
+                
+                if (onMessage) {
+                  onMessage(data);
+                }
+              } catch (error) {
+                console.error('Error parsing remaining SSE data:', error);
               }
             }
           }
@@ -345,6 +366,12 @@ export const chatService = {
       chatService.abort_controller.abort();
       chatService.abort_controller = null;
     }
+  },
+
+  stopChat: async (chatId: string): Promise<any> => {
+    return http.post(`/aicenter/v1/chat/stop`, {
+      chat_id: chatId
+    });
   },
 
   /**

@@ -143,6 +143,10 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
         list: 切片后的文档列表
     """
     from ..nlp import rag_tokenizer, tokenize_doc
+    from ..utils import ProgressCallback
+    
+    if not callback:
+        callback = ProgressCallback()
     
     if parser_config is None:
         parser_config = {}

@@ -55,3 +55,17 @@ export const getDatasourceIcon = (type: string): string => {
 export const getDefaultDatasourceIcon = (): string => {
   return datasourceIcon;
 };
+
+export const resolveAvatarPath = (avatarPath: string | undefined): string => {
+  if (!avatarPath) {
+    return defaultAvatar;
+  }
+  if (avatarPath.startsWith('/assets/llm/')) {
+    const provider = avatarPath.replace('/assets/llm/', '').replace('.svg', '');
+    return getProviderAvatar(provider);
+  }
+  if (avatarPath.startsWith('data:')) {
+    return avatarPath;
+  }
+  return avatarPath;
+};

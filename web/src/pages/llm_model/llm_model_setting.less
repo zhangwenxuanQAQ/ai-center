@@ -288,6 +288,10 @@
   }
 
   &.assistant {
+    .message-content {
+      align-items: flex-start;
+    }
+
     .message-text {
       &.dark {
         background: rgba(255, 255, 255, 0.1);
@@ -300,6 +304,7 @@
       }
 
       border-radius: 16px 16px 16px 4px;
+      text-align: left;
     }
   }
 }

@@ -5,6 +5,7 @@
 import json
 import logging
 import base64
+import asyncio
 from fastapi import APIRouter, Request, Query, Depends
 from fastapi.responses import StreamingResponse, Response
 from typing import Optional
@@ -15,7 +16,8 @@ from app.services.chat.dto import (
     ChatRequest, ChatListResponse, ChatMessageListResponse
 )
 from app.services.chat.service import ChatService, ChatMessageService
-from app.core.chat.chat_service import ChatCoreService
+from app.core.chat.chat_service import ChatCoreService, ChatStopManager
+from app.database.models import Chat
 from app.utils.response import ResponseUtil, ApiResponse
 from app.core.exceptions import ResourceNotFoundError
 from app.services.chat.file_utils import get_file_from_datasource
@@ -311,10 +313,34 @@ async def chat_completions(
         return ResponseUtil.error(message="query参数不能为空")
     
     try:
+        # 更新chat表数据，将对话的model_id, chatbot_id, config, system_prompt更新成最新的
+        if chat_request.chat_id:
+            update_fields = {}
+            if chat_request.model_id:
+                update_fields['model_id'] = chat_request.model_id
+            if chat_request.chatbot_id:
+                update_fields['chatbot_id'] = chat_request.chatbot_id
+            if chat_request.config:
+                update_fields['config'] = chat_request.config
+            if chat_request.system_prompt:
+                update_fields['system_prompt'] = chat_request.system_prompt
+            
+            if update_fields:
+                try:
+                    Chat.update(**update_fields).where(
+                        (Chat.id == chat_request.chat_id) &
+                        (Chat.user_id == user_id) &
+                        (Chat.deleted == False)
+                    ).execute()
+                    logger.info(f"更新chat表成功 - chat_id: {chat_request.chat_id}, fields: {update_fields}")
+                except Exception as e:
+                    logger.error(f"更新chat表失败: {e}")
+        
         if chat_request.stream:
             async def generate():
+                current_chat_id = None
                 try:
-                    for chunk in ChatCoreService.chat_stream(
+                    async for chunk in ChatCoreService.chat_stream(
                         user_id=user_id,
                         query=chat_request.query,
                         model_id=chat_request.model_id,
@@ -324,20 +350,20 @@ async def chat_completions(
                         message_id=chat_request.message_id,
                         system_prompt=chat_request.system_prompt
                     ):
-                        # 检查客户端是否断开连接
-                        if await request.is_disconnected():
-                            # 客户端断开连接，触发GeneratorExit异常
-                            raise GeneratorExit("Client disconnected")
+                        # 记录chat_id用于停止时更新消息
+                        if chunk.get('chat_id'):
+                            current_chat_id = chunk['chat_id']
                         
                         if 'error' in chunk:
                             yield f"data: {json.dumps({'error': chunk['error'], 'chat_id': chunk.get('chat_id')}, ensure_ascii=False)}\n\n"
+                            await asyncio.sleep(0)
                             return
 
                         yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+                        await asyncio.sleep(0)
 
                     yield "data: [DONE]\n\n"
                 except GeneratorExit:
-                    # 客户端断开连接，传播GeneratorExit异常
                     raise
                 except Exception as e:
                     print(f"Error in generate: {e}")
@@ -349,7 +375,8 @@ async def chat_completions(
                 headers={
                     "Cache-Control": "no-cache",
                     "Connection": "keep-alive",
-                    "X-Accel-Buffering": "no"
+                    "X-Accel-Buffering": "no",
+                    "Transfer-Encoding": "chunked"
                 }
             )
         else:
@@ -374,6 +401,47 @@ async def chat_completions(
     except Exception as e:
         logger.error(f"聊天接口异常: {str(e)}", exc_info=True)
         return ResponseUtil.error(message=f"聊天失败: {str(e)}")
+
+
+class StopChatRequest(BaseModel):
+    chat_id: str = Field(..., description="对话ID")
+
+
+@router.post("/stop", summary="停止聊天")
+async def stop_chat(
+    request: Request,
+    stop_request: StopChatRequest
+):
+    """
+    停止聊天
+    
+    将对话中所有正在运行的消息更新为停止状态，
+    并在content末尾拼接"已停止"
+    
+    Args:
+        request: 请求对象
+        stop_request: 停止请求参数
+            - chat_id: 对话ID
+            
+    Returns:
+        ApiResponse: 操作结果
+    """
+    user_id = get_user_id(request)
+    
+    try:
+        chat = Chat.get(
+            (Chat.id == stop_request.chat_id) &
+            (Chat.user_id == user_id) &
+            (Chat.deleted == False)
+        )
+    except Chat.DoesNotExist:
+        return ResponseUtil.not_found(message="对话不存在")
+    
+    updated_count = ChatMessageService.stop_chat_messages(stop_request.chat_id)
+    
+    ChatStopManager().request_stop(stop_request.chat_id)
+    
+    return ResponseUtil.success(data={"updated_count": updated_count}, message="已停止回答")
 
 
 class DownloadFileRequest(BaseModel):

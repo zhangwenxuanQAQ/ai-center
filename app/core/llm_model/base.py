@@ -55,6 +55,20 @@ class BaseLLM(ABC):
         pass
     
     @abstractmethod
+    def generate_with_messages(self, messages: list, **kwargs) -> Dict[str, Any]:
+        """
+        使用消息列表生成文本（非流式）
+        
+        Args:
+            messages: 消息列表，格式为[{'role': 'user'/'assistant', 'content': '...'}]
+            **kwargs: 其他参数
+            
+        Returns:
+            生成结果
+        """
+        pass
+    
+    @abstractmethod
     def stream_generate_with_messages(self, messages: list, **kwargs) -> Generator[Dict[str, Any], None, None]:
         """
         使用消息列表流式生成文本
@@ -90,3 +104,75 @@ class BaseLLM(ABC):
         if not self.endpoint:
             return False
         return True
+
+    def _extract_reasoning_content(self, message_or_delta) -> str:
+        """
+        从消息或delta中提取思考内容
+
+        不同模型厂商使用不同的字段名来表示思考内容：
+        - reasoning_content (通用字段)
+        - reasoning (某些厂商)
+        - think (某些厂商)
+        - thinking_content (某些厂商)
+
+        Args:
+            message_or_delta: 消息对象或delta对象
+
+        Returns:
+            思考内容字符串，如果没有则返回空字符串
+        """
+        # 定义可能的思考内容字段名列表
+        reasoning_fields = ['reasoning_content', 'reasoning', 'think', 'thinking_content']
+
+        for field in reasoning_fields:
+            # 检查对象是否有该属性且值不为空
+            if hasattr(message_or_delta, field):
+                content = getattr(message_or_delta, field)
+                if content:
+                    return content
+
+        return ''
+
+    def _handle_deep_thinking(self, params: dict, kwargs: dict) -> dict:
+        """
+        处理深度思考参数，兼容不同模型厂商的开关字段
+
+        不同模型厂商使用不同的参数来控制深度思考：
+        - Qwen: extra_body.enable_thinking
+        - DeepSeek: 不需要特殊设置，模型自动开启
+        - 其他厂商可能有不同的字段名
+
+        Args:
+            params: 当前参数字典
+            kwargs: 用户传入的参数
+
+        Returns:
+            更新后的参数字典
+        """
+        deep_thinking = kwargs.pop('deep_thinking', False)
+
+        # 根据不同厂商设置不同的深度思考开关
+        if self.provider:
+            provider_lower = self.provider.lower()
+
+            # Qwen系列模型的深度思考开关
+            if provider_lower == 'qwen':
+                # extra_body用于传递非标准参数
+                if 'extra_body' not in params:
+                    params['extra_body'] = {}
+                params['extra_body']['enable_thinking'] = bool(deep_thinking)
+
+            # DeepSeek模型深度思考开关（如果需要）
+            # elif provider_lower == 'deepseek':
+            #     # DeepSeek可能需要特定的参数，根据实际情况添加
+            #     pass
+
+            # 其他厂商的深度思考开关可以在这里继续添加
+            # 例如：
+            # elif provider_lower == 'anthropic':
+            #     params['extra_body']['thinking'] = bool(deep_thinking)
+            else:
+                params['extra_body'] = {}
+                params['extra_body']['thinking'] = {"type": "disabled" if not bool(deep_thinking) else "enabled"}
+                params['extra_body']['reasoning'] = bool(deep_thinking)
+        return params

@@ -5,7 +5,7 @@ Embedding模型实现
 """
 
 import re
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Generator
 import numpy as np
 from openai import OpenAI
 from app.core.llm_model.base import BaseLLM
@@ -126,19 +126,36 @@ class EmbeddingModel(BaseLLM):
             return response.usage.total_tokens
         return 0
     
-    def stream_generate(self, prompt: str, **kwargs) -> Any:
+    def stream_generate(self, prompt: str, **kwargs) -> Generator[Dict[str, Any], None, None]:
         """
-        流式生成嵌入（通常嵌入不需要流式）
+        流式生成嵌入向量（嵌入模型不支持流式）
         
         Args:
-            prompt: 要嵌入的文本
+            prompt: 提示词
             **kwargs: 其他参数
             
         Yields:
-            流式生成的结果
+            嵌入向量结果
         """
+        if not self._validate_config():
+            yield {'error': 'Invalid configuration'}
+            return
+        
         result = self.generate(prompt, **kwargs)
         yield result
+    
+    def generate_with_messages(self, messages: list, **kwargs) -> Dict[str, Any]:
+        """
+        使用消息列表生成文本（嵌入模型不支持）
+        
+        Args:
+            messages: 消息列表
+            **kwargs: 其他参数
+            
+        Returns:
+            包含错误信息的字典
+        """
+        return {'error': 'Embedding model does not support chat messages'}
     
     def stream_generate_with_messages(self, messages: list, **kwargs) -> Any:
         """

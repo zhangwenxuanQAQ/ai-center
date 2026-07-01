@@ -333,7 +333,7 @@ class ChatMessage(SoftDeleteModel):
     extra_content = TextField(null=True, verbose_name="额外内容JSON，如上传的文件信息")
     reasoning_content = TextField(null=True, verbose_name="思考过程内容")
     reasoning_time = IntegerField(null=True, verbose_name="思考耗时（毫秒）")
-    avatar = CharField(max_length=500, null=True, verbose_name="头像URL")
+    avatar = TextField(null=True, verbose_name="头像URL")
     model_id = CharField(max_length=40, null=True, index=True, verbose_name="模型ID")
     chatbot_id = CharField(max_length=40, null=True, index=True, verbose_name="机器人ID")
     

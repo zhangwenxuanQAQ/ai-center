@@ -670,4 +670,332 @@ export const knowledgebaseService = {
   }>> => {
     return http.get('/aicenter/v1/knowledgebase/retrieval_configs') || [];
   },
+
+  /**
+   * 从文件进行智能提取
+   */
+  intelligentExtractFromFile: async (
+    files: File[],
+    modelId: string,
+    prompt: string,
+    categoryId?: string
+  ): Promise<{
+    content: string;
+    extracted_info: {
+      title?: string;
+      tags?: string[];
+      custom_fields?: Record<string, any>;
+      content?: string;
+    };
+  }> => {
+    const formData = new FormData();
+    files.forEach(file => formData.append('files', file));
+    formData.append('model_id', modelId);
+    formData.append('prompt', prompt);
+    formData.append('category_id', categoryId || '');
+    
+    return http.post('/aicenter/v1/knowledgebase/document/intelligent_extract', formData);
+  },
+
+  /**
+   * 从文本进行智能提取
+   */
+  intelligentExtractFromText: async (
+    modelId: string,
+    prompt: string,
+    textContent: string,
+    categoryId?: string
+  ): Promise<{
+    content: string;
+    extracted_info: {
+      title?: string;
+      tags?: string[];
+      custom_fields?: Record<string, any>;
+      content?: string;
+    };
+  }> => {
+    const formData = new FormData();
+    formData.append('model_id', modelId);
+    formData.append('prompt', prompt);
+    formData.append('text_content', textContent);
+    formData.append('category_id', categoryId || '');
+    
+    return http.post('/aicenter/v1/knowledgebase/document/intelligent_extract', formData);
+  },
+
+  /**
+   * 从文件进行智能提取（流式返回）
+   */
+  intelligentExtractFromFileStream: async (
+    files: File[],
+    modelId: string,
+    prompt: string,
+    categoryId?: string,
+    deepThinking?: boolean,
+    onProgress?: (data: { reasoning_content: string; text: string }) => void,
+    signal?: AbortSignal
+  ): Promise<{
+    title?: string;
+    tags?: string[];
+    custom_fields?: Record<string, any>;
+    content?: string;
+    chapters?: any[];
+  }> => {
+    const formData = new FormData();
+    files.forEach(file => formData.append('files', file));
+    formData.append('model_id', modelId);
+    formData.append('prompt', prompt);
+    formData.append('category_id', categoryId || '');
+    formData.append('deep_thinking', deepThinking ? 'true' : 'false');
+
+    const response = await fetch('/aicenter/v1/knowledgebase/document/intelligent_extract_stream', {
+      method: 'POST',
+      body: formData,
+      signal,
+    });
+
+    if (!response.ok) {
+      throw new Error('智能提取失败');
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('无法获取响应流');
+    }
+
+    const decoder = new TextDecoder();
+    let fullReasoningContent = '';
+    let fullText = '';
+    let extractedData: {
+      title?: string;
+      tags?: string[];
+      custom_fields?: Record<string, any>;
+      content?: string;
+      chapters?: any[];
+    } = {};
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+      buffer += chunk;
+
+      while (buffer.includes('\n\n')) {
+        const delimiterIndex = buffer.indexOf('\n\n');
+        const message = buffer.substring(0, delimiterIndex);
+        buffer = buffer.substring(delimiterIndex + 2);
+
+        const lines = message.split('\n');
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') {
+              break;
+            }
+
+            try {
+              const parsed = JSON.parse(data);
+              
+              if (parsed.error) {
+                fullText += `\n\n[错误] ${parsed.error}`;
+                if (onProgress) {
+                  onProgress({
+                    reasoning_content: fullReasoningContent,
+                    text: fullText,
+                  });
+                }
+                throw new Error(parsed.error);
+              }
+
+              if (parsed.extracted_data) {
+                extractedData = parsed.extracted_data;
+              }
+
+              if (parsed.reasoning_content) {
+                fullReasoningContent += parsed.reasoning_content;
+              }
+              if (parsed.text) {
+                fullText += parsed.text;
+              }
+
+              if (onProgress) {
+                onProgress({
+                  reasoning_content: fullReasoningContent,
+                  text: fullText,
+                });
+              }
+            } catch (e) {
+              console.error('解析流数据失败:', e);
+              console.error('原始数据:', data);
+            }
+          }
+        }
+      }
+    }
+
+    if (extractedData && Object.keys(extractedData).length > 0) {
+      return extractedData;
+    }
+
+    const jsonMatch = fullText.match(/```json\s*(.*?)\s*```/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[1]);
+      } catch (e) {
+        console.error('解析JSON失败:', e);
+      }
+    }
+
+    try {
+      return JSON.parse(fullText);
+    } catch (e) {
+      console.error('解析结果失败:', e);
+      return {
+        title: '',
+        tags: [],
+        custom_fields: {},
+        content: fullText,
+      };
+    }
+  },
+
+  /**
+   * 从文本进行智能提取（流式返回）
+   */
+  intelligentExtractFromTextStream: async (
+    modelId: string,
+    prompt: string,
+    textContent: string,
+    categoryId?: string,
+    deepThinking?: boolean,
+    onProgress?: (data: { reasoning_content: string; text: string }) => void,
+    signal?: AbortSignal
+  ): Promise<{
+    title?: string;
+    tags?: string[];
+    custom_fields?: Record<string, any>;
+    content?: string;
+    chapters?: any[];
+  }> => {
+    const formData = new FormData();
+    formData.append('model_id', modelId);
+    formData.append('prompt', prompt);
+    formData.append('text_content', textContent);
+    formData.append('category_id', categoryId || '');
+    formData.append('deep_thinking', deepThinking ? 'true' : 'false');
+
+    const response = await fetch('/aicenter/v1/knowledgebase/document/intelligent_extract_stream', {
+      method: 'POST',
+      body: formData,
+      signal,
+    });
+
+    if (!response.ok) {
+      throw new Error('智能提取失败');
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('无法获取响应流');
+    }
+
+    const decoder = new TextDecoder();
+    let fullReasoningContent = '';
+    let fullText = '';
+    let extractedData: {
+      title?: string;
+      tags?: string[];
+      custom_fields?: Record<string, any>;
+      content?: string;
+      chapters?: any[];
+    } = {};
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+      buffer += chunk;
+
+      while (buffer.includes('\n\n')) {
+        const delimiterIndex = buffer.indexOf('\n\n');
+        const message = buffer.substring(0, delimiterIndex);
+        buffer = buffer.substring(delimiterIndex + 2);
+
+        const lines = message.split('\n');
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') {
+              break;
+            }
+
+            try {
+              const parsed = JSON.parse(data);
+              
+              if (parsed.error) {
+                fullText += `\n\n[错误] ${parsed.error}`;
+                if (onProgress) {
+                  onProgress({
+                    reasoning_content: fullReasoningContent,
+                    text: fullText,
+                  });
+                }
+                throw new Error(parsed.error);
+              }
+
+              if (parsed.extracted_data) {
+                extractedData = parsed.extracted_data;
+              }
+
+              if (parsed.reasoning_content) {
+                fullReasoningContent += parsed.reasoning_content;
+              }
+              if (parsed.text) {
+                fullText += parsed.text;
+              }
+
+              if (onProgress) {
+                onProgress({
+                  reasoning_content: fullReasoningContent,
+                  text: fullText,
+                });
+              }
+            } catch (e) {
+              console.error('解析流数据失败:', e);
+              console.error('原始数据:', data);
+            }
+          }
+        }
+      }
+    }
+
+    if (extractedData && Object.keys(extractedData).length > 0) {
+      return extractedData;
+    }
+
+    const jsonMatch = fullText.match(/```json\s*(.*?)\s*```/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[1]);
+      } catch (e) {
+        console.error('解析JSON失败:', e);
+      }
+    }
+
+    try {
+      return JSON.parse(fullText);
+    } catch (e) {
+      console.error('解析结果失败:', e);
+      return {
+        title: '',
+        tags: [],
+        custom_fields: {},
+        content: fullText,
+      };
+    }
+  },
 };

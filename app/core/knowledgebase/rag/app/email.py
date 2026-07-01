@@ -41,6 +41,10 @@ def chunk(
     """
     from ..nlp import rag_tokenizer, naive_merge, tokenize_chunks
     from .naive import chunk as naive_chunk
+    from ..utils import ProgressCallback
+    
+    if not callback:
+        callback = ProgressCallback()
     
     eng = lang.lower() == "english"
     

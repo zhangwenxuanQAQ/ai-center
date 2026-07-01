@@ -29,22 +29,6 @@ class TextModel(BaseLLM):
         self.max_length = model_config.get("max_length", 8191)
         self.model_name = model_config.get("name", "")
     
-    def _handle_deep_thinking(self, params: dict, kwargs: dict) -> dict:
-        """
-        处理深度思考参数
-        
-        Args:
-            params: 当前参数字典
-            kwargs: 用户传入的参数
-            
-        Returns:
-            更新后的参数字典
-        """
-        deep_thinking = kwargs.pop('deep_thinking', False)
-        if self.provider and self.provider.lower() == 'qwen' and not bool(deep_thinking):
-            params['extra_body'] = {"enable_thinking": False}
-        return params
-    
     def generate(self, prompt: str, **kwargs) -> Dict[str, Any]:
         """
         生成文本（非流式）
@@ -112,21 +96,90 @@ class TextModel(BaseLLM):
             
             params = self._handle_deep_thinking(params, kwargs)
             params.update(kwargs)
-            
+
             response = self.client.chat.completions.create(**params)
-            
+
+            # 检查response是否有效
+            if not response.choices or len(response.choices) == 0:
+                return {'error': '模型返回了无效响应：没有choices'}
+
+            if not response.choices[0].message:
+                return {'error': '模型返回了无效响应：message为空'}
+
             result = {
-                'text': response.choices[0].message.content,
+                'text': response.choices[0].message.content or '',
                 'usage': response.usage.model_dump() if response.usage else {},
                 'model': response.model
             }
-            
-            if hasattr(response.choices[0].message, 'reasoning_content') and response.choices[0].message.reasoning_content:
-                result['reasoning_content'] = response.choices[0].message.reasoning_content
-            
+
+            # 使用辅助方法提取思考内容
+            reasoning_content = self._extract_reasoning_content(response.choices[0].message)
+            if reasoning_content:
+                result['reasoning_content'] = reasoning_content
+
             if hasattr(response.choices[0].message, 'tool_calls') and response.choices[0].message.tool_calls:
                 result['tool_calls'] = response.choices[0].message.tool_calls
+
+            return result
+        except Exception as e:
+            return {'error': str(e)}
+    
+    def generate_with_messages(self, messages: list, **kwargs) -> Dict[str, Any]:
+        """
+        使用消息列表生成文本（非流式）
+        
+        Args:
+            messages: 消息列表，格式为[{'role': 'user'/'assistant', 'content': '...'}]
+            **kwargs: 其他参数，如temperature、top_p、max_tokens等
             
+        Returns:
+            生成结果
+        """
+        if not self._validate_config():
+            return {'error': 'Invalid configuration'}
+        
+        try:
+            tools = kwargs.pop('tools', None)
+            
+            params = {
+                'model': self.model_name,
+                'messages': messages,
+                'temperature': 0.7,
+                'max_tokens': 4096,
+                'top_p': 0.1,
+                'frequency_penalty': 0,
+                'presence_penalty': 0
+            }
+            
+            if tools:
+                params['tools'] = tools
+            
+            params = self._handle_deep_thinking(params, kwargs)
+            params.update(kwargs)
+
+            response = self.client.chat.completions.create(**params)
+
+            # 检查response是否有效
+            if not response.choices or len(response.choices) == 0:
+                return {'error': '模型返回了无效响应：没有choices'}
+
+            if not response.choices[0].message:
+                return {'error': '模型返回了无效响应：message为空'}
+
+            result = {
+                'text': response.choices[0].message.content or '',
+                'usage': response.usage.model_dump() if response.usage else {},
+                'model': response.model
+            }
+
+            # 使用辅助方法提取思考内容
+            reasoning_content = self._extract_reasoning_content(response.choices[0].message)
+            if reasoning_content:
+                result['reasoning_content'] = reasoning_content
+
+            if hasattr(response.choices[0].message, 'tool_calls') and response.choices[0].message.tool_calls:
+                result['tool_calls'] = response.choices[0].message.tool_calls
+
             return result
         except Exception as e:
             return {'error': str(e)}
@@ -214,9 +267,12 @@ class TextModel(BaseLLM):
                         'finish_reason': choice.finish_reason,
                         'usage': chunk.usage.model_dump() if chunk.usage else None
                     }
-                    if hasattr(choice.delta, 'reasoning_content') and choice.delta.reasoning_content:
-                        result['reasoning_content'] = choice.delta.reasoning_content
-                    
+
+                    # 使用辅助方法提取思考内容
+                    reasoning_content = self._extract_reasoning_content(choice.delta)
+                    if reasoning_content:
+                        result['reasoning_content'] = reasoning_content
+
                     if hasattr(choice.delta, 'tool_calls') and choice.delta.tool_calls:
                         for tool_call in choice.delta.tool_calls:
                             idx = tool_call.index
@@ -295,9 +351,12 @@ class TextModel(BaseLLM):
                         'finish_reason': choice.finish_reason,
                         'usage': chunk.usage.model_dump() if chunk.usage else None
                     }
-                    if hasattr(choice.delta, 'reasoning_content') and choice.delta.reasoning_content:
-                        result['reasoning_content'] = choice.delta.reasoning_content
-                    
+
+                    # 使用辅助方法提取思考内容
+                    reasoning_content = self._extract_reasoning_content(choice.delta)
+                    if reasoning_content:
+                        result['reasoning_content'] = reasoning_content
+
                     if hasattr(choice.delta, 'tool_calls') and choice.delta.tool_calls:
                         for tool_call in choice.delta.tool_calls:
                             idx = tool_call.index

@@ -12,7 +12,7 @@ from typing import Dict, Any, Optional, List
 from app.database.models import Knowledgebase, LLMModel
 from app.database.es_utils import es_utils
 from app.core.llm_model.factory import LLMFactory
-from app.core.exceptions import ResourceNotFoundError
+from app.core.exceptions import ResourceNotFoundError, BaseServiceError
 
 logger = logging.getLogger(__name__)
 
@@ -188,7 +188,7 @@ class RetrievalService:
             query_vector = query_vector.tolist() if hasattr(query_vector, 'tolist') else list(query_vector)
         except Exception as e:
             logger.error(f"查询文本向量化失败: {e}")
-            return {"total": 0, "chunks": []}
+            raise BaseServiceError(f"查询文本向量化失败: {e}")
 
         rerank_model = None
         if rnk_model_id:
@@ -219,4 +219,4 @@ class RetrievalService:
             return result
         except Exception as e:
             logger.error(f"知识库检索失败: {e}")
-            return {"total": 0, "chunks": []}
+            raise BaseServiceError(f"知识库检索失败: {e}")

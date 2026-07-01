@@ -88,6 +88,10 @@ def chunk(filename, binary=None, from_page=0, to_page=10000000000, lang="Chinese
         list: 切片后的文档列表，每个元素是一个QA对
     """
     from ..nlp import rag_tokenizer, tokenize
+    from ..utils import ProgressCallback
+    
+    if not callback:
+        callback = ProgressCallback()
     
     eng = lang.lower() == "english"
     res = []

@@ -516,8 +516,19 @@ def generate_custom_template_excel(document_config: Dict[str, Any]) -> tuple:
         # 构建数据行
         rows_data = []
         
-        # 如果没有章节，生成一行（自定义字段值 + 空章节内容）
-        if not chapters:
+        # 获取富文本内容（用于富文本章节类型）
+        content = document_config.get('content', '')
+        
+        # 如果没有章节但有富文本内容，生成一行（自定义字段值 + 富文本内容）
+        if not chapters and content:
+            row_values = []
+            for field in custom_fields:
+                field_value = field.get('value', '')
+                row_values.append(str(field_value) if field_value is not None else '')
+            row_values.append(content)
+            rows_data.append(row_values)
+        # 如果没有章节且没有富文本内容，生成一行（自定义字段值 + 空章节内容）
+        elif not chapters:
             row_values = []
             for field in custom_fields:
                 field_value = field.get('value', '')

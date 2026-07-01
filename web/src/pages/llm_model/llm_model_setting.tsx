@@ -1,8 +1,9 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Form, Input, Select, TreeSelect, Button, Switch, message, Row, Col, Spin, Slider, InputNumber, Tooltip, Tag } from 'antd';
+import { Form, Input, Select, TreeSelect, Button, Switch, message, Row, Col, Spin, Slider, InputNumber, Tooltip, Tag, Dropdown } from 'antd';
 const { TextArea } = Input;
-import { ArrowLeftOutlined, SaveOutlined, UndoOutlined, ApiTwoTone, SettingOutlined, ClearOutlined, SendOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, InfoCircleOutlined, BulbOutlined, CopyOutlined, ReloadOutlined, EditOutlined, DownOutlined, RightOutlined, PlusOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SaveOutlined, UndoOutlined, ApiTwoTone, SettingOutlined, ClearOutlined, SendOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, InfoCircleOutlined, BulbOutlined, CopyOutlined, ReloadOutlined, EditOutlined, DownOutlined, RightOutlined, PlusOutlined, PaperClipOutlined, UploadOutlined, CloseCircleOutlined as RemoveFileOutlined, InboxOutlined } from '@ant-design/icons';
+import DataSourceFileSelector from '../datasource/datasource data_select';
 import { llmModelService, LLMModel, LLMCategory } from '../../services/llm_model';
 import { request, post } from '../../utils/request';
 import PageHeader from '../../components/page-header';
@@ -23,6 +24,8 @@ interface Message {
     completion_tokens?: number;
     total_tokens?: number;
   };
+  files?: any[]; // 存储上传的文件信息
+  isComplete?: boolean; // 标记消息是否已完成（是否已接收到[DONE]）
 }
 
 interface ConfigParam {
@@ -73,7 +76,10 @@ const LLMModelSetting: React.FC = () => {
   const [editingContent, setEditingContent] = useState('');
   const [thinkingMessageId, setThinkingMessageId] = useState<string | null>(null);
   const [thinkingDuration, setThinkingDuration] = useState<Record<string, number>>({});
+  const [selectedFiles, setSelectedFiles] = useState<any[]>([]);
+  const [isDataSourceModalVisible, setIsDataSourceModalVisible] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const thinkingStartTimeRef = useRef<Record<string, number>>({});
 
@@ -99,8 +105,19 @@ const LLMModelSetting: React.FC = () => {
     }
   }, [id]);
 
+  // 检测是否在底部
+  const isAtBottom = () => {
+    if (!messagesContainerRef.current) return true;
+    const container = messagesContainerRef.current;
+    const threshold = 100; // 容差阈值，距离底部100px以内视为在底部
+    return container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
+  };
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // 只有在底部时才自动滚动
+    if (isAtBottom()) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
 
   const fetchModel = async (modelId: string) => {
@@ -220,8 +237,14 @@ const LLMModelSetting: React.FC = () => {
       if (result.success) {
         message.success('连接测试成功！');
         if (result.support_image !== undefined) {
+          // 更新 support_image 字段但不触发"有未保存的变动"提示
+          // 因为这是测试连接自动检测的结果，不是用户的主动修改
           form.setFieldsValue({ support_image: result.support_image });
-          setHasChanges(true);
+          // 更新原始数据，避免触发 hasChanges
+          setOriginalData(prev => ({
+            ...prev,
+            support_image: result.support_image
+          }));
         }
       }
     } catch (error: any) {
@@ -254,6 +277,47 @@ const LLMModelSetting: React.FC = () => {
     setHasChanges(false);
     setConfigHasChanges(false);
     message.info('已恢复原始数据');
+  };
+
+  // 处理本地文件上传
+  const handleLocalFileUpload = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64Content = (e.target?.result as string).split(',')[1];
+      const mimeType = file.type || 'application/octet-stream';
+
+      const newFile = {
+        type: 'file_base64',
+        content: base64Content,
+        mime_type: mimeType,
+        file_name: file.name,
+        file_size: file.size
+      };
+
+      setSelectedFiles(prev => [...prev, newFile]);
+    };
+    reader.readAsDataURL(file);
+    return false; // 阻止默认上传行为
+  };
+
+  // 移除已选择的文件
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // 处理数据源文件选择确认
+  const handleDataSourceFileConfirm = (files: any[]) => {
+    const newFiles: any[] = files.map(file => ({
+      type: 'document',
+      content: {
+        datasource_id: file.datasource_id,
+        bucket: file.bucket,
+        location: file.path,
+        file_name: file.name,
+        file_size: file.size
+      }
+    }));
+    setSelectedFiles(prev => [...prev, ...newFiles]);
   };
 
   const toggleReasoning = (messageId: string) => {
@@ -319,43 +383,103 @@ const LLMModelSetting: React.FC = () => {
       message.error('内容不能为空');
       return;
     }
-    
+
     const messageIndex = messages.findIndex(m => m.id === messageId);
     if (messageIndex === -1) return;
-    
+
+    // 获取所有历史用户消息中的文件（包括被编辑的消息）
+    // 编辑问题时，需要将所有历史文件都包含进去，确保模型能够访问所有文件
     const updatedMessages = messages.slice(0, messageIndex);
+    const allFiles: any[] = [];
+    
+    updatedMessages.forEach(msg => {
+      if (msg.role === 'user' && msg.files && msg.files.length > 0) {
+        msg.files.forEach(file => {
+          // 避免重复添加同一个文件
+          const fileExists = allFiles.some(existingFile =>
+            existingFile.file_name === file.file_name &&
+            existingFile.file_size === file.file_size
+          );
+          if (!fileExists) {
+            allFiles.push(file);
+          }
+        });
+      }
+    });
+
+    // 添加被编辑消息的文件
+    const originalMessage = messages[messageIndex];
+    if (originalMessage.files && originalMessage.files.length > 0) {
+      originalMessage.files.forEach(file => {
+        const fileExists = allFiles.some(existingFile =>
+          existingFile.file_name === file.file_name &&
+          existingFile.file_size === file.file_size
+        );
+        if (!fileExists) {
+          allFiles.push(file);
+        }
+      });
+    }
+
     setMessages(updatedMessages);
     setEditingMessageId(null);
     setEditingContent('');
-    
+
     setInputMessage(editingContent);
+
+    // 直接传递所有历史文件参数给发送函数，避免异步状态更新的问题
     setTimeout(() => {
-      handleSendMessageWithMessages(updatedMessages, editingContent);
+      handleSendMessageWithMessages(updatedMessages, editingContent, allFiles);
     }, 100);
   };
 
   const handleRegenerate = async (messageIndex: number) => {
     if (messageIndex < 1) return;
-    
+
     const userMessage = messages[messageIndex - 1];
     if (userMessage.role !== 'user') return;
-    
+
+    // 获取所有历史用户消息中的文件（包括当前用户消息）
+    // 重新回答时，需要将所有历史文件都包含进去，确保模型能够访问所有文件
     const updatedMessages = messages.slice(0, messageIndex);
-    setMessages(updatedMessages);
+    const allFiles: any[] = [];
     
+    updatedMessages.forEach(msg => {
+      if (msg.role === 'user' && msg.files && msg.files.length > 0) {
+        msg.files.forEach(file => {
+          // 避免重复添加同一个文件
+          const fileExists = allFiles.some(existingFile =>
+            existingFile.file_name === file.file_name &&
+            existingFile.file_size === file.file_size
+          );
+          if (!fileExists) {
+            allFiles.push(file);
+          }
+        });
+      }
+    });
+
+    setMessages(updatedMessages);
+
+    // 直接传递所有历史文件参数给发送函数，避免异步状态更新的问题
     setTimeout(() => {
-      handleSendMessageWithMessages(updatedMessages.slice(0, -1), userMessage.content);
+      handleSendMessageWithMessages(updatedMessages.slice(0, -1), userMessage.content, allFiles);
     }, 100);
   };
 
-  const handleSendMessageWithMessages = async (previousMessages: Message[], content: string) => {
+  const handleSendMessageWithMessages = async (previousMessages: Message[], content: string, files?: any[]) => {
     if (!model || isGenerating) return;
 
+    // 使用传入的文件参数或当前选中的文件
+    const currentFiles = files || selectedFiles;
+
+    // 创建用户消息，包含文件信息
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
       content: content.trim(),
-      timestamp: new Date()
+      timestamp: new Date(),
+      files: currentFiles.length > 0 ? [...currentFiles] : undefined // 存储本次上传的文件
     };
 
     const newMessages = [...previousMessages, userMessage];
@@ -368,7 +492,8 @@ const LLMModelSetting: React.FC = () => {
       id: assistantMessageId,
       role: 'assistant',
       content: '',
-      timestamp: new Date()
+      timestamp: new Date(),
+      isComplete: false // 标记为未完成，等待[DONE]消息
     };
     setMessages(prev => [...prev, assistantMessage]);
     setThinkingMessageId(assistantMessageId);
@@ -378,22 +503,90 @@ const LLMModelSetting: React.FC = () => {
 
     try {
       abortControllerRef.current = new AbortController();
-      
-      const chatMessages = newMessages.map(msg => ({
-        role: msg.role,
-        content: msg.content
-      }));
-      
+
+      // 构建request body：messages包含历史文件，query包含本次上传的新文件
       const requestBody = {
-        messages: chatMessages,
+        messages: newMessages.map((msg, index) => {
+          // 最新用户消息（最后一条用户消息）不包含文件，文件通过query传递
+          // 避免文件重复（既在messages中又在query中）
+          const isLatestUserMessage = index === newMessages.length - 1 && msg.role === 'user';
+
+          // 如果是历史用户消息（不是最新的）且包含文件，将文件信息编码到消息的content中
+          if (msg.role === 'user' && msg.files && msg.files.length > 0 && !isLatestUserMessage) {
+            // 构建OpenAI多部分消息格式
+            const contentParts: any[] = [];
+
+            // 添加文本内容
+            if (msg.content && msg.content.trim()) {
+              contentParts.push({
+                type: 'text',
+                text: msg.content
+              });
+            }
+
+            // 添加文件信息，转换为OpenAI支持的标准格式
+            msg.files.forEach(file => {
+              if (file.type === 'file_base64') {
+                const mimeType = file.mime_type || 'application/octet-stream';
+
+                // 图片文件：转换为image_url格式
+                if (mimeType.startsWith('image/')) {
+                  contentParts.push({
+                    type: 'image_url',
+                    image_url: {
+                      url: `data:${mimeType};base64,${file.content}`
+                    }
+                  });
+                } else if (mimeType.startsWith('audio/') || file.file_name.match(/\.(mp3|wav|ogg|m4a)$/i)) {
+                  // 音频文件：使用input_audio格式（OpenAI格式）
+                  contentParts.push({
+                    type: 'input_audio',
+                    input_audio: {
+                      data: `data:${mimeType};base64,${file.content}`,
+                      format: 'wav' // 假设音频格式为wav
+                    }
+                  });
+                } else {
+                  // 其他文件（文档、PDF等）：暂时保留为自定义格式
+                  // 后端会将这些文件转换为文本内容
+                  contentParts.push({
+                    type: 'file_base64',
+                    content: file.content,
+                    mime_type: mimeType,
+                    file_name: file.file_name,
+                    file_size: file.file_size
+                  });
+                }
+              } else if (file.type === 'document') {
+                // 数据源文件：保留为自定义格式
+                contentParts.push({
+                  type: 'document',
+                  content: file.content
+                });
+              }
+            });
+
+            return {
+              role: msg.role,
+              content: contentParts
+            };
+          } else {
+            // 没有文件的消息或最新用户消息，保持原样（最新用户消息的文件通过query传递）
+            return {
+              role: msg.role,
+              content: msg.content
+            };
+          }
+        }),
+        query: currentFiles.length > 0 ? [...currentFiles] : [], // query只包含本次上传的新文件
         config: {
           ...modelConfig,
           deep_thinking: deepThinking
         }
       };
-      
+
       const url = '/aicenter/v1/llm_model/model/' + model.id + '/chat';
-      
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -423,38 +616,44 @@ const LLMModelSetting: React.FC = () => {
             if (line.startsWith('data: ')) {
               const data = line.slice(6);
               if (data === '[DONE]') {
+                // 标记消息为已完成
+                setMessages(prev => prev.map(msg =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, isComplete: true }
+                    : msg
+                ));
                 setThinkingMessageId(null);
                 break;
               }
               try {
                 const parsed = JSON.parse(data);
                 if (parsed.error) {
-                  setMessages(prev => prev.map(msg => 
-                    msg.id === assistantMessageId 
+                  setMessages(prev => prev.map(msg =>
+                    msg.id === assistantMessageId
                       ? { ...msg, content: '错误: ' + parsed.error }
                       : msg
                   ));
                   setThinkingMessageId(null);
                   break;
                 }
-                
+
                 setMessages(prev => prev.map(msg => {
                   if (msg.id !== assistantMessageId) return msg;
-                  
+
                   const updates: Partial<Message> = {};
-                  
+
                   if (parsed.text) {
                     updates.content = msg.content + parsed.text;
                   }
-                  
+
                   if (parsed.reasoning_content) {
                     updates.reasoning_content = (msg.reasoning_content || '') + parsed.reasoning_content;
                   }
-                  
+
                   if (parsed.usage) {
                     updates.usage = parsed.usage;
                   }
-                  
+
                   return { ...msg, ...updates };
                 }));
               } catch (e) {
@@ -466,15 +665,15 @@ const LLMModelSetting: React.FC = () => {
       }
     } catch (error: any) {
       if (error.name === 'AbortError') {
-        setMessages(prev => prev.map(msg => 
-          msg.id === assistantMessageId 
+        setMessages(prev => prev.map(msg =>
+          msg.id === assistantMessageId
             ? { ...msg, content: msg.content + '\n[已停止生成]' }
             : msg
         ));
       } else {
         console.error('Chat error:', error);
-        setMessages(prev => prev.map(msg => 
-          msg.id === assistantMessageId 
+        setMessages(prev => prev.map(msg =>
+          msg.id === assistantMessageId
             ? { ...msg, content: '抱歉，生成回复时出现错误: ' + error.message }
             : msg
         ));
@@ -490,6 +689,8 @@ const LLMModelSetting: React.FC = () => {
       setIsGenerating(false);
       setThinkingMessageId(null);
       abortControllerRef.current = null;
+      // 清空已选择的文件
+      setSelectedFiles([]);
     }
   };
 
@@ -732,11 +933,13 @@ const LLMModelSetting: React.FC = () => {
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || !model || isGenerating) return;
 
+    // 创建用户消息，包含文件信息
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
       content: inputMessage.trim(),
-      timestamp: new Date()
+      timestamp: new Date(),
+      files: selectedFiles.length > 0 ? [...selectedFiles] : undefined // 存储本次上传的文件
     };
 
     const newMessages = [...messages, userMessage];
@@ -749,7 +952,8 @@ const LLMModelSetting: React.FC = () => {
       id: assistantMessageId,
       role: 'assistant',
       content: '',
-      timestamp: new Date()
+      timestamp: new Date(),
+      isComplete: false // 标记为未完成，等待[DONE]消息
     };
     setMessages(prev => [...prev, assistantMessage]);
     setThinkingMessageId(assistantMessageId);
@@ -759,24 +963,92 @@ const LLMModelSetting: React.FC = () => {
 
     try {
       abortControllerRef.current = new AbortController();
-      
-      const chatMessages = newMessages.map(msg => ({
-        role: msg.role,
-        content: msg.content
-      }));
-      
+
+      // 构建request body：messages包含历史文件，query包含本次上传的新文件
       const requestBody = {
-        messages: chatMessages,
+        messages: newMessages.map((msg, index) => {
+          // 最新用户消息（最后一条用户消息）不包含文件，文件通过query传递
+          // 避免文件重复（既在messages中又在query中）
+          const isLatestUserMessage = index === newMessages.length - 1 && msg.role === 'user';
+
+          // 如果是历史用户消息（不是最新的）且包含文件，将文件信息编码到消息的content中
+          if (msg.role === 'user' && msg.files && msg.files.length > 0 && !isLatestUserMessage) {
+            // 构建OpenAI多部分消息格式
+            const contentParts: any[] = [];
+
+            // 添加文本内容
+            if (msg.content && msg.content.trim()) {
+              contentParts.push({
+                type: 'text',
+                text: msg.content
+              });
+            }
+
+            // 添加文件信息，转换为OpenAI支持的标准格式
+            msg.files.forEach(file => {
+              if (file.type === 'file_base64') {
+                const mimeType = file.mime_type || 'application/octet-stream';
+
+                // 图片文件：转换为image_url格式
+                if (mimeType.startsWith('image/')) {
+                  contentParts.push({
+                    type: 'image_url',
+                    image_url: {
+                      url: `data:${mimeType};base64,${file.content}`
+                    }
+                  });
+                } else if (mimeType.startsWith('audio/') || file.file_name.match(/\.(mp3|wav|ogg|m4a)$/i)) {
+                  // 音频文件：使用input_audio格式（OpenAI格式）
+                  contentParts.push({
+                    type: 'input_audio',
+                    input_audio: {
+                      data: `data:${mimeType};base64,${file.content}`,
+                      format: 'wav' // 假设音频格式为wav
+                    }
+                  });
+                } else {
+                  // 其他文件（文档、PDF等）：暂时保留为自定义格式
+                  // 后端会将这些文件转换为文本内容
+                  contentParts.push({
+                    type: 'file_base64',
+                    content: file.content,
+                    mime_type: mimeType,
+                    file_name: file.file_name,
+                    file_size: file.file_size
+                  });
+                }
+              } else if (file.type === 'document') {
+                // 数据源文件：保留为自定义格式
+                contentParts.push({
+                  type: 'document',
+                  content: file.content
+                });
+              }
+            });
+
+            return {
+              role: msg.role,
+              content: contentParts
+            };
+          } else {
+            // 没有文件的消息或最新用户消息，保持原样（最新用户消息的文件通过query传递）
+            return {
+              role: msg.role,
+              content: msg.content
+            };
+          }
+        }),
+        query: selectedFiles.length > 0 ? [...selectedFiles] : [], // query只包含本次上传的新文件
         config: {
           ...modelConfig,
           deep_thinking: deepThinking
         }
       };
-      
+
       const url = '/aicenter/v1/llm_model/model/' + model.id + '/chat';
       console.log('[DEBUG] Request URL:', url);
       console.log('[DEBUG] Request Body:', JSON.stringify(requestBody, null, 2));
-      
+
       // 使用原生fetch处理SSE流式响应
       const response = await fetch(url, {
         method: 'POST',
@@ -793,7 +1065,7 @@ const LLMModelSetting: React.FC = () => {
       if (!response.ok) {
         const errorText = await response.text();
         console.error('[DEBUG] Error response:', errorText);
-        throw new Error(`请求失败: ${response.status} ${errorText}`);
+        throw new Error(`请求失败: {response.status} ${errorText}`);
       }
 
       const reader = response.body?.getReader();
@@ -811,38 +1083,44 @@ const LLMModelSetting: React.FC = () => {
             if (line.startsWith('data: ')) {
               const data = line.slice(6);
               if (data === '[DONE]') {
+                // 标记消息为已完成
+                setMessages(prev => prev.map(msg =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, isComplete: true }
+                    : msg
+                ));
                 setThinkingMessageId(null);
                 break;
               }
               try {
                 const parsed = JSON.parse(data);
                 if (parsed.error) {
-                  setMessages(prev => prev.map(msg => 
-                    msg.id === assistantMessageId 
+                  setMessages(prev => prev.map(msg =>
+                    msg.id === assistantMessageId
                       ? { ...msg, content: '错误: ' + parsed.error }
                       : msg
                   ));
                   setThinkingMessageId(null);
                   break;
                 }
-                
+
                 setMessages(prev => prev.map(msg => {
                   if (msg.id !== assistantMessageId) return msg;
-                  
+
                   const updates: Partial<Message> = {};
-                  
+
                   if (parsed.text) {
                     updates.content = msg.content + parsed.text;
                   }
-                  
+
                   if (parsed.reasoning_content) {
                     updates.reasoning_content = (msg.reasoning_content || '') + parsed.reasoning_content;
                   }
-                  
+
                   if (parsed.usage) {
                     updates.usage = parsed.usage;
                   }
-                  
+
                   return { ...msg, ...updates };
                 }));
               } catch (e) {
@@ -854,15 +1132,15 @@ const LLMModelSetting: React.FC = () => {
       }
     } catch (error: any) {
       if (error.name === 'AbortError') {
-        setMessages(prev => prev.map(msg => 
-          msg.id === assistantMessageId 
+        setMessages(prev => prev.map(msg =>
+          msg.id === assistantMessageId
             ? { ...msg, content: msg.content + '\n[已停止生成]' }
             : msg
         ));
       } else {
         console.error('Chat error:', error);
-        setMessages(prev => prev.map(msg => 
-          msg.id === assistantMessageId 
+        setMessages(prev => prev.map(msg =>
+          msg.id === assistantMessageId
             ? { ...msg, content: '抱歉，生成回复时出现错误: ' + error.message }
             : msg
         ));
@@ -878,6 +1156,8 @@ const LLMModelSetting: React.FC = () => {
       setIsGenerating(false);
       setThinkingMessageId(null);
       abortControllerRef.current = null;
+      // 清空已选择的文件
+      setSelectedFiles([]);
     }
   };
 
@@ -1133,7 +1413,7 @@ const LLMModelSetting: React.FC = () => {
               </div>
             </div>
             
-            <div className="chat-messages">
+            <div className="chat-messages" ref={messagesContainerRef}>
               {messages.length === 0 ? (
                 <div className="empty-chat">
                   <div className="welcome-icon">💬</div>
@@ -1198,31 +1478,131 @@ const LLMModelSetting: React.FC = () => {
                           </div>
                         </div>
                       ) : (
-                        <div className="message-text">{msg.content}</div>
+                        <>
+                          {/* 显示用户上传的文件（在文本上方） */}
+                          {msg.role === 'user' && msg.files && msg.files.length > 0 && (
+                            <div style={{ marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              {msg.files.map((file, fileIndex) => {
+                                // 计算文件大小
+                                let fileSize = '';
+                                if (file.file_size) {
+                                  const size = file.file_size;
+                                  if (size < 1024) {
+                                    fileSize = `${size.toFixed(0)} B`;
+                                  } else if (size < 1024 * 1024) {
+                                    fileSize = `${(size / 1024).toFixed(2)} KB`;
+                                  } else {
+                                    fileSize = `${(size / (1024 * 1024)).toFixed(2)} MB`;
+                                  }
+                                } else if (file.content && typeof file.content === 'string') {
+                                  // Base64 编码的文件大小（作为后备）
+                                  const base64Size = file.content.length * 3 / 4;
+                                  if (base64Size < 1024) {
+                                    fileSize = `${base64Size.toFixed(0)} B`;
+                                  } else if (base64Size < 1024 * 1024) {
+                                    fileSize = `${(base64Size / 1024).toFixed(2)} KB`;
+                                  } else {
+                                    fileSize = `${(base64Size / (1024 * 1024)).toFixed(2)} MB`;
+                                  }
+                                }
+
+                                // 获取文件图标
+                                const getFileIcon = () => {
+                                  const fileName = file.file_name || file.content?.file_name || '';
+                                  if (fileName.endsWith('.pdf')) return '📄';
+                                  if (fileName.match(/\.(doc|docx)$/i)) return '📝';
+                                  if (fileName.match(/\.(jpg|jpeg|png|gif|bmp|webp)$/i)) return '🖼️';
+                                  if (fileName.match(/\.(mp3|wav|ogg|m4a)$/i)) return '🎵';
+                                  if (fileName.match(/\.(mp4|avi|mov|mkv)$/i)) return '🎬';
+                                  if (fileName.match(/\.(zip|rar|7z)$/i)) return '📦';
+                                  if (fileName.match(/\.(txt|md)$/i)) return '📃';
+                                  return '📎';
+                                };
+
+                                // 获取文件扩展名
+                                const fileName = file.file_name || file.content?.file_name || '';
+                                const extension = fileName.split('.').pop()?.toUpperCase() || '';
+
+                                return (
+                                  <div
+                                    key={fileName || `file-${fileIndex}`}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      padding: '10px 12px',
+                                      borderRadius: 6,
+                                      backgroundColor: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
+                                      border: `1px solid ${theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
+                                      transition: 'all 0.2s ease'
+                                    }}
+                                  >
+                                    <div style={{ marginRight: 12, fontSize: 20 }}>
+                                      {getFileIcon()}
+                                    </div>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div style={{
+                                        fontSize: 14,
+                                        fontWeight: 500,
+                                        marginBottom: 2,
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis'
+                                      }}>
+                                        {fileName}
+                                      </div>
+                                      <div style={{
+                                        fontSize: 12,
+                                        color: theme === 'dark' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(0, 0, 0, 0.45)'
+                                      }}>
+                                        {extension} {fileSize ? `· ${fileSize}` : ''}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                          <div className="message-text">{msg.content}</div>
+                        </>
                       )}
                       <div className="message-footer">
                         <span className="message-time">
                           {msg.timestamp.toLocaleTimeString()}
                         </span>
                         <div className="message-actions">
-                          {msg.role === 'assistant' && msg.content && (
+                          {msg.role === 'assistant' && (
                             <>
-                              <Tooltip title="重新回答">
-                                <Button 
-                                  type="text" 
-                                  size="small"
-                                  icon={<ReloadOutlined />} 
-                                  onClick={() => handleRegenerate(index)}
-                                />
-                              </Tooltip>
-                              <Tooltip title="复制回答">
-                                <Button 
-                                  type="text" 
-                                  size="small"
-                                  icon={<CopyOutlined />} 
-                                  onClick={() => copyToClipboard(msg.content, '回答')}
-                                />
-                              </Tooltip>
+                              {/* 如果消息未完成，显示运行中图标 */}
+                              {!msg.isComplete ? (
+                                <Tooltip title="正在生成中">
+                                  <Button
+                                    type="text"
+                                    size="small"
+                                    icon={<LoadingOutlined spin />}
+                                  />
+                                </Tooltip>
+                              ) : (
+                                msg.content && (
+                                  <>
+                                    <Tooltip title="重新回答">
+                                      <Button
+                                        type="text"
+                                        size="small"
+                                        icon={<ReloadOutlined />}
+                                        onClick={() => handleRegenerate(index)}
+                                      />
+                                    </Tooltip>
+                                    <Tooltip title="复制回答">
+                                      <Button
+                                        type="text"
+                                        size="small"
+                                        icon={<CopyOutlined />}
+                                        onClick={() => copyToClipboard(msg.content, '回答')}
+                                      />
+                                    </Tooltip>
+                                  </>
+                                )
+                              )}
                             </>
                           )}
                           {msg.role === 'user' && !editingMessageId && (
@@ -1255,6 +1635,96 @@ const LLMModelSetting: React.FC = () => {
             </div>
             
             <div className="chat-input-area">
+              {/* 显示已选择的文件列表 */}
+              {selectedFiles.length > 0 && (
+                <div style={{
+                  marginBottom: 12,
+                  display: 'flex',
+                  flexDirection: 'row',
+                  flexWrap: 'wrap',
+                  gap: 8,
+                  padding: '0 16px'
+                }}>
+                  {selectedFiles.map((file, index) => {
+                    // 计算文件大小
+                    let fileSize = '';
+                    if (file.file_size) {
+                      const size = file.file_size;
+                      if (size < 1024) {
+                        fileSize = `${size.toFixed(0)} B`;
+                      } else if (size < 1024 * 1024) {
+                        fileSize = `${(size / 1024).toFixed(2)} KB`;
+                      } else {
+                        fileSize = `${(size / (1024 * 1024)).toFixed(2)} MB`;
+                      }
+                    }
+
+                    // 获取文件图标
+                    const getFileNameIcon = () => {
+                      const fileName = file.file_name || '';
+                      if (fileName.endsWith('.pdf')) return <span style={{ marginRight: 8 }}>📄</span>;
+                      if (fileName.endsWith('.doc') || fileName.endsWith('.docx')) return <span style={{ marginRight: 8 }}>📝</span>;
+                      if (fileName.match(/\.(jpg|jpeg|png|gif|bmp|webp)$/i)) return <span style={{ marginRight: 8 }}>🖼️</span>;
+                      if (fileName.match(/\.(mp3|wav|ogg|m4a)$/i)) return <span style={{ marginRight: 8 }}>🎵</span>;
+                      return <span style={{ marginRight: 8 }}>📎</span>;
+                    };
+
+                    return (
+                      <div key={index} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '8px 12px',
+                        background: theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
+                        borderRadius: 6,
+                        border: `1px solid ${theme === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'}`,
+                        maxWidth: '33.33%',
+                        flex: '0 0 auto',
+                        minWidth: '200px'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                          {getFileNameIcon()}
+                          <span style={{
+                            fontSize: 14,
+                            color: theme === 'dark' ? '#fff' : '#333',
+                            flex: 1,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            {file.file_name}
+                          </span>
+                        </div>
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 12,
+                          marginLeft: 12
+                        }}>
+                          <span style={{
+                            fontSize: 12,
+                            color: theme === 'dark' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(0, 0, 0, 0.45)'
+                          }}>
+                            {fileSize}
+                          </span>
+                          <Tooltip title="移除文件">
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<RemoveFileOutlined />}
+                              onClick={() => handleRemoveFile(index)}
+                              style={{
+                                color: theme === 'dark' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(0, 0, 0, 0.45)'
+                              }}
+                            />
+                          </Tooltip>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
               <div className="chat-input-wrapper">
                 <TextArea
                   value={inputMessage}
@@ -1270,15 +1740,80 @@ const LLMModelSetting: React.FC = () => {
                   className="chat-input"
                 />
                 <div className="chat-input-inner-footer">
-                  <div className={`deep-thinking-switch ${theme === 'dark' ? 'dark' : 'light'}`} onClick={() => setDeepThinking(!deepThinking)}>
-                    <BulbOutlined className={deepThinking ? 'bulb-active' : ''} />
-                    <span>深度思考</span>
-                    <Switch size="small" checked={deepThinking} onChange={setDeepThinking} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <div className={`deep-thinking-switch ${theme === 'dark' ? 'dark' : 'light'}`} onClick={() => setDeepThinking(!deepThinking)}>
+                      <BulbOutlined className={deepThinking ? 'bulb-active' : ''} />
+                      <span>深度思考</span>
+                      <Switch size="small" checked={deepThinking} onChange={setDeepThinking} />
+                    </div>
+
+                    {/* 上传文件下拉菜单 */}
+                    <Dropdown
+                      menu={{
+                        items: [
+                          {
+                            key: 'local',
+                            label: (
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 8,
+                                  padding: '8px 16px',
+                                  height: '36px',
+                                  boxSizing: 'border-box'
+                                }}
+                              >
+                                <UploadOutlined />
+                                <span>上传本地文件</span>
+                              </div>
+                            ),
+                            onClick: () => {
+                              // 触发文件选择
+                              const input = document.createElement('input');
+                              input.type = 'file';
+                              input.multiple = true;
+                              input.onchange = (e) => {
+                                const files = (e.target as HTMLInputElement).files;
+                                if (files) {
+                                  Array.from(files).forEach(file => handleLocalFileUpload(file));
+                                }
+                              };
+                              input.click();
+                            }
+                          },
+                          {
+                            key: 'datasource',
+                            label: (
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 8,
+                                  padding: '8px 16px',
+                                  height: '36px',
+                                  boxSizing: 'border-box',
+                                  cursor: 'pointer'
+                                }}
+                                onClick={() => setIsDataSourceModalVisible(true)}
+                              >
+                                <InboxOutlined />
+                                <span>从数据源选择文件</span>
+                              </div>
+                            )
+                          }
+                        ]
+                      }}
+                      trigger={['click']}
+                      placement="bottomRight"
+                    >
+                      <Button icon={<PaperClipOutlined />} type="text" />
+                    </Dropdown>
                   </div>
                 </div>
                 {isGenerating ? (
-                  <Button 
-                    type="primary" 
+                  <Button
+                    type="primary"
                     danger
                     onClick={handleStopGeneration}
                     className="input-send-button"
@@ -1286,11 +1821,11 @@ const LLMModelSetting: React.FC = () => {
                     停止
                   </Button>
                 ) : (
-                  <Button 
-                    type="primary" 
+                  <Button
+                    type="primary"
                     icon={<SendOutlined />}
                     onClick={handleSendMessage}
-                    disabled={!inputMessage.trim()}
+                    disabled={!inputMessage.trim() && selectedFiles.length === 0}
                     className="input-send-button"
                   />
                 )}
@@ -1299,6 +1834,14 @@ const LLMModelSetting: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* 数据源选择文件弹窗 */}
+      <DataSourceFileSelector
+        visible={isDataSourceModalVisible}
+        onCancel={() => setIsDataSourceModalVisible(false)}
+        onConfirm={handleDataSourceFileConfirm}
+        theme={theme}
+      />
     </div>
   );
 };

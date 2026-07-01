@@ -8,6 +8,7 @@ import MDEditor from '@uiw/react-md-editor';
 import PageHeader from '../../components/page-header';
 import ChapterList from '../../components/ChapterList';
 import { Chapter } from './folder_modal/AddChapterModal';
+import IntelligentExtractModal from './intelligent_extract_modal';
 import {
   UploadOutlined,
   PlusOutlined,
@@ -27,6 +28,7 @@ import {
   FolderOutlined,
   TableOutlined,
   QuestionCircleOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons';
 import { knowledgebaseService, KnowledgebaseDocument, KnowledgebaseCategory, KnowledgebaseDocumentCategory } from '../../services/knowledgebase';
 import { datasourceService, Datasource } from '../../services/datasource';
@@ -119,6 +121,12 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
   // 自定义字段值状态
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, any>>({});
   
+  // 智能提取新增的自定义字段定义
+  const [extraCustomFields, setExtraCustomFields] = useState<any[]>([]);
+  
+  // 动态章节状态
+  const [dynamicChapters, setDynamicChapters] = useState<Chapter[]>([]);
+  
   // 合并用户标签和知识目录标签
   const tags = useMemo(() => {
     const allTags = [...categoryTags];
@@ -152,6 +160,8 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
   const [newTag, setNewTag] = useState('');
   const tagInputRef = useRef<HTMLInputElement>(null);
   const fileMapRef = useRef<Map<string, File>>(new Map());
+  
+  const [showIntelligentExtract, setShowIntelligentExtract] = useState<boolean>(false);
 
   // 格式化文件大小
   const formatFileSize = (bytes: number): string => {
@@ -252,6 +262,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     richTextContent: '',
     title: '',
     customFieldValues: {} as Record<string, any>,
+    dynamicChapters: [] as Chapter[],
   });
 
   useEffect(() => {
@@ -523,6 +534,12 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         } else {
           setCategoryTags([]);
         }
+        
+        // 如果切换到非动态章节的知识目录，清空动态章节
+        const chapterType = category.document_config?.chapter_type || 'fixed';
+        if (chapterType !== 'dynamic') {
+          setDynamicChapters([]);
+        }
       }
     }
   }, [categoryId, categories, isEdit]);
@@ -657,6 +674,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       // 从document_config中读取richTextContent和customFieldValues
       let initRichTextContent = '';
       let initCustomFieldValues: Record<string, any> = {};
+      let initDynamicChapters: Chapter[] = [];
       
       if (doc.document_config) {
         try {
@@ -682,6 +700,24 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
           if (documentConfig.chapters && Array.isArray(documentConfig.chapters)) {
             const chapterFieldsValues: Record<string, any> = {};
             
+            // 检查是否是动态章节
+            const category = findCategoryById(categories, docCategoryId);
+            const isDynamicChapter = category && 
+              category.document_config?.template_type === 'custom_template' && 
+              category.document_config?.chapter_type === 'dynamic';
+            
+            // 如果是动态章节，加载章节结构
+            if (isDynamicChapter) {
+              initDynamicChapters = documentConfig.chapters.map((chapter: any) => ({
+                id: chapter.id,
+                name: chapter.name,
+                parentId: chapter.parentId,
+                type: chapter.type,
+                fields: chapter.fields,
+              }));
+              setDynamicChapters(initDynamicChapters);
+            }
+            
             for (const chapter of documentConfig.chapters) {
               if (chapter.id && chapter.value !== undefined) {
                 switch (chapter.type) {
@@ -704,6 +740,15 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
             if (Object.keys(chapterFieldsValues).length > 0) {
               initCustomFieldValues.chapter_fields_values = chapterFieldsValues;
             }
+          }
+
+          // 处理富文本章节类型：从content字段读取内容
+          const category = findCategoryById(categories, docCategoryId);
+          if (category && 
+              category.document_config?.template_type === 'custom_template' && 
+              category.document_config?.chapter_type === 'rich_text' &&
+              documentConfig.content) {
+            initCustomFieldValues.chapter_rich_text_content = documentConfig.content;
           }
           
           if (documentConfig.content) {
@@ -738,6 +783,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         richTextContent: initRichTextContent,
         title: doc.title || '',
         customFieldValues: initCustomFieldValues,
+        dynamicChapters: initDynamicChapters,
       };
       setOriginalData(initData);
       setCustomFieldValues(initCustomFieldValues);
@@ -747,7 +793,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       initDefaultChunkConfig('naive');
       setIsInitialized(true);
     }
-  }, [doc, constants]);
+  }, [doc, constants, categories]);
 
   const normalizeValue = (value: any): any => {
     if (value === null || value === undefined || value === '') {
@@ -828,6 +874,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         richTextContent: false,
         title: false,
         customFieldValues: false,
+        dynamicChapters: false,
       };
     }
     return {
@@ -842,6 +889,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       richTextContent: richTextContent !== originalData.richTextContent,
       title: title !== originalData.title,
       customFieldValues: !compareCustomFieldValues(customFieldValues, originalData.customFieldValues),
+      dynamicChapters: JSON.stringify(dynamicChapters) !== JSON.stringify(originalData.dynamicChapters),
     };
   }, [sourceType, chunkMethod, chunkConfig, tags, status, fileList, categoryId, metadatas, richTextContent, title, customFieldValues, originalData, isInitialized]);
 
@@ -867,6 +915,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       richTextContent,
       title,
       customFieldValues,
+      dynamicChapters: [...dynamicChapters],
     };
     const changed =
       current.sourceType !== originalData.sourceType ||
@@ -879,9 +928,10 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       JSON.stringify(current.metadatas) !== JSON.stringify(originalData.metadatas) ||
       current.richTextContent !== originalData.richTextContent ||
       current.title !== originalData.title ||
-      JSON.stringify(current.customFieldValues) !== JSON.stringify(originalData.customFieldValues);
+      JSON.stringify(current.customFieldValues) !== JSON.stringify(originalData.customFieldValues) ||
+      JSON.stringify(current.dynamicChapters) !== JSON.stringify(originalData.dynamicChapters);
     setHasChanges(changed);
-    }, [sourceType, chunkMethod, chunkConfig, tags, status, fileList, categoryId, metadatas, richTextContent, title, customFieldValues, originalData, constants, isInitialized]);
+    }, [sourceType, chunkMethod, chunkConfig, tags, status, fileList, categoryId, metadatas, richTextContent, title, customFieldValues, dynamicChapters, originalData, constants, isInitialized]);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -1046,7 +1096,9 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         }
         
         // 校验章节目录必填字段
-        const chapters = category.document_config.chapters || [];
+        // 如果是动态章节，使用dynamicChapters；如果是固定章节，使用category.document_config.chapters
+        const chapterType = category.document_config.chapter_type || 'fixed';
+        const chapters = chapterType === 'dynamic' ? dynamicChapters : (category.document_config.chapters || []);
         const chapterFieldsValues = customFieldValues.chapter_fields_values || {};
         
         // 递归校验章节字段
@@ -1117,9 +1169,32 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       if (category && category.document_config?.template_type === 'custom_template') {
         const categoryDocConfig = category.document_config;
         
-        // 复制custom_fields，并为每个字段添加value属性
-        if (categoryDocConfig.custom_fields && categoryDocConfig.custom_fields.length > 0) {
-          documentConfig.custom_fields = categoryDocConfig.custom_fields.map((field: any) => {
+        // 编辑时优先从数据集的document_config获取字段定义
+        let docDocConfig: any = null;
+        if (isEdit && doc?.document_config) {
+          try {
+            docDocConfig = typeof doc.document_config === 'string' 
+              ? JSON.parse(doc.document_config) 
+              : doc.document_config;
+          } catch (e) {
+            console.error('Failed to parse doc document_config:', e);
+          }
+        }
+        
+        // 合并字段定义：数据集字段 + 目录中存在但数据集中没有的字段 + 智能提取新增的字段
+        const categoryFields = categoryDocConfig.custom_fields || [];
+        const docFields = docDocConfig?.custom_fields || [];
+        const docFieldIds = new Set(docFields.map((f: any) => f.id));
+        const allCustomFields = [...docFields, ...categoryFields.filter((f: any) => !docFieldIds.has(f.id))];
+        // 合并智能提取新增的字段
+        const existingFieldIds = new Set(allCustomFields.map((f: any) => f.id));
+        extraCustomFields.forEach(f => {
+          if (f.id && !existingFieldIds.has(f.id)) {
+            allCustomFields.push(f);
+          }
+        });
+        if (allCustomFields.length > 0) {
+          documentConfig.custom_fields = allCustomFields.map((field: any) => {
             let value = customFieldValues[field.id];
             if (value === undefined || value === null) {
               if (field.default_value !== undefined && field.default_value !== null) {
@@ -1194,6 +1269,63 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
               value,
             };
           });
+        }
+        
+        // 处理动态章节
+        if (categoryDocConfig.chapter_type === 'dynamic' && dynamicChapters.length > 0) {
+          const chapterFieldsValues = customFieldValues.chapter_fields_values || {};
+          
+          documentConfig.chapters = dynamicChapters.map((chapter: any) => {
+            const chapterValue = chapterFieldsValues[chapter.id] || {};
+            let value: any = null;
+            
+            switch (chapter.type) {
+              case 'form':
+                // 表单类型：value是对象 {"字段id":"字段值"}
+                value = {};
+                if (chapter.fields && chapter.fields.length > 0) {
+                  for (const field of chapter.fields) {
+                    let fieldValue = chapterValue[field.id];
+                    if (fieldValue === undefined || fieldValue === null) {
+                      if (field.default_value !== undefined && field.default_value !== null) {
+                        fieldValue = field.default_value;
+                      } else {
+                        switch (field.field_type) {
+                          case 'object':
+                            fieldValue = {};
+                            break;
+                          case 'array':
+                            fieldValue = [];
+                            break;
+                          default:
+                            fieldValue = null;
+                        }
+                      }
+                    }
+                    value[field.id] = fieldValue;
+                  }
+                }
+                break;
+              case 'list':
+                // 列表类型：value是数组 [{"字段id":"字段值"}]
+                value = chapterValue.list_data || [];
+                break;
+              case 'rich_text':
+                // 富文本类型：value是字符串
+                value = chapterValue.rich_text_content || '';
+                break;
+            }
+            
+            return {
+              ...chapter,
+              value,
+            };
+          });
+        }
+
+        // 处理富文本章节类型
+        if (categoryDocConfig.chapter_type === 'rich_text') {
+          documentConfig.content = customFieldValues.chapter_rich_text_content || '';
         }
       }
     }
@@ -1434,6 +1566,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     setRichTextContent(originalData.richTextContent);
     setTitle(originalData.title);
     setCustomFieldValues(originalData.customFieldValues);
+    setDynamicChapters([...originalData.dynamicChapters]);
   };
 
   const renderSourceTypes = () => {
@@ -1655,9 +1788,20 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     if (sourceType !== 'rich_text') return null;
     return (
       <div style={{ width: '100%', ...(isEdit && fieldChanges.richTextContent ? changedFieldStyle : {}) }}>
-        <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
-          知识内容 <span style={{ color: '#ff4d4f' }}>*</span>
-          {isEdit && fieldChanges.richTextContent && <span style={{ color: '#faad14', marginLeft: 8, fontSize: 12 }}>已修改</span>}
+        <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            知识内容 <span style={{ color: '#ff4d4f' }}>*</span>
+            {isEdit && fieldChanges.richTextContent && <span style={{ color: '#faad14', marginLeft: 8, fontSize: 12 }}>已修改</span>}
+          </div>
+          <Button
+            type="primary"
+            icon={<ThunderboltOutlined />}
+            size="small"
+            onClick={() => setShowIntelligentExtract(true)}
+            style={{ marginLeft: 8 }}
+          >
+            智能提取
+          </Button>
         </div>
         <div style={{ width: '100%' }}>
           <MDEditor
@@ -2485,11 +2629,35 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     const category = findCategoryById(categories, categoryId);
     if (!category || category.document_config?.template_type !== 'custom_template') return null;
     
-    const docConfig = category.document_config || {};
-    const customFields = docConfig.custom_fields || [];
-    const hasKnowledgeContent = docConfig.has_knowledge_content || false;
-    const chapterType = docConfig.chapter_type || 'fixed';
-    const chapters = docConfig.chapters || [];
+    const categoryDocConfig = category.document_config || {};
+    
+    // 编辑时优先从数据集的document_config获取字段定义和章节
+    let docDocConfig: any = null;
+    if (isEdit && doc?.document_config) {
+      try {
+        docDocConfig = typeof doc.document_config === 'string' 
+          ? JSON.parse(doc.document_config) 
+          : doc.document_config;
+      } catch (e) {
+        console.error('Failed to parse doc document_config:', e);
+      }
+    }
+    
+    // 自定义字段：编辑时优先使用数据集的document_config中的字段定义
+    const categoryCustomFields = categoryDocConfig.custom_fields || [];
+    const docCustomFields = docDocConfig?.custom_fields || [];
+    const docFieldIds = new Set(docCustomFields.map((f: any) => f.id));
+    // 合并：数据集字段 + 目录中存在但数据集中没有的字段
+    const baseCustomFields = [...docCustomFields, ...categoryCustomFields.filter((f: any) => !docFieldIds.has(f.id))];
+    // 合并智能提取新增的自定义字段
+    const baseFieldIds = new Set(baseCustomFields.map((f: any) => f.id));
+    const extraFields = extraCustomFields.filter(f => !baseFieldIds.has(f.id));
+    const customFields = [...baseCustomFields, ...extraFields];
+    
+    const hasKnowledgeContent = categoryDocConfig.has_knowledge_content || false;
+    const chapterType = categoryDocConfig.chapter_type || 'fixed';
+    // 动态章节使用dynamicChapters状态，固定章节使用目录配置或数据集配置
+    const chapters = chapterType === 'dynamic' ? dynamicChapters : (docDocConfig?.chapters || categoryDocConfig.chapters || []);
     
     // 渲染字段值控件
     const renderFieldValue = (field: any) => {
@@ -2653,9 +2821,20 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     
     return (
       <div style={{ width: '100%', ...(isEdit && fieldChanges.customFieldValues ? changedFieldStyle : {}) }}>
-        <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
-          知识配置
-          {isEdit && fieldChanges.customFieldValues && <span style={{ color: '#faad14', marginLeft: 8, fontSize: 12 }}>已修改</span>}
+        <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            知识配置
+            {isEdit && fieldChanges.customFieldValues && <span style={{ color: '#faad14', marginLeft: 8, fontSize: 12 }}>已修改</span>}
+          </div>
+          <Button
+            type="primary"
+            icon={<ThunderboltOutlined />}
+            size="small"
+            onClick={() => setShowIntelligentExtract(true)}
+            style={{ marginLeft: 8 }}
+          >
+            智能提取
+          </Button>
         </div>
         <div style={{ 
           padding: 16, 
@@ -2708,6 +2887,57 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
               />
             </div>
           )}
+          
+          {/* 动态章节配置 */}
+          {hasKnowledgeContent && chapterType === 'dynamic' && (
+            <div style={{ marginTop: customFields.length > 0 ? 16 : 0, paddingTop: customFields.length > 0 ? 16 : 0, borderTop: customFields.length > 0 ? `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}` : 'none' }}>
+              <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
+                章节目录
+                <Tooltip title="动态章节：用户可手动添加章节及章节字段">
+                  <QuestionCircleOutlined style={{ marginLeft: 4, color: '#999', fontSize: 14 }} />
+                </Tooltip>
+              </div>
+              <ChapterList 
+                chapters={dynamicChapters} 
+                onChange={(newChapters) => {
+                  setDynamicChapters(newChapters);
+                  setHasChanges(true);
+                }} 
+                editable={true}
+                documentConstants={constants}
+                chapterFieldsValues={customFieldValues.chapter_fields_values || {}}
+                onChapterFieldsValuesChange={(values) => {
+                  setCustomFieldValues(prev => ({
+                    ...prev,
+                    chapter_fields_values: values,
+                  }));
+                }}
+              />
+            </div>
+          )}
+
+          {/* 富文本章节配置 */}
+          {hasKnowledgeContent && chapterType === 'rich_text' && (
+            <div style={{ marginTop: customFields.length > 0 ? 16 : 0, paddingTop: customFields.length > 0 ? 16 : 0, borderTop: customFields.length > 0 ? `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}` : 'none' }}>
+              <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
+                知识内容
+              </div>
+              <div style={{ width: '100%' }}>
+                <MDEditor
+                  value={customFieldValues.chapter_rich_text_content || ''}
+                  onChange={(val) => {
+                    setCustomFieldValues(prev => ({
+                      ...prev,
+                      chapter_rich_text_content: val || ''
+                    }));
+                    setHasChanges(true);
+                  }}
+                  height={250}
+                  preview="edit"
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -2730,6 +2960,64 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         </div>
       </div>
     );
+  };
+
+  const handleIntelligentExtractConfirm = (extractedData: {
+    title?: string;
+    tags?: string[];
+    customFieldValues?: Record<string, any>;
+    richTextContent?: string;
+    chapterFieldsValues?: Record<string, any>;
+    dynamicChapters?: any[];
+    newCustomFields?: any[];
+  }) => {
+    if (extractedData.title) {
+      setTitle(extractedData.title);
+    }
+    if (extractedData.tags) {
+      const newCategoryTags = extractedData.tags.filter(tag => !categoryTags.includes(tag));
+      setUserTags(prev => {
+        const mergedTags = [...prev];
+        newCategoryTags.forEach(tag => {
+          if (!mergedTags.includes(tag)) {
+            mergedTags.push(tag);
+          }
+        });
+        return mergedTags;
+      });
+    }
+    // 处理新增的自定义字段定义
+    if (extractedData.newCustomFields && extractedData.newCustomFields.length > 0) {
+      setExtraCustomFields(prev => {
+        const existingIds = new Set(prev.map(f => f.id));
+        const toAdd = extractedData.newCustomFields!.filter(f => f.id && !existingIds.has(f.id));
+        return [...prev, ...toAdd];
+      });
+    }
+    if (extractedData.customFieldValues) {
+      setCustomFieldValues(prev => ({
+        ...prev,
+        ...extractedData.customFieldValues
+      }));
+    }
+    // 处理章节字段值
+    if (extractedData.chapterFieldsValues) {
+      setCustomFieldValues(prev => ({
+        ...prev,
+        chapter_fields_values: {
+          ...(prev.chapter_fields_values || {}),
+          ...extractedData.chapterFieldsValues
+        }
+      }));
+    }
+    // 处理动态章节
+    if (extractedData.dynamicChapters && extractedData.dynamicChapters.length > 0) {
+      setDynamicChapters(extractedData.dynamicChapters);
+    }
+    if (extractedData.richTextContent) {
+      setRichTextContent(extractedData.richTextContent);
+    }
+    message.success('智能提取结果已填充到配置页面');
   };
 
   const renderBottomButtons = () => {
@@ -2885,6 +3173,19 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         </Form>
       </div>
       {renderBottomButtons()}
+      
+      <IntelligentExtractModal
+        visible={showIntelligentExtract}
+        knowledgebaseId={knowledgebase.id}
+        selectedCategory={categoryId ? findCategoryById(categories, categoryId) : null}
+        currentTitle={title}
+        currentTags={tags}
+        currentCustomFieldValues={customFieldValues}
+        currentRichTextContent={richTextContent}
+        currentDynamicChapters={dynamicChapters}
+        onCancel={() => setShowIntelligentExtract(false)}
+        onConfirm={handleIntelligentExtractConfirm}
+      />
     </div>
   );
 };

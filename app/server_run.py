@@ -1046,6 +1046,30 @@ try:
     except Exception as e:
         logger.error(f"[MIGRATION]   修改messages字段类型失败: {e}")
 
+    # 修改chat_message表的avatar字段类型为TEXT
+    logger.info("\n[MIGRATION] 修改chat_message表的avatar字段类型为TEXT...")
+    try:
+        cursor = db.execute_sql("""
+            SELECT column_name, data_type, column_type
+            FROM information_schema.columns
+            WHERE table_name = 'chat_message'
+            AND column_name = 'avatar'
+        """)
+        result = cursor.fetchone()
+        
+        if result:
+            logger.info(f"[MIGRATION]   当前avatar字段类型: {result[1]}, {result[2]}")
+            
+            if 'varchar' in result[1].lower():
+                db.execute_sql("ALTER TABLE chat_message MODIFY COLUMN avatar TEXT DEFAULT NULL")
+                logger.info("[MIGRATION]   成功将avatar字段类型修改为TEXT")
+            else:
+                logger.info("[MIGRATION]   avatar字段已经是TEXT类型或其他非VARCHAR类型，跳过")
+        else:
+            logger.info("[MIGRATION]   avatar字段不存在，跳过")
+    except Exception as e:
+        logger.error(f"[MIGRATION]   修改avatar字段类型失败: {e}")
+
     # 为knowledgebase_document表添加metadatas字段
     logger.info("\n[MIGRATION] 为knowledgebase_document表添加metadatas字段...")
     try:

@@ -84,6 +84,10 @@ def chunk(filename, binary=None, callback=None, **kwargs):
         list: 包含单个简历文档元素的列表
     """
     from ..nlp import rag_tokenizer, tokenize
+    from ..utils import ProgressCallback
+    
+    if not callback:
+        callback = ProgressCallback()
     
     if not re.search(r"\.(pdf|doc|docx|txt)$", filename, flags=re.IGNORECASE):
         raise NotImplementedError(f"不支持的文件类型: {filename} (支持: pdf, doc, docx, txt)")
