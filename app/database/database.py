@@ -78,13 +78,7 @@ def get_db_connection():
         MySQLDatabase: 数据库连接对象
     """
     try:
-        if not db.is_closed():
-            try:
-                db.execute_sql('SELECT 1')
-            except Exception:
-                db.close()
-                db.connect(reuse_if_open=True)
-        else:
+        if db.is_closed():
             db.connect(reuse_if_open=True)
     except Exception as e:
         logger.error(f"数据库连接失败: {e}")
