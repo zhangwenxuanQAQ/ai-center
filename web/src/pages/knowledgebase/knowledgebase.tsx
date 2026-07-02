@@ -650,7 +650,8 @@ const KnowledgebaseManagement: React.FC = () => {
             overflowY: 'auto', 
             marginBottom: '0',
             scrollbarWidth: 'none',
-            msOverflowStyle: 'none'
+            msOverflowStyle: 'none',
+            paddingLeft:16
           }} className="hide-scrollbar">
             <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; }`}</style>
             {loading ? (

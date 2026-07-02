@@ -1,7 +1,7 @@
-﻿/* ==================== 白天模式主题样式 ==================== */
+﻿﻿﻿﻿﻿﻿﻿﻿/* ==================== 白天模式主题样式 ==================== */
 
 body[data-theme="light"] .ant-card-bordered:not([data-card-type="model"]) {
-  border-radius: 0 !important;
+  border-radius: 16px !important;
 }
 
 /* 布局背景色 */
@@ -66,9 +66,17 @@ body[data-theme="light"] .ant-layout-content {
 
 /* Card 样式 */
 body[data-theme="light"] .ant-card:not([data-card-type="model"]) {
-  background: transparent !important;
-  border-color: transparent !important;
-  border-radius: 0 !important;
+  background: #ffffff !important;
+  border-color: #f0f0f0 !important;
+  border-radius: 16px !important;
+  border-width: 1px !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+}
+
+body[data-theme="light"] .ant-card:not([data-card-type="model"]):hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08) !important;
+  transform: translateY(-3px) !important;
+  border-color: #e0e0e0 !important;
 }
 
 body[data-theme="light"] .ant-card-body {

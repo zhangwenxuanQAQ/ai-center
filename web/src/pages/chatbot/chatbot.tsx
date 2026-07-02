@@ -746,7 +746,7 @@ const ChatbotManagement: React.FC = () => {
   };
 
   const handleAvatarChange = async (info: any) => {
-    if (info.file.status === 'done' || info.file.originFileObj) {
+    if (info.file.status === 'done') {
       const file = info.file.originFileObj;
       if (file) {
         try {
@@ -762,7 +762,7 @@ const ChatbotManagement: React.FC = () => {
   };
 
   const handleEditAvatarChange = async (info: any) => {
-    if (info.file.status === 'done' || info.file.originFileObj) {
+    if (info.file.status === 'done') {
       const file = info.file.originFileObj;
       if (file) {
         try {
