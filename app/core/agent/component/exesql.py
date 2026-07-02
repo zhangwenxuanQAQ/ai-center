@@ -149,12 +149,28 @@ class ExeSQL(Generate, ABC):
         db = None
         cursor = None
         try:
+            # 创建数据库连接,添加连接超时和读写超时参数
             if self._param.db_type in ["mysql", "mariadb"]:
-                db = pymysql.connect(db=self._param.database, user=self._param.username, host=self._param.host,
-                                     port=self._param.port, password=self._param.password)
+                db = pymysql.connect(
+                    db=self._param.database, 
+                    user=self._param.username, 
+                    host=self._param.host,
+                    port=self._param.port, 
+                    password=self._param.password,
+                    connect_timeout=10,
+                    read_timeout=30,
+                    write_timeout=30,
+                    charset='utf8mb4'
+                )
             elif self._param.db_type == 'postgresql':
-                db = psycopg2.connect(dbname=self._param.database, user=self._param.username, host=self._param.host,
-                                      port=self._param.port, password=self._param.password)
+                db = psycopg2.connect(
+                    dbname=self._param.database, 
+                    user=self._param.username, 
+                    host=self._param.host,
+                    port=self._param.port, 
+                    password=self._param.password,
+                    connect_timeout=10
+                )
             elif self._param.db_type == 'mssql':
                 conn_str = (
                         r'DRIVER={ODBC Driver 17 for SQL Server};'
@@ -204,17 +220,27 @@ class ExeSQL(Generate, ABC):
             if not sql_res:
                 return ExeSQL.be_output("")
             return pd.DataFrame(sql_res)
+        except Exception as e:
+            logging.error(f"SQL执行失败: {str(e)}")
+            raise
         finally:
+            # 确保cursor和db连接正确关闭
             if cursor:
                 try:
                     cursor.close()
-                except:
-                    pass
+                except Exception as e:
+                    logging.warning(f"关闭cursor失败: {str(e)}")
             if db:
                 try:
+                    # 对于MySQL连接,确保关闭前提交或回滚未完成的事务
+                    if self._param.db_type in ["mysql", "mariadb"]:
+                        try:
+                            db.rollback()  # 回滚未提交的事务,避免连接关闭时的警告
+                        except:
+                            pass
                     db.close()
-                except:
-                    pass
+                except Exception as e:
+                    logging.warning(f"关闭数据库连接失败: {str(e)}")
 
     def _regenerate_sql(self, failed_sql, error_message, **kwargs):
         prompt = f'''

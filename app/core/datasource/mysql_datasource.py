@@ -6,6 +6,8 @@ MySQL数据源实现类
 
 from typing import Any, Dict, List, Optional
 from app.core.datasource.base import DatasourceBase
+import threading
+import time
 
 
 class MySQLDatasource(DatasourceBase):
@@ -13,7 +15,153 @@ class MySQLDatasource(DatasourceBase):
     MySQL数据源实现类
     
     实现MySQL数据库的连接测试、查询执行和Schema信息获取
+    使用轻量级连接池机制,避免频繁创建和关闭连接
     """
+    
+    def __init__(self, config: Dict[str, Any]):
+        """
+        初始化MySQL数据源
+        
+        Args:
+            config: 数据源配置字典
+        """
+        super().__init__(config)
+        self._connection_pool = {}  # 简单的连接池字典
+        self._pool_lock = threading.Lock()  # 连接池锁
+        self._pool_max_size = 3  # 每个数据源实例最多保持3个连接
+        self._connection_timeout = 600  # 连接超时时间(秒)
+
+    def _get_connection_key(self) -> str:
+        """
+        生成连接池键
+        
+        Returns:
+            str: 连接池键
+        """
+        return f"{self.config.get('host', 'localhost')}:{self.config.get('port', 3306)}:{self.config.get('database', '')}"
+
+    def _get_pooled_connection(self):
+        """
+        从连接池获取连接,如果连接池为空则创建新连接
+        
+        Returns:
+            connection: pymysql连接对象
+        """
+        import pymysql
+        connection_key = self._get_connection_key()
+        
+        with self._pool_lock:
+            # 清理过期连接
+            self._clean_expired_connections()
+            
+            # 从连接池获取连接
+            if connection_key in self._connection_pool:
+                pool = self._connection_pool[connection_key]
+                if pool:
+                    conn_info = pool.pop()
+                    connection = conn_info['connection']
+                    # 验证连接是否仍然有效
+                    try:
+                        connection.ping(reconnect=True)
+                        return connection
+                    except Exception:
+                        # 连接失效,尝试关闭
+                        try:
+                            connection.close()
+                        except:
+                            pass
+        
+        # 创建新连接
+        connection = pymysql.connect(
+            host=self.config.get('host', 'localhost'),
+            port=int(self.config.get('port', 3306)),
+            user=self.config.get('username', ''),
+            password=self.config.get('password', ''),
+            database=self.config.get('database', ''),
+            charset=self.config.get('charset', 'utf8mb4'),
+            connect_timeout=10,
+            read_timeout=30,
+            write_timeout=30,
+        )
+        return connection
+
+    def _return_connection(self, connection):
+        """
+        将连接归还到连接池
+        
+        Args:
+            connection: pymysql连接对象
+        """
+        if not connection:
+            return
+            
+        connection_key = self._get_connection_key()
+        
+        with self._pool_lock:
+            if connection_key not in self._connection_pool:
+                self._connection_pool[connection_key] = []
+            
+            pool = self._connection_pool[connection_key]
+            
+            # 如果连接池未满,归还连接
+            if len(pool) < self._pool_max_size:
+                try:
+                    connection.ping(reconnect=True)
+                    pool.append({
+                        'connection': connection,
+                        'timestamp': time.time()
+                    })
+                except Exception:
+                    # 连接失效,关闭它
+                    try:
+                        connection.close()
+                    except:
+                        pass
+            else:
+                # 连接池已满,关闭连接
+                try:
+                    connection.close()
+                except:
+                    pass
+
+    def _clean_expired_connections(self):
+        """
+        清理过期的连接
+        """
+        current_time = time.time()
+        connection_key = self._get_connection_key()
+        
+        if connection_key not in self._connection_pool:
+            return
+            
+        pool = self._connection_pool[connection_key]
+        expired_connections = []
+        
+        # 找出过期连接
+        for i, conn_info in enumerate(pool):
+            if current_time - conn_info['timestamp'] > self._connection_timeout:
+                expired_connections.append(i)
+        
+        # 移除并关闭过期连接
+        for i in reversed(expired_connections):
+            conn_info = pool.pop(i)
+            try:
+                conn_info['connection'].close()
+            except:
+                pass
+
+    def _close_all_connections(self):
+        """
+        关闭所有连接池中的连接
+        """
+        with self._pool_lock:
+            for connection_key, pool in self._connection_pool.items():
+                for conn_info in pool:
+                    try:
+                        conn_info['connection'].close()
+                    except:
+                        pass
+            self._connection_pool.clear()
 
     def test_connection(self) -> Dict[str, Any]:
         """
@@ -24,16 +172,7 @@ class MySQLDatasource(DatasourceBase):
         """
         connection = None
         try:
-            import pymysql
-            connection = pymysql.connect(
-                host=self.config.get('host', 'localhost'),
-                port=int(self.config.get('port', 3306)),
-                user=self.config.get('username', ''),
-                password=self.config.get('password', ''),
-                database=self.config.get('database', ''),
-                charset=self.config.get('charset', 'utf8mb4'),
-                connect_timeout=10,
-            )
+            connection = self._get_pooled_connection()
             with connection.cursor() as cursor:
                 cursor.execute("SELECT 1")
             return {"success": True, "message": "MySQL数据库连接成功"}
@@ -43,10 +182,7 @@ class MySQLDatasource(DatasourceBase):
             return {"success": False, "message": f"MySQL数据库连接失败: {str(e)}"}
         finally:
             if connection:
-                try:
-                    connection.close()
-                except:
-                    pass
+                self._return_connection(connection)
 
     def execute_query(self, query: str, params: Optional[Dict] = None) -> Dict[str, Any]:
         """
@@ -62,15 +198,7 @@ class MySQLDatasource(DatasourceBase):
         connection = None
         try:
             import pymysql
-            connection = pymysql.connect(
-                host=self.config.get('host', 'localhost'),
-                port=int(self.config.get('port', 3306)),
-                user=self.config.get('username', ''),
-                password=self.config.get('password', ''),
-                database=self.config.get('database', ''),
-                charset=self.config.get('charset', 'utf8mb4'),
-                connect_timeout=10,
-            )
+            connection = self._get_pooled_connection()
             with connection.cursor(pymysql.cursors.DictCursor) as cursor:
                 cursor.execute(query, params)
                 if query.strip().upper().startswith('SELECT'):
@@ -99,10 +227,7 @@ class MySQLDatasource(DatasourceBase):
             return {"success": False, "message": f"查询执行失败: {str(e)}"}
         finally:
             if connection:
-                try:
-                    connection.close()
-                except:
-                    pass
+                self._return_connection(connection)
 
     def get_schema_info(self) -> Dict[str, Any]:
         """
@@ -114,15 +239,7 @@ class MySQLDatasource(DatasourceBase):
         connection = None
         try:
             import pymysql
-            connection = pymysql.connect(
-                host=self.config.get('host', 'localhost'),
-                port=int(self.config.get('port', 3306)),
-                user=self.config.get('username', ''),
-                password=self.config.get('password', ''),
-                database=self.config.get('database', ''),
-                charset=self.config.get('charset', 'utf8mb4'),
-                connect_timeout=10,
-            )
+            connection = self._get_pooled_connection()
             with connection.cursor(pymysql.cursors.DictCursor) as cursor:
                 cursor.execute(
                     "SELECT TABLE_NAME, TABLE_COMMENT FROM INFORMATION_SCHEMA.TABLES "
@@ -157,10 +274,7 @@ class MySQLDatasource(DatasourceBase):
             return {"success": False, "message": f"获取Schema信息失败: {str(e)}"}
         finally:
             if connection:
-                try:
-                    connection.close()
-                except:
-                    pass
+                self._return_connection(connection)
 
     def list_tables(self, database: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -179,15 +293,7 @@ class MySQLDatasource(DatasourceBase):
             if not target_database:
                 return {"success": False, "message": "数据库名称不能为空", "data": None}
             
-            connection = pymysql.connect(
-                host=self.config.get('host', 'localhost'),
-                port=int(self.config.get('port', 3306)),
-                user=self.config.get('username', ''),
-                password=self.config.get('password', ''),
-                database=target_database,
-                charset=self.config.get('charset', 'utf8mb4'),
-                connect_timeout=10,
-            )
+            connection = self._get_pooled_connection()
             with connection.cursor(pymysql.cursors.DictCursor) as cursor:
                 cursor.execute(
                     "SELECT TABLE_NAME, TABLE_COMMENT, TABLE_TYPE, CREATE_TIME, UPDATE_TIME "
@@ -220,10 +326,7 @@ class MySQLDatasource(DatasourceBase):
             return {"success": False, "message": f"获取表列表失败: {str(e)}"}
         finally:
             if connection:
-                try:
-                    connection.close()
-                except:
-                    pass
+                self._return_connection(connection)
 
     def get_table_columns(self, table_name: str, database: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -245,15 +348,7 @@ class MySQLDatasource(DatasourceBase):
             if not table_name:
                 return {"success": False, "message": "表名称不能为空", "data": None}
             
-            connection = pymysql.connect(
-                host=self.config.get('host', 'localhost'),
-                port=int(self.config.get('port', 3306)),
-                user=self.config.get('username', ''),
-                password=self.config.get('password', ''),
-                database=target_database,
-                charset=self.config.get('charset', 'utf8mb4'),
-                connect_timeout=10,
-            )
+            connection = self._get_pooled_connection()
             with connection.cursor(pymysql.cursors.DictCursor) as cursor:
                 cursor.execute(
                     "SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_DEFAULT, IS_NULLABLE, "
@@ -292,10 +387,7 @@ class MySQLDatasource(DatasourceBase):
             return {"success": False, "message": f"获取表字段信息失败: {str(e)}"}
         finally:
             if connection:
-                try:
-                    connection.close()
-                except:
-                    pass
+                self._return_connection(connection)
 
     def get_monitor_info(self) -> Dict[str, Any]:
         """
@@ -307,15 +399,7 @@ class MySQLDatasource(DatasourceBase):
         connection = None
         try:
             import pymysql
-            connection = pymysql.connect(
-                host=self.config.get('host', 'localhost'),
-                port=int(self.config.get('port', 3306)),
-                user=self.config.get('username', ''),
-                password=self.config.get('password', ''),
-                database=self.config.get('database', ''),
-                charset=self.config.get('charset', 'utf8mb4'),
-                connect_timeout=10,
-            )
+            connection = self._get_pooled_connection()
             with connection.cursor(pymysql.cursors.DictCursor) as cursor:
                 version = ""
                 cursor.execute("SELECT VERSION() AS version")
@@ -402,7 +486,4 @@ class MySQLDatasource(DatasourceBase):
             return {"success": False, "message": f"获取MySQL监控信息失败: {str(e)}", "data": {"status": "disconnected"}}
         finally:
             if connection:
-                try:
-                    connection.close()
-                except:
-                    pass
+                self._return_connection(connection)
