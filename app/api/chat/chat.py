@@ -339,6 +339,7 @@ async def chat_completions(
         if chat_request.stream:
             async def generate():
                 current_chat_id = None
+                has_error = False
                 try:
                     async for chunk in ChatCoreService.chat_stream(
                         user_id=user_id,
@@ -354,19 +355,22 @@ async def chat_completions(
                         if chunk.get('chat_id'):
                             current_chat_id = chunk['chat_id']
                         
-                        if 'error' in chunk:
-                            yield f"data: {json.dumps({'error': chunk['error'], 'chat_id': chunk.get('chat_id')}, ensure_ascii=False)}\n\n"
-                            await asyncio.sleep(0)
-                            return
-
+                        # 正常返回所有chunk，包括error响应
                         yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
                         await asyncio.sleep(0)
+                        
+                        # 记录是否有错误，但不提前返回
+                        if 'error' in chunk:
+                            has_error = True
 
+                    # 无论是否错误，最终都返回[DONE]消息
                     yield "data: [DONE]\n\n"
                 except GeneratorExit:
                     raise
                 except Exception as e:
                     print(f"Error in generate: {e}")
+                    # 即使发生异常，也尝试返回[DONE]
+                    yield "data: [DONE]\n\n"
                     raise
 
             return StreamingResponse(

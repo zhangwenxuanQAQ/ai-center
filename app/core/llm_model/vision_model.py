@@ -182,10 +182,14 @@ class VisionModel(BaseLLM):
                                     tool_calls_data[idx]['function']['name'] += tool_call.function.name
                                 if tool_call.function.arguments:
                                     tool_calls_data[idx]['function']['arguments'] += tool_call.function.arguments
-                        
+
                         if tool_calls_data:
                             result['tool_calls'] = list(tool_calls_data.values())
-                    
+
+                    # 当 finish_reason 为 "length" 时，追加截断提示
+                    if choice.finish_reason == 'length':
+                        result['text'] = ' \n\n【系统提示】内容达到长度上限，已截断。'
+
                     yield result
                 elif chunk.usage:
                     yield {
@@ -194,7 +198,7 @@ class VisionModel(BaseLLM):
                     }
         except Exception as e:
             yield {'error': str(e)}
-    
+
     def generate_with_messages(self, messages: list, **kwargs) -> Dict[str, Any]:
         """
         使用消息列表生成文本（非流式）
@@ -313,10 +317,14 @@ class VisionModel(BaseLLM):
                                     tool_calls_data[idx]['function']['name'] += tool_call.function.name
                                 if tool_call.function.arguments:
                                     tool_calls_data[idx]['function']['arguments'] += tool_call.function.arguments
-                        
+
                         if tool_calls_data:
                             result['tool_calls'] = list(tool_calls_data.values())
-                    
+
+                    # 当 finish_reason 为 "length" 时，追加截断提示
+                    if choice.finish_reason == 'length':
+                        result['text'] = ' \n\n【系统提示】内容达到长度上限，已截断。'
+
                     yield result
                 elif chunk.usage:
                     yield {
@@ -325,7 +333,7 @@ class VisionModel(BaseLLM):
                     }
         except Exception as e:
             yield {'error': str(e)}
-    
+
     def get_model_info(self) -> Dict[str, Any]:
         """
         获取模型信息

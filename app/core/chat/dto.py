@@ -18,6 +18,7 @@ class MessageStatus:
     RUNNING = 'running'
     DONE = 'done'
     STOP = 'stop'
+    ERROR = 'error'
 
 
 class MessageStep:
@@ -143,8 +144,14 @@ class ChatStreamResponse:
             'step_id': self.step_id
         }
         
+        if self.step is not None:
+            data['step'] = self.step
+        
         if self.error is not None:
             data['error'] = self.error
+            # 错误响应也需要包含text字段（错误信息文本）
+            if self.text:
+                data['text'] = self.text
             return data
         
         if self.reasoning_content is not None:
@@ -186,6 +193,9 @@ class ChatStreamResponse:
         chat_id: str = '',
         user_message_id: str = '',
         assistant_message_id: str = '',
+        step_id: str = '',
+        step: Optional[str] = None,
+        text: str = '',
         avatar: Optional[str] = None
     ) -> 'ChatStreamResponse':
         """
@@ -196,6 +206,9 @@ class ChatStreamResponse:
             chat_id: 对话ID
             user_message_id: 用户消息ID
             assistant_message_id: 助手消息ID
+            step_id: 步骤ID
+            step: 当前步骤
+            text: 文本内容（错误信息）
             avatar: 头像URL
             
         Returns:
@@ -203,10 +216,13 @@ class ChatStreamResponse:
         """
         return cls(
             error=error,
+            text=text,
             chat_id=chat_id,
             user_message_id=user_message_id,
             assistant_message_id=assistant_message_id,
-            status=MessageStatus.DONE,
+            status=MessageStatus.ERROR,
+            step_id=step_id,
+            step=step,
             avatar=avatar
         )
     

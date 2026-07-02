@@ -673,7 +673,7 @@ class ChatMessageService:
             extra_content_dict['step'] = step
         if step_id is not None:
             extra_content_dict['step_id'] = step_id
-        extra_content_dict['step_status'] = 'running'
+        extra_content_dict['step_status'] = 'done'
         
         extra_content_str = json.dumps(extra_content_dict, ensure_ascii=False) if extra_content_dict else None
         

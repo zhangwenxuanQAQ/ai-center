@@ -489,11 +489,25 @@ class ChatCoreService:
                 
                 if 'error' in chunk:
                     print(f"判断是否需要子任务错误: {chunk['error']}")
+                    ChatMessageService.upsert_assistant_message(
+                        chat_id=chat_id,
+                        assistant_content=f"抱歉，发送消息时出现错误：{chunk['error']}",
+                        step_id=analyze_problem_step_id,
+                        model_id=model_params.get('model_id'),
+                        chatbot_id=model_params.get('chatbot_id'),
+                        config=model_params.get('config'),
+                        step=MessageStep.ANALYZE_QUERY,
+                        message_id=assistant_message_id,
+                        avatar=avatar
+                    )
                     yield ChatStreamResponse.error_response(
                         chat_id=chat_id,
                         user_message_id=user_message_id,
                         assistant_message_id=assistant_message_id,
                         error=chunk['error'],
+                        step_id=analyze_problem_step_id,
+                        step=MessageStep.ANALYZE_QUERY,
+                        text=f"抱歉，发送消息时出现错误：{chunk['error']}",
                         avatar=avatar
                     ).to_dict()
                     return False
@@ -552,11 +566,25 @@ class ChatCoreService:
             return result_text.strip() == '是'
         except Exception as e:
             print(f"判断是否需要子任务异常: {e}")
+            ChatMessageService.upsert_assistant_message(
+                chat_id=chat_id,
+                assistant_content=f"抱歉，发送消息时出现错误：{str(e)}",
+                step_id=analyze_problem_step_id,
+                model_id=model_params.get('model_id'),
+                chatbot_id=model_params.get('chatbot_id'),
+                config=model_params.get('config'),
+                step=MessageStep.ANALYZE_QUERY,
+                message_id=assistant_message_id,
+                avatar=avatar
+            )
             yield ChatStreamResponse.error_response(
                 chat_id=chat_id,
                 user_message_id=user_message_id,
                 assistant_message_id=assistant_message_id,
                 error=str(e),
+                step_id=analyze_problem_step_id,
+                step=MessageStep.ANALYZE_QUERY,
+                text=f"抱歉，发送消息时出现错误：{str(e)}",
                 avatar=avatar
             ).to_dict()
             raise e
@@ -650,9 +678,25 @@ class ChatCoreService:
             
             if 'error' in chunk:
                 print(f"任务规划错误: {chunk['error']}")
+                ChatMessageService.upsert_assistant_message(
+                    chat_id=chat_id,
+                    assistant_content=f"抱歉，发送消息时出现错误：{chunk['error']}",
+                    step_id=task_planning_step_id,
+                    model_id=model_params.get('model_id'),
+                    chatbot_id=model_params.get('chatbot_id'),
+                    config=model_params.get('config'),
+                    step=MessageStep.TASK_PLANNING,
+                    message_id=assistant_message_id,
+                    avatar=avatar
+                )
                 yield ChatStreamResponse.error_response(
                     error=chunk['error'],
                     chat_id=chat_id,
+                    user_message_id=user_message_id,
+                    assistant_message_id=assistant_message_id,
+                    step_id=task_planning_step_id,
+                    step=MessageStep.TASK_PLANNING,
+                    text=f"抱歉，发送消息时出现错误：{chunk['error']}",
                     avatar=avatar
                 ).to_dict()
                 return None
@@ -797,9 +841,25 @@ class ChatCoreService:
                     return
                 
                 if 'error' in chunk:
+                    ChatMessageService.upsert_assistant_message(
+                        chat_id=chat_id,
+                        assistant_content=f"抱歉，发送消息时出现错误：{chunk['error']}",
+                        step_id=task_execution_step_id,
+                        model_id=model_params.get('model_id'),
+                        chatbot_id=model_params.get('chatbot_id'),
+                        config=model_params.get('config'),
+                        step=MessageStep.TASK_EXECUTION,
+                        message_id=assistant_message_id,
+                        avatar=avatar
+                    )
                     yield ChatStreamResponse.error_response(
                         error=chunk['error'],
                         chat_id=chat_id,
+                        user_message_id=user_message_id,
+                        assistant_message_id=assistant_message_id,
+                        step_id=task_execution_step_id,
+                        step=MessageStep.TASK_EXECUTION,
+                        text=f"抱歉，发送消息时出现错误：{chunk['error']}",
                         avatar=avatar
                     ).to_dict()
                     return
@@ -994,9 +1054,25 @@ class ChatCoreService:
         
         for chunk in model.stream_generate_with_messages(messages, **model_params):
             if 'error' in chunk:
+                ChatMessageService.upsert_assistant_message(
+                    chat_id=chat_id,
+                    assistant_content=f"抱歉，发送消息时出现错误：{chunk['error']}",
+                    step_id=result_summary_step_id,
+                    model_id=model_params.get('model_id'),
+                    chatbot_id=model_params.get('chatbot_id'),
+                    config=model_params.get('config'),
+                    step=MessageStep.RESULT_SUMMARY,
+                    message_id=assistant_message_id,
+                    avatar=avatar
+                )
                 yield ChatStreamResponse.error_response(
                     error=chunk['error'],
                     chat_id=chat_id,
+                    user_message_id=user_message_id,
+                    assistant_message_id=assistant_message_id,
+                    step_id=result_summary_step_id,
+                    step=MessageStep.RESULT_SUMMARY,
+                    text=f"抱歉，发送消息时出现错误：{chunk['error']}",
                     avatar=avatar
                 ).to_dict()
                 return
@@ -1105,9 +1181,25 @@ class ChatCoreService:
                     return
                 
                 if 'error' in chunk:
+                    ChatMessageService.upsert_assistant_message(
+                        chat_id=chat_id,
+                        assistant_content=f"抱歉，发送消息时出现错误：{chunk['error']}",
+                        step_id=model_answer_step_id,
+                        model_id=model_id,
+                        chatbot_id=chatbot_id,
+                        config=config,
+                        step=MessageStep.MODEL_ANSWER,
+                        message_id=assistant_message_id,
+                        avatar=avatar
+                    )
                     yield ChatStreamResponse.error_response(
                         error=chunk['error'],
                         chat_id=chat_id,
+                        user_message_id=user_message_id,
+                        assistant_message_id=assistant_message_id,
+                        step_id=model_answer_step_id,
+                        step=MessageStep.MODEL_ANSWER,
+                        text=f"抱歉，发送消息时出现错误：{chunk['error']}",
                         avatar=avatar
                     ).to_dict()
                     return
@@ -1424,9 +1516,23 @@ class ChatCoreService:
                 except ChatbotModel.DoesNotExist:
                     pass
             except ResourceNotFoundError as e:
+                ChatMessageService.upsert_assistant_message(
+                    chat_id=chat_id,
+                    assistant_content=f"抱歉，发送消息时出现错误：{str(e)}",
+                    step_id=f"{chat_id}_{assistant_message_id}",
+                    model_id=model_id,
+                    chatbot_id=chatbot_id,
+                    config=config,
+                    message_id=assistant_message_id,
+                    avatar=avatar
+                )
                 yield ChatStreamResponse.error_response(
                     error=str(e),
                     chat_id=chat_id,
+                    user_message_id=user_message_id,
+                    assistant_message_id=assistant_message_id,
+                    step_id=f"{chat_id}_{assistant_message_id}",
+                    text=f"抱歉，发送消息时出现错误：{str(e)}",
                     avatar=avatar
                 ).to_dict()
                 return
@@ -1490,9 +1596,23 @@ class ChatCoreService:
             if chat.model_id:
                 model_id = chat.model_id
             else:
+                ChatMessageService.upsert_assistant_message(
+                    chat_id=chat_id,
+                    assistant_content="抱歉，发送消息时出现错误：未指定模型",
+                    step_id=f"{chat_id}_{assistant_message_id}",
+                    model_id=None,
+                    chatbot_id=chatbot_id,
+                    config=config,
+                    message_id=assistant_message_id,
+                    avatar=avatar
+                )
                 yield ChatStreamResponse.error_response(
                     error='未指定模型',
                     chat_id=chat_id,
+                    user_message_id=user_message_id,
+                    assistant_message_id=assistant_message_id,
+                    step_id=f"{chat_id}_{assistant_message_id}",
+                    text="抱歉，发送消息时出现错误：未指定模型",
                     avatar=avatar
                 ).to_dict()
                 return
@@ -1965,9 +2085,25 @@ class ChatCoreService:
                                 break
                             
                             if 'error' in chunk:
+                                ChatMessageService.upsert_assistant_message(
+                                    chat_id=chat_id,
+                                    assistant_content=f"抱歉，发送消息时出现错误：{chunk['error']}",
+                                    step_id=result_summary_step_id,
+                                    model_id=model_id,
+                                    chatbot_id=chatbot_id,
+                                    config=config,
+                                    step=MessageStep.RESULT_SUMMARY,
+                                    message_id=assistant_message_id,
+                                    avatar=avatar
+                                )
                                 yield ChatStreamResponse.error_response(
                                     error=chunk['error'],
                                     chat_id=chat_id,
+                                    user_message_id=user_message_id,
+                                    assistant_message_id=assistant_message_id,
+                                    step_id=result_summary_step_id,
+                                    step=MessageStep.RESULT_SUMMARY,
+                                    text=f"抱歉，发送消息时出现错误：{chunk['error']}",
                                     avatar=avatar
                                 ).to_dict()
                                 return

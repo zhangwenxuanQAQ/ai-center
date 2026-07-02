@@ -53,6 +53,17 @@ export interface FileInfo {
 
 export const chatService = {
   abort_controller: null as AbortController | null,
+  // 按对话ID存储各自的abort_controller，支持多对话同时流式输出
+  abortControllersMap: new Map<string, AbortController>(),
+  // 按对话ID存储正在接收的流式消息缓存
+  streamingMessagesMap: new Map<string, {
+    messages: Message[];
+    isStreaming: boolean;
+    userMessageId: string;
+    assistantMessageId: string;
+    currentContent: string;
+    currentReasoningContent: string;
+  }>(),
 
   /**
    * 获取对话列表
@@ -224,11 +235,38 @@ export const chatService = {
     onError?: (error: any) => void,
     onComplete?: () => void
   ) => {
-    if (chatService.abort_controller) {
-      chatService.abort_controller.abort();
-    }
+    // 如果有 chatId，使用按对话分离的 abort_controller
+    // 否则使用全局的 abort_controller（兼容旧逻辑）
+    let abortController: AbortController;
     
-    chatService.abort_controller = new AbortController();
+    if (chatId) {
+      // 中断该对话之前的请求
+      const existingController = chatService.abortControllersMap.get(chatId);
+      if (existingController) {
+        existingController.abort();
+      }
+      
+      // 创建新的 abort_controller
+      abortController = new AbortController();
+      chatService.abortControllersMap.set(chatId, abortController);
+      
+      // 初始化该对话的流式消息缓存
+      chatService.streamingMessagesMap.set(chatId, {
+        messages: [],
+        isStreaming: true,
+        userMessageId: '',
+        assistantMessageId: '',
+        currentContent: '',
+        currentReasoningContent: ''
+      });
+    } else {
+      // 兼容旧逻辑：没有 chatId 时使用全局 abort_controller
+      if (chatService.abort_controller) {
+        chatService.abort_controller.abort();
+      }
+      abortController = new AbortController();
+      chatService.abort_controller = abortController;
+    }
     
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
     const url = `${API_BASE_URL}/aicenter/v1/chat/completions`;
@@ -249,11 +287,15 @@ export const chatService = {
           message_id: messageId,
           system_prompt: systemPrompt
         }),
-        signal: chatService.abort_controller.signal
+        signal: abortController.signal
       });
 
       if (!response.ok) {
         const error = await response.json();
+        // 清理缓存
+        if (chatId) {
+          chatService.streamingMessagesMap.delete(chatId);
+        }
         if (onError) {
           onError(error);
         }
@@ -262,6 +304,10 @@ export const chatService = {
 
       const reader = response.body?.getReader();
       if (!reader) {
+        // 清理缓存
+        if (chatId) {
+          chatService.streamingMessagesMap.delete(chatId);
+        }
         if (onError) {
           onError(new Error('No response body'));
         }
@@ -287,6 +333,13 @@ export const chatService = {
             if (line.startsWith('data: ')) {
               const dataStr = line.substring(6);
               if (dataStr === '[DONE]') {
+                // 完成时清理该对话的流式缓存
+                if (chatId) {
+                  const cache = chatService.streamingMessagesMap.get(chatId);
+                  if (cache) {
+                    cache.isStreaming = false;
+                  }
+                }
                 if (onComplete) {
                   onComplete();
                 }
@@ -295,13 +348,14 @@ export const chatService = {
               
               try {
                 const data = JSON.parse(dataStr);
-                if (data.error) {
-                  if (onError) {
-                    onError(data.error);
-                  }
-                  return;
+                
+                // 将消息存储到缓存中（无论是否有error字段）
+                if (chatId) {
+                  chatService.addToStreamingCache(chatId, data);
                 }
                 
+                // 即使包含 error 字段，也通过 onMessage 传递，让前端统一处理
+                // 前端会根据 status === 'error' 来决定如何显示错误信息
                 if (onMessage) {
                   onMessage(data);
                 }
@@ -319,6 +373,13 @@ export const chatService = {
             if (line.startsWith('data: ')) {
               const dataStr = line.substring(6);
               if (dataStr === '[DONE]') {
+                // 完成时清理该对话的流式缓存
+                if (chatId) {
+                  const cache = chatService.streamingMessagesMap.get(chatId);
+                  if (cache) {
+                    cache.isStreaming = false;
+                  }
+                }
                 if (onComplete) {
                   onComplete();
                 }
@@ -327,13 +388,13 @@ export const chatService = {
               
               try {
                 const data = JSON.parse(dataStr);
-                if (data.error) {
-                  if (onError) {
-                    onError(data.error);
-                  }
-                  return;
+                
+                // 将消息存储到缓存中（无论是否有error字段）
+                if (chatId) {
+                  chatService.addToStreamingCache(chatId, data);
                 }
                 
+                // 即使包含 error 字段，也通过 onMessage 传递，让前端统一处理
                 if (onMessage) {
                   onMessage(data);
                 }
@@ -349,15 +410,90 @@ export const chatService = {
     } catch (error: any) {
       if (error.name === 'AbortError') {
         console.log('Request aborted by user');
+        // 用户中断时保留缓存（切换对话场景）
+        if (chatId) {
+          const cache = chatService.streamingMessagesMap.get(chatId);
+          if (cache) {
+            cache.isStreaming = false;
+          }
+        }
         if (onComplete) {
           onComplete();
         }
       } else {
         console.error('Fetch error:', error);
+        // 其他错误时清理缓存
+        if (chatId) {
+          chatService.streamingMessagesMap.delete(chatId);
+        }
         if (onError) {
           onError(error);
         }
       }
+    }
+  },
+
+  /**
+   * 将消息添加到流式缓存
+   * @param chatId - 对话ID
+   * @param data - SSE消息数据
+   */
+  addToStreamingCache: (chatId: string, data: any) => {
+    const cache = chatService.streamingMessagesMap.get(chatId);
+    if (!cache) return;
+    
+    // 根据消息类型更新缓存
+    if (data.user_message_id) {
+      cache.userMessageId = data.user_message_id;
+    }
+    if (data.assistant_message_id) {
+      cache.assistantMessageId = data.assistant_message_id;
+    }
+    if (data.text) {
+      cache.currentContent += data.text;
+    }
+    if (data.reasoning_content) {
+      cache.currentReasoningContent += data.reasoning_content;
+    }
+    
+    // 存储完整的消息数据用于恢复
+    cache.messages.push(data);
+  },
+
+  /**
+   * 获取对话的流式消息缓存
+   * @param chatId - 对话ID
+   */
+  getStreamingCache: (chatId: string) => {
+    return chatService.streamingMessagesMap.get(chatId);
+  },
+
+  /**
+   * 清理对话的流式消息缓存
+   * @param chatId - 对话ID
+   */
+  clearStreamingCache: (chatId: string) => {
+    chatService.streamingMessagesMap.delete(chatId);
+    chatService.abortControllersMap.delete(chatId);
+  },
+
+  /**
+   * 检查对话是否有正在进行的流式输出
+   * @param chatId - 对话ID
+   */
+  isStreaming: (chatId: string) => {
+    const cache = chatService.streamingMessagesMap.get(chatId);
+    return cache?.isStreaming ?? false;
+  },
+
+  /**
+   * 中断指定对话的流式输出（不清理缓存）
+   * @param chatId - 对话ID
+   */
+  abortConversation: (chatId: string) => {
+    const controller = chatService.abortControllersMap.get(chatId);
+    if (controller) {
+      controller.abort();
     }
   },
 
