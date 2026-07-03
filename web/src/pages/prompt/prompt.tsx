@@ -607,7 +607,7 @@ const PromptManagement: React.FC = () => {
 
   return (
     <div className={`page-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '20px' }}>
+      {/* <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '20px' }}>
         <Button 
           type="primary" 
           icon={<PlusOutlined />}
@@ -619,7 +619,7 @@ const PromptManagement: React.FC = () => {
         >
           新增提示词
         </Button>
-      </div>
+      </div> */}
 
       <Layout className="prompt-layout">
         <LeftSider width={260} className={`category-sider ${theme === 'dark' ? 'dark' : 'light'}`}>

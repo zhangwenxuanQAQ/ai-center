@@ -219,27 +219,28 @@ function AppContent() {
               overflow: 'hidden'
             }}
           >
-            <Card 
-              style={{ 
-                background: 'transparent',
-                borderColor: 'transparent',
-                borderRadius: 0,
-                flex: 1,
-                overflow: 'hidden',
-                display: 'flex',
-                flexDirection: 'column',
-                height: '100%'
-              }}
-              bodyStyle={{ 
-                background: 'transparent',
-                color: theme === 'dark' ? '#e0e0e0' : '#333333',
-                height: '100%',
-                overflow: 'hidden',
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                padding: 0
-              }}
+            <div 
+              style={{height:'100%'}}
+              // style={{ 
+              //   background: 'transparent',
+              //   borderColor: 'transparent',
+              //   borderRadius: 0,
+              //   flex: 1,
+              //   overflow: 'hidden',
+              //   display: 'flex',
+              //   flexDirection: 'column',
+              //   height: '100%'
+              // }}
+              // bodyStyle={{ 
+              //   background: 'transparent',
+              //   color: theme === 'dark' ? '#e0e0e0' : '#333333',
+              //   height: '100%',
+              //   overflow: 'hidden',
+              //   flex: 1,
+              //   display: 'flex',
+              //   flexDirection: 'column',
+              //   padding: 0
+              // }}
             >
               <Routes>
                 <Route path="/" element={<Home />} />
@@ -261,7 +262,7 @@ function AppContent() {
                 <Route path="/agents" element={<Agent />} />
                 <Route path="/agent/setting/:id" element={<AgentSetting />} />
               </Routes>
-            </Card>
+            </div>
           </Content>
         </Layout>
       </Layout>
