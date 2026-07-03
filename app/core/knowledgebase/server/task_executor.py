@@ -166,7 +166,12 @@ class TaskExecutor:
         )
         self._heartbeat_thread.start()
 
-        self._recover_pending_tasks()
+        # 异步恢复任务，不阻塞服务启动
+        recovery_thread = threading.Thread(
+            target=self._recover_pending_tasks,
+            daemon=True
+        )
+        recovery_thread.start()
 
         logger.info("任务调度器已启动")
 
