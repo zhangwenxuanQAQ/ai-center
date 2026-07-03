@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layout, Tree, Card, Row, Col, Avatar, Empty, Spin, Button, Modal, Form, Input, TreeSelect, Upload, message, Popconfirm, Pagination, Switch, Select, Tag } from 'antd';
 const { TextArea } = Input;
@@ -6,7 +6,6 @@ const { Option } = Select;
 import { BookOutlined, PlusOutlined, UploadOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UpOutlined, DownOutlined, FileTextOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import type { TreeDataNode, TreeProps, UploadProps } from 'antd';
 import { knowledgebaseService, Knowledgebase, KnowledgebaseCategory } from '../../services/knowledgebase';
-import PageHeader from '../../components/page-header';
 import '../../styles/common.css';
 import './knowledgebase.less';
 
@@ -538,12 +537,6 @@ const KnowledgebaseManagement: React.FC = () => {
 
   return (
     <div className={`page-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-      <PageHeader 
-        items={[
-          { title: '知识库管理', icon: <BookOutlined /> }
-        ]} 
-      />
-
       <Layout className="knowledgebase-layout">
         <LeftSider
           width={260}
@@ -557,7 +550,7 @@ const KnowledgebaseManagement: React.FC = () => {
               onClick={handleAddCategory}
               size="small"
               style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)',
                 border: 'none',
                 borderRadius: '12px',
                 padding: '0 12px',
@@ -579,14 +572,14 @@ const KnowledgebaseManagement: React.FC = () => {
           />
         </LeftSider>
 
-        <Content className={`knowledgebase-content ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <Content className={`knowledgebase-content ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '16px', boxSizing: 'border-box' }}>
+          <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap', alignItems: 'center' ,padding:'16px'}}>
             <Button 
               type="primary" 
               icon={<PlusOutlined />} 
               onClick={handleAddKnowledgebase}
               style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)',
                 border: 'none',
                 borderRadius: '18px',
                 padding: '0 20px',
@@ -657,7 +650,8 @@ const KnowledgebaseManagement: React.FC = () => {
             overflowY: 'auto', 
             marginBottom: '0',
             scrollbarWidth: 'none',
-            msOverflowStyle: 'none'
+            msOverflowStyle: 'none',
+            paddingLeft:16
           }} className="hide-scrollbar">
             <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; }`}</style>
             {loading ? (

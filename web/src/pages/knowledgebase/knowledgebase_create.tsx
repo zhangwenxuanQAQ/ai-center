@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Form, Input, Select, TreeSelect, Button, message, Row, Col, Upload, Spin, Tag, Avatar, Modal, InputNumber, Switch, Slider, Tooltip, Drawer, Descriptions } from 'antd';
 const { TextArea } = Input;
@@ -419,17 +419,17 @@ const KnowledgebaseCreate: React.FC = () => {
 
   return (
     <div className={`page-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-      <PageHeader
+      {/* <PageHeader
         items={[
           { title: '知识库管理', icon: <DatabaseOutlined />, onClick: () => navigate('/knowledgebases') },
-          { title: '创建知识库' }
+          { title: '创建知识库' } 
         ]}
         extra={
           <Button icon={<ArrowLeftOutlined />} onClick={handleBack}>
             返回列表
           </Button>
         }
-      />
+      /> */}
 
       <div className="knowledgebase-create-container" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100% - 80px)', overflow: 'hidden' }}>
         <div style={{ display: 'flex', gap: '8px', flex: 1, overflow: 'hidden' }}>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import React, { useState, useEffect } from 'react';
 import MDEditor from '@uiw/react-md-editor';
 import '@uiw/react-md-editor/markdown-editor.css';
 
@@ -24,11 +24,9 @@ const MDEditorTheme: React.FC<MDEditorThemeProps> = ({
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
   useEffect(() => {
-    // 获取初始主题
     const currentTheme = document.body.getAttribute('data-theme') || 'dark';
     setTheme(currentTheme as 'light' | 'dark');
 
-    // 监听主题变化
     const observer = new MutationObserver(() => {
       const newTheme = document.body.getAttribute('data-theme') || 'dark';
       setTheme(newTheme as 'light' | 'dark');

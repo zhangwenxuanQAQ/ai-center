@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Layout, Tree, Empty, Spin, Button, Modal, Form, Input, Select, Tag, message, Popconfirm, Table, Pagination, Switch, Space, TreeSelect, Checkbox, Tooltip, Drawer, Descriptions } from 'antd';
+import { Layout, Tree, Empty, Spin, Button, Modal, Form, Input, Select, Tag, message, Popconfirm, Table, Pagination, Switch, Space, TreeSelect, Checkbox, Tooltip, Drawer, Descriptions, Row, Col } from 'antd';
 const { TextArea } = Input;
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, FileTextOutlined, CheckCircleOutlined, CloseCircleOutlined, PlusSquareOutlined, UpOutlined, DownOutlined, CloseOutlined, EyeOutlined } from '@ant-design/icons';
 import type { TreeDataNode } from 'antd';
@@ -10,7 +10,6 @@ import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { promptService, Prompt, PromptCategory, PromptListResponse } from '../../services/prompt';
-import PageHeader from '../../components/page-header';
 import '../../styles/common.css';
 import './prompt.less';
 
@@ -71,6 +70,7 @@ const PromptManagement: React.FC = () => {
   const [isCategoryModalVisible, setIsCategoryModalVisible] = useState(false);
   const [isPromptModalVisible, setIsPromptModalVisible] = useState(false);
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [isFullPromptModalVisible, setIsFullPromptModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState<Prompt | null>(null);
   const [editingCategory, setEditingCategory] = useState<PromptCategory | null>(null);
   
@@ -78,9 +78,17 @@ const PromptManagement: React.FC = () => {
   const [editForm] = Form.useForm();
   const [categoryForm] = Form.useForm();
   const [editCategoryForm] = Form.useForm();
+  const [fullForm] = Form.useForm();
   const [viewDrawerVisible, setViewDrawerVisible] = useState(false);
   const [viewingPrompt, setViewingPrompt] = useState<Prompt | null>(null);
   const viewDrawerRef = useRef<HTMLDivElement>(null);
+
+  const [promptContent, setPromptContent] = useState<string>('');
+  const [promptTags, setPromptTags] = useState<string[]>([]);
+  const [newTag, setNewTag] = useState<string>('');
+  const [showTagInput, setShowTagInput] = useState<boolean>(false);
+  const [promptDescription, setPromptDescription] = useState<string>('');
+  const tagInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const currentTheme = document.body.getAttribute('data-theme') || 'light';
@@ -331,6 +339,51 @@ const PromptManagement: React.FC = () => {
     });
   };
 
+  const handleAddTag = () => {
+    if (newTag.trim() && !promptTags.includes(newTag.trim())) {
+      setPromptTags([...promptTags, newTag.trim()]);
+      setNewTag('');
+    }
+    setShowTagInput(false);
+  };
+
+  const handleTagClose = (tagToClose: string) => {
+    setPromptTags(promptTags.filter(tag => tag !== tagToClose));
+  };
+
+  const handleDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setPromptDescription(e.target.value);
+  };
+
+  const handleContentChange = (value: string) => {
+    setPromptContent(value);
+  };
+
+  const handleFullCreatePrompt = () => {
+    fullForm.validateFields().then(values => {
+      const data = {
+        ...values,
+        content: promptContent,
+        tags: promptTags,
+        description: promptDescription
+      };
+      promptService.createPrompt(data).then(() => {
+        message.success('提示词创建成功');
+        setIsFullPromptModalVisible(false);
+        fullForm.resetFields();
+        setPromptContent('');
+        setPromptTags([]);
+        setNewTag('');
+        setShowTagInput(false);
+        setPromptDescription('');
+        fetchPrompts();
+      }).catch(error => {
+        console.error('Failed to create prompt:', error);
+        message.error('提示词创建失败');
+      });
+    });
+  };
+
   const handleBatchDelete = () => {
     if (selectedRowKeys.length === 0) {
       message.warning('请选择要删除的提示词');
@@ -554,24 +607,19 @@ const PromptManagement: React.FC = () => {
 
   return (
     <div className={`page-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-      <PageHeader
-        items={[
-          { title: '提示词管理', icon: <FileTextOutlined /> }
-        ]}
-        extra={
-          <Button 
-            type="primary" 
-            icon={<PlusOutlined />}
-            onClick={() => {
-              form.resetFields();
-              setIsPromptModalVisible(true);
-            }}
-            style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', borderRadius: '18px', padding: '0 20px', height: '36px' }}
-          >
-            新增提示词
-          </Button>
-        }
-      />
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '20px' }}>
+        <Button 
+          type="primary" 
+          icon={<PlusOutlined />}
+          onClick={() => {
+            form.resetFields();
+            setIsPromptModalVisible(true);
+          }}
+          style={{ background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)', border: 'none'}}
+        >
+          新增提示词
+        </Button>
+      </div>
 
       <Layout className="prompt-layout">
         <LeftSider width={260} className={`category-sider ${theme === 'dark' ? 'dark' : 'light'}`}>
@@ -590,8 +638,8 @@ const PromptManagement: React.FC = () => {
                 categoryForm.setFieldsValue({ sort_order: maxSortOrder + 1 });
                 setIsCategoryModalVisible(true);
               }} 
-              size="small" 
-              style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', borderRadius: '12px', padding: '0 12px', height: '28px', fontSize: '12px' }}
+              // size="small" 
+              // style={{ background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)', border: 'none'}}
             >
               新增分类
             </Button>
@@ -608,12 +656,20 @@ const PromptManagement: React.FC = () => {
         </LeftSider>
 
         <Content className={`prompt-content ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap', alignItems: 'center',padding:16 }}>
             <Button 
               type="primary" 
               icon={<PlusOutlined />}
-              onClick={() => navigate('/prompt/setting/new')}
-              style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', borderRadius: '18px', padding: '0 20px', height: '36px' }}
+              onClick={() => {
+                fullForm.resetFields();
+                setPromptContent('');
+                setPromptTags([]);
+                setNewTag('');
+                setShowTagInput(false);
+                setPromptDescription('');
+                setIsFullPromptModalVisible(true);
+              }}
+              style={{ background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)' }}
             >
               新增提示词
             </Button>
@@ -878,6 +934,185 @@ const PromptManagement: React.FC = () => {
             <Switch checkedChildren="启用" unCheckedChildren="禁用" />
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* 完整提示词编辑弹窗 */}
+      <Modal
+        title="新增提示词"
+        open={isFullPromptModalVisible}
+        onCancel={() => {
+          setIsFullPromptModalVisible(false);
+          fullForm.resetFields();
+          setPromptContent('');
+          setPromptTags([]);
+          setNewTag('');
+          setShowTagInput(false);
+          setPromptDescription('');
+        }}
+        footer={[
+          <Button key="cancel" onClick={() => {
+            setIsFullPromptModalVisible(false);
+            fullForm.resetFields();
+            setPromptContent('');
+            setPromptTags([]);
+            setNewTag('');
+            setShowTagInput(false);
+            setPromptDescription('');
+          }}>
+            取消
+          </Button>,
+          <Button key="submit" type="primary" onClick={handleFullCreatePrompt}>
+            保存
+          </Button>,
+        ]}
+        width={1000}
+        style={{ top: 20 }}
+        className={`prompt-setting-modal ${theme === 'dark' ? 'dark' : 'light'}`}
+      >
+        <div style={{ display: 'flex', gap: '16px' }}>
+          <div style={{ width: '30%', flexShrink: 0 }}>
+            <div
+              style={{
+                padding: '16px',
+                borderRadius: '4px',
+                border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #d9d9d9',
+                background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fff',
+                display: 'flex',
+                flexDirection: 'column',
+                height: '100%'
+              }}
+            >
+              <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8' }}>
+                <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', textAlign: 'left' }}>基本信息</h3>
+              </div>
+              <Form
+                form={fullForm}
+                layout="vertical"
+                initialValues={{ status: true }}
+              >
+                <Row gutter={16}>
+                  <Col span={24}>
+                    <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>
+                      <Input placeholder="请输入提示词名称" />
+                    </Form.Item>
+                  </Col>
+                </Row>
+                <Row gutter={16}>
+                  <Col span={24}>
+                    <Form.Item name="category_id" label="分类">
+                      <TreeSelect
+                        placeholder="请选择分类"
+                        treeData={categories.map(category => ({
+                          title: category.name,
+                          value: category.id,
+                          key: category.id,
+                          children: category.children && category.children.length > 0 ? category.children.map(child => ({
+                            title: child.name,
+                            value: child.id,
+                            key: child.id
+                          })) : undefined
+                        }))}
+                        treeDefaultExpandAll
+                        allowClear
+                      />
+                    </Form.Item>
+                  </Col>
+                </Row>
+                <Form.Item label="描述">
+                  <TextArea
+                    placeholder="请输入提示词描述"
+                    value={promptDescription}
+                    onChange={handleDescriptionChange}
+                    rows={4}
+                  />
+                </Form.Item>
+                <Form.Item label="标签">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {promptTags.map((tag, index) => (
+                        <Tag
+                          key={index}
+                          closable
+                          onClose={() => handleTagClose(tag)}
+                          style={{ marginBottom: 4 }}
+                        >
+                          {tag}
+                        </Tag>
+                      ))}
+                      {showTagInput ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Input
+                            ref={tagInputRef}
+                            type="text"
+                            size="small"
+                            value={newTag}
+                            onChange={(e) => setNewTag(e.target.value)}
+                            onKeyPress={(e) => e.key === 'Enter' && handleAddTag()}
+                            placeholder="输入标签"
+                            style={{ width: 120, height: 24 }}
+                          />
+                          <Button size="small" onClick={handleAddTag} style={{ height: 24 }}>添加</Button>
+                          <Button size="small" onClick={() => setShowTagInput(false)} style={{ height: 24 }}>取消</Button>
+                        </div>
+                      ) : (
+                        <Button
+                          type="dashed"
+                          icon={<PlusOutlined />}
+                          onClick={() => {
+                            setShowTagInput(true);
+                            setTimeout(() => tagInputRef.current?.focus(), 100);
+                          }}
+                          style={{ borderStyle: 'dashed', height: 24, minWidth: 80 }}
+                        >
+                          添加标签
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </Form.Item>
+                <Form.Item name="status" label="状态" valuePropName="checked">
+                  <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+                </Form.Item>
+              </Form>
+            </div>
+          </div>
+          <div style={{ width: '70%', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div
+              style={{
+                padding: '16px',
+                borderRadius: '4px',
+                border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #d9d9d9',
+                background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fafafa',
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                minHeight: '400px'
+              }}
+            >
+              <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <FileTextOutlined style={{ fontSize: '14px', color: theme === 'dark' ? '#fff' : '#000' }} />
+                  <span style={{ fontWeight: 500, fontSize: '14px', color: theme === 'dark' ? '#fff' : '#000' }}>提示词内容</span>
+                </div>
+              </div>
+              <div style={{ flex: 1, minHeight: '350px' }} className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                <MDEditor
+                  value={promptContent}
+                  onChange={(value) => handleContentChange(value || '')}
+                  height="100%"
+                  preview="edit"
+                  className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                  style={{
+                    background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fff',
+                    height: '100%',
+                    minHeight: '350px',
+                    color: theme === 'dark' ? '#fff' : '#000'
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
       </Modal>
 
       {/* 查看提示词抽屉 */}

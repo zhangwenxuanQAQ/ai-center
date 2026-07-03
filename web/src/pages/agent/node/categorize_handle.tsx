@@ -1,1 +1,1 @@
-export default CategorizeHandle;
+﻿export default CategorizeHandle;

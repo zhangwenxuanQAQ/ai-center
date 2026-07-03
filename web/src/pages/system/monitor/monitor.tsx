@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Row, Col, Tag, Spin, Tooltip, Button } from 'antd';
 import {
   CheckCircleOutlined,
@@ -276,8 +276,8 @@ const SystemMonitor: React.FC = () => {
   };
 
   const moduleCards: { key: ModuleKey; label: string; icon: React.ReactNode; color: string; getCount: () => number }[] = [
-    { key: 'overview', label: '总览', icon: <DashboardOutlined />, color: '#667eea', getCount: () => 0 },
-    { key: 'chatbot', label: '机器人', icon: <RobotOutlined />, color: '#667eea', getCount: () => overview?.modules.chatbot_count || 0 },
+    { key: 'overview', label: '总览', icon: <DashboardOutlined />, color: 'var(--primary-color)', getCount: () => 0 },
+    { key: 'chatbot', label: '机器人', icon: <RobotOutlined />, color: 'var(--primary-color)', getCount: () => overview?.modules.chatbot_count || 0 },
     { key: 'knowledgebase', label: '知识库', icon: <BookOutlined />, color: '#52c41a', getCount: () => overview?.modules.knowledgebase_count || 0 },
     { key: 'mcp', label: 'MCP服务', icon: <ApiOutlined />, color: '#13c2c2', getCount: () => overview?.servers?.find(s => s.type === 'mcp')?.monitor_info?.metrics?.find(m => m.name_en === 'tools_count')?.value || 0 },
     { key: 'prompt', label: '提示词', icon: <CommentOutlined />, color: '#eb2f96', getCount: () => overview?.modules.prompt_count || 0 },
@@ -324,9 +324,9 @@ const SystemMonitor: React.FC = () => {
 
   return (
     <div className={`monitor-page ${theme === 'dark' ? 'dark' : 'light'}`}>
-      <PageHeader
+      {/* <PageHeader
         items={[{ title: '系统监控', icon: <DashboardOutlined /> }]}
-      />
+      /> */}
 
       <div className="monitor-content">
         <Spin spinning={loading}>

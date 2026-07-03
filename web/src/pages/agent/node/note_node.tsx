@@ -1,4 +1,4 @@
-import { NodeProps } from '@xyflow/react';
+﻿import { NodeProps } from '@xyflow/react';
 import classNames from 'classnames';
 import { getTheme } from '../utils/theme';
 import styles from './node.module.less';

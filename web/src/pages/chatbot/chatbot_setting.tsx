@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Form, Input, Select, TreeSelect, Button, message, Row, Col, Upload, Spin, Tag, Avatar, Modal, Table, Slider, InputNumber, Switch, Drawer, Descriptions, Dropdown, Tooltip } from 'antd';
 const { TextArea } = Input;
@@ -15,7 +15,6 @@ import { promptService, Prompt } from '../../services/prompt';
 import { knowledgebaseService, Knowledgebase } from '../../services/knowledgebase';
 import { mcpService, MCPServer } from '../../services/mcp';
 import { llmModelService, LLMModel } from '../../services/llm_model';
-import PageHeader from '../../components/page-header';
 import '../../styles/common.css';
 import './chatbot_setting.less';
 import { getDefaultAvatar } from '../../utils/avatar';
@@ -974,18 +973,11 @@ const ChatbotSetting: React.FC = () => {
 
   return (
     <div className={`page-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-      <PageHeader
-        items={[
-          { title: '机器人管理', icon: <RobotOutlined />, onClick: () => navigate('/chatbots') },
-          { title: '机器人配置' },
-          { title: chatbot?.name || '' }
-        ]}
-        extra={
-          <Button icon={<ArrowLeftOutlined />} onClick={handleBack}>
-            返回列表
-          </Button>
-        }
-      />
+      <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', marginBottom: '20px' }}>
+        <Button icon={<ArrowLeftOutlined />} onClick={handleBack}>
+          返回列表
+        </Button>
+      </div>
 
       <div className="chatbot-setting-container" style={{ display: 'flex', gap: '8px', height: 'calc(100% - 60px)', overflow: 'hidden' }}>
         {/* 左侧基本信息 */}
@@ -1664,8 +1656,8 @@ const ChatbotSetting: React.FC = () => {
                 }}
                 onClick={handleSelectTool}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = '#667eea';
-                  e.currentTarget.style.color = '#667eea';
+                  e.currentTarget.style.borderColor = 'var(--primary-color)';
+                  e.currentTarget.style.color = 'var(--primary-color)';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.borderColor = theme === 'dark' ? 'rgba(255, 255, 255, 0.2)' : '#d9d9d9';
@@ -1700,7 +1692,7 @@ const ChatbotSetting: React.FC = () => {
                         size={24} 
                         src={server.server_avatar} 
                         icon={<ApiOutlined />}
-                        style={{ backgroundColor: '#667eea', flexShrink: 0 }}
+                        style={{ backgroundColor: 'var(--primary-color)', flexShrink: 0 }}
                       />
                       <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>
@@ -2336,7 +2328,7 @@ const ChatbotSetting: React.FC = () => {
                         size={24} 
                         src={server.avatar} 
                         icon={<ApiOutlined />}
-                        style={{ backgroundColor: '#667eea', flexShrink: 0 }}
+                        style={{ backgroundColor: 'var(--primary-color)', flexShrink: 0 }}
                       />
                       <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <div style={{ fontSize: '14px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>
@@ -2410,7 +2402,7 @@ const ChatbotSetting: React.FC = () => {
                                     checked={(selectedTools[server.id] || []).includes(tool.id)}
                                     onChange={() => handleToolSelect(server.id, tool.id)}
                                     style={{
-                                      accentColor: '#667eea',
+                                      accentColor: 'var(--primary-color)',
                                       marginTop: '2px'
                                     }}
                                   />

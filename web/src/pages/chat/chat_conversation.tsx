@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { Input, Button, Switch, Modal, Slider, message, Popconfirm, Tooltip, Dropdown, Empty, Spin, Popover, InputNumber, Select, Steps, Upload, List } from 'antd';
 import { SendOutlined, ClearOutlined, SettingOutlined, RobotOutlined, BulbOutlined, LoadingOutlined, DownOutlined, RightOutlined, CopyOutlined, ReloadOutlined, EditOutlined, InfoCircleOutlined, StopOutlined, PaperClipOutlined, FolderOpenOutlined, FileTextOutlined, UploadOutlined, CloseCircleOutlined, InboxOutlined, FilePdfOutlined, FileWordOutlined, FileImageOutlined, SoundOutlined, DownloadOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import DataSourceFileSelector from '../datasource/datasource data_select';
@@ -3253,7 +3253,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                           icon={<DownloadOutlined />}
                           onClick={() => handleDownloadFile(file)}
                           style={{
-                            color: theme === 'dark' ? '#667eea' : '#1890ff'
+                            color: theme === 'dark' ? 'var(--primary-color)' : '#1890ff'
                           }}
                         />
                       </div>
@@ -3342,7 +3342,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                         icon={<DownloadOutlined />}
                         onClick={() => handleDownloadFile(file)}
                         style={{
-                          color: theme === 'dark' ? '#667eea' : '#1890ff'
+                          color: theme === 'dark' ? 'var(--primary-color)' : '#1890ff'
                         }}
                       />
                     </div>
@@ -3495,7 +3495,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       <div className={`chat-messages ${theme === 'dark' ? 'dark' : 'light'}`} ref={messagesContainerRef}>
         {loading && messages.length === 0 ? (
           <div className="loading-container">
-            <LoadingOutlined style={{ fontSize: 32, color: '#667eea' }} />
+            <LoadingOutlined style={{ fontSize: 32, color: 'var(--primary-color)' }} />
           </div>
         ) : messages.length === 0 ? (
           renderEmptyState()
@@ -3564,8 +3564,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                         gap: 6,
                         padding: '4px 8px',
                         borderRadius: 4,
-                        backgroundColor: theme === 'dark' ? 'rgba(102, 126, 234, 0.2)' : 'rgba(102, 126, 234, 0.1)',
-                        border: `1px solid ${theme === 'dark' ? 'rgba(102, 126, 234, 0.3)' : 'rgba(102, 126, 234, 0.2)'}`,
+                        backgroundColor: theme === 'dark' ? 'rgba(90, 111, 214, 0.2)' : 'rgba(90, 111, 214, 0.1)',
+                        border: `1px solid ${theme === 'dark' ? 'rgba(90, 111, 214, 0.3)' : 'rgba(90, 111, 214, 0.2)'}`,
                         fontSize: 12
                       }}
                     >

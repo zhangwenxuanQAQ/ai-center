@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+﻿import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Tabs } from 'antd';
 import { Layout, Tree, Table, Input, Select, Button, Tag, Spin, Pagination, Empty, Row, Col, Tooltip, Switch, message, Modal, Popconfirm, Form, TreeSelect, Popover, Descriptions, Dropdown } from 'antd';
@@ -904,7 +904,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       title: '操作',
       key: 'action',
       width: 240,
-      fixed: 'right' as const,
+      // fixed: 'right' as const,
       render: (_: any, record: KnowledgebaseDocument) => {
         const getStatusButton = () => {
           switch (record.running_status) {
@@ -1084,7 +1084,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
                 setIsFolderModalVisible(true);
               }}
               style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)',
                 border: 'none',
                 borderRadius: '12px',
                 padding: '0 12px',
@@ -1149,7 +1149,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
               setShowDocumentSetting(true)
             }}
             style={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)',
               border: 'none',
               borderRadius: '18px',
               height: '36px',

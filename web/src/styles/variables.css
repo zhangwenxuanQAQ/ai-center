@@ -1,0 +1,15 @@
+﻿﻿:root {
+  --primary-color: #5a6fd6;
+  --primary-color-hover: #6b7fe6;
+  --primary-color-active: #4a5fc6;
+  --primary-gradient: linear-gradient(135deg, #5a6fd6 0%, #6b7fe6 100%);
+  --primary-gradient-hover: linear-gradient(135deg, #6b7fe6 0%, #5a6fd6 100%);
+}
+
+body[data-theme="dark"] {
+  --primary-color: #5a6fd6;
+  --primary-color-hover: #6b7fe6;
+  --primary-color-active: #4a5fc6;
+  --primary-gradient: linear-gradient(135deg, #5a6fd6 0%, #6b7fe6 100%);
+  --primary-gradient-hover: linear-gradient(135deg, #6b7fe6 0%, #5a6fd6 100%);
+}

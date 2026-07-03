@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Layout, Slider, Select, Input, Button, Card, Tag, Spin, Empty, Pagination, Image, Popover, InputNumber, Tooltip, message, Switch, DatePicker, Space } from 'antd';
 import { SearchOutlined, FileTextOutlined, DownOutlined, UpOutlined, QuestionCircleOutlined, FilterOutlined } from '@ant-design/icons';
 import MDEditor from '@uiw/react-md-editor';
@@ -93,7 +93,7 @@ const ChunkCard: React.FC<{
       }}
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <FileTextOutlined style={{ color: '#667eea' }} />
+          <FileTextOutlined style={{ color: 'var(--primary-color)' }} />
           <span style={{ fontWeight: 500, fontSize: 13 }}>
             {chunk.docnm_kwd || '未命名文档'}
           </span>
@@ -684,11 +684,11 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
           <div style={{ position: 'absolute', bottom: '16px', left: '16px', right: '16px', paddingTop: '16px', borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8', padding: '16px' }}>
             <Button
               type="primary"
-              size="small"
+              // size="small"
               onClick={handleSaveConfig}
               loading={savingConfig}
               style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)',
                 border: 'none',
                 boxShadow: 'none',
                 borderRadius: '4px',
@@ -703,7 +703,7 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
         </div>
       </LeftSider>
 
-      <Content className={`knowledgebase-content ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <Content className={`knowledgebase-content ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', flexDirection: 'column', height: '100%',padding:"16px !important" }}>
         <div style={{ display: 'flex', gap: '16px', marginBottom: '24px' }}>
           <Input
             placeholder="请输入检索问题"
@@ -762,7 +762,7 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
               height: '44px',
               padding: '0 32px',
               borderRadius: '22px',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)',
               border: 'none',
               boxShadow: 'none',
               fontSize: '16px'

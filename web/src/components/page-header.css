@@ -123,6 +123,38 @@ body[data-theme="light"] .page-header .ant-breadcrumb-item span {
   font-weight: 500;
 }
 
+.page-header-back-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 10px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s ease;
+  background: transparent;
+}
+
+.page-header-back-btn.dark {
+  color: rgba(255, 255, 255, 0.6);
+
+  &:hover {
+    color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.08);
+  }
+}
+
+.page-header-back-btn.light {
+  color: rgba(0, 0, 0, 0.6);
+
+  &:hover {
+    color: rgba(0, 0, 0, 0.9);
+    background: rgba(0, 0, 0, 0.08);
+  }
+}
+
 /* ==================== 公共按钮样式 ==================== */
 
 .page-header .ant-btn {
@@ -153,15 +185,15 @@ body[data-theme="light"] .page-header .ant-breadcrumb-item span {
 
 /* 夜间模式按钮样式 */
 body[data-theme="dark"] .page-header .ant-btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  background: linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%) !important;
   border: none !important;
   color: white !important;
 }
 
 body[data-theme="dark"] .page-header .ant-btn-primary:hover {
-  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
+  background: linear-gradient(135deg, #6b7fe6 0%, var(--primary-color) 100%) !important;
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 8px 24px rgba(90, 111, 214, 0.4);
 }
 
 body[data-theme="dark"] .page-header .ant-btn-default {
@@ -179,13 +211,13 @@ body[data-theme="dark"] .page-header .ant-btn-default:hover {
 
 /* 白天模式按钮样式 */
 body[data-theme="light"] .page-header .ant-btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  background: linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%) !important;
   border: none !important;
   color: white !important;
 }
 
 body[data-theme="light"] .page-header .ant-btn-primary:hover {
-  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
+  background: linear-gradient(135deg, #6b7fe6 0%, var(--primary-color) 100%) !important;
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 8px 24px rgba(90, 111, 214, 0.4);
 }

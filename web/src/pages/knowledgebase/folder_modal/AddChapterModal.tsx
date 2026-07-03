@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Modal, Form, Input, TreeSelect, Radio, Button, message } from 'antd';
+﻿import React, { useState, useEffect } from 'react';
+import { Modal, Form, Input, Select, Radio, Button, message } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import SimpleEditableTable, { SimpleTableRow } from '../../../components/SimpleEditableTable';
 
@@ -17,9 +17,8 @@ interface AddChapterModalProps {
   chapters: Chapter[];
   onCancel: () => void;
   onAdd: (chapter: Chapter) => void;
+  // 新增属性：是否仅显示富文本类型（用于动态章节）
   richTextOnly?: boolean;
-  editingChapter?: Chapter | null;
-  documentConstants?: any;
 }
 
 const AddChapterModal: React.FC<AddChapterModalProps> = ({
@@ -28,70 +27,33 @@ const AddChapterModal: React.FC<AddChapterModalProps> = ({
   onCancel,
   onAdd,
   richTextOnly = false,
-  editingChapter = null,
-  documentConstants,
 }) => {
   const [form] = Form.useForm();
   const [chapterType, setChapterType] = useState<'form' | 'list' | 'rich_text'>('form');
   const [fields, setFields] = useState<SimpleTableRow[]>([]);
 
-  const treeData = useMemo(() => {
-    const buildNode = (chapter: Chapter): any => {
-      const children = chapters.filter(ch => ch.parentId === chapter.id);
-      return {
-        title: chapter.name,
-        value: chapter.id,
-        key: chapter.id,
-        children: children.length > 0 ? children.map(buildNode) : undefined,
-      };
-    };
-    const rootChapters = chapters.filter(ch => !ch.parentId);
-    return rootChapters.map(buildNode);
-  }, [chapters]);
-
   useEffect(() => {
     if (visible) {
-      if (editingChapter) {
-        // 编辑模式：回填数据
-        form.setFieldsValue({
-          name: editingChapter.name,
-          parentId: editingChapter.parentId,
-        });
-        setChapterType(editingChapter.type);
-        setFields(editingChapter.fields || []);
-      } else {
-        // 添加模式：重置表单
-        form.resetFields();
-        setChapterType(richTextOnly ? 'rich_text' : 'form');
-        setFields([]);
-      }
+      form.resetFields();
+      setChapterType(richTextOnly ? 'rich_text' : 'form');
+      setFields([]);
     }
-  }, [visible, form, richTextOnly, editingChapter]);
+  }, [visible, form, richTextOnly]);
 
   const handleOk = async () => {
     try {
       const values = await form.validateFields();
       
-      // 校验字段中文名是否重复
-      if (chapterType === 'form' || chapterType === 'list') {
-        const fieldNames = fields.map(f => f.field_name).filter(name => name);
-        const duplicates = fieldNames.filter((name, index) => fieldNames.indexOf(name) !== index);
-        if (duplicates.length > 0) {
-          message.error(`字段中文名重复：${[...new Set(duplicates)].join('、')}`);
-          return;
-        }
-      }
-      
-      const chapter: Chapter = {
-        id: editingChapter?.id || `chapter_${Date.now()}`,
+      const newChapter: Chapter = {
+        id: `chapter_${Date.now()}`,
         name: values.name,
         parentId: values.parentId,
         type: chapterType,
         fields: (chapterType === 'form' || chapterType === 'list') ? fields : undefined,
       };
 
-      onAdd(chapter);
-      message.success(editingChapter ? '章节编辑成功' : '章节添加成功');
+      onAdd(newChapter);
+      message.success('章节添加成功');
       form.resetFields();
       setChapterType(richTextOnly ? 'rich_text' : 'form');
       setFields([]);
@@ -110,7 +72,7 @@ const AddChapterModal: React.FC<AddChapterModalProps> = ({
 
   return (
     <Modal
-      title={editingChapter ? "编辑章节" : "添加章节"}
+      title="添加章节"
       open={visible}
       onCancel={handleCancel}
       onOk={handleOk}
@@ -131,14 +93,13 @@ const AddChapterModal: React.FC<AddChapterModalProps> = ({
           name="parentId"
           label="上级章节"
         >
-          <TreeSelect 
-            placeholder="请选择上级章节" 
-            allowClear
-            treeData={treeData}
-            treeDefaultExpandAll
-            showSearch
-            treeNodeFilterProp="title"
-          />
+          <Select placeholder="请选择上级章节" allowClear>
+            {chapters.map(chapter => (
+              <Select.Option key={chapter.id} value={chapter.id}>
+                {chapter.name}
+              </Select.Option>
+            ))}
+          </Select>
         </Form.Item>
 
         {!richTextOnly && (
@@ -171,8 +132,6 @@ const AddChapterModal: React.FC<AddChapterModalProps> = ({
             <SimpleEditableTable
               value={fields}
               onChange={setFields}
-              fieldTypes={documentConstants?.metadata_field_types || []}
-              disabled={false}
             />
           </Form.Item>
         )}

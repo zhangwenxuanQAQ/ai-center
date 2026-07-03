@@ -1,4 +1,4 @@
-// 无边框输入框 - 增强特异性以覆盖全局样式
+﻿﻿﻿﻿﻿﻿﻿﻿﻿// 无边框输入框 - 增强特异性以覆盖全局样式
 .agent-content .no-border-input {
   // 基础样式
   .ant-input {
@@ -112,7 +112,7 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
     transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 
     &.dark {
-      background: rgb(30, 30, 30);
+      background: #1a1a2e;
       border-right: 1px solid rgba(255, 255, 255, 0.08);
 
       &::after {
@@ -122,7 +122,7 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
         right: 0;
         width: 1px;
         height: 100%;
-        background: linear-gradient(180deg, transparent, rgba(120, 119, 198, 0.3), transparent);
+        background: linear-gradient(180deg, transparent, rgba(90, 111, 214, 0.3), transparent);
       }
     }
 
@@ -137,7 +137,7 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
         right: 0;
         width: 1px;
         height: 100%;
-        background: linear-gradient(180deg, transparent, rgba(102, 126, 234, 0.3), transparent);
+        background: linear-gradient(180deg, transparent, rgba(90, 111, 214, 0.3), transparent);
       }
     }
 
@@ -162,8 +162,8 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
       flex-shrink: 0;
 
       &.dark {
-        color: rgba(255, 255, 255, 0.9);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        color: #e0e0e0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
       }
 
       &.light {
@@ -187,13 +187,13 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
       }
 
       &.dark {
-        color: rgba(255, 255, 255, 0.9);
+        color: #e0e0e0;
         :global {
           .ant-tree {
-            color: rgba(255, 255, 255, 0.9);
+            color: #e0e0e0;
           }
           .ant-tree-node-content-wrapper {
-            color: rgba(255, 255, 255, 0.9);
+            color: #e0e0e0;
             transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
             position: relative;
             font-size: 14px;
@@ -219,7 +219,7 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
               transform: translateX(4px);
 
               &::before {
-                background: linear-gradient(180deg, #667eea, #764ba2);
+                background: linear-gradient(180deg, ~"var(--primary-color)", #6b7fe6);
               }
             }
           }
@@ -230,13 +230,13 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
             font-weight: 600;
 
             &::before {
-              background: linear-gradient(180deg, #667eea, #764ba2);
-              box-shadow: 0 0 12px rgba(102, 126, 234, 0.8);
+              background: linear-gradient(180deg, ~"var(--primary-color)", #6b7fe6);
+              box-shadow: 0 0 12px rgba(90, 111, 214, 0.8);
             }
           }
 
           .ant-tree-switcher {
-            color: rgba(255, 255, 255, 0.6);
+            color: #a0a0b0;
             transition: all 0.3s ease;
             background: transparent;
             border-radius: 8px 0 0 8px;
@@ -249,17 +249,17 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
           }
 
           .ant-tree-treenode:hover {
-            background: rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.05);
             border-radius: 8px;
 
             .ant-tree-switcher,
             .ant-tree-indent {
-              background: rgba(255, 255, 255, 0.08);
+              background: rgba(255, 255, 255, 0.05);
             }
           }
 
           .ant-tree-treenode-selected {
-            background: linear-gradient(90deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2)) !important;
+            background: linear-gradient(90deg, rgba(90, 111, 214, 0.2), rgba(90, 111, 214, 0.1)) !important;
             border-radius: 8px;
           }
         }
@@ -293,18 +293,18 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
               transform: translateX(4px);
 
               &::before {
-                background: linear-gradient(180deg, #667eea, #764ba2);
+                background: linear-gradient(180deg, ~"var(--primary-color)", #6b7fe6);
               }
             }
           }
 
           .ant-tree-node-selected {
-            color: #667eea !important;
+            color: ~"var(--primary-color)" !important;
             background: transparent !important;
             font-weight: 500;
 
             &::before {
-              background: linear-gradient(180deg, #667eea, #764ba2);
+              background: linear-gradient(180deg, ~"var(--primary-color)", #6b7fe6);
             }
           }
 
@@ -373,7 +373,7 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
             transition: all 0.3s ease;
 
             &:hover {
-              border-color: rgba(102, 126, 234, 0.3);
+              border-color: rgba(90, 111, 214, 0.3);
               transform: scale(1.05);
             }
 
@@ -431,7 +431,7 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
 
       :global {
         .ant-spin-dot-item {
-          background-color: #667eea;
+          background-color: ~"var(--primary-color)";
         }
       }
     }
@@ -564,14 +564,14 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
         }
 
         &:hover {
-          border-color: rgba(102, 126, 234, 0.5);
+          border-color: rgba(90, 111, 214, 0.5);
           background: rgba(255, 255, 255, 0.08);
         }
 
         &:focus {
-          border-color: #667eea;
+          border-color: ~"var(--primary-color)";
           background: rgba(255, 255, 255, 0.1);
-          box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+          box-shadow: 0 0 0 3px rgba(90, 111, 214, 0.2);
         }
       }
 
@@ -583,7 +583,7 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
         transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 
         &:hover {
-          border-color: rgba(102, 126, 234, 0.5) !important;
+          border-color: rgba(90, 111, 214, 0.5) !important;
           background: rgba(255, 255, 255, 0.08) !important;
         }
       }
@@ -622,12 +622,12 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
             font-weight: 500 !important;
 
             &.ant-btn-primary {
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+              background: linear-gradient(135deg, ~"var(--primary-color)" 0%, #6b7fe6 100%) !important;
               border: none !important;
               color: white !important;
 
               &:hover {
-                background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
+                background: linear-gradient(135deg, #6b7fe6 0%, ~"var(--primary-color)" 100%) !important;
               }
             }
 
@@ -668,7 +668,7 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
           transition: all 0.2s ease;
 
           &.ant-select-item-option-selected {
-            background: linear-gradient(135deg, rgba(102, 126, 234, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%);
+            background: linear-gradient(135deg, rgba(90, 111, 214, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%);
             color: #fff;
             font-weight: 500;
           }
@@ -686,12 +686,12 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
         transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 
         &.ant-btn-primary {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: linear-gradient(135deg, ~"var(--primary-color)" 0%, #6b7fe6 100%);
           border: none;
 
           &:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 8px 24px rgba(90, 111, 214, 0.4);
           }
         }
 
@@ -754,12 +754,12 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
         transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 
         &:hover {
-          border-color: #667eea;
+          border-color: ~"var(--primary-color)";
         }
 
         &:focus {
-          border-color: #667eea;
-          box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+          border-color: ~"var(--primary-color)";
+          box-shadow: 0 0 0 3px rgba(90, 111, 214, 0.1);
         }
       }
 
@@ -769,7 +769,7 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
         transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 
         &:hover {
-          border-color: #667eea !important;
+          border-color: ~"var(--primary-color)" !important;
         }
       }
 
@@ -779,12 +779,12 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
         transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 
         &.ant-btn-primary {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: linear-gradient(135deg, ~"var(--primary-color)" 0%, #6b7fe6 100%);
           border: none;
 
           &:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+            box-shadow: 0 8px 24px rgba(90, 111, 214, 0.3);
           }
         }
       }
@@ -793,7 +793,6 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
 }
 
 .agent-setting {
-  height: 100%;
   display: flex;
   flex-direction: column;
   
@@ -869,8 +868,8 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
           color: rgba(255, 255, 255, 0.9) !important;
           
           &:hover {
-            border-color: #667eea !important;
-            color: #667eea !important;
+            border-color: ~"var(--primary-color)" !important;
+            color: ~"var(--primary-color)" !important;
           }
           
           &.delete-btn {
@@ -951,15 +950,15 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
         }
         
         &:hover {
-          border-color: #667eea;
+          border-color: ~"var(--primary-color)";
           
           a {
-            color: #667eea;
+            color: ~"var(--primary-color)";
           }
         }
         
         &.ant-pagination-item-active {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: linear-gradient(135deg, ~"var(--primary-color)" 0%, #6b7fe6 100%);
           border: none;
           
           a {
@@ -979,8 +978,8 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
         }
         
         &:hover .ant-pagination-item-link {
-          color: #667eea;
-          border-color: #667eea;
+          color: ~"var(--primary-color)";
+          border-color: ~"var(--primary-color)";
         }
       }
       
@@ -1020,7 +1019,7 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
     left: 0;
     right: 0;
     height: 4px;
-    background: linear-gradient(90deg, #667eea, #764ba2, #f093fb, #f5576c);
+    background: linear-gradient(90deg, ~"var(--primary-color)", #6b7fe6, #f093fb, #f5576c);
     opacity: 0;
     transition: opacity 0.3s ease;
   }
@@ -1042,7 +1041,7 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
     transform: translateY(-8px) scale(1.02);
     box-shadow: 
       0 20px 40px rgba(0, 0, 0, 0.25),
-      0 0 0 1px rgba(102, 126, 234, 0.1),
+      0 0 0 1px rgba(90, 111, 214, 0.1),
       inset 0 1px 0 rgba(255, 255, 255, 0.1);
 
     &::before {
@@ -1056,7 +1055,7 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
     .card-avatar {
       transform: scale(1.05);
       box-shadow: 
-        0 8px 20px rgba(102, 126, 234, 0.5),
+        0 8px 20px rgba(90, 111, 214, 0.5),
         0 0 0 2px rgba(255, 255, 255, 0.1);
     }
 
@@ -1102,10 +1101,10 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
 
     &:hover {
-      border-color: rgba(102, 126, 234, 0.3);
+      border-color: rgba(90, 111, 214, 0.3);
       box-shadow: 
         0 20px 40px rgba(0, 0, 0, 0.15),
-        0 0 0 1px rgba(102, 126, 234, 0.1);
+        0 0 0 1px rgba(90, 111, 214, 0.1);
     }
 
     .card-title {
@@ -1152,11 +1151,11 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
       align-items: center;
       justify-content: center;
       padding: 0;
-      color: #667eea;
+      color: ~"var(--primary-color)";
       background: rgba(255, 255, 255, 0.1);
 
       &:hover {
-        background: rgba(102, 126, 234, 0.15);
+        background: rgba(90, 111, 214, 0.15);
         transform: scale(1.1);
       }
 
@@ -1200,10 +1199,10 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
     }
 
     .card-avatar {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, ~"var(--primary-color)" 0%, #6b7fe6 100%);
       color: white;
       box-shadow: 
-        0 6px 16px rgba(102, 126, 234, 0.4),
+        0 6px 16px rgba(90, 111, 214, 0.4),
         0 0 0 2px rgba(255, 255, 255, 0.1);
       transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 

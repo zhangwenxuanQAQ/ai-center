@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+﻿import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Form, Input, Select, TreeSelect, Button, message, Row, Col, Switch, Modal, Spin, Drawer, Tag, Popover, Slider, InputNumber, Tooltip } from 'antd';
 const { TextArea } = Input;
@@ -857,12 +857,16 @@ const PromptSetting: React.FC = () => {
 
   return (
     <div className={`page-container ${theme === 'dark' ? 'dark' : 'light'}`} ref={contentContainerRef}>
-      <PageHeader
+      {/* <PageHeader
         items={[
           { title: '提示词管理', icon: <FileTextOutlined />, onClick: () => navigate('/prompts') },
           { title: id === 'new' ? '新增提示词' : '编辑提示词' }
         ]}
-      />
+      /> */}
+
+      {
+        id === 'new' ? <h3>新增提示词</h3> : <h3>编辑提示词</h3>
+      }
 
       <div ref={promptSettingContainerRef} className="prompt-setting-container" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100% - 60px)', overflow: 'hidden' }}>
         <div style={{ display: 'flex', gap: '8px', flex: 1, overflow: 'hidden' }}>
@@ -1414,7 +1418,7 @@ const PromptSetting: React.FC = () => {
                     right: '8px', 
                     bottom: '8px', 
                     borderRadius: '8px',
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)',
                     border: 'none'
                   }}
                 />
