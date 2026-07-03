@@ -32,6 +32,7 @@ export interface LLMModel {
   is_default?: boolean;
   created_at: string;
   updated_at?: string;
+  connection_status?: number;
 }
 
 export const llmModelService = {

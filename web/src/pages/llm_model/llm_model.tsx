@@ -76,8 +76,10 @@ const LLMModelManagement: React.FC = () => {
   const [newEditTag, setNewEditTag] = useState('');
   const [hasTestedConnection, setHasTestedConnection] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<number>(-1);
   const [hasTestedEditConnection, setHasTestedEditConnection] = useState(false);
   const [testingEditConnection, setTestingEditConnection] = useState(false);
+  const [editConnectionStatus, setEditConnectionStatus] = useState<number>(-1);
   const [originalEditModel, setOriginalEditModel] = useState<any>(null);
   
   const cardRefs = useRef<{ [key: string]: HTMLDivElement }>({});
@@ -444,14 +446,17 @@ const LLMModelManagement: React.FC = () => {
           
           if (!result.success) {
             message.error({ content: `连接测试失败: ${result.message}`, key });
+            setConnectionStatus(0);
             return;
           }
           
           message.success({ content: `连接测试成功！`, key });
           supportImage = result.support_image || false;
+          setConnectionStatus(1);
         } catch (error: any) {
           setTestingConnection(false);
           message.error({ content: `测试失败: ${error.message}`, key });
+          setConnectionStatus(0);
           return;
         }
       }
@@ -477,7 +482,8 @@ const LLMModelManagement: React.FC = () => {
         api_key: values.api_key,
         tags: JSON.stringify(updatedTags),
         config: '{}',
-        support_image: supportImage
+        support_image: supportImage,
+        connection_status: connectionStatus
       };
       
       await llmModelService.createLLMModel(submitData);
@@ -528,13 +534,16 @@ const LLMModelManagement: React.FC = () => {
           if (result.success) {
             message.success({ content: `连接测试成功！`, key });
             supportImage = result.support_image || false;
+            setEditConnectionStatus(1);
           } else {
             message.error({ content: `连接测试失败: ${result.message}`, key });
+            setEditConnectionStatus(0);
             return;
           }
         } catch (error: any) {
           setTestingEditConnection(false);
           message.error({ content: `测试失败: ${error.message}`, key });
+          setEditConnectionStatus(0);
           return;
         }
       }
@@ -564,6 +573,10 @@ const LLMModelManagement: React.FC = () => {
       
       if (hasParamsChanged) {
         submitData.support_image = supportImage;
+      }
+      
+      if (editConnectionStatus !== -1) {
+        submitData.connection_status = editConnectionStatus;
       }
       
       await llmModelService.updateLLMModel(editingModelId, submitData);
@@ -835,8 +848,9 @@ const LLMModelManagement: React.FC = () => {
               }}
             >
               <Option value="">全部</Option>
-              <Option value="success">连接成功</Option>
-              <Option value="failed">连接失败</Option>
+              <Option value="-1">待测试</Option>
+              <Option value="0">连接失败</Option>
+              <Option value="1">连接成功</Option>
             </Select>
           </div>
           
@@ -910,10 +924,10 @@ const LLMModelManagement: React.FC = () => {
                                 {model.status ? '已启用' : '已禁用'}
                               </Tag>
                               <Tag 
-                                color={model.status ? 'blue' : 'default'}
-                                style={{ marginBottom: 0, borderRadius: '4px', fontSize: '12px', background: model.status ? (theme === 'dark' ? 'rgba(24, 144, 255, 0.15)' : undefined) : (theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : undefined), borderColor: model.status ? (theme === 'dark' ? 'rgba(24, 144, 255, 0.3)' : undefined) : (theme === 'dark' ? 'rgba(255, 255, 255, 0.15)' : undefined) }}
+                                color={model.connection_status === 1 ? 'success' : model.connection_status === 0 ? 'error' : 'default'}
+                                style={{ marginBottom: 0, borderRadius: '4px', fontSize: '12px', background: model.connection_status === 1 ? (theme === 'dark' ? 'rgba(82, 196, 26, 0.15)' : undefined) : model.connection_status === 0 ? (theme === 'dark' ? 'rgba(255, 77, 79, 0.15)' : undefined) : (theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : undefined), borderColor: model.connection_status === 1 ? (theme === 'dark' ? 'rgba(82, 196, 26, 0.3)' : undefined) : model.connection_status === 0 ? (theme === 'dark' ? 'rgba(255, 77, 79, 0.3)' : undefined) : (theme === 'dark' ? 'rgba(255, 255, 255, 0.15)' : undefined) }}
                               >
-                                {model.status ? '可用' : '不可用'}
+                                {model.connection_status === 1 ? '连接成功' : model.connection_status === 0 ? '连接失败' : '待测试'}
                               </Tag>
                             </div>
                           </div>
@@ -1224,15 +1238,18 @@ const LLMModelManagement: React.FC = () => {
                 if (result.success) {
                   message.success({ content: `连接测试成功！`, key });
                   setHasTestedConnection(true);
+                  setConnectionStatus(1);
                 } else {
                   message.error({ content: `连接测试失败: ${result.message}`, key });
                   setHasTestedConnection(false);
+                  setConnectionStatus(0);
                   form.setFieldValue('status', false);
                 }
               } catch (error: any) {
                 setTestingConnection(false);
                 message.error({ content: `测试失败: ${error.message}`, key: 'test-new-model' });
                 setHasTestedConnection(false);
+                setConnectionStatus(0);
                 form.setFieldValue('status', false);
               }
             }}
@@ -1429,13 +1446,16 @@ const LLMModelManagement: React.FC = () => {
                   
                   if (result.success) {
                     message.success({ content: `连接测试成功！`, key });
+                    setEditConnectionStatus(1);
                   } else {
                     message.error({ content: `连接测试失败: ${result.message}`, key });
+                    setEditConnectionStatus(0);
                     editForm.setFieldValue('status', false);
                   }
                 }
               } catch (error: any) {
                 message.error({ content: `测试失败: ${error.message}`, key: `test-edit-model-${editingModelId}` });
+                setEditConnectionStatus(0);
                 editForm.setFieldValue('status', false);
               }
             }}
