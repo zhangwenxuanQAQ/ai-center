@@ -1469,7 +1469,7 @@ class PdfParser:
                 self.__ocr(i + 1, img, chars, zoomin, id)
 
             if callback and i % 6 == 5:
-                callback((i + 1) * 0.6 / len(self.page_images))
+                callback((i + 1) * 0.6 / len(self.page_images), f"OCR处理进度: {i + 1}/{len(self.page_images)}页")
 
         async def __img_ocr_launcher():
             def __ocr_preprocess():
@@ -1578,7 +1578,7 @@ class PdfParser:
             callback(0.63, "Layout analysis ({:.2f}s)".format(timer() - start))
 
         # Read table auto-rotation setting from environment variable
-        auto_rotate_tables = os.getenv("TABLE_AUTO_ROTATE", "true").lower() in ("true", "1", "yes")
+        auto_rotate_tables = os.getenv("TABLE_AUTO_ROTATE", "false").lower() in ("true", "1", "yes")
 
         start = timer()
         self._table_transformer_job(zoomin, auto_rotate=auto_rotate_tables)
