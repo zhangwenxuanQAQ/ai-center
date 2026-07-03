@@ -379,7 +379,9 @@ export const knowledgebaseService = {
     chunkMethod?: string,
     chunkConfig?: Record<string, unknown>,
     tags?: string[],
-    status?: boolean
+    status?: boolean,
+    title?: string,
+    documentConfig?: Record<string, unknown>
   ): Promise<{ errors: string[]; documents: KnowledgebaseDocument[] }> => {
     const formData = new FormData();
     files.forEach(file => {
@@ -400,6 +402,12 @@ export const knowledgebaseService = {
     }
     if (status !== undefined) {
       formData.append('status', String(status));
+    }
+    if (title) {
+      formData.append('title', title);
+    }
+    if (documentConfig) {
+      formData.append('document_config', JSON.stringify(documentConfig));
     }
     return http.post(
       `/aicenter/v1/knowledgebase/${kbId}/document/upload`,

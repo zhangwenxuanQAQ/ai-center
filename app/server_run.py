@@ -915,7 +915,14 @@ try:
             db.execute_sql("ALTER TABLE knowledgebase_document ADD COLUMN thumbnail TEXT DEFAULT NULL AFTER source_config")
             logger.info("  thumbnail 字段已添加")
         else:
-            logger.info("  thumbnail 字段已存在，跳过")
+            # 检查 thumbnail 字段类型，如果不是 LONGTEXT 则修改为 LONGTEXT
+            cursor = db.execute_sql("DESCRIBE knowledgebase_document thumbnail;")
+            result = cursor.fetchone()
+            if result and 'text' in result[1].lower() and 'longtext' not in result[1].lower():
+                db.execute_sql("ALTER TABLE knowledgebase_document MODIFY COLUMN thumbnail LONGTEXT DEFAULT NULL")
+                logger.info("  成功将 thumbnail 字段类型修改为 LONGTEXT")
+            else:
+                logger.info("  thumbnail 字段已存在且类型正确，跳过")
     except Exception as e:
         logger.info(f"  为 knowledgebase_document 表添加字段失败: {e}")
 

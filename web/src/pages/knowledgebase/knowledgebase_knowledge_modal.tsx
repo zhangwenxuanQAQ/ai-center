@@ -231,7 +231,7 @@ const KnowledgeModal: React.FC<KnowledgeModalProps> = ({
             const editFiles = fileList.map(f => fileMapRef.current.get(f.uid)).filter(Boolean) as File[];
             
             if (editFiles.length > 0) {
-              // 如果上传了新文件，先删除旧文档，然后上传新文件
+              // 如果上传了新文件，先删除旧文档，然后上传新文件（直接传递 title 和 document_config）
               await knowledgebaseService.deleteDocument(knowledgebaseId, document.id);
               
               const result = await knowledgebaseService.uploadDocuments(
@@ -242,16 +242,17 @@ const KnowledgeModal: React.FC<KnowledgeModalProps> = ({
                 selectedCategory.chunk_method || 'default',
                 selectedCategory.chunk_config || {},
                 tags,
-                true
+                true,
+                title.trim(),
+                documentConfigData
               );
               
-              // 更新新文档的配置
+              // 检查上传结果
               const uploadedDocs = Array.isArray(result) ? result : (result.data || result.documents || []);
-              if (uploadedDocs.length > 0) {
-                await knowledgebaseService.updateDocument(knowledgebaseId, uploadedDocs[0].id, {
-                  title: title.trim(),
-                  document_config: documentConfigData,
-                } as any);
+              if (uploadedDocs.length === 0) {
+                message.error('文件上传失败，请检查文件内容是否为空或格式是否正确');
+                setLoading(false);
+                return;
               }
             } else {
               // 如果没有上传新文件，只更新文档配置
@@ -267,7 +268,7 @@ const KnowledgeModal: React.FC<KnowledgeModalProps> = ({
               } as any);
             }
           } else {
-            // 新增模式：使用 uploadDocuments 接口
+            // 新增模式：使用 uploadDocuments 接口，直接传递 title 和 document_config
             const result = await knowledgebaseService.uploadDocuments(
               knowledgebaseId,
               files,
@@ -276,24 +277,19 @@ const KnowledgeModal: React.FC<KnowledgeModalProps> = ({
               selectedCategory.chunk_method || 'default',
               selectedCategory.chunk_config || {},
               tags,
-              true
+              true,
+              title.trim(),
+              documentConfigData
             );
             
             if (result.errors && result.errors.length > 0) {
               message.warning(`${result.errors.length}个文件上传失败`);
             }
             
-            // 如果有文档创建成功，更新文档配置
+            // 检查是否有文档创建成功
             // result 直接就是文档数组，因为 request.ts 已经提取了 result.data
             const uploadedDocs = Array.isArray(result) ? result : (result.data || result.documents || []);
-            if (Array.isArray(uploadedDocs) && uploadedDocs.length > 0) {
-              for (const doc of uploadedDocs) {
-                await knowledgebaseService.updateDocument(knowledgebaseId, doc.id, {
-                  title: title.trim(),
-                  document_config: documentConfigData,
-                } as any);
-              }
-            } else {
+            if (!Array.isArray(uploadedDocs) || uploadedDocs.length === 0) {
               // 所有文件都上传失败，显示错误并保持弹窗打开
               message.error('文件上传失败，请检查文件内容是否为空或格式是否正确');
               setLoading(false);
