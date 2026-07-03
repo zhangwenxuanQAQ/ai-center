@@ -1381,22 +1381,12 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
             chunkMethod,
             chunkConfig,
             tags,
-            status
+            status,
+            title.trim(),
+            Object.keys(documentConfig).length > 0 ? documentConfig : undefined
           );
           if (result.errors && result.errors.length > 0) {
             message.warning(`${result.errors.length}个文件上传失败`);
-          }
-          if (result.documents && result.documents.length > 0) {
-            for (const doc of result.documents) {
-              await knowledgebaseService.updateDocument(knowledgebase.id, doc.id, {
-                chunk_method: chunkMethod,
-                chunk_config: chunkConfig,
-                tags,
-                status: status,
-                category_id: categoryId || undefined,
-                title: title.trim(),
-              });
-            }
           }
           message.success('创建成功');
         } else if (sourceType === 'rich_text') {

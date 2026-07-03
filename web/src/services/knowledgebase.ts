@@ -416,57 +416,64 @@ export const knowledgebaseService = {
   },
 
   /**
-   * 下载文档
+   * 下载文档(支持大文件)
    */
   downloadDocument: async (kbId: string, documentId: string): Promise<void> => {
     try {
-      const response = await fetch(`/aicenter/v1/knowledgebase/${kbId}/document/${documentId}/download`);
+      console.log('开始下载文档:', { kbId, documentId });
+
+      const response = await fetch(`/aicenter/v1/knowledgebase/${kbId}/document/${documentId}/download`, {
+        method: 'GET',
+        headers: {
+          'Accept': '*/*',
+        },
+        timeout: 300000,
+      });
+
+      console.log('响应状态:', response.status, response.statusText);
+      console.log('响应头:', {
+        'Content-Type': response.headers.get('Content-Type'),
+        'Content-Length': response.headers.get('Content-Length'),
+        'Content-Disposition': response.headers.get('Content-Disposition'),
+        'Transfer-Encoding': response.headers.get('Transfer-Encoding'),
+      });
+
       if (!response.ok) {
-        throw new Error('下载失败');
+        const errorText = await response.text();
+        console.error('下载失败,响应内容:', errorText);
+        throw new Error(`下载失败: ${response.status} ${response.statusText} - ${errorText}`);
       }
-      
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      
-      // 从响应头中获取文件名
+
+      const contentLength = response.headers.get('Content-Length');
+      const fileSize = contentLength ? parseInt(contentLength, 10) : 0;
+      console.log('文件大小:', fileSize, 'bytes (', (fileSize / 1024 / 1024).toFixed(2), 'MB)');
+
+      if (fileSize > 50 * 1024 * 1024) {
+        console.warn('文件较大(>50MB),使用流式下载');
+      }
+
       const contentDisposition = response.headers.get('Content-Disposition');
       const contentType = response.headers.get('Content-Type');
-      
-      console.log('Content-Disposition:', contentDisposition);
-      console.log('Content-Type:', contentType);
-      
+
       let fileName = 'document';
       if (contentDisposition) {
-        // 尝试多种格式的 Content-Disposition
-        // 格式1: filename*=UTF-8''filename.ext
         const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/);
         if (utf8Match) {
           fileName = decodeURIComponent(utf8Match[1]);
-          console.log('Matched UTF-8 format:', fileName);
-        } 
-        // 格式2: filename="filename.ext"
-        else {
+        } else {
           const traditionalMatch = contentDisposition.match(/filename="([^"]+)"/);
           if (traditionalMatch) {
             fileName = traditionalMatch[1];
-            console.log('Matched traditional format:', fileName);
-          } 
-          // 格式3: filename=filename.ext
-          else {
+          } else {
             const simpleMatch = contentDisposition.match(/filename=([^;]+)/);
             if (simpleMatch) {
               fileName = simpleMatch[1].replace(/^['"]|['"]$/g, '');
-              console.log('Matched simple format:', fileName);
             }
           }
         }
       }
-      
-      // 确保文件名有扩展名
+
       if (!fileName.includes('.')) {
-        // 尝试从 Content-Type 中推断扩展名
         const extensionMap: Record<string, string> = {
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
           'application/msword': '.doc',
@@ -480,19 +487,65 @@ export const knowledgebaseService = {
         };
         if (contentType && extensionMap[contentType]) {
           fileName += extensionMap[contentType];
-          console.log('Added extension from Content-Type:', fileName);
         }
       }
-      
-      console.log('Final filename:', fileName);
-      
+
+      console.log('最终文件名:', fileName);
+
+      if (!response.body) {
+        console.error('响应体为空');
+        throw new Error('响应体为空');
+      }
+
+      const reader = response.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let receivedLength = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        
+        if (done) {
+          break;
+        }
+        
+        chunks.push(value);
+        receivedLength += value.length;
+        
+        console.log(`已接收: ${receivedLength} / ${fileSize} bytes (${((receivedLength / fileSize) * 100).toFixed(1)}%)`);
+      }
+
+      const blob = new Blob(chunks, { type: contentType });
+      console.log('Blob大小:', blob.size, 'bytes');
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
       a.download = fileName;
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        console.log('下载完成,清理资源');
+      }, 100);
+
     } catch (error) {
-      console.error('下载文档失败:', error);
+      console.error('下载文档失败 - 详细错误信息:', error);
+      console.error('错误类型:', error?.constructor?.name);
+      console.error('错误消息:', error?.message);
+      console.error('错误堆栈:', error?.stack);
+
+      if (error instanceof TypeError) {
+        console.error('这可能是网络错误或CORS问题');
+      } else if (error instanceof Error) {
+        if (error.message.includes('Failed to fetch')) {
+          console.error('可能原因: 网络连接问题、服务器无响应、CORS限制或请求被中止');
+        } else if (error.message.includes('out of memory') || error.message.includes('内存不足')) {
+          console.error('可能原因: 文件太大,浏览器内存不足');
+        }
+      }
+
       throw error;
     }
   },

@@ -1015,8 +1015,11 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
                   onClick={async () => {
                     try {
                       await knowledgebaseService.downloadDocument(knowledgebase.id, record.id);
-                    } catch (error) {
-                      message.error('下载失败，请稍后重试');
+                      message.success('下载成功');
+                    } catch (error: any) {
+                      console.error('下载文档失败 - 完整错误:', error);
+                      const errorMsg = error?.message || '下载失败，请稍后重试';
+                      message.error(`下载失败: ${errorMsg}`);
                     }
                   }}
                 />

@@ -15,10 +15,16 @@ export default defineConfig(({ mode }) => {
           target: env.VITE_API_BASE_URL || 'http://localhost:8081',
           changeOrigin: true,
           ws: true,
+          timeout: 300000,
           onProxyReq: (proxyReq, req, res) => {
-            if (req.url?.includes('/chat')) {
-              proxyReq.setHeader('X-Accel-Buffering', 'no');
-            }
+            proxyReq.setHeader('X-Accel-Buffering', 'no');
+            proxyReq.setHeader('Connection', 'keep-alive');
+          },
+          onProxyRes: (proxyRes, req, res) => {
+            proxyRes.headers['X-Accel-Buffering'] = 'no';
+            proxyRes.headers['Cache-Control'] = 'no-cache';
+            proxyRes.headers['Connection'] = 'keep-alive';
+            proxyRes.headers['Transfer-Encoding'] = 'chunked';
           }
         }
       }

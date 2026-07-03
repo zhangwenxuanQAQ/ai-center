@@ -874,7 +874,7 @@ def delete_document(kb_id: str, document_id: str):
 
 
 @router.get("/{kb_id}/document/{document_id}/download")
-def download_document(kb_id: str, document_id: str):
+async def download_document(kb_id: str, document_id: str):
     """
     下载知识库文档（支持大文件流式下载）
 
@@ -886,25 +886,28 @@ def download_document(kb_id: str, document_id: str):
         StreamingResponse: 文件流响应
     """
     try:
-        # 使用流式下载方法，避免大文件内存占用过高
         from app.core.knowledgebase.document.download_handler import DocumentDownloadHandler
-        generator, file_name, mime_type, file_size = DocumentDownloadHandler.download_document_stream(document_id)
+        iterable, file_name, mime_type, file_size = DocumentDownloadHandler.download_document_stream(document_id)
 
         import urllib.parse
         encoded_filename = urllib.parse.quote(file_name)
 
+        from fastapi.responses import StreamingResponse
         return StreamingResponse(
-            generator,
+            iterable,
             media_type=mime_type,
             headers={
                 "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
                 "Content-Length": str(file_size),
                 "Cache-Control": "no-cache",
-                "X-Accel-Buffering": "no",  # 禁用nginx缓冲，支持流式传输
+                "X-Accel-Buffering": "no",
+                "Connection": "keep-alive",
+                "Transfer-Encoding": "chunked",
             }
         )
     except Exception as e:
         logger.error(f"下载文档失败: {e}")
+        from app.utils.response import ResponseUtil
         return ResponseUtil.error(message=str(e))
 
 

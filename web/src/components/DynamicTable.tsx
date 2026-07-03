@@ -215,7 +215,7 @@ const DynamicTableComponent = (props: DynamicTableProps, ref: React.Ref<DynamicT
       ),
     },
     {
-      title: '是否参数检索',
+      title: '是否参与检索',
       dataIndex: 'is_param_search',
       key: 'is_param_search',
       width: 100,

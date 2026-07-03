@@ -136,7 +136,7 @@ def main():
             port=config.server['http_port'],
             workers=workers,
             access_log=True,
-            timeout_keep_alive=5,
+            timeout_keep_alive=300,
         )
     except KeyboardInterrupt:
         logger.info("\n[SHUTDOWN] 收到中断信号，正在关闭...")

@@ -376,6 +376,85 @@ class RustFSUtils:
                 logger.error(f"下载对象失败 {bucket_name}/{object_key}: {e}")
             return None
 
+    def download_object_stream(
+        self,
+        bucket_name: str,
+        object_key: str,
+        chunk_size: int = 8192
+    ):
+        """
+        流式下载对象（分块读取，适合大文件）
+
+        Args:
+            bucket_name: Bucket名称
+            object_key: 对象键（路径）
+            chunk_size: 每次读取的块大小（字节），默认8KB
+
+        Returns:
+            tuple: (iterable, content_length) - 可迭代对象和内容长度
+
+        Raises:
+            ClientError: S3操作错误
+        """
+        self._ensure_initialized()
+        if not self._s3_client:
+            logger.error("RustFS客户端未初始化")
+            raise RuntimeError("RustFS客户端未初始化")
+
+        try:
+            response = self._s3_client.get_object(
+                Bucket=bucket_name,
+                Key=object_key
+            )
+
+            body = response['Body']
+            content_length = response.get('ContentLength', 0)
+
+            # 创建一个上下文管理的迭代器包装类
+            class StreamIterator:
+                """流式迭代器包装类,确保资源正确管理"""
+                def __init__(self, body_stream, chunk_size):
+                    self.body_stream = body_stream
+                    self.chunk_size = chunk_size
+                    self._closed = False
+
+                def __iter__(self):
+                    return self
+
+                def __next__(self):
+                    if self._closed:
+                        raise StopIteration
+
+                    chunk = self.body_stream.read(self.chunk_size)
+                    if not chunk:
+                        self.close()
+                        raise StopIteration
+                    return chunk
+
+                def close(self):
+                    if not self._closed:
+                        self._closed = True
+                        try:
+                            self.body_stream.close()
+                        except Exception:
+                            pass
+
+                def __del__(self):
+                    self.close()
+
+            stream_iterator = StreamIterator(body, chunk_size)
+            logger.debug(f"开始流式下载对象: {bucket_name}/{object_key}")
+            return stream_iterator, content_length
+
+        except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+            if error_code == 'NoSuchKey':
+                logger.warning(f"对象不存在: {bucket_name}/{object_key}")
+                raise RuntimeError(f"对象不存在: {bucket_name}/{object_key}")
+            else:
+                logger.error(f"流式下载对象失败 {bucket_name}/{object_key}: {e}")
+                raise RuntimeError(f"流式下载失败: {str(e)}")
+
     def download_file(
         self,
         bucket_name: str,

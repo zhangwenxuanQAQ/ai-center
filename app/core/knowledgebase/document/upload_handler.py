@@ -32,7 +32,7 @@ class DocumentUploadHandler:
     """
 
     @staticmethod
-    def upload_documents(kb_id, file_data_list, source_type=SourceType.LOCAL_DOCUMENT, category_id=None, chunk_method=None, chunk_config=None, tags=None, status=None):
+    def upload_documents(kb_id, file_data_list, source_type=SourceType.LOCAL_DOCUMENT, category_id=None, chunk_method=None, chunk_config=None, tags=None, status=None, title=None, document_config=None):
         """
         批量上传文档到知识库
 
@@ -45,6 +45,8 @@ class DocumentUploadHandler:
             chunk_config: 切片配置，可选
             tags: 标签，可选
             status: 状态，可选
+            title: 知识标题，可选
+            document_config: 知识配置，可选
 
         Returns:
             tuple: (errors, documents) 错误列表和文档记录列表
@@ -87,6 +89,8 @@ class DocumentUploadHandler:
                     chunk_config=chunk_config,
                     tags=tags,
                     status=status,
+                    title=title,
+                    document_config=document_config,
                 )
                 documents.append(doc)
                 logger.info(f"文件处理成功: {file_data.get('filename')}")
@@ -100,7 +104,7 @@ class DocumentUploadHandler:
         return errors, documents
 
     @staticmethod
-    def _upload_single_document(kb_id, kb, file_data, source_type, category_id, chunk_method=None, chunk_config=None, tags=None, status=None):
+    def _upload_single_document(kb_id, kb, file_data, source_type, category_id, chunk_method=None, chunk_config=None, tags=None, status=None, title=None, document_config=None):
         """
         上传单个文档
 
@@ -114,6 +118,8 @@ class DocumentUploadHandler:
             chunk_config: 切片配置，可选
             tags: 标签，可选
             status: 状态，可选
+            title: 知识标题，可选
+            document_config: 知识配置，可选
 
         Returns:
             KnowledgebaseDocument: 创建的文档记录
@@ -173,6 +179,8 @@ class DocumentUploadHandler:
             chunk_config=chunk_config,
             tags=tags,
             status=status,
+            title=title,
+            document_config=document_config,
         )
 
         # 文档上传后不自动执行切片任务，用户需手动触发
@@ -237,7 +245,7 @@ class DocumentUploadHandler:
     @staticmethod
     def _create_document_record(
         kb_id, kb, filename, original_filename, location, blob,
-        file_type, source_type, category_id, thumbnail, chunk_method=None, chunk_config=None, tags=None, status=None
+        file_type, source_type, category_id, thumbnail, chunk_method=None, chunk_config=None, tags=None, status=None, title=None, document_config=None
     ):
         """
         创建文档数据库记录
@@ -246,7 +254,7 @@ class DocumentUploadHandler:
             kb_id: 知识库ID
             kb: 知识库模型对象
             filename: 处理后的文件名（可能已去重）
-            original_filename: 原始文件名
+            original_filename: 始始文件名
             location: 对象存储路径
             blob: 文件二进制数据
             file_type: 文件类型
@@ -257,6 +265,8 @@ class DocumentUploadHandler:
             chunk_config: 切片配置，可选
             tags: 标签，可选
             status: 状态，可选
+            title: 知识标题，可选
+            document_config: 知识配置，可选
 
         Returns:
             KnowledgebaseDocument: 创建的文档记录
@@ -306,9 +316,15 @@ class DocumentUploadHandler:
         # 处理状态
         document_status = status if status is not None else True
 
+        # 处理知识配置
+        document_document_config = document_config
+        if document_document_config and isinstance(document_document_config, dict):
+            document_document_config = json.dumps(document_document_config, ensure_ascii=False)
+
         doc = KnowledgebaseDocument(
             kb_id=kb_id,
             category_id=category_id,
+            title=title or filename,  # 如果没有提供 title，使用文件名作为标题
             chunk_method=document_chunk_method,
             chunk_config=document_chunk_config,
             file_type=file_type,
@@ -322,6 +338,7 @@ class DocumentUploadHandler:
             task_progress=0,
             status=document_status,
             tags=document_tags,
+            document_config=document_document_config,
         )
         doc.save(force_insert=True)
 
