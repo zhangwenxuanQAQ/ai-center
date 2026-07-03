@@ -149,7 +149,7 @@ class BaseLLM(ABC):
         Returns:
             更新后的参数字典
         """
-        deep_thinking = kwargs.pop('deep_thinking', False)
+        deep_thinking = kwargs.pop('deep_thinking', True)
 
         # 根据不同厂商设置不同的深度思考开关
         if self.provider:

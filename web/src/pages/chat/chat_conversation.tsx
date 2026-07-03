@@ -644,6 +644,9 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         // 标记正在创建新对话，防止 useEffect 清空消息
         isCreatingNewConversation.current = true;
         
+        // 手动更新当前对话ID，确保 SSE 回调能正确处理新对话的消息
+        currentChatIdRef.current = ''; // 先清空，等创建成功后更新
+        
         currentConversation = await chatService.createConversation(
           title,
           selectedModel?.id,
@@ -651,6 +654,10 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           modelConfig,
           systemPrompt
         );
+        
+        // 创建成功后，立即更新 currentChatIdRef
+        currentChatIdRef.current = currentConversation.id;
+        
         // 通知父组件更新对话列表并选中新创建的对话
         if (onConversationCreated) {
           onConversationCreated({
