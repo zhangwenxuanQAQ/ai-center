@@ -1,6 +1,6 @@
 ﻿import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Layout, Button, message, Spin, Popconfirm } from 'antd';
+import { Button, message, Spin, Popconfirm } from 'antd';
 import { SaveOutlined, PlayCircleOutlined, DeleteOutlined, CloudUploadOutlined, ArrowLeftOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons';
 import { Node, ReactFlowProvider } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -8,8 +8,6 @@ import AgentComponents from './agent_components';
 import AgentDrawer from './agent_drawer';
 import AgentCanvas from './agent_canvas';
 import './agent.less';
-
-const { Sider, Content } = Layout;
 
 interface AgentInstance {
   id: string;
@@ -317,43 +315,28 @@ const AgentSetting: React.FC = () => {
   }
 
   return (
-    <div className={`agent-setting ${theme}`} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div className="agent-setting-header" style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '16px',
-        borderBottom: `1px solid ${theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#e8e8e8'}`,
-        background: theme === 'dark' ? '#1a1a2e' : '#fff'
-      }}>
+    <div className={`page-container ${theme === 'dark' ? 'dark' : 'light'}`} style={{padding:16}}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <Button 
-            icon={<ArrowLeftOutlined />} 
-            onClick={() => navigate('/agents')}
-            className="back-btn"
-            style={{
-              borderRadius: '8px',
-              color: theme === 'dark' ? '#fff' : '#000'
-            }}
-          >
+          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/agents')}>
             返回
           </Button>
-          <div className="agent-setting-title" style={{ fontSize: '18px', fontWeight: 600, color: theme === 'dark' ? '#fff' : '#000' }}>
+          <div style={{ fontSize: '18px', fontWeight: 600, color: theme === 'dark' ? '#fff' : '#000' }}>
             {agent?.name || '智能体配置'}
             {agent?.version && <span style={{ marginLeft: 8, fontSize: '14px', color: '#999' }}>v{agent.version}</span>}
           </div>
         </div>
 
-        <div className="agent-setting-actions">
-          <Button icon={<PlayCircleOutlined />} onClick={handleRun} className="action-btn">
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <Button icon={<PlayCircleOutlined />} onClick={handleRun}>
             运行
           </Button>
           {id && (
-            <Button icon={<CloudUploadOutlined />} onClick={handlePublish} className="action-btn">
+            <Button icon={<CloudUploadOutlined />} onClick={handlePublish}>
               发布
             </Button>
           )}
-          <Button icon={<SaveOutlined />} onClick={handleSave} className="action-btn">
+          <Button type="primary" icon={<SaveOutlined />} onClick={handleSave}>
             保存
           </Button>
           {id && (
@@ -363,7 +346,7 @@ const AgentSetting: React.FC = () => {
               okText="确定"
               cancelText="取消"
             >
-              <Button icon={<DeleteOutlined />} className="action-btn delete-btn">
+              <Button danger icon={<DeleteOutlined />}>
                 删除
               </Button>
             </Popconfirm>
@@ -371,65 +354,67 @@ const AgentSetting: React.FC = () => {
         </div>
       </div>
 
-      <div className="agent-setting-content" style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
-        <Sider 
-          width={240} 
-          collapsedWidth={0}
-          collapsed={siderCollapsed}
-          trigger={null}
+      <div className="agent-setting-content" style={{ display: 'flex', 
+        // height: 'calc(100vh - 280px)', 
+        overflow: 'hidden', position: 'relative' }}>
+        <div 
           style={{ 
+            width: siderCollapsed ? 0 : 240,
             background: theme === 'dark' ? '#1a1a1a' : '#fff', 
-            borderRight: `1px solid ${theme === 'dark' ? '#333' : '#e8e8e8'}` 
+            borderRight: `1px solid ${theme === 'dark' ? '#333' : '#e8e8e8'}`,
+            flexShrink: 0,
+            overflow: 'hidden',
+            transition: 'width 0.3s'
           }}
         >
           <AgentComponents onDragStart={onDragStart} />
-        </Sider>
-        <Content style={{ flex: 1, position: 'relative' }}>
+        </div>
+        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
           <div ref={contentRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
-          <div 
-            style={{ 
-              position: 'absolute',
-              top: '12px',
-              left: '12px',
-              width: '28px',
-              height: '28px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              zIndex: 100,
-              background: theme === 'dark' ? '#2a2a2a' : '#fff',
-              borderRadius: '4px',
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-              border: `1px solid ${theme === 'dark' ? '#444' : '#e8e8e8'}`,
-              transition: 'all 0.3s'
-            }}
-            onClick={() => setSiderCollapsed(!siderCollapsed)}
-          >
-            {siderCollapsed ? (
-              <MenuUnfoldOutlined style={{ fontSize: '14px', color: theme === 'dark' ? '#aaa' : '#666' }} />
-            ) : (
-              <MenuFoldOutlined style={{ fontSize: '14px', color: theme === 'dark' ? '#aaa' : '#666' }} />
-            )}
-          </div>
-          <AgentCanvas
-            ref={canvasRef}
-            initialNodes={initialNodes}
-            initialEdges={initialEdges}
-            colorMode={theme}
-            onNodeClick={onNodeClick}
-          />
+            <div 
+              style={{ 
+                position: 'absolute',
+                top: '12px',
+                left: '12px',
+                width: '28px',
+                height: '28px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                zIndex: 100,
+                background: theme === 'dark' ? '#2a2a2a' : '#fff',
+                borderRadius: '4px',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                border: `1px solid ${theme === 'dark' ? '#444' : '#e8e8e8'}`,
+                transition: 'all 0.3s'
+              }}
+              onClick={() => setSiderCollapsed(!siderCollapsed)}
+            >
+              {siderCollapsed ? (
+                <MenuUnfoldOutlined style={{ fontSize: '14px', color: theme === 'dark' ? '#aaa' : '#666' }} />
+              ) : (
+                <MenuFoldOutlined style={{ fontSize: '14px', color: theme === 'dark' ? '#aaa' : '#666' }} />
+              )}
+            </div>
+            <AgentCanvas
+              ref={canvasRef}
+              initialNodes={initialNodes}
+              initialEdges={initialEdges}
+              colorMode={theme}
+              onNodeClick={onNodeClick}
+            />
 
-          <AgentDrawer
-            visible={isDrawerVisible}
-            onClose={handleDrawerClose}
-            selectedNode={selectedNode}
-            onFormSubmit={handleFormSubmit}
-            runResults={runResults}
-            container={contentRef.current}
-          />
+            <AgentDrawer
+              visible={isDrawerVisible}
+              onClose={handleDrawerClose}
+              selectedNode={selectedNode}
+              onFormSubmit={handleFormSubmit}
+              runResults={runResults}
+              container={contentRef.current}
+            />
           </div>
-        </Content>
+        </div>
       </div>
     </div>
   );

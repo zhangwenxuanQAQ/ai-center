@@ -353,7 +353,7 @@ const ChatList: React.FC<ChatListProps> = ({
 
   return (
     <div className={`chat-list ${theme === 'dark' ? 'dark' : 'light'}`}>
-      <div className="chat-list-header">
+      <div className={`chat-list-header ${theme === 'dark' ? 'dark' : 'light'}`}>
         <Button
           type="primary"
           icon={<PlusOutlined />}
@@ -363,29 +363,32 @@ const ChatList: React.FC<ChatListProps> = ({
         >
           新建对话
         </Button>
-        <Button
-          type="text"
-          icon={<SearchOutlined />}
-          onClick={() => {
-            setShowSearch(!showSearch);
-            if (showSearch) {
-              setSearchText('');
-            }
-          }}
-          className={`search-toggle-btn ${theme === 'dark' ? 'dark' : 'light'}`}
-        />
-        <Button
-          type="text"
-          icon={<MenuFoldOutlined />}
-          onClick={onToggleCollapse}
-          className={`toggle-btn ${theme === 'dark' ? 'dark' : 'light'}`}
-        />
+        <div className="sidebar-actions">
+          <Button
+            type="text"
+            icon={<SearchOutlined />}
+            onClick={() => {
+              setShowSearch(!showSearch);
+              if (showSearch) {
+                setSearchText('');
+              }
+            }}
+            className={`search-toggle-btn ${theme === 'dark' ? 'dark' : 'light'}`}
+          />
+          <Button
+            type="text"
+            icon={<MenuFoldOutlined />}
+            onClick={onToggleCollapse}
+            className={`toggle-btn ${theme === 'dark' ? 'dark' : 'light'}`}
+          />
+        </div>
       </div>
       
       <div className={`sidebar-tabs ${theme === 'dark' ? 'dark' : 'light'}`}>
         <div 
           className={`tab ${theme === 'dark' ? 'dark' : 'light'} ${activeTab === 'pinned' ? 'active' : ''}`}
           onClick={() => setActiveTab('pinned')}
+          style={{ minWidth:110,height: 32}}
         >
           <PushpinOutlined />
           <span>置顶对话</span>
@@ -396,6 +399,7 @@ const ChatList: React.FC<ChatListProps> = ({
         <div 
           className={`tab ${theme === 'dark' ? 'dark' : 'light'} ${activeTab === 'all' ? 'active' : ''}`}
           onClick={() => setActiveTab('all')}
+          style={{ minWidth: 138,height: 32}}
         >
           <MessageOutlined />
           <span>全部对话</span>
@@ -417,7 +421,7 @@ const ChatList: React.FC<ChatListProps> = ({
       )}
 
       <div 
-        className="conversation-list" 
+        className={`conversation-list ${theme === 'dark' ? 'dark' : 'light'}`} 
         ref={listRef}
         onScroll={handleScroll}
       >

@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿import React, { useState, useEffect, useRef } from 'react';
+﻿﻿﻿﻿import React, { useState, useEffect, useRef } from 'react';
 import { Layout, Tree, Card, Row, Col, Avatar, Tag, Empty, Spin, Button, Modal, Form, Input, Select, TreeSelect, Popconfirm, Pagination, Switch, message, Tabs, Table, Badge, InputNumber, Dropdown } from 'antd';
 const { TextArea, Password } = Input;
 import { CloudServerOutlined, PlusOutlined, MoreOutlined, EditOutlined, DeleteOutlined, SearchOutlined, CheckCircleOutlined, CloseCircleOutlined, DatabaseOutlined, LinkOutlined, LoadingOutlined, ChevronRightOutlined, ChevronDownOutlined, FolderOutlined, FolderOpenOutlined } from '@ant-design/icons';
@@ -297,9 +297,22 @@ const DatasourceManagement: React.FC = () => {
     const buildCategoryNode = (category: DatasourceCategory): TreeDataNode => {
       const node: TreeDataNode = {
         title: (
-          <div className="category-tree-node" style={{ cursor: 'pointer' }}>
-            <div className="category-name" title={category.name}>{category.name}</div>
-            <div className="category-actions">
+          <div className="category-tree-node" style={{ 
+            cursor: 'pointer', 
+            display: 'flex', 
+            alignItems: 'center', 
+            width: '100%'
+          }}>
+            <div className="category-name" title={category.name} style={{ 
+              overflow: 'hidden', 
+              textOverflow: 'ellipsis', 
+              whiteSpace: 'nowrap'
+            }}>{category.name}</div>
+            <div className="category-actions" style={{ 
+              marginLeft: 'auto',
+              display: 'flex',
+              alignItems: 'center'
+            }}>
               <Button
                 type="text"
                 icon={<PlusOutlined />}

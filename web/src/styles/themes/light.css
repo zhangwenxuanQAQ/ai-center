@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿/* ==================== 白天模式主题样式 ==================== */
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿/* ==================== 白天模式主题样式 ==================== */
 
 body[data-theme="light"] .ant-card-bordered:not([data-card-type="model"]) {
   border-radius: 16px !important;
@@ -294,6 +294,22 @@ body[data-theme="light"] div.ant-select-dropdown {
 
 /* ==================== 白天模式按钮样式 ==================== */
 
+body[data-theme="light"] .ant-btn-text,
+body[data-theme="light"] button.ant-btn-text {
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+body[data-theme="light"] .ant-btn-text:hover,
+body[data-theme="light"] button.ant-btn-text:hover {
+  color: rgba(0, 0, 0, 0.85) !important;
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+
+body[data-theme="light"] .ant-btn-text:active,
+body[data-theme="light"] button.ant-btn-text:active {
+  color: rgba(0, 0, 0, 0.9) !important;
+}
+
 body[data-theme="light"] .ant-btn-primary,
 body[data-theme="light"] button.ant-btn-primary {
   background: var(--primary-gradient) !important;
@@ -406,12 +422,27 @@ body[data-theme="light"] span.ant-radio-inner::after {
 }
 
 /* Checkbox 样式 */
+body[data-theme="light"] .ant-checkbox-inner,
+body[data-theme="light"] span.ant-checkbox-inner {
+  background: #ffffff !important;
+  border-color: #d9d9d9 !important;
+}
+
 body[data-theme="light"] .ant-checkbox-checked .ant-checkbox-inner,
 body[data-theme="light"] span.ant-checkbox-checked span.ant-checkbox-inner {
   background: linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%) !important;
   border-color: var(--primary-color) !important;
 }
 
+body[data-theme="light"] .ant-checkbox-indeterminate .ant-checkbox-inner::after,
+body[data-theme="light"] span.ant-checkbox-indeterminate span.ant-checkbox-inner::after {
+  background: var(--primary-color) !important;
+}
+
+body[data-theme="light"] .ant-checkbox-wrapper,
+body[data-theme="light"] label.ant-checkbox-wrapper {
+  color: rgba(0, 0, 0, 0.85) !important;
+}
 
 /* Breadcrumb 样式 */
 body[data-theme="light"] .ant-breadcrumb,
@@ -424,10 +455,70 @@ body[data-theme="light"] span.ant-breadcrumb-link {
   color: rgba(0, 0, 0, 0.85) !important;
 }
 
+/* Tabs 样式 */
+body[data-theme="light"] .ant-tabs-nav,
+body[data-theme="light"] div.ant-tabs-nav {
+  background: transparent !important;
+}
+
+body[data-theme="light"] .ant-tabs-tab,
+body[data-theme="light"] div.ant-tabs-tab {
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+body[data-theme="light"] .ant-tabs-tab:hover,
+body[data-theme="light"] div.ant-tabs-tab:hover {
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+body[data-theme="light"] .ant-tabs-tab-active,
+body[data-theme="light"] div.ant-tabs-tab-active {
+  color: rgba(0, 0, 0, 0.9) !important;
+}
+
+body[data-theme="light"] .ant-tabs-ink-bar,
+body[data-theme="light"] div.ant-tabs-ink-bar {
+  background: linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%) !important;
+}
+
 /* Empty 样式 */
 body[data-theme="light"] .ant-empty,
 body[data-theme="light"] div.ant-empty {
   color: rgba(0, 0, 0, 0.45) !important;
+}
+
+/* Slider 样式 */
+body[data-theme="light"] .ant-slider,
+body[data-theme="light"] div.ant-slider {
+  background: transparent !important;
+}
+
+body[data-theme="light"] .ant-slider-rail,
+body[data-theme="light"] div.ant-slider-rail {
+  background: #e8e8e8 !important;
+}
+
+body[data-theme="light"] .ant-slider-track,
+body[data-theme="light"] div.ant-slider-track {
+  background: linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%) !important;
+}
+
+body[data-theme="light"] .ant-slider-handle,
+body[data-theme="light"] div.ant-slider-handle {
+  background: #ffffff !important;
+  border-color: var(--primary-color) !important;
+  box-shadow: 0 0 0 2px rgba(90, 111, 214, 0.2) !important;
+}
+
+body[data-theme="light"] .ant-slider-handle:hover,
+body[data-theme="light"] div.ant-slider-handle:hover {
+  border-color: var(--primary-color) !important;
+  box-shadow: 0 0 0 4px rgba(90, 111, 214, 0.3) !important;
+}
+
+body[data-theme="light"] .ant-slider-handle::after,
+body[data-theme="light"] div.ant-slider-handle::after {
+  background: #ffffff !important;
 }
 
 /* Tooltip 样式 */

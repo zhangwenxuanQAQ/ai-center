@@ -684,7 +684,7 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
           <div style={{ position: 'absolute', bottom: '16px', left: '16px', right: '16px', paddingTop: '16px', borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8', padding: '16px' }}>
             <Button
               type="primary"
-              size="small"
+              // size="small"
               onClick={handleSaveConfig}
               loading={savingConfig}
               style={{
@@ -703,7 +703,7 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
         </div>
       </LeftSider>
 
-      <Content className={`knowledgebase-content ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <Content className={`knowledgebase-content ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', flexDirection: 'column', height: '100%',padding:"16px !important" }}>
         <div style={{ display: 'flex', gap: '16px', marginBottom: '24px' }}>
           <Input
             placeholder="请输入检索问题"

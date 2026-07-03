@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Breadcrumb } from 'antd';
 import { HomeOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
@@ -13,12 +13,11 @@ interface BreadcrumbItem {
 interface PageHeaderProps {
   items: BreadcrumbItem[];
   actionButton?: React.ReactNode;
-  backButton?: React.ReactNode;
   showHome?: boolean;
   className?: string;
 }
 
-const PageHeader: React.FC<PageHeaderProps> = ({ items, actionButton, backButton, showHome = true, className }) => {
+const PageHeader: React.FC<PageHeaderProps> = ({ items, actionButton, showHome = true, className }) => {
   const navigate = useNavigate();
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
@@ -75,11 +74,6 @@ const PageHeader: React.FC<PageHeaderProps> = ({ items, actionButton, backButton
   return (
     <div className={`page-header ${theme === 'dark' ? 'dark' : 'light'} ${className || ''}`}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-        {backButton && (
-          <div className="page-header-back">
-            {backButton}
-          </div>
-        )}
         <Breadcrumb
           className={`ant-breadcrumb ${theme === 'dark' ? 'dark' : 'light'}`}
           items={breadcrumbItems}

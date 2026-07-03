@@ -43,6 +43,21 @@ def get_users(skip: int = 0, limit: int = 100):
     return ResponseUtil.success(data=users_data, message="获取用户列表成功")
 
 
+@router.post("/login", response_model=ApiResponse)
+def login(user: UserLogin):
+    """
+    用户登录
+    
+    Args:
+        user: 用户登录DTO
+        
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    # 这里可以添加登录逻辑
+    return ResponseUtil.success(data={"access_token": "token", "token_type": "bearer"}, message="登录成功")
+
+
 @router.get("/{user_id}", response_model=ApiResponse)
 def get_user(user_id: int):
     """
@@ -89,18 +104,3 @@ def delete_user(user_id: int):
     """
     db_user = UserService.delete_user(user_id)
     return ResponseUtil.success(data=db_user.__data__, message="用户删除成功")
-
-
-@router.post("/login", response_model=ApiResponse)
-def login(user: UserLogin):
-    """
-    用户登录
-    
-    Args:
-        user: 用户登录DTO
-        
-    Returns:
-        ApiResponse: 统一格式的响应对象
-    """
-    # 这里可以添加登录逻辑
-    return ResponseUtil.success(data={"access_token": "token", "token_type": "bearer"}, message="登录成功")

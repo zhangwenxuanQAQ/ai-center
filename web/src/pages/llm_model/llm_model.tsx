@@ -641,7 +641,7 @@ const LLMModelManagement: React.FC = () => {
   };
 
   return (
-    <div className={`page-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+    <div className={`page-container ${theme === 'dark' ? 'dark' : 'light'}`} style={{ padding: '16px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <div style={{ fontWeight: '600', fontSize: '16px', color: theme === 'dark' ? '#ffffff' : '#000000' }}>模型管理</div>
         <Button type="primary" icon={<PlusOutlined />} onClick={handleAddModel} style={{ background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)', border: 'none', fontWeight: '500' }}>

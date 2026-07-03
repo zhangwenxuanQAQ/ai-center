@@ -1113,6 +1113,18 @@ body[data-theme="dark"] .ant-tree-title {
   color: var(--dark-text-secondary);
 }
 
+body[data-theme="light"] .page-container .ant-tree-title {
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+
+body[data-theme="dark"] .page-container .ant-tree-title {
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+
 /* Steps component styles - 使用更具体的选择器 */
 body[data-theme="light"] .ant-steps .ant-steps-item-finish .ant-steps-item-icon {
   background: #ffffff !important;

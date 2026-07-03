@@ -1,6 +1,6 @@
-﻿import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+﻿import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { Layout, Menu, Button, Card, Breadcrumb, ConfigProvider, theme as antTheme } from 'antd';
-import { HomeOutlined, MessageOutlined, SettingOutlined, LogoutOutlined, RobotOutlined, BookOutlined, DatabaseOutlined, CommentOutlined, MoonOutlined, SunOutlined, MenuFoldOutlined, MenuUnfoldOutlined, HistoryOutlined, TeamOutlined, ToolOutlined, FileTextOutlined, CloudServerOutlined, DashboardOutlined, DesktopOutlined, ApartmentOutlined } from '@ant-design/icons';
+import { HomeOutlined, MessageOutlined, SettingOutlined, LogoutOutlined, RobotOutlined, BookOutlined, DatabaseOutlined, CommentOutlined, MoonOutlined, SunOutlined, MenuFoldOutlined, MenuUnfoldOutlined, HistoryOutlined, TeamOutlined, ToolOutlined, FileTextOutlined, CloudServerOutlined, DashboardOutlined, DesktopOutlined, ApartmentOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { useState, useEffect } from 'react';
 import './styles/index.css';
 import './styles/common.css';
@@ -62,6 +62,7 @@ const getBreadcrumbItems = (path: string) => {
 
 function AppContent() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const savedTheme = localStorage.getItem('theme');
     return (savedTheme as 'light' | 'dark') || 'dark';
@@ -175,6 +176,21 @@ function AppContent() {
               </Breadcrumb.Item>
             ))}
           </Breadcrumb>
+          <Button
+            type="text"
+            icon={<ArrowLeftOutlined />}
+            onClick={() => navigate(-1)}
+            style={{ 
+              color: theme === 'dark' ? '#a0a0b0' : '#666666',
+              marginLeft: 10,
+              padding: '6px 12px',
+              borderRadius: 6,
+              fontSize: 13
+            }}
+            className="header-back-btn"
+          >
+            返回
+          </Button>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', marginRight: 24 }}>
           <Button 

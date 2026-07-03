@@ -255,8 +255,18 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
             position: relative;
             font-size: 14px;
             font-weight: 400;
+            width: 100% !important;
+            display: flex !important;
+            align-items: center;
             box-sizing: border-box;
             cursor: pointer;
+            padding: 0 !important;
+
+            :global(.ant-tree-title) {
+              width: 100% !important;
+              display: flex !important;
+              align-items: center !important;
+            }
 
             &::before {
               content: '';
@@ -330,7 +340,17 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
             position: relative;
             font-size: 14px;
             box-sizing: border-box;
+            width: 100% !important;
+            display: flex !important;
+            align-items: center;
             cursor: pointer;
+            padding: 0 !important;
+
+            :global(.ant-tree-title) {
+              width: 100% !important;
+              display: flex !important;
+              align-items: center !important;
+            }
 
             &::before {
               content: '';
@@ -395,17 +415,15 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
       }
 
       .category-tree-node {
-        display: flex;
+        display: flex !important;
         align-items: center;
-        width: 100%;
-        max-width: 100%;
+        width: 100% !important;
         box-sizing: border-box;
-        position: relative;
         min-height: 36px;
+        margin: 0 !important;
+        flex-wrap: nowrap;
 
         .category-name {
-          display: block;
-          flex: 1;
           min-width: 0;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -416,10 +434,10 @@ body[data-theme="dark"] .no-border-input .ant-input-affix-wrapper-focused {
         }
 
         .category-actions {
+          margin-left: auto;
           display: flex;
           align-items: center;
           flex-shrink: 0;
-          margin-left: auto;
 
           .ant-btn {
             padding: 4px 8px;

@@ -904,7 +904,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       title: '操作',
       key: 'action',
       width: 240,
-      fixed: 'right' as const,
+      // fixed: 'right' as const,
       render: (_: any, record: KnowledgebaseDocument) => {
         const getStatusButton = () => {
           switch (record.running_status) {

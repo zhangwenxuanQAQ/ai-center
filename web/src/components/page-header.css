@@ -1,4 +1,4 @@
-﻿/* ==================== 公共页面头部样式 ==================== */
+/* ==================== 公共页面头部样式 ==================== */
 
 .page-header {
   display: flex;
@@ -121,6 +121,38 @@ body[data-theme="light"] .page-header .ant-breadcrumb-item span {
   align-items: center;
   gap: 4px;
   font-weight: 500;
+}
+
+.page-header-back-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 10px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s ease;
+  background: transparent;
+}
+
+.page-header-back-btn.dark {
+  color: rgba(255, 255, 255, 0.6);
+
+  &:hover {
+    color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.08);
+  }
+}
+
+.page-header-back-btn.light {
+  color: rgba(0, 0, 0, 0.6);
+
+  &:hover {
+    color: rgba(0, 0, 0, 0.9);
+    background: rgba(0, 0, 0, 0.08);
+  }
 }
 
 /* ==================== 公共按钮样式 ==================== */

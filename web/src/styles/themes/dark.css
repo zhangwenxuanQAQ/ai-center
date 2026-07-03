@@ -389,6 +389,22 @@ body[data-theme="dark"] div.ant-select-item-option-active {
 
 /* ==================== 夜间模式按钮样式 ==================== */
 
+body[data-theme="dark"] .ant-btn-text,
+body[data-theme="dark"] button.ant-btn-text {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+
+body[data-theme="dark"] .ant-btn-text:hover,
+body[data-theme="dark"] button.ant-btn-text:hover {
+  color: rgba(255, 255, 255, 0.85) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+body[data-theme="dark"] .ant-btn-text:active,
+body[data-theme="dark"] button.ant-btn-text:active {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
 body[data-theme="dark"] .ant-btn-default,
 body[data-theme="dark"] button.ant-btn-default {
   background: transparent !important;
@@ -411,6 +427,19 @@ body[data-theme="dark"] button.ant-btn-primary:hover {
 body[data-theme="dark"] .ant-btn-danger,
 body[data-theme="dark"] button.ant-btn-danger {
   border: none !important;
+}
+
+body[data-theme="dark"] .ant-btn-dashed,
+body[data-theme="dark"] button.ant-btn-dashed {
+  background: transparent !important;
+  border: 1px dashed rgba(255, 255, 255, 0.3) !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+body[data-theme="dark"] .ant-btn-dashed:hover,
+body[data-theme="dark"] button.ant-btn-dashed:hover {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(90, 111, 214, 0.5) !important;
 }
 
 
@@ -1179,6 +1208,78 @@ body[data-theme="dark"] .ant-tooltip .ant-tooltip-inner {
 
 body[data-theme="dark"] .ant-tooltip .ant-tooltip-content {
   background: transparent !important;
+}
+
+/* Tabs 样式 */
+body[data-theme="dark"] .ant-tabs-nav,
+body[data-theme="dark"] div.ant-tabs-nav {
+  background: transparent !important;
+}
+
+body[data-theme="dark"] .ant-tabs-tab,
+body[data-theme="dark"] div.ant-tabs-tab {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+
+body[data-theme="dark"] .ant-tabs-tab:hover,
+body[data-theme="dark"] div.ant-tabs-tab:hover {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+body[data-theme="dark"] .ant-tabs-tab-active,
+body[data-theme="dark"] div.ant-tabs-tab-active {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+body[data-theme="dark"] .ant-tabs-ink-bar,
+body[data-theme="dark"] div.ant-tabs-ink-bar {
+  background: linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%) !important;
+}
+
+/* Slider 样式 */
+body[data-theme="dark"] .ant-slider,
+body[data-theme="dark"] div.ant-slider {
+  background: transparent !important;
+}
+
+body[data-theme="dark"] .ant-slider-rail,
+body[data-theme="dark"] div.ant-slider-rail {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+body[data-theme="dark"] .ant-slider-track,
+body[data-theme="dark"] div.ant-slider-track {
+  background: linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%) !important;
+}
+
+body[data-theme="dark"] .ant-slider-handle,
+body[data-theme="dark"] div.ant-slider-handle {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: var(--primary-color) !important;
+  box-shadow: 0 0 0 2px rgba(90, 111, 214, 0.3) !important;
+}
+
+body[data-theme="dark"] .ant-slider-handle:hover,
+body[data-theme="dark"] div.ant-slider-handle:hover {
+  border-color: var(--primary-color) !important;
+  box-shadow: 0 0 0 4px rgba(90, 111, 214, 0.4) !important;
+}
+
+body[data-theme="dark"] .ant-slider-handle::after,
+body[data-theme="dark"] div.ant-slider-handle::after {
+  background: rgba(255, 255, 255, 0.8) !important;
+}
+
+/* Slider 标签文字颜色 */
+body[data-theme="dark"] .ant-slider + span,
+body[data-theme="dark"] .ant-slider label {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+/* 配置标签样式 */
+body[data-theme="dark"] .config-label,
+body[data-theme="dark"] .config-label.dark {
+  color: rgba(255, 255, 255, 0.85) !important;
 }
 
 body[data-theme="dark"] .ant-tooltip .ant-tooltip-arrow::before {
