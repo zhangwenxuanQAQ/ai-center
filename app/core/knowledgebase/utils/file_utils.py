@@ -500,37 +500,40 @@ def generate_custom_template_excel(document_config: Dict[str, Any]) -> tuple:
         # 获取自定义字段
         custom_fields = document_config.get('custom_fields', [])
         chapters = document_config.get('chapters', [])
-        
-        # 构建表头
+
+        # 筛选参与检索的自定义字段（is_param_search=true）
+        searchable_fields = [field for field in custom_fields if field.get('is_param_search', False)]
+
+        # 构建表头（只包含参与检索的字段）
         headers = []
-        for field in custom_fields:
+        for field in searchable_fields:
             headers.append(field.get('field_name', ''))
         headers.append('章节')
-        
+
         # 写入表头
         for col_idx, header in enumerate(headers, start=1):
             cell = ws.cell(row=1, column=col_idx, value=header)
             cell.font = Font(bold=True)
             cell.alignment = Alignment(horizontal='center', vertical='center')
-        
+
         # 构建数据行
         rows_data = []
-        
+
         # 获取富文本内容（用于富文本章节类型）
         content = document_config.get('content', '')
-        
-        # 如果没有章节但有富文本内容，生成一行（自定义字段值 + 富文本内容）
+
+        # 如果没有章节但有富文本内容，生成一行（参与检索的自定义字段值 + 富文本内容）
         if not chapters and content:
             row_values = []
-            for field in custom_fields:
+            for field in searchable_fields:
                 field_value = field.get('value', '')
                 row_values.append(str(field_value) if field_value is not None else '')
             row_values.append(content)
             rows_data.append(row_values)
-        # 如果没有章节且没有富文本内容，生成一行（自定义字段值 + 空章节内容）
+        # 如果没有章节且没有富文本内容，生成一行（参与检索的自定义字段值 + 空章节内容）
         elif not chapters:
             row_values = []
-            for field in custom_fields:
+            for field in searchable_fields:
                 field_value = field.get('value', '')
                 row_values.append(str(field_value) if field_value is not None else '')
             row_values.append('')
@@ -586,9 +589,9 @@ def generate_custom_template_excel(document_config: Dict[str, Any]) -> tuple:
                         if chapter_value:
                             chapter_content += str(chapter_value)
                     
-                    # 构建行数据
+                    # 构建行数据（只包含参与检索的自定义字段）
                     row_values = []
-                    for field in custom_fields:
+                    for field in searchable_fields:
                         field_value = field.get('value', '')
                         row_values.append(str(field_value) if field_value is not None else '')
                     row_values.append(chapter_content)

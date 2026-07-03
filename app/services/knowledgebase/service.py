@@ -1857,6 +1857,7 @@ class KnowledgebaseDocumentService:
             'CUSTOM_FIELDS': json.dumps(custom_fields, ensure_ascii=False) if custom_fields else '无',
             'HAS_CHAPTERS': '是' if chapters else '否',
             'CHAPTER_TYPE': chapter_type or '无',
+            'DOCUMENT_CONFIG': json.dumps(document_config, ensure_ascii=False),
             'HAS_KNOWLEDGE_CONTENT': '是' if has_knowledge_content else '否'
         }
         
@@ -2045,6 +2046,7 @@ class KnowledgebaseDocumentService:
             'CUSTOM_FIELDS': json.dumps(custom_fields, ensure_ascii=False) if custom_fields else '无',
             'HAS_CHAPTERS': '是' if chapters else '否',
             'CHAPTER_TYPE': chapter_type or '无',
+            'DOCUMENT_CONFIG': json.dumps(document_config, ensure_ascii=False),
             'HAS_KNOWLEDGE_CONTENT': '是' if has_knowledge_content else '否'
         }
         

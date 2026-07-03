@@ -1086,6 +1086,24 @@ class TaskExecutor:
 
         docs_to_insert = []
 
+        # 处理metadatas（在循环外部定义）
+        metadatas = task.metadatas or {}
+
+        # 如果是自定义模版知识，将所有自定义字段添加到metadatas中
+        if task.doc and task.doc.source_type == 'custom_template':
+            document_config = task.doc.document_config
+            if isinstance(document_config, str):
+                import json
+                document_config = json.loads(document_config)
+
+            custom_fields = document_config.get('custom_fields', [])
+            for field in custom_fields:
+                field_code = field.get('field_code', '')
+                field_value = field.get('value', '')
+                if field_code and field_value is not None:
+                    # 将字段值添加到metadatas中
+                    metadatas[field_code] = field_value
+
         for i, chunk in enumerate(chunks):
             doc = dict(chunk)
 
@@ -1116,8 +1134,9 @@ class TaskExecutor:
             doc["create_timestamp_flt"] = datetime.now().timestamp()
             doc["available_int"] = 1
 
-            if task.metadatas:
-                doc["metadatas"] = task.metadatas
+            # 将处理后的metadatas添加到每个切片中
+            if metadatas:
+                doc["metadatas"] = metadatas
 
             if "image" in doc:
                 img = doc["image"]
@@ -1144,6 +1163,18 @@ class TaskExecutor:
         if docs_to_insert:
             success_count = es_utils.batch_insert_documents(task.kb_id, docs_to_insert)
             logger.info(f"ES写入完成: {success_count}/{len(docs_to_insert)} 个切片")
+
+            # 如果是自定义模版知识，更新数据库中的metadatas字段
+            if task.doc and task.doc.source_type == 'custom_template' and metadatas:
+                try:
+                    import json
+                    from app.database.models import KnowledgebaseDocument
+                    # 更新数据库中的metadatas字段
+                    task.doc.metadatas = json.dumps(metadatas, ensure_ascii=False)
+                    task.doc.save()
+                    logger.info(f"已更新文档 {task.doc_id} 的metadatas字段到数据库")
+                except Exception as e:
+                    logger.error(f"更新文档metadatas字段失败: {e}")
 
     def _delete_es_chunks(self, kb_id: str, doc_id: str):
         """删除ES中指定文档的切片"""
