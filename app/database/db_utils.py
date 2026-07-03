@@ -27,7 +27,6 @@ def transaction_scope():
             # 退出上下文时自动提交，异常时自动回滚
     """
     try:
-        get_db_connection()
         db.begin()
         yield
         db.commit()
@@ -58,7 +57,7 @@ def transaction_scope():
         db.rollback()
         try:
             db.close()
-            get_db_connection()
+            db.connect(reuse_if_open=True)
         except Exception:
             pass
         raise DatabaseOperationError(
@@ -83,7 +82,6 @@ def handle_transaction(func: Callable[..., T]) -> Callable[..., T]:
     """
     def wrapper(*args, **kwargs):
         try:
-            get_db_connection()
             db.begin()
             result = func(*args, **kwargs)
             db.commit()
@@ -115,7 +113,7 @@ def handle_transaction(func: Callable[..., T]) -> Callable[..., T]:
             db.rollback()
             try:
                 db.close()
-                get_db_connection()
+                db.connect(reuse_if_open=True)
             except Exception:
                 pass
             raise DatabaseOperationError(

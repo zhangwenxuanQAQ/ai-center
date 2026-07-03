@@ -57,7 +57,7 @@ interface Message {
   };
   extra_content?: any;
   tool_calls?: ToolCallStep[];
-  status?: 'start' | 'running' | 'done' | 'stop';
+  status?: 'start' | 'running' | 'done' | 'stop' | 'error';
   step?: 'pre_process' | 'task_planning' | 'task_list' | 'model_answer' | 'task_execution' | 'result_summary';
   step_id?: string;
   task_plan?: TaskInfo[];
@@ -113,7 +113,11 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
   const [thinkingDuration, setThinkingDuration] = useState<Record<string, number>>({});
   const thinkingStartTimeRef = useRef<Record<string, number>>({});
   const isCreatingNewConversation = useRef(false);
-  
+  // 标记切换对话后是否需要滚动到底部
+  const shouldScrollToBottomOnLoad = useRef(false);
+  // 追踪当前显示的对话ID，用于隔离不同对话的流式消息更新
+  const currentChatIdRef = useRef<string>('');
+
   // 文件上传相关状态
   const [selectedFiles, setSelectedFiles] = useState<QueryItem[]>([]);
   const [isDataSourceModalVisible, setIsDataSourceModalVisible] = useState(false);
@@ -144,11 +148,60 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     }
     
     if (conversation) {
-      // 立即清空消息列表，防止显示旧对话的消息
-      setMessages([]);
-      setLoading(true);
-      fetchMessages(conversation.id);
-      fetchConversationConfig(conversation.id);
+      // 更新当前显示的对话ID，用于隔离流式消息更新
+      currentChatIdRef.current = conversation.id;
+      
+      // 检查是否有该对话的流式消息缓存
+      const streamingCache = chatService.getStreamingCache(conversation.id);
+      
+      if (streamingCache && streamingCache.messages.length > 0) {
+        // 有缓存：恢复缓存的消息
+        // 先加载历史消息
+        fetchMessages(conversation.id);
+        fetchConversationConfig(conversation.id);
+        
+        // 设置标志：切换对话后需要滚动到底部
+        shouldScrollToBottomOnLoad.current = true;
+        
+        // 恢复正在接收的助手消息
+        if (streamingCache.isStreaming && streamingCache.assistantMessageId) {
+          // 添加正在接收的助手消息到 messages
+          setThinkingMessageId(streamingCache.assistantMessageId);
+          
+          // 创建一个恢复的助手消息
+          const restoredAssistantMessage: Message = {
+            id: streamingCache.assistantMessageId,
+            message_id: streamingCache.assistantMessageId,
+            role: 'assistant',
+            content: streamingCache.currentContent,
+            created_at: new Date().toISOString(),
+            reasoning_content: streamingCache.currentReasoningContent,
+            reasoning_end: streamingCache.currentReasoningContent ? true : undefined,
+            status: 'running',
+            step: 'model_answer'
+          };
+          
+          // 需要在历史消息加载后追加这条消息
+          // 使用 setTimeout 确保历史消息加载完成后再追加
+          setTimeout(() => {
+            setMessages(prev => {
+              // 检查是否已经有这条消息（避免重复）
+              if (prev.find(m => m.id === streamingCache.assistantMessageId)) {
+                return prev;
+              }
+              // 追加恢复的助手消息
+              return [...prev, restoredAssistantMessage];
+            });
+          }, 200);
+        }
+      } else {
+        // 无缓存：正常加载历史消息
+        setMessages([]);
+        setLoading(true);
+        shouldScrollToBottomOnLoad.current = true;
+        fetchMessages(conversation.id);
+        fetchConversationConfig(conversation.id);
+      }
     } else {
       // 新建对话时，清空消息列表
       setMessages([]);
@@ -336,6 +389,15 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
   };
 
   useEffect(() => {
+    // 切换对话后强制滚动到底部
+    if (shouldScrollToBottomOnLoad.current) {
+      shouldScrollToBottomOnLoad.current = false;
+      // 使用 setTimeout 确保 DOM 完全渲染后再滚动
+      setTimeout(() => {
+        scrollToBottomInstant();
+      }, 100);
+      return;
+    }
     // 只有在底部时才自动滚动
     if (isAtBottom()) {
       scrollToBottom();
@@ -344,6 +406,13 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // 立即滚动到底部（无动画），用于切换对话时
+  const scrollToBottomInstant = () => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
   };
 
   // 处理本地文件上传
@@ -674,8 +743,68 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         undefined, // messageId is undefined for new messages
         systemPrompt, // 系统提示词
         (data) => {
+          // 对话隔离：只处理当前显示对话的消息
+          if (currentChatIdRef.current !== currentConversation?.id) {
+            return;
+          }
+          
           const status = data.status || 'running';
           const stepId = data.step_id;
+          
+          // 处理 error 状态：将错误内容显示到助手消息中，不抛出异常
+          if (status === 'error') {
+            setMessages(prev => {
+              // 先更新用户消息（如果有user_message_id）
+              let updatedMessages = prev;
+              if (data.user_message_id) {
+                updatedMessages = prev.map(msg => {
+                  if (msg.role === 'user' && (msg.id === idTracker.user || msg.message_id === idTracker.user)) {
+                    idTracker.user = data.user_message_id;
+                    return { ...msg, id: data.user_message_id, message_id: data.user_message_id };
+                  }
+                  return msg;
+                });
+              }
+              
+              // 检查是否有对应的助手消息（通过 step_id 或 assistant_message_id）
+              const existingMsg = updatedMessages.find(msg => 
+                msg.role === 'assistant' && 
+                (msg.step_id === stepId || msg.message_id === data.assistant_message_id || msg.id === idTracker.assistant)
+              );
+              
+              if (existingMsg) {
+                // 更新现有消息为错误状态，显示错误内容
+                return updatedMessages.map(msg => {
+                  if (msg.role === 'assistant' && (msg.step_id === stepId || msg.message_id === data.assistant_message_id || msg.id === idTracker.assistant)) {
+                    return {
+                      ...msg,
+                      content: data.text || '抱歉，处理您的请求时出现错误。',
+                      status: 'error',
+                      reasoning_content: undefined,
+                      reasoning_end: undefined
+                    };
+                  }
+                  return msg;
+                });
+              } else {
+                // 创建新的错误消息
+                const errorMsg: Message = {
+                  id: stepId || idTracker.assistant,
+                  message_id: data.assistant_message_id,
+                  role: 'assistant',
+                  content: data.text || '抱歉，处理您的请求时出现错误。',
+                  created_at: new Date().toISOString(),
+                  status: 'error',
+                  step: data.step,
+                  step_id: stepId,
+                  avatar: data.avatar
+                };
+                return [...updatedMessages, errorMsg];
+              }
+            });
+            // 不清理状态，等待 [DONE] 消息来处理最终状态
+            return;
+          }
           
           // 当收到status=start且有step_id时，处理消息新增或更新
           if (status === 'start' && stepId && data.step) {
@@ -786,6 +915,13 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               [idTracker.assistant]: duration
             }));
           }
+          // 将所有仍在运行中的消息（包括 error 状态）更新为 done，以便显示重新回答和复制按钮
+          setMessages(prev => prev.map(msg => {
+            if (msg.role === 'assistant' && msg.status && msg.status !== 'done' && msg.status !== 'stop') {
+              return { ...msg, status: 'done' };
+            }
+            return msg;
+          }));
           setLoading(false);
           setThinkingMessageId(null);
         }
@@ -1094,8 +1230,68 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           messageId,
           systemPrompt,
           (data) => {
+              // 对话隔离：只处理当前显示对话的消息
+              if (currentChatIdRef.current !== conversation?.id) {
+                return;
+              }
+              
               const status = data.status || 'running';
               const stepId = data.step_id;
+              
+              // 处理 error 状态：将错误内容显示到助手消息中，不抛出异常
+              if (status === 'error') {
+                setMessages(prev => {
+                  // 先更新用户消息（如果有user_message_id）
+                  let updatedMessages = prev;
+                  if (data.user_message_id) {
+                    updatedMessages = prev.map(msg => {
+                      if (msg.role === 'user' && (msg.id === idTracker.user || msg.message_id === idTracker.user)) {
+                        idTracker.user = data.user_message_id;
+                        return { ...msg, id: data.user_message_id, message_id: data.user_message_id };
+                      }
+                      return msg;
+                    });
+                  }
+                  
+                  // 检查是否有对应的助手消息
+                  const existingMsg = updatedMessages.find(msg => 
+                    msg.role === 'assistant' && 
+                    (msg.step_id === stepId || msg.message_id === data.assistant_message_id || msg.id === idTracker.assistant)
+                  );
+                  
+                  if (existingMsg) {
+                    // 更新现有消息为错误状态
+                    return updatedMessages.map(msg => {
+                      if (msg.role === 'assistant' && (msg.step_id === stepId || msg.message_id === data.assistant_message_id || msg.id === idTracker.assistant)) {
+                        return {
+                          ...msg,
+                          content: data.text || '抱歉，处理您的请求时出现错误。',
+                          status: 'error',
+                          reasoning_content: undefined,
+                          reasoning_end: undefined
+                        };
+                      }
+                      return msg;
+                    });
+                  } else {
+                    // 创建新的错误消息
+                    const errorMsg: Message = {
+                      id: stepId || idTracker.assistant,
+                      message_id: data.assistant_message_id,
+                      role: 'assistant',
+                      content: data.text || '抱歉，处理您的请求时出现错误。',
+                      created_at: new Date().toISOString(),
+                      status: 'error',
+                      step: data.step,
+                      step_id: stepId,
+                      avatar: data.avatar
+                    };
+                    return [...updatedMessages, errorMsg];
+                  }
+                });
+                // 不清理状态，等待 [DONE] 消息来处理最终状态
+                return;
+              }
               
               // 当收到status=start且有step_id时，处理消息新增或更新
               if (status === 'start' && stepId && data.step) {
@@ -1170,6 +1366,13 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 [idTracker.assistant]: duration
               }));
             }
+            // 将所有仍在运行中的消息（包括 error 状态）更新为 done，以便显示重新回答和复制按钮
+            setMessages(prev => prev.map(msg => {
+              if (msg.role === 'assistant' && msg.status && msg.status !== 'done' && msg.status !== 'stop') {
+                return { ...msg, status: 'done' };
+              }
+              return msg;
+            }));
             setLoading(false);
             setThinkingMessageId(null);
           },
@@ -1181,6 +1384,13 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 [idTracker.assistant]: duration
               }));
             }
+            // 将所有仍在运行中的消息（包括 error 状态）更新为 done，以便显示重新回答和复制按钮
+            setMessages(prev => prev.map(msg => {
+              if (msg.role === 'assistant' && msg.status && msg.status !== 'done' && msg.status !== 'stop') {
+                return { ...msg, status: 'done' };
+              }
+              return msg;
+            }));
             setLoading(false);
             setThinkingMessageId(null);
           }
@@ -1197,8 +1407,68 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           messageId,
           systemPrompt,
           (data) => {
+            // 对话隔离：只处理当前显示对话的消息
+            if (currentChatIdRef.current !== conversation?.id) {
+              return;
+            }
+            
             const status = data.status || 'running';
             const stepId = data.step_id;
+            
+            // 处理 error 状态：将错误内容显示到助手消息中，不抛出异常
+            if (status === 'error') {
+              setMessages(prev => {
+                // 先更新用户消息（如果有user_message_id）
+                let updatedMessages = prev;
+                if (data.user_message_id) {
+                  updatedMessages = prev.map(msg => {
+                    if (msg.role === 'user' && (msg.id === idTracker.user || msg.message_id === idTracker.user)) {
+                      idTracker.user = data.user_message_id;
+                      return { ...msg, id: data.user_message_id, message_id: data.user_message_id };
+                    }
+                    return msg;
+                  });
+                }
+                
+                // 检查是否有对应的助手消息
+                const existingMsg = updatedMessages.find(msg => 
+                  msg.role === 'assistant' && 
+                  (msg.step_id === stepId || msg.message_id === data.assistant_message_id || msg.id === idTracker.assistant)
+                );
+                
+                if (existingMsg) {
+                  // 更新现有消息为错误状态
+                  return updatedMessages.map(msg => {
+                    if (msg.role === 'assistant' && (msg.step_id === stepId || msg.message_id === data.assistant_message_id || msg.id === idTracker.assistant)) {
+                      return {
+                        ...msg,
+                        content: data.text || '抱歉，处理您的请求时出现错误。',
+                        status: 'error',
+                        reasoning_content: undefined,
+                        reasoning_end: undefined
+                      };
+                    }
+                    return msg;
+                  });
+                } else {
+                  // 创建新的错误消息
+                  const errorMsg: Message = {
+                    id: stepId || idTracker.assistant,
+                    message_id: data.assistant_message_id,
+                    role: 'assistant',
+                    content: data.text || '抱歉，处理您的请求时出现错误。',
+                    created_at: new Date().toISOString(),
+                    status: 'error',
+                    step: data.step,
+                    step_id: stepId,
+                    avatar: data.avatar
+                  };
+                  return [...updatedMessages, errorMsg];
+                }
+              });
+              // 不清理状态，等待 [DONE] 消息来处理最终状态
+              return;
+            }
             
             // 当收到status=start且有step_id时，处理消息新增或更新
             if (status === 'start' && stepId && data.step) {
@@ -1285,6 +1555,13 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 [idTracker.assistant]: duration
               }));
             }
+            // 将所有仍在运行中的消息（包括 error 状态）更新为 done，以便显示重新回答和复制按钮
+            setMessages(prev => prev.map(msg => {
+              if (msg.role === 'assistant' && msg.status && msg.status !== 'done' && msg.status !== 'stop') {
+                return { ...msg, status: 'done' };
+              }
+              return msg;
+            }));
             setLoading(false);
             setThinkingMessageId(null);
           },
@@ -1296,6 +1573,13 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 [idTracker.assistant]: duration
               }));
             }
+            // 将所有仍在运行中的消息（包括 error 状态）更新为 done，以便显示重新回答和复制按钮
+            setMessages(prev => prev.map(msg => {
+              if (msg.role === 'assistant' && msg.status && msg.status !== 'done' && msg.status !== 'stop') {
+                return { ...msg, status: 'done' };
+              }
+              return msg;
+            }));
             setLoading(false);
             setThinkingMessageId(null);
           }

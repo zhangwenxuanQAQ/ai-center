@@ -535,7 +535,17 @@ class LLMModelService:
         }
         
         # 测试模型
-        return ModelTestUtils.test_model(db_llm_model.model_type, model_config)
+        result = ModelTestUtils.test_model(db_llm_model.model_type, model_config)
+        
+        # 根据测试结果更新连接状态
+        if result['success']:
+            db_llm_model.connection_status = 1  # 连接成功
+        else:
+            db_llm_model.connection_status = 0  # 连接失败
+        db_llm_model.updated_at = datetime.now()
+        db_llm_model.save()
+        
+        return result
     
     @staticmethod
     def test_model_config(model_test) -> Dict[str, Any]:

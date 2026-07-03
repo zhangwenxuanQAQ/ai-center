@@ -4,6 +4,8 @@ import yaml
 import os
 import logging
 import pymysql
+import threading
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +57,7 @@ class RetryPooledMySQLDatabase(PooledMySQLDatabase):
         raise last_error
 
 
+# 创建连接池数据库实例
 db = RetryPooledMySQLDatabase(
     config['mysql']['name'],
     user=config['mysql']['user'],
@@ -62,8 +65,9 @@ db = RetryPooledMySQLDatabase(
     host=config['mysql']['host'],
     port=config['mysql']['port'],
     charset='utf8mb4',
-    max_connections=config['mysql'].get('max_connections', 20),
-    stale_timeout=1800,
+    max_connections=config['mysql'].get('max_connections', 32),
+    stale_timeout=config['mysql'].get('stale_timeout', 300),
+    connect_timeout=config['mysql'].get('connect_timeout', 10),
 )
 
 def get_db_connection():
@@ -74,13 +78,7 @@ def get_db_connection():
         MySQLDatabase: 数据库连接对象
     """
     try:
-        if not db.is_closed():
-            try:
-                db.execute_sql('SELECT 1')
-            except Exception:
-                db.close()
-                db.connect(reuse_if_open=True)
-        else:
+        if db.is_closed():
             db.connect(reuse_if_open=True)
     except Exception as e:
         logger.error(f"数据库连接失败: {e}")
@@ -101,6 +99,72 @@ def close_db_connection():
             db.close()
     except Exception as e:
         logger.error(f"关闭数据库连接失败: {e}")
+
+def get_pool_status():
+    """
+    获取连接池状态信息
+    
+    Returns:
+        dict: 包含连接池状态信息的字典
+    """
+    try:
+        # 获取连接池的状态信息
+        in_use_count = len(db._in_use) if hasattr(db, '_in_use') else 0
+        free_count = len(db._connections) if hasattr(db, '_connections') else 0
+        max_conn = db._max_connections if hasattr(db, '_max_connections') else 0
+        
+        return {
+            'in_use': in_use_count,  # 正在使用的连接数
+            'free': free_count,      # 空闲的连接数
+            'max': max_conn,         # 最大连接数
+            'total': in_use_count + free_count,  # 总连接数
+            'is_closed': db.is_closed()  # 数据库是否关闭
+        }
+    except Exception as e:
+        logger.error(f"获取连接池状态失败: {e}")
+        return {
+            'in_use': 0,
+            'free': 0,
+            'max': 0,
+            'total': 0,
+            'is_closed': True,
+            'error': str(e)
+        }
+
+def log_pool_status_periodically():
+    """
+    定期记录连接池状态到日志
+    """
+    while True:
+        try:
+            pool_status = get_pool_status()
+            logger.info(
+                f"数据库连接池状态 - 正在使用: {pool_status['in_use']}, "
+                f"空闲: {pool_status['free']}, "
+                f"总数: {pool_status['total']}, "
+                f"最大: {pool_status['max']}, "
+                f"是否关闭: {pool_status['is_closed']}"
+            )
+            
+            # 如果连接数超过80%,发出警告
+            if pool_status['max'] > 0 and pool_status['in_use'] > pool_status['max'] * 0.8:
+                logger.warning(
+                    f"数据库连接池使用率超过80%! "
+                    f"当前使用: {pool_status['in_use']}/{pool_status['max']}"
+                )
+        except Exception as e:
+            logger.error(f"监控连接池状态失败: {e}")
+        
+        # 每5分钟记录一次
+        time.sleep(300)
+
+# 启动连接池监控线程
+_pool_monitor_thread = threading.Thread(
+    target=log_pool_status_periodically,
+    daemon=True,
+    name="DatabasePoolMonitor"
+)
+_pool_monitor_thread.start()
 
 def create_database_if_not_exists():
     """

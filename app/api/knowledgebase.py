@@ -539,6 +539,8 @@ async def upload_documents(
     chunk_config: str = Form(None, description="切片配置，JSON字符串"),
     tags: str = Form(None, description="标签，JSON字符串"),
     status: bool = Form(None, description="状态：true/false"),
+    title: str = Form(None, description="知识标题"),
+    document_config: str = Form(None, description="知识配置，JSON字符串"),
 ):
     """
     批量上传文档到知识库
@@ -597,6 +599,14 @@ async def upload_documents(
             except (json.JSONDecodeError, TypeError):
                 return ResponseUtil.bad_request(message="标签格式错误")
 
+        # 处理 document_config 参数
+        document_document_config = None
+        if document_config:
+            try:
+                document_document_config = json.loads(document_config)
+            except (json.JSONDecodeError, TypeError):
+                return ResponseUtil.bad_request(message="知识配置格式错误")
+
         logger.info(f"准备上传 {len(file_data_list)} 个文件到知识库 {kb_id}")
         errors, documents = DocumentService.upload_documents(
             kb_id=kb_id,
@@ -607,6 +617,8 @@ async def upload_documents(
             chunk_config=document_chunk_config,
             tags=document_tags,
             status=status,
+            title=title,
+            document_config=document_document_config,
         )
 
         docs_data = []
@@ -864,7 +876,7 @@ def delete_document(kb_id: str, document_id: str):
 @router.get("/{kb_id}/document/{document_id}/download")
 def download_document(kb_id: str, document_id: str):
     """
-    下载知识库文档
+    下载知识库文档（支持大文件流式下载）
 
     Args:
         kb_id: 知识库ID
@@ -874,23 +886,21 @@ def download_document(kb_id: str, document_id: str):
         StreamingResponse: 文件流响应
     """
     try:
-        result = DocumentService.download_document(document_id)
-        blob = result["blob"]
-        file_name = result["file_name"]
-        mime_type = result["mime_type"]
+        # 使用流式下载方法，避免大文件内存占用过高
+        from app.core.knowledgebase.document.download_handler import DocumentDownloadHandler
+        generator, file_name, mime_type, file_size = DocumentDownloadHandler.download_document_stream(document_id)
 
         import urllib.parse
         encoded_filename = urllib.parse.quote(file_name)
 
-        from io import BytesIO
-        file_stream = BytesIO(blob)
-
         return StreamingResponse(
-            file_stream,
+            generator,
             media_type=mime_type,
             headers={
                 "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
-                "Content-Length": str(len(blob)),
+                "Content-Length": str(file_size),
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",  # 禁用nginx缓冲，支持流式传输
             }
         )
     except Exception as e:

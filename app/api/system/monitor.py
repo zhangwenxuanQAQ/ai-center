@@ -5,6 +5,7 @@
 from fastapi import APIRouter
 from app.services.system.service import MonitorService
 from app.utils.response import ResponseUtil, ApiResponse
+from app.database.database import get_pool_status
 
 router = APIRouter()
 
@@ -157,6 +158,20 @@ def get_datasource_stats():
     """
     stats = MonitorService.get_datasource_stats()
     return ResponseUtil.success(data=stats, message="获取数据源统计信息成功")
+
+
+@router.get("/monitor/database/pool", response_model=ApiResponse)
+def get_database_pool_status():
+    """
+    获取数据库连接池状态
+    
+    显示当前连接池中正在使用的连接数、空闲连接数、最大连接数等状态信息
+    
+    Returns:
+        ApiResponse: 统一格式的响应对象，包含连接池状态数据
+    """
+    pool_status = get_pool_status()
+    return ResponseUtil.success(data=pool_status, message="获取数据库连接池状态成功")
 
 
 
