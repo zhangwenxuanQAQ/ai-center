@@ -234,6 +234,7 @@ class LLMModel(SoftDeleteModel):
     support_image = BooleanField(default=False, verbose_name="是否支持图片")
     status = BooleanField(default=True, verbose_name="状态")
     is_default = BooleanField(default=False, verbose_name="是否默认模型")
+    connection_status = IntegerField(default=-1, verbose_name="连接状态：-1待连接，0连接失败，1连接成功")
     
     class Meta:
         table_name = 'llm_model'

@@ -358,6 +358,13 @@ try:
             logger.info("  成功添加 is_default 字段")
         else:
             logger.info("  is_default 字段已存在")
+        
+        # 添加 connection_status 字段
+        if 'connection_status' not in columns:
+            db.execute_sql("ALTER TABLE llm_model ADD COLUMN connection_status TINYINT DEFAULT -1")
+            logger.info("  成功添加 connection_status 字段")
+        else:
+            logger.info("  connection_status 字段已存在，跳过")
     except Exception as e:
         logger.info(f"  修改 llm_model 表结构失败: {e}")
     

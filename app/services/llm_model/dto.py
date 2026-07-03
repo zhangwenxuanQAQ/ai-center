@@ -76,6 +76,7 @@ class LLMModelBase(BaseModel):
         support_image: 是否支持图片
         status: 状态
         is_default: 是否默认模型
+        connection_status: 连接状态
     """
     name: str = Field(..., min_length=1, max_length=100, description="模型名称，长度1-100个字符")
     provider: Optional[str] = Field(default="default", max_length=50, description="提供商，长度1-50个字符")
@@ -88,6 +89,7 @@ class LLMModelBase(BaseModel):
     support_image: bool = Field(default=False, description="是否支持图片")
     status: bool = Field(default=True, description="状态，True表示启用，False表示禁用")
     is_default: Optional[bool] = Field(default=False, description="是否默认模型")
+    connection_status: int = Field(default=-1, description="连接状态：-1待连接，0连接失败，1连接成功")
 
 
 class LLMModelCreate(LLMModelBase):
@@ -113,6 +115,7 @@ class LLMModelUpdate(BaseModel):
         support_image: 是否支持图片
         status: 状态
         is_default: 是否默认模型
+        connection_status: 连接状态
     """
     name: Optional[str] = Field(None, min_length=1, max_length=100, description="模型名称，长度1-100个字符")
     provider: Optional[str] = Field(None, max_length=50, description="提供商，长度1-50个字符")
@@ -125,6 +128,7 @@ class LLMModelUpdate(BaseModel):
     support_image: Optional[bool] = Field(None, description="是否支持图片")
     status: Optional[bool] = Field(None, description="状态，True表示启用，False表示禁用")
     is_default: Optional[bool] = Field(None, description="是否默认模型")
+    connection_status: Optional[int] = Field(None, description="连接状态：-1待连接，0连接失败，1连接成功")
 
 
 class LLMModel(LLMModelBase, BaseDTO):
