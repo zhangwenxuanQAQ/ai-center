@@ -627,7 +627,7 @@ body[data-theme="light"] .ant-layout-sider {
 }
 
 body[data-theme="dark"] .ant-layout-sider {
-  background: linear-gradient(180deg, var(--dark-bg-primary) 0%, var(--dark-bg-card) 100%);
+  /* background: linear-gradient(180deg, var(--dark-bg-primary) 0%, var(--dark-bg-card) 100%); */
   box-shadow: 2px 0 20px rgba(0, 0, 0, 0.3);
 }
 

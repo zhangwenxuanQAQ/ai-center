@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿/* ==================== 白天模式主题样式 ==================== */
+﻿﻿﻿﻿﻿﻿﻿﻿﻿/* ==================== 白天模式主题样式 ==================== */
 
 body[data-theme="light"] .ant-card-bordered:not([data-card-type="model"]) {
   border-radius: 16px !important;
@@ -404,6 +404,31 @@ body[data-theme="light"] li.ant-pagination-item-active a {
   color: #fff !important;
 }
 
+body[data-theme="light"] .ant-pagination-total-text {
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+body[data-theme="light"] .ant-pagination-prev,
+body[data-theme="light"] li.ant-pagination-prev,
+body[data-theme="light"] .ant-pagination-next,
+body[data-theme="light"] li.ant-pagination-next {
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+body[data-theme="light"] .ant-pagination-prev:hover .ant-pagination-item-link,
+body[data-theme="light"] li.ant-pagination-prev:hover .ant-pagination-item-link,
+body[data-theme="light"] .ant-pagination-next:hover .ant-pagination-item-link,
+body[data-theme="light"] li.ant-pagination-next:hover .ant-pagination-item-link {
+  color: var(--primary-color) !important;
+}
+
+body[data-theme="light"] .ant-pagination-item-link,
+body[data-theme="light"] a.ant-pagination-item-link {
+  background: #fff !important;
+  border: 1px solid #d9d9d9 !important;
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
 /* Switch 样式 */
 body[data-theme="light"] .ant-switch-checked,
 body[data-theme="light"] button.ant-switch-checked {
@@ -537,4 +562,17 @@ body[data-theme="light"] .ant-tooltip .ant-tooltip-content {
 body[data-theme="light"] .ant-tooltip .ant-tooltip-arrow::before {
   background: #ffffff !important;
   border: 1px solid rgba(0, 0, 0, 0.1) !important;
+}
+
+body[data-theme="light"] .ant-btn-dashed,
+body[data-theme="light"] button.ant-btn-dashed {
+  background: transparent !important;
+  border: 1px dashed #d9d9d9 !important;
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+body[data-theme="light"] .ant-btn-dashed:hover,
+body[data-theme="light"] button.ant-btn-dashed:hover {
+  background: #f5f7fa !important;
+  border-color: #5a6fd6 !important;
 }

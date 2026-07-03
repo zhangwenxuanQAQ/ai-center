@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿// 提示词管理页面样式
+﻿﻿// 提示词管理页面样式
 
 .prompt-layout {
   flex: 1;
@@ -330,20 +330,46 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
 
-    // 修改表格cell的padding为8px
     :global {
-      // 支持列宽动态调整
       .ant-table-column-sorter {
         margin: 0 4px;
       }
 
-      // 确保表格列可以调整宽度
       .ant-table-header {
         overflow: auto;
       }
 
       .ant-table-column-title {
         white-space: nowrap;
+      }
+
+      .ant-table-wrapper {
+        background: transparent;
+      }
+
+      .ant-table,
+      div.ant-table {
+        background: transparent !important;
+      }
+
+      .ant-table-container {
+        background: transparent !important;
+      }
+
+      .ant-table-content {
+        background: transparent !important;
+      }
+
+      .ant-table-body {
+        background: transparent !important;
+      }
+
+      .ant-table-thead > tr > th {
+        background: transparent !important;
+      }
+
+      .ant-table-tbody > tr > td {
+        background: transparent !important;
       }
     }
 
@@ -421,7 +447,6 @@
   }
 }
 
-// 暗色主题下的树形组件样式
 .dark {
   .category-tree {
     .ant-tree {
@@ -445,7 +470,6 @@
   }
 }
 
-// 亮色主题下的树形组件样式
 .light {
   .category-tree {
     .ant-tree {
@@ -469,7 +493,6 @@
   }
 }
 
-// Markdown编辑器样式
 .md-editor-container {
   &.dark {
     .wmde-markdown {
