@@ -72,9 +72,9 @@ class ModelTestUtils:
                     image_base64 = base64.b64encode(image_data).decode('utf-8')
 
                     # 调用模型识别图片
-                    response = model.generate(test_prompt, image=image_base64, max_tokens=10)
+                    image_response = model.generate(test_prompt, image=image_base64, max_tokens=10)
 
-                    if 'text' in response and response['text'] and response['text'].strip() and 'error' not in response:
+                    if 'text' in image_response and image_response['text'] and image_response['text'].strip() and 'error' not in image_response:
                         support_image = True
                 except Exception:
                     # 图片识别失败，不支持图片
