@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal, Form, Input, Select, Radio, Button, message } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import SimpleEditableTable, { SimpleTableRow } from '../../../components/SimpleEditableTable';
@@ -19,6 +19,10 @@ interface AddChapterModalProps {
   onAdd: (chapter: Chapter) => void;
   // 新增属性：是否仅显示富文本类型（用于动态章节）
   richTextOnly?: boolean;
+  // 编辑模式：传入要编辑的章节
+  editingChapter?: Chapter | null;
+  // 文档常量（包含 metadata_field_types）
+  documentConstants?: any;
 }
 
 const AddChapterModal: React.FC<AddChapterModalProps> = ({
@@ -27,33 +31,48 @@ const AddChapterModal: React.FC<AddChapterModalProps> = ({
   onCancel,
   onAdd,
   richTextOnly = false,
+  editingChapter,
+  documentConstants,
 }) => {
   const [form] = Form.useForm();
   const [chapterType, setChapterType] = useState<'form' | 'list' | 'rich_text'>('form');
   const [fields, setFields] = useState<SimpleTableRow[]>([]);
 
+  const isEditMode = !!editingChapter;
+
   useEffect(() => {
     if (visible) {
-      form.resetFields();
-      setChapterType(richTextOnly ? 'rich_text' : 'form');
-      setFields([]);
+      if (isEditMode && editingChapter) {
+        // 编辑模式：填充现有数据
+        form.setFieldsValue({
+          name: editingChapter.name,
+          parentId: editingChapter.parentId,
+        });
+        setChapterType(editingChapter.type);
+        setFields(editingChapter.fields || []);
+      } else {
+        // 新增模式：重置表单
+        form.resetFields();
+        setChapterType(richTextOnly ? 'rich_text' : 'form');
+        setFields([]);
+      }
     }
-  }, [visible, form, richTextOnly]);
+  }, [visible, form, richTextOnly, editingChapter, isEditMode]);
 
   const handleOk = async () => {
     try {
       const values = await form.validateFields();
-      
-      const newChapter: Chapter = {
-        id: `chapter_${Date.now()}`,
+
+      const chapter: Chapter = {
+        id: isEditMode && editingChapter ? editingChapter.id : `chapter_${Date.now()}`,
         name: values.name,
         parentId: values.parentId,
         type: chapterType,
         fields: (chapterType === 'form' || chapterType === 'list') ? fields : undefined,
       };
 
-      onAdd(newChapter);
-      message.success('章节添加成功');
+      onAdd(chapter);
+      message.success(isEditMode ? '章节更新成功' : '章节添加成功');
       form.resetFields();
       setChapterType(richTextOnly ? 'rich_text' : 'form');
       setFields([]);
@@ -72,7 +91,7 @@ const AddChapterModal: React.FC<AddChapterModalProps> = ({
 
   return (
     <Modal
-      title="添加章节"
+      title={isEditMode ? '编辑章节' : '添加章节'}
       open={visible}
       onCancel={handleCancel}
       onOk={handleOk}
@@ -132,6 +151,7 @@ const AddChapterModal: React.FC<AddChapterModalProps> = ({
             <SimpleEditableTable
               value={fields}
               onChange={setFields}
+              fieldTypes={documentConstants?.metadata_field_types || []}
             />
           </Form.Item>
         )}

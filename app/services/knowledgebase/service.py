@@ -2382,6 +2382,102 @@ class KnowledgebaseDocumentCategoryService:
             return None
 
     @staticmethod
+    def _update_document_config_fields(old_config: dict, new_config: dict) -> dict:
+        """
+        更新数据集的document_config字段，根据字段ID和章节ID匹配更新
+
+        Args:
+            old_config: 旧的数据集document_config
+            new_config: 新的目录document_config
+
+        Returns:
+            dict: 更新后的数据集document_config
+        """
+        updated_config = old_config.copy()
+
+        # 1. 更新自定义字段：根据字段id更新相同字段
+        if 'custom_fields' in new_config and 'custom_fields' in old_config:
+            new_custom_fields = new_config['custom_fields']
+            old_custom_fields = old_config['custom_fields']
+
+            # 创建字段ID映射
+            new_field_map = {field['id']: field for field in new_custom_fields}
+
+            # 更新旧字段：根据ID匹配更新
+            updated_custom_fields = []
+            for old_field in old_custom_fields:
+                field_id = old_field.get('id')
+                if field_id in new_field_map:
+                    # 找到匹配的字段，用新字段的数据更新
+                    new_field = new_field_map[field_id]
+                    updated_field = old_field.copy()
+                    # 更新字段的所有属性（保留原有的值，但更新其他配置）
+                    for key in new_field.keys():
+                        if key != 'id':  # 不更新ID
+                            updated_field[key] = new_field[key]
+                    updated_custom_fields.append(updated_field)
+                else:
+                    # 字段ID在目录中不存在，保留原有字段（可能已删除）
+                    updated_custom_fields.append(old_field)
+
+            updated_config['custom_fields'] = updated_custom_fields
+
+        # 2. 更新章节和章节字段：根据章节id和字段id更新
+        if 'chapters' in new_config and 'chapters' in old_config:
+            new_chapters = new_config['chapters']
+            old_chapters = old_config['chapters']
+
+            # 创建章节ID映射
+            new_chapter_map = {chapter['id']: chapter for chapter in new_chapters}
+
+            # 更新旧章节：根据ID匹配更新
+            updated_chapters = []
+            for old_chapter in old_chapters:
+                chapter_id = old_chapter.get('id')
+                if chapter_id in new_chapter_map:
+                    # 找到匹配的章节，用新章节的数据更新
+                    new_chapter = new_chapter_map[chapter_id]
+                    updated_chapter = old_chapter.copy()
+
+                    # 更新章节的基本属性（保留原有的值，但更新其他配置）
+                    for key in new_chapter.keys():
+                        if key not in ['id', 'fields']:  # 不更新ID和fields
+                            updated_chapter[key] = new_chapter[key]
+
+                    # 更新章节字段：根据字段ID匹配更新
+                    if 'fields' in new_chapter and 'fields' in old_chapter:
+                        new_fields = new_chapter['fields']
+                        old_fields = old_chapter['fields']
+
+                        new_field_map = {field['id']: field for field in new_fields}
+
+                        updated_fields = []
+                        for old_field in old_fields:
+                            field_id = old_field.get('id')
+                            if field_id in new_field_map:
+                                # 找到匹配的字段，用新字段的数据更新
+                                new_field = new_field_map[field_id]
+                                updated_field = old_field.copy()
+                                for key in new_field.keys():
+                                    if key != 'id':
+                                        updated_field[key] = new_field[key]
+                                updated_fields.append(updated_field)
+                            else:
+                                # 字段ID在章节中不存在，保留原有字段
+                                updated_fields.append(old_field)
+
+                        updated_chapter['fields'] = updated_fields
+
+                    updated_chapters.append(updated_chapter)
+                else:
+                    # 章节ID在目录中不存在，保留原有章节
+                    updated_chapters.append(old_chapter)
+
+            updated_config['chapters'] = updated_chapters
+
+        return updated_config
+
+    @staticmethod
     @handle_transaction
     def update_category(category_id: str, category: KnowledgebaseDocumentCategoryUpdate):
         """
@@ -2420,9 +2516,43 @@ class KnowledgebaseDocumentCategoryService:
             if existing:
                 raise DuplicateResourceError(f"分类名称 '{update_data['name']}' 已存在")
 
+        # 获取旧的document_config
+        old_category_config = json.loads(db_category.document_config) if db_category.document_config else {}
+
+        # 如果更新了document_config，需要同步更新该目录下的所有数据集
         if update_data.get('document_config') and isinstance(update_data['document_config'], dict):
+            new_category_config = update_data['document_config']
+
+            # 更新该目录下的所有数据集的document_config
+            documents = KnowledgebaseDocument.select().where(
+                (KnowledgebaseDocument.category_id == category_id) &
+                (KnowledgebaseDocument.deleted == False)
+            )
+
+            for doc in documents:
+                try:
+                    # 解析数据集的document_config
+                    doc_config = json.loads(doc.document_config) if doc.document_config else {}
+
+                    # 如果数据集有document_config，则更新字段
+                    if doc_config:
+                        updated_doc_config = KnowledgebaseDocumentCategoryService._update_document_config_fields(
+                            doc_config, new_category_config
+                        )
+
+                        # 保存更新后的document_config
+                        doc.document_config = json.dumps(updated_doc_config, ensure_ascii=False)
+                        doc.updated_at = datetime.now()
+                        doc.save()
+
+                        logger.info(f"更新数据集 {doc.id} 的document_config成功")
+                except Exception as e:
+                    logger.error(f"更新数据集 {doc.id} 的document_config失败: {e}")
+                    continue
+
+            # 序列化新的document_config
             update_data['document_config'] = json.dumps(update_data['document_config'], ensure_ascii=False)
-        
+
         if update_data.get('chunk_config') and isinstance(update_data['chunk_config'], dict):
             update_data['chunk_config'] = json.dumps(update_data['chunk_config'], ensure_ascii=False)
 

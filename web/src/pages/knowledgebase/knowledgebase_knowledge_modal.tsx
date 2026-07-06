@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Modal, Form, Input, Button, Upload, message, Select, Radio, Checkbox, DatePicker, Tooltip } from 'antd';
 import { UploadOutlined, InfoCircleOutlined, InboxOutlined } from '@ant-design/icons';
 import MDEditorTheme from '../../components/MDEditorTheme';
