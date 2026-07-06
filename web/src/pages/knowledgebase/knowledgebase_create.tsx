@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Form, Input, Select, TreeSelect, Button, message, Row, Col, Upload, Spin, Tag, Avatar, Modal, InputNumber, Switch, Slider, Tooltip, Drawer, Descriptions } from 'antd';
 const { TextArea } = Input;
@@ -120,54 +120,9 @@ const KnowledgebaseCreate: React.FC = () => {
 
   const fetchRetrievalConfigs = async () => {
     try {
-      // 这里应该调用后端API获取检索配置项
-      // 暂时使用前端常量，后续替换为后端API
-      const configs = [
-        {
-          key: "vector_similarity",
-          label: "文本相似度阈值",
-          type: "slider",
-          min: 0,
-          max: 1,
-          step: 0.01,
-          default: 0.2,
-          description: "文本相似度阈值，用于筛选检索结果"
-        },
-        {
-          key: "keyword_similarity",
-          label: "关键词相似度阈值",
-          type: "slider",
-          min: 0,
-          max: 1,
-          step: 0.01,
-          default: 0.3,
-          description: "关键词相似度阈值，用于筛选检索结果"
-        },
-        {
-          key: "top_k",
-          label: "召回数量",
-          type: "slider",
-          min: 1,
-          max: 20,
-          step: 1,
-          default: 5,
-          description: "检索时返回的最大结果数量"
-        },
-        {
-          key: "sort_by",
-          label: "排序方式",
-          type: "select",
-          options: [
-            { value: "sim", label: "混合相似度" },
-            { value: "vsim", label: "向量相似度" },
-            { value: "tsim", label: "关键词相似度" }
-          ],
-          default: "sim",
-          description: "检索结果的排序方式"
-        }
-      ];
+      const configs = await knowledgebaseService.getRetrievalConfigs();
       setRetrievalConfigs(configs);
-      
+
       // 初始化默认值
       const defaultConfig: any = {};
       configs.forEach(config => {

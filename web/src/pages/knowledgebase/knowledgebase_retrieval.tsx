@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Layout, Slider, Select, Input, Button, Card, Tag, Spin, Empty, Pagination, Image, Popover, InputNumber, Tooltip, message, Switch, DatePicker, Space } from 'antd';
 import { SearchOutlined, FileTextOutlined, DownOutlined, UpOutlined, QuestionCircleOutlined, FilterOutlined } from '@ant-design/icons';
 import MDEditor from '@uiw/react-md-editor';
@@ -245,6 +245,11 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
             defaultConfig[key] = value;
           });
         }
+        // 确保top_k有默认值（如果配置项中没有，则使用配置项中的默认值）
+        if (!defaultConfig.top_k) {
+          const topKConfig = configs.find(c => c.key === 'top_k');
+          defaultConfig.top_k = topKConfig?.default || 5;
+        }
         setRetrievalConfig(defaultConfig);
       } catch (error) {
         console.error('Failed to fetch retrieval configs:', error);
@@ -326,7 +331,7 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
         query,
         {
           ...retrievalConfig,
-          top_k: pageSize,
+          top_k: retrievalConfig.top_k,
           page,
           page_size: pageSize,
           metadatas: metadataQuery,
@@ -631,7 +636,7 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
               <Spin size="small" />
             </div>
           ) : (
-            retrievalConfigs.filter(config => config.key !== 'top_k').map(config => (
+            retrievalConfigs.map(config => (
               <div key={config.key} style={{ marginBottom: '24px' }}>
                 <div className={`config-label ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   {config.label}
