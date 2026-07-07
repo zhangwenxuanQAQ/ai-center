@@ -15,6 +15,22 @@ from app.core.exceptions import (
 T = TypeVar('T')
 
 
+def _safe_rollback():
+    """
+    安全回滚事务，处理连接断开的情况
+    
+    当数据库连接已断开时，rollback 也会失败，需要捕获异常并尝试重新连接
+    """
+    try:
+        db.rollback()
+    except (InterfaceError, OperationalError):
+        try:
+            db.close()
+            db.connect(reuse_if_open=True)
+        except Exception:
+            pass
+
+
 @contextmanager
 def transaction_scope():
     """
@@ -31,7 +47,7 @@ def transaction_scope():
         yield
         db.commit()
     except IntegrityError as e:
-        db.rollback()
+        _safe_rollback()
         if 'Duplicate entry' in str(e) or 'UNIQUE constraint' in str(e):
             raise DuplicateResourceError(
                 message="资源已存在",
@@ -48,24 +64,19 @@ def transaction_scope():
                 detail=str(e)
             ) from e
     except OperationalError as e:
-        db.rollback()
+        _safe_rollback()
         raise DatabaseOperationError(
             message="数据库操作失败",
             detail=str(e)
         ) from e
     except InterfaceError as e:
-        db.rollback()
-        try:
-            db.close()
-            db.connect(reuse_if_open=True)
-        except Exception:
-            pass
+        _safe_rollback()
         raise DatabaseOperationError(
             message="数据库连接失败，请重试",
             detail=str(e)
         ) from e
     except Exception as e:
-        db.rollback()
+        _safe_rollback()
         raise
 
 
@@ -87,7 +98,7 @@ def handle_transaction(func: Callable[..., T]) -> Callable[..., T]:
             db.commit()
             return result
         except IntegrityError as e:
-            db.rollback()
+            _safe_rollback()
             if 'Duplicate entry' in str(e) or 'UNIQUE constraint' in str(e):
                 raise DuplicateResourceError(
                     message="资源已存在",
@@ -104,24 +115,19 @@ def handle_transaction(func: Callable[..., T]) -> Callable[..., T]:
                     detail=str(e)
                 ) from e
         except OperationalError as e:
-            db.rollback()
+            _safe_rollback()
             raise DatabaseOperationError(
                 message="数据库操作失败",
                 detail=str(e)
             ) from e
         except InterfaceError as e:
-            db.rollback()
-            try:
-                db.close()
-                db.connect(reuse_if_open=True)
-            except Exception:
-                pass
+            _safe_rollback()
             raise DatabaseOperationError(
                 message="数据库连接失败，请重试",
                 detail=str(e)
             ) from e
         except Exception:
-            db.rollback()
+            _safe_rollback()
             raise
     
     return wrapper
