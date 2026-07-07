@@ -726,6 +726,10 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     if (deepThinking) {
       thinkingStartTimeRef.current[assistantMessageId] = Date.now();
     }
+    
+    setTimeout(() => {
+      scrollToBottomInstant();
+    }, 50);
 
     try {
       // 发送消息到后端
@@ -1169,6 +1173,10 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     if (deepThinking) {
       thinkingStartTimeRef.current[assistantMessageId] = Date.now();
     }
+    
+    setTimeout(() => {
+      scrollToBottomInstant();
+    }, 50);
 
     try {
       // 检查是否需要发送文件
@@ -1968,7 +1976,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             )}
             {msg.status === 'running' && msg.reasoning_content && !msg.reasoning_end && (
               <div className="message-reasoning">
-                <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
+                <div className="reasoning-header">
                   <LoadingOutlined spin />
                   <BulbOutlined />
                   <span>分析问题中</span>
@@ -1978,16 +1986,14 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                     </span>
                   )}
                 </div>
-                {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
-                  <div className="reasoning-text">
-                    <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                      <MDEditor.Markdown
-                        source={msg.reasoning_content}
-                        className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
-                      />
-                    </div>
+                <div className="reasoning-text">
+                  <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                    <MDEditor.Markdown
+                      source={msg.reasoning_content}
+                      className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                    />
                   </div>
-                )}
+                </div>
               </div>
             )}
             {(msg.status !== 'start' || !msg.status) && msg.reasoning_content && (msg.reasoning_end || msg.status === 'done' || msg.status === 'stop') && (
@@ -2051,7 +2057,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             )}
             {msg.status === 'running' && msg.reasoning_content && !msg.reasoning_end && (
               <div className="message-reasoning">
-                <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
+                <div className="reasoning-header">
                   <LoadingOutlined spin />
                   <BulbOutlined />
                   <span>任务规划中</span>
@@ -2061,16 +2067,14 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                     </span>
                   )}
                 </div>
-                {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
-                  <div className="reasoning-text">
-                    <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                      <MDEditor.Markdown
-                        source={msg.reasoning_content}
-                        className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
-                      />
-                    </div>
+                <div className="reasoning-text">
+                  <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                    <MDEditor.Markdown
+                      source={msg.reasoning_content}
+                      className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                    />
                   </div>
-                )}
+                </div>
               </div>
             )}
             {(msg.status !== 'start' || !msg.status) && msg.reasoning_content && (msg.reasoning_end || msg.status === 'done' || msg.status === 'stop') && (
@@ -2206,7 +2210,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             )}
             {msg.status === 'running' && msg.reasoning_content && !msg.reasoning_end && (
               <div className="message-reasoning">
-                <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
+                <div className="reasoning-header">
                   <LoadingOutlined spin />
                   <BulbOutlined />
                   <span>正在思考中</span>
@@ -2216,16 +2220,14 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                     </span>
                   )}
                 </div>
-                {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
-                  <div className="reasoning-text">
-                    <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                      <MDEditor.Markdown
-                        source={msg.reasoning_content}
-                        className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
-                      />
-                    </div>
+                <div className="reasoning-text">
+                  <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                    <MDEditor.Markdown
+                      source={msg.reasoning_content}
+                      className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                    />
                   </div>
-                )}
+                </div>
               </div>
             )}
             {(msg.status !== 'start' || !msg.status) && msg.reasoning_content && (msg.reasoning_end || msg.status === 'done' || msg.status === 'stop') && (
