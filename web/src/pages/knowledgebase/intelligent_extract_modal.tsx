@@ -94,8 +94,8 @@ const ThinkingProcessDisplay: React.FC<ThinkingProcessDisplayProps> = ({ onInter
       )}
 
       {/* 正文内容 */}
-      <div style={{ flex: 1, minHeight: 200 }}>
-        <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left' }}>
+      <div style={{ flex: 1, minHeight: 200, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#fff' : '#333', textAlign: 'left', flexShrink: 0 }}>
           📝 正文内容
         </div>
         <div
@@ -106,11 +106,12 @@ const ThinkingProcessDisplay: React.FC<ThinkingProcessDisplayProps> = ({ onInter
             borderRadius: 8,
             background: theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#f5f5f5',
             border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}`,
-            maxHeight: 280,
+            flex: 1,
             overflowY: 'auto',
             color: theme === 'dark' ? '#fff' : '#000',
             fontSize: 14,
             lineHeight: 1.6,
+            minHeight: 0,
           }}
         >
           {textContent || '等待生成...'}

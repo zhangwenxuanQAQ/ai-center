@@ -392,6 +392,36 @@ body[data-theme="light"] tbody.ant-table-tbody > tr:hover > td {
   background: #fafafa !important;
 }
 
+body[data-theme="light"] .ant-table-container,
+body[data-theme="light"] div.ant-table-container {
+  background: #ffffff !important;
+}
+
+body[data-theme="light"] .ant-table-content,
+body[data-theme="light"] div.ant-table-content {
+  background: #ffffff !important;
+}
+
+body[data-theme="light"] .ant-table-body,
+body[data-theme="light"] div.ant-table-body {
+  background: #ffffff !important;
+}
+
+body[data-theme="light"] .ant-table-placeholder,
+body[data-theme="light"] div.ant-table-placeholder {
+  background: #ffffff !important;
+}
+
+body[data-theme="light"] .ant-spin-nested-loading,
+body[data-theme="light"] div.ant-spin-nested-loading {
+  background: #ffffff !important;
+}
+
+body[data-theme="light"] .ant-spin-container,
+body[data-theme="light"] div.ant-spin-container {
+  background: #ffffff !important;
+}
+
 /* Pagination 样式 */
 body[data-theme="light"] .ant-pagination-item-active,
 body[data-theme="light"] li.ant-pagination-item-active {
@@ -504,6 +534,21 @@ body[data-theme="light"] div.ant-tabs-tab-active {
 body[data-theme="light"] .ant-tabs-ink-bar,
 body[data-theme="light"] div.ant-tabs-ink-bar {
   background: linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%) !important;
+}
+
+body[data-theme="light"] .ant-tabs-tab-active,
+body[data-theme="light"] div.ant-tabs-tab-active {
+  color: var(--primary-color) !important;
+}
+
+body[data-theme="light"] .ant-tabs-tab-active::after,
+body[data-theme="light"] div.ant-tabs-tab-active::after {
+  border-bottom-color: var(--primary-color) !important;
+}
+
+body[data-theme="light"] .ant-tabs-nav-wrap::after,
+body[data-theme="light"] div.ant-tabs-nav-wrap::after {
+  border-bottom-color: rgba(90, 111, 214, 0.2) !important;
 }
 
 /* Empty 样式 */
