@@ -391,7 +391,7 @@ FILE_TYPE_CHUNK_METHODS: Dict[str, List[str]] = {
     FileType.DOC: [
         ChunkMethod.NAIVE, ChunkMethod.QA, ChunkMethod.RESUME, 
         ChunkMethod.MANUAL, ChunkMethod.BOOK, ChunkMethod.LAWS, 
-        ChunkMethod.ONE
+        ChunkMethod.ONE , ChunkMethod.TABLE
     ],
     FileType.AURAL: [ChunkMethod.AUDIO],
     FileType.OTHER: [ChunkMethod.ONE],
@@ -419,7 +419,7 @@ SOURCE_TYPE_CHUNK_METHODS: Dict[str, List[str]] = {
     SourceType.CUSTOM_TEMPLATE: [ChunkMethod.TABLE,ChunkMethod.ONE],
     KnowledgeTemplateType.FILE: [ChunkMethod.NAIVE, ChunkMethod.QA, ChunkMethod.RESUME, 
         ChunkMethod.MANUAL, ChunkMethod.BOOK, ChunkMethod.LAWS, ChunkMethod.PAPER,ChunkMethod.PRESENTATION,
-        ChunkMethod.ONE],
+        ChunkMethod.ONE,ChunkMethod.TABLE],
 }
 
 
