@@ -391,11 +391,11 @@ async def chat_with_model(llm_model_id: str, request: dict = Body(...)):
                                         audio_format = input_audio.get('format', 'wav')
 
                                         # 如果已经是wav格式，直接使用
-                                        if audio_format == 'wav' and (audio_data.startswith('data:audio/wav') or audio_data.startswith('data:audio/x-wav')):
+                                        if audio_format == 'wav' and not audio_data.startswith('data:'):
                                             content_parts.append(item)
                                         else:
                                             # 其他格式需要转换为wav
-                                            wav_data_uri = None
+                                            wav_base64_data = None
                                             # 处理data URI格式
                                             if audio_data.startswith('data:'):
                                                 try:
@@ -411,8 +411,7 @@ async def chat_with_model(llm_model_id: str, request: dict = Body(...)):
                                                     if converted_path:
                                                         with open(converted_path, 'rb') as f:
                                                             wav_data = f.read()
-                                                        wav_base64 = base64.b64encode(wav_data).decode('utf-8')
-                                                        wav_data_uri = f"data:audio/wav;base64,{wav_base64}"
+                                                        wav_base64_data = base64.b64encode(wav_data).decode('utf-8')
                                                         if converted_path != temp_file.name:
                                                             temp_files.append(converted_path)
                                                     else:
@@ -420,11 +419,11 @@ async def chat_with_model(llm_model_id: str, request: dict = Body(...)):
                                                 except Exception as e:
                                                     logger.warning(f"转换input_audio失败: {e}")
 
-                                            if wav_data_uri:
+                                            if wav_base64_data:
                                                 content_parts.append({
                                                     'type': 'input_audio',
                                                     'input_audio': {
-                                                        'data': wav_data_uri,
+                                                        'data': wav_base64_data,
                                                         'format': 'wav'
                                                     }
                                                 })
@@ -446,11 +445,10 @@ async def chat_with_model(llm_model_id: str, request: dict = Body(...)):
                                                     with open(converted_path, 'rb') as f:
                                                         wav_data = f.read()
                                                     wav_base64 = base64.b64encode(wav_data).decode('utf-8')
-                                                    wav_data_uri = f"data:audio/wav;base64,{wav_base64}"
                                                     content_parts.append({
                                                         'type': 'input_audio',
                                                         'input_audio': {
-                                                            'data': wav_data_uri,
+                                                            'data': wav_base64,
                                                             'format': 'wav'
                                                         }
                                                     })

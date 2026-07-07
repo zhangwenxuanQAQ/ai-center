@@ -75,8 +75,7 @@ class AudioModel(BaseLLM):
             with open(converted_audio_path, 'rb') as f:
                 audio_data = f.read()
             audio_base64 = base64.b64encode(audio_data).decode('utf-8')
-            audio_data_uri = f"data:audio/wav;base64,{audio_base64}"
-            
+
             params = {
                 'model': self.model_name,
                 'messages': [
@@ -86,7 +85,7 @@ class AudioModel(BaseLLM):
                             {
                                 'type': 'input_audio',
                                 'input_audio': {
-                                    'data': audio_data_uri,
+                                    'data': audio_base64,
                                     'format': 'wav'
                                 }
                             }

@@ -388,7 +388,7 @@ def convert_to_wav(audio_path: str) -> tuple:
             temp_wav = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
             temp_wav.close()
             
-            subprocess.run([ffmpeg_exe, '-i', audio_path, '-y', temp_wav.name], 
+            subprocess.run([ffmpeg_exe, '-i', audio_path, '-ar', '16000', '-ac', '1', '-sample_fmt', 's16', '-y', temp_wav.name], 
                           check=True, capture_output=True, text=True)
             logger.info(f"成功使用ffmpeg转换音频文件: {audio_path} -> {temp_wav.name}")
             return temp_wav.name, None
