@@ -1256,10 +1256,15 @@ const LLMModelManagement: React.FC = () => {
           >
             测试连接
           </Button>
-          <Button 
+          <Button
             type="primary"
             loading={testingConnection}
             onClick={async () => {
+              // 如果已经测试过连接，直接提交
+              if (hasTestedConnection) {
+                handleSubmit();
+                return;
+              }
               try {
                 const values = await form.validateFields();
                 const testData = {
@@ -1269,25 +1274,28 @@ const LLMModelManagement: React.FC = () => {
                   api_key: values.api_key,
                   model_type: values.model_type
                 };
-                
+
                 setTestingConnection(true);
                 const key = `submit-new-model`;
                 message.loading({ content: `正在测试连接...`, key, duration: 0 });
-                
+
                 const result = await llmModelService.testModelConfig(testData);
-                
+
                 setTestingConnection(false);
-                
+
                 if (result.success) {
                   message.success({ content: `连接测试成功！`, key });
+                  setConnectionStatus(1);
                   handleSubmit();
                 } else {
                   message.error({ content: `连接测试失败: ${result.message}`, key });
+                  setConnectionStatus(0);
                   form.setFieldValue('status', false);
                 }
               } catch (error: any) {
                 setTestingConnection(false);
                 message.error({ content: `测试失败: ${error.message}`, key: 'submit-new-model' });
+                setConnectionStatus(0);
                 form.setFieldValue('status', false);
               }
             }}
@@ -1424,16 +1432,16 @@ const LLMModelManagement: React.FC = () => {
           <Button onClick={() => setIsEditModalVisible(false)}>
             取消
           </Button>
-          <Button 
+          <Button
             icon={<ApiTwoTone />}
             onClick={async () => {
               try {
                 const values = await editForm.validateFields();
-                
+
                 if (editingModelId) {
                   const key = `test-edit-model-${editingModelId}`;
                   message.loading({ content: `正在测试连接...`, key, duration: 0 });
-                  
+
                   const testData = {
                     name: values.name,
                     provider: getProviderFromModelName(values.name),
@@ -1441,12 +1449,59 @@ const LLMModelManagement: React.FC = () => {
                     api_key: values.api_key,
                     model_type: values.model_type
                   };
-                  
+
                   const result = await llmModelService.testModelConfig(testData);
-                  
+
                   if (result.success) {
                     message.success({ content: `连接测试成功！`, key });
                     setEditConnectionStatus(1);
+                    setHasTestedEditConnection(true);
+                  } else {
+                    message.error({ content: `连接测试失败: ${result.message}`, key });
+                    setEditConnectionStatus(0);
+                    setHasTestedEditConnection(false);
+                    editForm.setFieldValue('status', false);
+                  }
+                }
+              } catch (error: any) {
+                message.error({ content: `测试失败: ${error.message}`, key: `test-edit-model-${editingModelId}` });
+                setEditConnectionStatus(0);
+                setHasTestedEditConnection(false);
+                editForm.setFieldValue('status', false);
+              }
+            }}
+          >
+            测试连接
+          </Button>
+          <Button
+            type="primary"
+            onClick={async () => {
+              // 如果已经测试过连接，直接提交
+              if (hasTestedEditConnection) {
+                handleEditSubmit();
+                return;
+              }
+              try {
+                const values = await editForm.validateFields();
+
+                if (editingModelId) {
+                  const key = `submit-edit-model-${editingModelId}`;
+                  message.loading({ content: `正在测试连接...`, key, duration: 0 });
+
+                  const testData = {
+                    name: values.name,
+                    provider: getProviderFromModelName(values.name),
+                    endpoint: values.endpoint,
+                    api_key: values.api_key,
+                    model_type: values.model_type
+                  };
+
+                  const result = await llmModelService.testModelConfig(testData);
+
+                  if (result.success) {
+                    message.success({ content: `连接测试成功！`, key });
+                    setEditConnectionStatus(1);
+                    handleEditSubmit();
                   } else {
                     message.error({ content: `连接测试失败: ${result.message}`, key });
                     setEditConnectionStatus(0);
@@ -1454,44 +1509,8 @@ const LLMModelManagement: React.FC = () => {
                   }
                 }
               } catch (error: any) {
-                message.error({ content: `测试失败: ${error.message}`, key: `test-edit-model-${editingModelId}` });
-                setEditConnectionStatus(0);
-                editForm.setFieldValue('status', false);
-              }
-            }}
-          >
-            测试连接
-          </Button>
-          <Button 
-            type="primary"
-            onClick={async () => {
-              try {
-                const values = await editForm.validateFields();
-                
-                if (editingModelId) {
-                  const key = `submit-edit-model-${editingModelId}`;
-                  message.loading({ content: `正在测试连接...`, key, duration: 0 });
-                  
-                  const testData = {
-                    name: values.name,
-                    provider: getProviderFromModelName(values.name),
-                    endpoint: values.endpoint,
-                    api_key: values.api_key,
-                    model_type: values.model_type
-                  };
-                  
-                  const result = await llmModelService.testModelConfig(testData);
-                  
-                  if (result.success) {
-                    message.success({ content: `连接测试成功！`, key });
-                    handleEditSubmit();
-                  } else {
-                    message.error({ content: `连接测试失败: ${result.message}`, key });
-                    editForm.setFieldValue('status', false);
-                  }
-                }
-              } catch (error: any) {
                 message.error({ content: `测试失败: ${error.message}`, key: `submit-edit-model-${editingModelId}` });
+                setEditConnectionStatus(0);
                 editForm.setFieldValue('status', false);
               }
             }}

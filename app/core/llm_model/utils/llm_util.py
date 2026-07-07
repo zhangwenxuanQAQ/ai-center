@@ -230,7 +230,7 @@ def convert_query_to_message(query: List[Any], model_type: Optional[str] = None,
                     content.append({
                         'type': 'input_audio',
                         'input_audio': {
-                            'data': f'data:audio;base64,{item.content}',
+                            'data': f'data:audio/wav;base64,{item.content}',
                             'format': 'wav'
                         }
                     })

@@ -6,6 +6,7 @@
 from typing import Dict, Any, Generator
 from openai import OpenAI
 from app.core.llm_model.base import BaseLLM
+from pathlib import Path
 import os
 import tempfile
 import logging
@@ -33,11 +34,13 @@ class AudioModel(BaseLLM):
         """准备音频输入"""
         temp_file_path = None
         converted_audio_path = None
-        
-        if isinstance(prompt, str):
-            if not os.path.exists(prompt):
-                return None, None, f'音频文件不存在: {prompt}'
-            converted_audio_path, error_msg = convert_to_wav(prompt)
+
+        # 支持字符串路径和Path对象
+        if isinstance(prompt, (str, Path)):
+            file_path = str(prompt)  # 统一转换为字符串
+            if not os.path.exists(file_path):
+                return None, None, f'音频文件不存在: {file_path}'
+            converted_audio_path, error_msg = convert_to_wav(file_path)
             if error_msg:
                 return None, None, error_msg
         else:
@@ -108,8 +111,13 @@ class AudioModel(BaseLLM):
         except Exception as e:
             return {'error': str(e)}
         finally:
-            if isinstance(prompt, str) and converted_audio_path == prompt:
-                cleanup_temp_files(temp_file_path)
+            # 清理临时文件
+            if isinstance(prompt, (str, Path)):
+                file_path = str(prompt)
+                if converted_audio_path == file_path:
+                    cleanup_temp_files(temp_file_path)
+                else:
+                    cleanup_temp_files(temp_file_path, converted_audio_path)
             else:
                 cleanup_temp_files(temp_file_path, converted_audio_path)
     
@@ -130,22 +138,136 @@ class AudioModel(BaseLLM):
     
     def generate_with_messages(self, messages: list, **kwargs) -> Dict[str, Any]:
         """
-        使用消息列表生成文本（音频模型不支持）
-        
+        使用消息列表生成文本（处理消息列表，user消息只保留input_audio）
+
         Args:
-            messages: 消息列表
+            messages: 消息列表（已在外部处理好音频文件）
             **kwargs: 其他参数
-            
+
         Returns:
-            包含错误信息的字典
+            包含生成结果的字典
         """
-        return {'error': 'Audio model does not support chat messages'}
-    
+        if not self._validate_config():
+            return {'error': 'Invalid configuration'}
+
+        try:
+            processed_messages = self._filter_user_messages(messages)
+
+            params = {
+                'model': self.model_name,
+                'messages': processed_messages,
+                'temperature': 0.0
+            }
+            params = self._handle_deep_thinking(params, kwargs)
+            params.update(kwargs)
+
+            response = self.client.chat.completions.create(**params)
+
+            result = {
+                'text': response.choices[0].message.content,
+                'model': response.model
+            }
+
+            if hasattr(response, 'usage') and response.usage:
+                result['usage'] = response.usage.model_dump()
+
+            return result
+        except Exception as e:
+            return {'error': str(e)}
+
+    def _filter_user_messages(self, messages: list) -> list:
+        """
+        过滤消息：删除system消息，user消息只保留input_audio类型，只保留最后一条input_audio消息
+
+        Args:
+            messages: 原始消息列表
+
+        Returns:
+            处理后的消息列表
+        """
+        input_audio_indices = []
+        temp_messages = []
+        
+        for idx, msg in enumerate(messages):
+            role = msg.get('role', '')
+            content = msg.get('content')
+
+            if role == 'system':
+                continue
+            
+            if role == 'user':
+                if isinstance(content, list):
+                    filtered_content = [
+                        item for item in content
+                        if isinstance(item, dict) and item.get('type') == 'input_audio'
+                    ]
+                    if filtered_content:
+                        temp_messages.append({
+                            'role': role,
+                            'content': filtered_content
+                        })
+                        input_audio_indices.append(len(temp_messages) - 1)
+                    else:
+                        temp_messages.append(msg)
+                elif isinstance(content, str):
+                    temp_messages.append(msg)
+                else:
+                    temp_messages.append(msg)
+            else:
+                temp_messages.append(msg)
+
+        if len(input_audio_indices) > 1:
+            for idx in input_audio_indices[:-1]:
+                temp_messages[idx] = None
+        
+        return [msg for msg in temp_messages if msg is not None]
+
     def stream_generate_with_messages(self, messages: list, **kwargs) -> Generator[Dict[str, Any], None, None]:
         """
-        使用消息列表流式生成（音频模型不支持）
+        使用消息列表流式生成（处理消息列表，user消息只保留input_audio）
+
+        Args:
+            messages: 消息列表（已在外部处理好音频文件）
+            **kwargs: 其他参数
+
+        Yields:
+            流式生成结果
         """
-        yield {'error': 'Audio model does not support chat messages'}
+        if not self._validate_config():
+            yield {'error': 'Invalid configuration'}
+            return
+
+        try:
+            processed_messages = self._filter_user_messages(messages)
+
+            params = {
+                'model': self.model_name,
+                'messages': processed_messages,
+                'temperature': 0.0,
+                'stream': True
+            }
+            params = self._handle_deep_thinking(params, kwargs)
+            params.update(kwargs)
+
+            stream = self.client.chat.completions.create(**params)
+
+            for chunk in stream:
+                if chunk.choices:
+                    choice = chunk.choices[0]
+                    result = {
+                        'text': choice.delta.content or '',
+                        'finish_reason': choice.finish_reason,
+                        'usage': chunk.usage.model_dump() if chunk.usage else None
+                    }
+
+                    reasoning_content = self._extract_reasoning_content(choice.delta)
+                    if reasoning_content:
+                        result['reasoning_content'] = reasoning_content
+
+                    yield result
+
+        except Exception as e:
+            yield {'error': str(e)}
     
     def get_model_info(self) -> Dict[str, Any]:
         """获取模型信息"""
@@ -154,7 +276,7 @@ class AudioModel(BaseLLM):
             'provider': self.provider,
             'type': 'audio',
             'capabilities': {
-                'streaming': False,
+                'streaming': True,
                 'non_streaming': True,
                 'transcription': True,
                 'translation': False

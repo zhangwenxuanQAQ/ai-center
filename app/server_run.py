@@ -1603,11 +1603,68 @@ except Exception as e:
 mcp_enabled = config.config.get('mcp', {}).get('enabled', False)
 mcp_process = None
 
+# 创建FastAPI应用，禁用默认的docs以使用本地静态资源
 app = FastAPI(
     title="AI Center API",
     description="AI服务中心后端API",
-    version="1.0.0"
+    version="1.0.0",
+    docs_url=None,  # 禁用默认docs，使用本地静态资源
+    redoc_url=None  # 禁用默认redoc，使用本地静态资源
 )
+
+# 配置静态文件目录，用于提供Swagger UI和ReDoc的静态资源
+from fastapi.staticfiles import StaticFiles
+import os
+
+# 检查静态资源目录是否存在
+swagger_static_dir = os.path.join(os.path.dirname(__file__), '..', 'web', 'src', 'assets', 'swagger-ui')
+if os.path.exists(swagger_static_dir):
+    # 挂载静态文件目录到 /static/swagger-ui
+    app.mount("/static/swagger-ui", StaticFiles(directory=swagger_static_dir), name="swagger_ui_static")
+    logger.info(f"[STATIC] Swagger UI静态资源目录已挂载: {swagger_static_dir}")
+else:
+    logger.warning(f"[STATIC] Swagger UI静态资源目录不存在: {swagger_static_dir}")
+
+# 自定义Swagger UI路径，使用本地静态资源
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui_html():
+    """
+    自定义Swagger UI文档页面
+    使用本地静态资源加载，不依赖外网CDN
+    """
+    from fastapi.openapi.docs import get_swagger_ui_html
+    return get_swagger_ui_html(
+        openapi_url=app.openapi_url,
+        title=app.title + " - Swagger UI",
+        oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
+        # 使用本地静态资源路径
+        swagger_js_url="/static/swagger-ui/swagger-ui-bundle.js",
+        swagger_css_url="/static/swagger-ui/swagger-ui.css",
+    )
+
+# 自定义OAuth2重定向路径
+@app.get(app.swagger_ui_oauth2_redirect_url, include_in_schema=False)
+async def swagger_ui_redirect():
+    """
+    Swagger UI OAuth2重定向处理
+    """
+    from fastapi.openapi.docs import get_swagger_ui_oauth2_redirect_html
+    return get_swagger_ui_oauth2_redirect_html()
+
+# 自定义ReDoc路径，使用本地静态资源
+@app.get("/redoc", include_in_schema=False)
+async def custom_redoc_html():
+    """
+    自定义ReDoc文档页面
+    使用本地静态资源加载，不依赖外网CDN
+    """
+    from fastapi.openapi.docs import get_redoc_html
+    return get_redoc_html(
+        openapi_url=app.openapi_url,
+        title=app.title + " - ReDoc",
+        # 使用本地静态资源路径
+        redoc_js_url="/static/swagger-ui/redoc.standalone.js",
+    )
 
 app.add_middleware(
     CORSMiddleware,

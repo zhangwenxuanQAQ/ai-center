@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Button, Input, Select, Tag, Upload, message, Slider, InputNumber, Tooltip, Form, Switch, TreeSelect, Spin, Empty, Row, Col, List, DatePicker, Space, Descriptions } from 'antd';
 const { RangePicker } = DatePicker;
 import type { RangePickerProps } from 'antd/es/date-picker';
@@ -9,6 +9,7 @@ import PageHeader from '../../components/page-header';
 import ChapterList from '../../components/ChapterList';
 import { Chapter } from './folder_modal/AddChapterModal';
 import IntelligentExtractModal from './intelligent_extract_modal';
+import { ExtractManager } from '../../utils/extract_manager';
 import {
   UploadOutlined,
   PlusOutlined,
@@ -29,6 +30,7 @@ import {
   TableOutlined,
   QuestionCircleOutlined,
   ThunderboltOutlined,
+  LoadingOutlined,
 } from '@ant-design/icons';
 import { knowledgebaseService, KnowledgebaseDocument, KnowledgebaseCategory, KnowledgebaseDocumentCategory } from '../../services/knowledgebase';
 import { datasourceService, Datasource } from '../../services/datasource';
@@ -84,6 +86,8 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
   selectedCategoryId,
 }) => {
   const isEdit = !!doc;
+  const knowledgeId = doc?.id || `new_${knowledgebase.id}_${Date.now()}`;
+  
   const [theme, setTheme] = useState<string>('dark');
   const [constants, setConstants] = useState<DocumentConstants | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
@@ -162,6 +166,59 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
   const fileMapRef = useRef<Map<string, File>>(new Map());
   
   const [showIntelligentExtract, setShowIntelligentExtract] = useState<boolean>(false);
+  const [isExtracting, setIsExtracting] = useState<boolean>(false);
+  const extractManagerRef = useRef(ExtractManager.getInstance());
+
+  useEffect(() => {
+    const detectExtractStatus = async () => {
+      console.log('开始检测提取状态，knowledgeId:', knowledgeId);
+
+      // 先从localStorage检查
+      const localState = extractManagerRef.current.getState(knowledgeId);
+      console.log('localStorage中的提取状态:', localState);
+
+      if (localState && localState.extractId) {
+        // localStorage有状态，直接使用
+        setIsExtracting(localState.status === 'extracting');
+      } else {
+        // localStorage没有状态，从后端查询是否有正在进行的提取任务
+        try {
+          const response = await knowledgebaseApi.getIntelligentExtractStatusByKnowledgeId(knowledgeId);
+          console.log('从后端查询的提取状态:', response);
+
+          if (response && response.data) {
+            const statusData = response.data;
+
+            if (statusData.status !== 'none') {
+              // 有提取任务，保存到localStorage
+              const { extract_id, status, full_reasoning, full_text, extracted_data, finish_reason } = statusData;
+
+              if (status === 'extracting') {
+                extractManagerRef.current.setExtracting(knowledgeId, extract_id);
+                setIsExtracting(true);
+              } else if (status === 'completed') {
+                extractManagerRef.current.setCompleted(knowledgeId, extract_id, extracted_data, full_reasoning, full_text);
+                setIsExtracting(false);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('查询提取状态失败:', error);
+        }
+      }
+    };
+
+    detectExtractStatus();
+
+    const unsubscribe = extractManagerRef.current.addListener(knowledgeId, (state) => {
+      console.log('监听到提取状态变化:', state);
+      setIsExtracting(state.status === 'extracting');
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [knowledgeId]);
 
   // 格式化文件大小
   const formatFileSize = (bytes: number): string => {
@@ -1785,12 +1842,12 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
           </div>
           <Button
             type="primary"
-            icon={<ThunderboltOutlined />}
+            icon={isExtracting ? <LoadingOutlined /> : <ThunderboltOutlined />}
             size="small"
             onClick={() => setShowIntelligentExtract(true)}
             style={{ marginLeft: 8 }}
           >
-            智能提取
+            {isExtracting ? '提取中...' : '智能提取'}
           </Button>
         </div>
         <div style={{ width: '100%' }}>
@@ -2818,12 +2875,12 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
           </div>
           <Button
             type="primary"
-            icon={<ThunderboltOutlined />}
+            icon={isExtracting ? <LoadingOutlined /> : <ThunderboltOutlined />}
             size="small"
             onClick={() => setShowIntelligentExtract(true)}
             style={{ marginLeft: 8 }}
           >
-            智能提取
+            {isExtracting ? '提取中...' : '智能提取'}
           </Button>
         </div>
         <div style={{ 
@@ -3167,6 +3224,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       <IntelligentExtractModal
         visible={showIntelligentExtract}
         knowledgebaseId={knowledgebase.id}
+        knowledgeId={knowledgeId}
         selectedCategory={categoryId ? findCategoryById(categories, categoryId) : null}
         currentTitle={title}
         currentTags={tags}

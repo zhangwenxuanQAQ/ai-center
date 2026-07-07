@@ -294,7 +294,8 @@ def get_knowledgebases(
 
 @router.post("/retrieval", response_model=ApiResponse)
 def retrieval(
-    kb_ids: List[str] = Body(..., description="知识库ID列表"),
+    kb_ids: List[str] = Body(None, description="知识库ID列表"),
+    kb_ids_str: str = Body(None, description="知识库ID字符串，多个ID用逗号分隔"),
     question: str = Body(..., description="查询文本"),
     doc_ids: List[str] = Body(None, description="文档ID列表，可选，用于限定检索范围"),
     page: int = Body(1, ge=1, description="页码，从1开始"),
@@ -353,6 +354,12 @@ def retrieval(
 
         if sort_by and sort_by not in ("sim", "vsim", "tsim"):
             return ResponseUtil.error(message="sort_by参数必须为sim、vsim或tsim")
+
+        if not kb_ids and kb_ids_str:
+            kb_ids = [id.strip() for id in kb_ids_str.split(',') if id.strip()]
+
+        if not kb_ids:
+            return ResponseUtil.error(message="知识库ID不能为空")
 
         result = RetrievalService.retrieval(
             kb_ids=kb_ids,
@@ -1613,26 +1620,28 @@ async def intelligent_extract_stream(
     model_id: str = Form(...),
     prompt: Optional[str] = Form(default=None),
     category_id: str = Form(...),
+    knowledge_id: Optional[str] = Form(default=None),
     deep_thinking: bool = Form(default=False),
     files: Optional[List[UploadFile]] = File(None),
     text_content: Optional[str] = Form(None)
 ):
     """
     智能提取流式返回接口（支持文件和文本两种输入方式）
-    
+
     使用SSE（Server-Sent Events）流式返回识别过程，包括思考过程和正文
-    
+
     Args:
         model_id: 模型ID
         prompt: 提取提示词（可选）
         category_id: 知识目录ID
+        knowledge_id: 知识ID（可选，用于保存提取状态）
         deep_thinking: 是否开启深度思考（默认False）
         files: 上传的文件列表（可选）
         text_content: 文本内容（可选）
-        
+
     Returns:
         StreamingResponse: SSE流式响应
-        
+
     Note:
         files和text_content至少需要提供一个
         返回格式：data: {"thinking_content": "思考过程", "text": "正文内容", ...}\n\n
@@ -1660,6 +1669,7 @@ async def intelligent_extract_stream(
                     model_id=model_id,
                     prompt=prompt,
                     category_id=category_id,
+                    knowledge_id=knowledge_id,
                     deep_thinking=deep_thinking,
                     files=files,
                     text_content=text_content
@@ -1690,6 +1700,75 @@ async def intelligent_extract_stream(
         
     except Exception as e:
         logger.error(f"智能提取流式接口失败: {e}")
+        return ResponseUtil.error(message=str(e))
+
+
+@router.get("/document/intelligent_extract_status/{extract_id}", response_model=ApiResponse)
+async def intelligent_extract_status(extract_id: str):
+    """
+    查询智能提取状态接口
+    
+    Args:
+        extract_id: 提取任务ID
+        
+    Returns:
+        ApiResponse: 包含提取状态和已提取内容的响应
+    """
+    try:
+        from app.database.redis_utils import redis_utils
+        
+        if not redis_utils.is_available:
+            return ResponseUtil.error(message="Redis不可用")
+        
+        status_data = redis_utils.get_obj(f"extract:{extract_id}:status")
+        
+        if not status_data:
+            return ResponseUtil.error(message="提取任务不存在或已过期")
+        
+        return ResponseUtil.success(data=status_data)
+        
+    except Exception as e:
+        logger.error(f"查询提取状态失败: {e}")
+        return ResponseUtil.error(message=str(e))
+
+
+@router.get("/document/intelligent_extract_status_by_knowledge/{knowledge_id}", response_model=ApiResponse)
+async def intelligent_extract_status_by_knowledge(knowledge_id: str):
+    """
+    根据知识ID查询智能提取状态接口
+
+    Args:
+        knowledge_id: 知识ID
+
+    Returns:
+        ApiResponse: 包含提取状态和已提取内容的响应
+    """
+    try:
+        from app.database.redis_utils import redis_utils
+
+        if not redis_utils.is_available:
+            return ResponseUtil.success(data={'status': 'none', 'message': 'Redis不可用'})
+
+        # 根据知识ID查询提取任务ID
+        extract_id = redis_utils.get_obj(f"knowledge:{knowledge_id}:extract_id")
+
+        if not extract_id:
+            return ResponseUtil.success(data={'status': 'none', 'message': '没有提取任务'})
+
+        # 根据提取任务ID查询提取状态
+        status_data = redis_utils.get_obj(f"extract:{extract_id}:status")
+
+        if not status_data:
+            # 提取任务已过期，清理映射
+            redis_utils.delete(f"knowledge:{knowledge_id}:extract_id")
+            return ResponseUtil.success(data={'status': 'none', 'message': '提取任务已过期'})
+
+        # 返回提取状态和extract_id
+        status_data['extract_id'] = extract_id
+        return ResponseUtil.success(data=status_data)
+
+    except Exception as e:
+        logger.error(f"根据知识ID查询提取状态失败: {e}")
         return ResponseUtil.error(message=str(e))
 
 

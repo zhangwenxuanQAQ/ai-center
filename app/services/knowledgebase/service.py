@@ -1974,24 +1974,26 @@ class KnowledgebaseDocumentService:
         model_id: str,
         prompt: Optional[str] = None,
         category_id: str = None,
+        knowledge_id: Optional[str] = None,
         deep_thinking: bool = False,
         files: Optional[List] = None,
         text_content: Optional[str] = None
     ) -> Generator[Dict[str, Any], None, None]:
         """
         智能提取知识流式返回方法
-        
+
         Args:
             model_id: 模型ID
             prompt: 提取提示词（可选）
             category_id: 知识目录ID
+            knowledge_id: 知识ID（可选，用于保存提取状态）
             deep_thinking: 是否开启深度思考（默认False）
             files: 上传的文件列表（可选）
             text_content: 文本内容（可选）
-            
+
         Yields:
             Dict: 流式返回的提取结果，包含thinking_content（思考过程）和text（正文）
-            
+
         Raises:
             ResourceNotFoundError: 知识目录不存在或模型不存在
         """
@@ -2078,6 +2080,32 @@ class KnowledgebaseDocumentService:
                 content=text_content
             ))
         
+        # 初始化提取状态
+        extract_id = f"extract_{category_id}_{int(datetime.now().timestamp())}"
+        from app.database.redis_utils import redis_utils
+        if redis_utils.is_available:
+            # 保存提取状态
+            redis_utils.set_obj(f"extract:{extract_id}:status", {
+                'status': 'extracting',
+                'full_reasoning': '',
+                'full_text': '',
+                'extracted_data': None,
+                'finish_reason': None
+            }, exp=3600)
+            # 如果提供了knowledge_id，保存knowledgeId到extractId的映射
+            if knowledge_id:
+                redis_utils.set_obj(f"knowledge:{knowledge_id}:extract_id", extract_id, exp=3600)
+        
+        # 立即返回extract_id，让前端可以尽快开始轮询
+        yield {
+            'reasoning_content': '',
+            'text': '',
+            'finish_reason': None,
+            'usage': None,
+            'extracted_data': None,
+            'extract_id': extract_id
+        }
+            
         # 转换为用户消息
         user_message = convert_query_to_message(query_items, llm_model.model_type, model_id, chunk_method="one")
         
@@ -2143,8 +2171,20 @@ class KnowledgebaseDocumentService:
                         'error': chunk['error'],
                         'reasoning_content': '',
                         'text': '',
-                        'extracted_data': None
+                        'extracted_data': None,
+                        'extract_id': extract_id
                     }
+                    
+                    # 更新状态为失败
+                    if redis_utils.is_available:
+                        redis_utils.set_obj(f"extract:{extract_id}:status", {
+                            'status': 'failed',
+                            'full_reasoning': '',
+                            'full_text': '',
+                            'extracted_data': None,
+                            'finish_reason': 'error',
+                            'error': chunk['error']
+                        }, exp=3600)
                     return
                 
                 reasoning_content = chunk.get('reasoning_content', '')
@@ -2159,8 +2199,19 @@ class KnowledgebaseDocumentService:
                     'text': text,
                     'finish_reason': chunk.get('finish_reason', None),
                     'usage': chunk.get('usage', None),
-                    'extracted_data': None
+                    'extracted_data': None,
+                    'extract_id': extract_id
                 }
+                
+                # 实时保存到Redis
+                if redis_utils.is_available:
+                    redis_utils.set_obj(f"extract:{extract_id}:status", {
+                        'status': 'extracting',
+                        'full_reasoning': full_reasoning,
+                        'full_text': full_text,
+                        'extracted_data': None,
+                        'finish_reason': None
+                    }, exp=3600)
                 
                 yield result
             
@@ -2178,21 +2229,47 @@ class KnowledgebaseDocumentService:
                     extracted_data = {"content": full_text}
             
             # 最后返回包含extracted_data的结果
-            yield {
+            final_result = {
                 'reasoning_content': '',
                 'text': '',
                 'finish_reason': 'done',
                 'usage': None,
-                'extracted_data': extracted_data
+                'extracted_data': extracted_data,
+                'extract_id': extract_id
             }
+            
+            # 保存最终结果到Redis
+            if redis_utils.is_available:
+                redis_utils.set_obj(f"extract:{extract_id}:status", {
+                    'status': 'completed',
+                    'full_reasoning': full_reasoning,
+                    'full_text': full_text,
+                    'extracted_data': extracted_data,
+                    'finish_reason': 'done'
+                }, exp=3600)
+            
+            yield final_result
                 
         except Exception as e:
             logger.error(f"模型调用失败: {e}")
+            
+            # 更新状态为失败
+            if redis_utils.is_available:
+                redis_utils.set_obj(f"extract:{extract_id}:status", {
+                    'status': 'failed',
+                    'full_reasoning': full_reasoning,
+                    'full_text': full_text,
+                    'extracted_data': None,
+                    'finish_reason': 'error',
+                    'error': str(e)
+                }, exp=3600)
+            
             yield {
                 'error': str(e),
                 'reasoning_content': '',
                 'text': '',
-                'extracted_data': None
+                'extracted_data': None,
+                'extract_id': extract_id
             }
             return
 

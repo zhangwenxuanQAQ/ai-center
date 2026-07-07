@@ -808,8 +808,9 @@ export const knowledgebaseService = {
     modelId: string,
     prompt: string,
     categoryId?: string,
+    knowledgeId?: string,
     deepThinking?: boolean,
-    onProgress?: (data: { reasoning_content: string; text: string }) => void,
+    onProgress?: (data: { reasoning_content: string; text: string; extract_id?: string }) => void,
     signal?: AbortSignal
   ): Promise<{
     title?: string;
@@ -823,6 +824,9 @@ export const knowledgebaseService = {
     formData.append('model_id', modelId);
     formData.append('prompt', prompt);
     formData.append('category_id', categoryId || '');
+    if (knowledgeId) {
+      formData.append('knowledge_id', knowledgeId);
+    }
     formData.append('deep_thinking', deepThinking ? 'true' : 'false');
 
     const response = await fetch('/aicenter/v1/knowledgebase/document/intelligent_extract_stream', {
@@ -852,6 +856,8 @@ export const knowledgebaseService = {
     } = {};
     let buffer = '';
 
+    let extractId: string | undefined;
+    
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -875,12 +881,17 @@ export const knowledgebaseService = {
             try {
               const parsed = JSON.parse(data);
               
+              if (parsed.extract_id) {
+                extractId = parsed.extract_id;
+              }
+              
               if (parsed.error) {
                 fullText += `\n\n[错误] ${parsed.error}`;
                 if (onProgress) {
                   onProgress({
                     reasoning_content: fullReasoningContent,
                     text: fullText,
+                    extract_id: extractId,
                   });
                 }
                 throw new Error(parsed.error);
@@ -897,10 +908,19 @@ export const knowledgebaseService = {
                 fullText += parsed.text;
               }
 
-              if (onProgress) {
+              // 如果有extract_id，即使内容为空也要触发回调，确保前端能保存extract_id
+              if (onProgress && extractId) {
                 onProgress({
                   reasoning_content: fullReasoningContent,
                   text: fullText,
+                  extract_id: extractId,
+                });
+              } else if (onProgress && (parsed.reasoning_content || parsed.text)) {
+                // 没有extract_id时，只有内容变化才触发回调
+                onProgress({
+                  reasoning_content: fullReasoningContent,
+                  text: fullText,
+                  extract_id: extractId,
                 });
               }
             } catch (e) {
@@ -946,8 +966,9 @@ export const knowledgebaseService = {
     prompt: string,
     textContent: string,
     categoryId?: string,
+    knowledgeId?: string,
     deepThinking?: boolean,
-    onProgress?: (data: { reasoning_content: string; text: string }) => void,
+    onProgress?: (data: { reasoning_content: string; text: string; extract_id?: string }) => void,
     signal?: AbortSignal
   ): Promise<{
     title?: string;
@@ -961,6 +982,9 @@ export const knowledgebaseService = {
     formData.append('prompt', prompt);
     formData.append('text_content', textContent);
     formData.append('category_id', categoryId || '');
+    if (knowledgeId) {
+      formData.append('knowledge_id', knowledgeId);
+    }
     formData.append('deep_thinking', deepThinking ? 'true' : 'false');
 
     const response = await fetch('/aicenter/v1/knowledgebase/document/intelligent_extract_stream', {
@@ -990,6 +1014,8 @@ export const knowledgebaseService = {
     } = {};
     let buffer = '';
 
+    let extractId: string | undefined;
+    
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -1013,12 +1039,17 @@ export const knowledgebaseService = {
             try {
               const parsed = JSON.parse(data);
               
+              if (parsed.extract_id) {
+                extractId = parsed.extract_id;
+              }
+              
               if (parsed.error) {
                 fullText += `\n\n[错误] ${parsed.error}`;
                 if (onProgress) {
                   onProgress({
                     reasoning_content: fullReasoningContent,
                     text: fullText,
+                    extract_id: extractId,
                   });
                 }
                 throw new Error(parsed.error);
@@ -1035,10 +1066,19 @@ export const knowledgebaseService = {
                 fullText += parsed.text;
               }
 
-              if (onProgress) {
+              // 如果有extract_id，即使内容为空也要触发回调，确保前端能保存extract_id
+              if (onProgress && extractId) {
                 onProgress({
                   reasoning_content: fullReasoningContent,
                   text: fullText,
+                  extract_id: extractId,
+                });
+              } else if (onProgress && (parsed.reasoning_content || parsed.text)) {
+                // 没有extract_id时，只有内容变化才触发回调
+                onProgress({
+                  reasoning_content: fullReasoningContent,
+                  text: fullText,
+                  extract_id: extractId,
                 });
               }
             } catch (e) {
@@ -1074,5 +1114,23 @@ export const knowledgebaseService = {
         content: fullText,
       };
     }
+  },
+
+  /**
+   * 查询智能提取状态
+   */
+  getIntelligentExtractStatus: async (extractId: string): Promise<any> => {
+    const response = await http.get(`/aicenter/v1/knowledgebase/document/intelligent_extract_status/${extractId}`);
+    return response;
+  },
+
+  /**
+   * 根据知识ID查询智能提取状态
+   * @param knowledgeId 知识ID
+   * @returns 提取状态数据
+   */
+  getIntelligentExtractStatusByKnowledgeId: async (knowledgeId: string): Promise<any> => {
+    const response = await http.get(`/aicenter/v1/knowledgebase/document/intelligent_extract_status_by_knowledge/${knowledgeId}`);
+    return response;
   },
 };

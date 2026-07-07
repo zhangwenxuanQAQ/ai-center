@@ -304,9 +304,13 @@ async def chat_with_model(llm_model_id: str, request: dict = Body(...)):
     from fastapi import HTTPException
     import json
     import logging
+    import tempfile
+    import base64
+    import os
     from app.core.llm_model.factory import LLMFactory
     from app.services.chat.dto import QueryItem
     from app.core.chat.chat_service import ChatCoreService
+    from app.core.llm_model.audio_model import convert_to_wav, cleanup_temp_files
 
     logger = logging.getLogger(__name__)
 
@@ -333,6 +337,9 @@ async def chat_with_model(llm_model_id: str, request: dict = Body(...)):
 
         from app.core.prompt.utils.system_prompt_builder import build_system_prompt
 
+        # 获取模型类型
+        model_type = db_llm_model.model_type or 'text'
+
         # 处理系统消息和历史消息（包括文件格式）
         has_system_message = False
         processed_messages = []
@@ -356,8 +363,132 @@ async def chat_with_model(llm_model_id: str, request: dict = Body(...)):
                         for item in content if isinstance(item, dict)
                     )
 
-                    if has_custom_files:
-                        # 将自定义文件格式转换为文本内容
+                    # 检查是否包含音频文件（对音频模型保留原格式）
+                    has_audio_files = False
+                    if model_type == 'audio':
+                        has_audio_files = any(
+                            item.get('type') == 'file_base64' and
+                            (item.get('mime_type') or '').startswith('audio/')
+                            for item in content if isinstance(item, dict)
+                        )
+
+                    if has_audio_files:
+                        # 音频模型：将音频文件转换为wav格式后设置到input_audio中
+                        content_parts = []
+                        temp_files = []
+                        try:
+                            for item in content:
+                                if isinstance(item, dict):
+                                    if item.get('type') == 'text':
+                                        content_parts.append({
+                                            'type': 'text',
+                                            'text': item.get('text', '')
+                                        })
+                                    elif item.get('type') == 'input_audio':
+                                        # input_audio格式，需要检查并转换为wav格式
+                                        input_audio = item.get('input_audio', {})
+                                        audio_data = input_audio.get('data', '')
+                                        audio_format = input_audio.get('format', 'wav')
+
+                                        # 如果已经是wav格式，直接使用
+                                        if audio_format == 'wav' and (audio_data.startswith('data:audio/wav') or audio_data.startswith('data:audio/x-wav')):
+                                            content_parts.append(item)
+                                        else:
+                                            # 其他格式需要转换为wav
+                                            wav_data_uri = None
+                                            # 处理data URI格式
+                                            if audio_data.startswith('data:'):
+                                                try:
+                                                    # 提取base64部分
+                                                    base64_part = audio_data.split(',', 1)[1] if ',' in audio_data else audio_data[5:]
+                                                    raw_data = base64.b64decode(base64_part)
+                                                    temp_file = tempfile.NamedTemporaryFile(suffix='.tmp', delete=False)
+                                                    temp_file.write(raw_data)
+                                                    temp_file.close()
+                                                    temp_files.append(temp_file.name)
+
+                                                    converted_path, error_msg = convert_to_wav(temp_file.name)
+                                                    if converted_path:
+                                                        with open(converted_path, 'rb') as f:
+                                                            wav_data = f.read()
+                                                        wav_base64 = base64.b64encode(wav_data).decode('utf-8')
+                                                        wav_data_uri = f"data:audio/wav;base64,{wav_base64}"
+                                                        if converted_path != temp_file.name:
+                                                            temp_files.append(converted_path)
+                                                    else:
+                                                        logger.warning(f"转换input_audio失败: {error_msg}")
+                                                except Exception as e:
+                                                    logger.warning(f"转换input_audio失败: {e}")
+
+                                            if wav_data_uri:
+                                                content_parts.append({
+                                                    'type': 'input_audio',
+                                                    'input_audio': {
+                                                        'data': wav_data_uri,
+                                                        'format': 'wav'
+                                                    }
+                                                })
+                                            else:
+                                                content_parts.append(item)
+                                    elif item.get('type') == 'file_base64':
+                                        mime_type = item.get('mime_type', '')
+                                        if mime_type.startswith('audio/'):
+                                            audio_base64 = item.get('content', '')
+                                            if audio_base64:
+                                                # 将base64转换为临时文件再转换为wav
+                                                temp_file = tempfile.NamedTemporaryFile(suffix='.tmp', delete=False)
+                                                temp_file.write(base64.b64decode(audio_base64))
+                                                temp_file.close()
+                                                temp_files.append(temp_file.name)
+
+                                                converted_path, error_msg = convert_to_wav(temp_file.name)
+                                                if converted_path:
+                                                    with open(converted_path, 'rb') as f:
+                                                        wav_data = f.read()
+                                                    wav_base64 = base64.b64encode(wav_data).decode('utf-8')
+                                                    wav_data_uri = f"data:audio/wav;base64,{wav_base64}"
+                                                    content_parts.append({
+                                                        'type': 'input_audio',
+                                                        'input_audio': {
+                                                            'data': wav_data_uri,
+                                                            'format': 'wav'
+                                                        }
+                                                    })
+                                                    if converted_path != temp_file.name:
+                                                        temp_files.append(converted_path)
+                                                else:
+                                                    logger.warning(f"转换音频文件失败 [{item.get('file_name', 'unknown')}]: {error_msg}")
+                                                    content_parts.append({
+                                                        'type': 'text',
+                                                        'text': f'[音频文件转换失败: {item.get("file_name", "unknown")}]'
+                                                    })
+                                            else:
+                                                content_parts.append({
+                                                    'type': 'text',
+                                                    'text': f'[音频文件: {item.get("file_name", "unknown")}]'
+                                                })
+                                        else:
+                                            # 非音频文件，转换为文本描述
+                                            content_parts.append({
+                                                'type': 'text',
+                                                'text': f'[文件: {item.get("file_name", "unknown")}]'
+                                            })
+                                    elif item.get('type') == 'document':
+                                        # document类型转换为文本描述
+                                        content_parts.append({
+                                            'type': 'text',
+                                            'text': f'[文档: {item.get("content", "unknown")}]'
+                                        })
+                        finally:
+                            # 清理临时文件
+                            cleanup_temp_files(*temp_files)
+
+                        processed_messages.append({
+                            'role': msg.get('role'),
+                            'content': content_parts
+                        })
+                    elif has_custom_files:
+                        # 非音频模型或有非音频文件：将自定义文件格式转换为文本内容
                         # 提取文本部分
                         text_parts = []
                         file_items = []

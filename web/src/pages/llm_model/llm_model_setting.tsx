@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Form, Input, Select, TreeSelect, Button, Switch, message, Row, Col, Spin, Slider, InputNumber, Tooltip, Tag, Dropdown } from 'antd';
 const { TextArea } = Input;
@@ -379,12 +379,15 @@ const LLMModelSetting: React.FC = () => {
   };
 
   const handleSaveEdit = async (messageId: string) => {
-    if (!editingContent.trim()) {
+    const messageIndex = messages.findIndex(m => m.id === messageId);
+    const originalMessage = messageIndex !== -1 ? messages[messageIndex] : null;
+    const hasFiles = originalMessage && originalMessage.files && originalMessage.files.length > 0;
+    
+    if (!editingContent.trim() && !hasFiles) {
       message.error('内容不能为空');
       return;
     }
 
-    const messageIndex = messages.findIndex(m => m.id === messageId);
     if (messageIndex === -1) return;
 
     // 获取所有历史用户消息中的文件（包括被编辑的消息）
@@ -408,8 +411,7 @@ const LLMModelSetting: React.FC = () => {
     });
 
     // 添加被编辑消息的文件
-    const originalMessage = messages[messageIndex];
-    if (originalMessage.files && originalMessage.files.length > 0) {
+    if (originalMessage && originalMessage.files && originalMessage.files.length > 0) {
       originalMessage.files.forEach(file => {
         const fileExists = allFiles.some(existingFile =>
           existingFile.file_name === file.file_name &&
@@ -767,23 +769,33 @@ const LLMModelSetting: React.FC = () => {
         }
         
         const configStr = JSON.stringify(modelConfig);
-        
+
         let tagsArray = values.tags || [];
         if (supportImage && !tagsArray.includes('图片支持')) {
           tagsArray.push('图片支持');
         }
         const tags = JSON.stringify(tagsArray);
-        
+
         const updateData: any = {
           ...values,
           tags: tags,
           config: configStr
         };
-        
+
         if (hasParamsChanged) {
           updateData.support_image = supportImage;
         }
-        
+
+        // 根据测试结果设置连接状态
+        if (connectionTestResult?.success) {
+          updateData.connection_status = 1; // 连接成功
+        } else if (connectionTestResult && !connectionTestResult.success) {
+          updateData.connection_status = 0; // 连接失败
+        } else if (!hasParamsChanged) {
+          // 参数未改变且未重新测试，保持原有连接状态
+          updateData.connection_status = model.connection_status;
+        }
+
         await llmModelService.updateLLMModel(model.id, updateData);
         message.success('保存成功');
         
@@ -931,7 +943,7 @@ const LLMModelSetting: React.FC = () => {
   };
 
   const handleSendMessage = async () => {
-    if (!inputMessage.trim() || !model || isGenerating) return;
+    if ((!inputMessage.trim() && selectedFiles.length === 0) || !model || isGenerating) return;
 
     // 创建用户消息，包含文件信息
     const userMessage: Message = {
