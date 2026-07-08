@@ -33,7 +33,7 @@ class ModelTestUtils:
             
             # 先测试基本的文本生成能力
             test_prompt = "请简要介绍一下你自己"
-            response = model.generate(test_prompt, max_tokens=10)
+            response = model.generate(test_prompt, max_tokens=10, deep_thinking=False)
 
             if 'error' in response:
                 return {
@@ -72,7 +72,7 @@ class ModelTestUtils:
                     image_base64 = base64.b64encode(image_data).decode('utf-8')
 
                     # 调用模型识别图片
-                    image_response = model.generate(test_prompt, image=image_base64, max_tokens=10)
+                    image_response = model.generate(test_prompt, image=image_base64, max_tokens=10, deep_thinking=False)
 
                     if 'text' in image_response and image_response['text'] and image_response['text'].strip() and 'error' not in image_response:
                         support_image = True
@@ -127,7 +127,7 @@ class ModelTestUtils:
             # 构建data URL格式
             image_url = f"data:image/jpeg;base64,{image_base64}"
             
-            response = model.generate(test_prompt, image_url=image_url, max_tokens=100)
+            response = model.generate(test_prompt, image_url=image_url, max_tokens=100, deep_thinking=False)
 
             if 'error' in response:
                 return {
@@ -231,7 +231,7 @@ class ModelTestUtils:
             
             # 测试语音合成
             test_prompt = "这是一段测试文本，用于测试TTS模型的语音合成功能"
-            response = model.generate(test_prompt, max_tokens=10)
+            response = model.generate(test_prompt, max_tokens=10, deep_thinking=False)
             
             if 'error' in response:
                 return {

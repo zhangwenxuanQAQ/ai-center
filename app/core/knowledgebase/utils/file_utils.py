@@ -350,19 +350,36 @@ def cleanup_temp_files(*file_paths):
 
 
 def convert_to_wav(audio_path: str) -> tuple:
-    """将音频文件转换为wav格式
-    
+    """将音频文件转换为wav格式（优先使用ffmpeg）
+
     Args:
         audio_path: 原始音频文件路径
-    
+
     Returns:
         tuple: (转换后的wav文件路径, 错误信息)，成功时错误信息为None
     """
     if os.path.splitext(audio_path)[1].lower() == '.wav':
         return audio_path, None
-    
+
     ffmpeg_exe = get_ffmpeg_path()
-    
+
+    # 优先使用ffmpeg
+    if ffmpeg_exe:
+        try:
+            import subprocess
+            temp_wav = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+            temp_wav.close()
+
+            subprocess.run([ffmpeg_exe, '-i', audio_path, '-ar', '16000', '-ac', '1', '-sample_fmt', 's16', '-y', temp_wav.name],
+                          check=True, capture_output=True, text=True)
+            logger.info(f"成功使用ffmpeg转换音频文件: {audio_path} -> {temp_wav.name}")
+            return temp_wav.name, None
+        except subprocess.CalledProcessError as e:
+            logger.warning(f"ffmpeg转换失败: {e.stderr}，尝试使用pydub")
+        except Exception as e:
+            logger.warning(f"ffmpeg转换失败: {str(e)}，尝试使用pydub")
+
+    # ffmpeg失败或未找到，尝试使用pydub
     try:
         from pydub import AudioSegment
         if ffmpeg_exe and ffmpeg_exe != 'ffmpeg':
@@ -370,32 +387,16 @@ def convert_to_wav(audio_path: str) -> tuple:
             if ffmpeg_dir not in os.environ.get('PATH', ''):
                 os.environ['PATH'] = ffmpeg_dir + os.pathsep + os.environ.get('PATH', '')
                 logger.info(f"已将ffmpeg目录添加到PATH: {ffmpeg_dir}")
-        
+
         temp_wav = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
         temp_wav.close()
-        
+
         audio = AudioSegment.from_file(audio_path)
         audio.export(temp_wav.name, format='wav')
         logger.info(f"成功使用pydub转换音频文件: {audio_path} -> {temp_wav.name}")
         return temp_wav.name, None
     except ImportError:
-        logger.warning("pydub未安装，尝试使用ffmpeg")
-        if not ffmpeg_exe:
-            return None, "音频转换失败: 未找到ffmpeg。请安装ffmpeg或将音频文件转换为wav格式"
-        
-        try:
-            import subprocess
-            temp_wav = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
-            temp_wav.close()
-            
-            subprocess.run([ffmpeg_exe, '-i', audio_path, '-ar', '16000', '-ac', '1', '-sample_fmt', 's16', '-y', temp_wav.name], 
-                          check=True, capture_output=True, text=True)
-            logger.info(f"成功使用ffmpeg转换音频文件: {audio_path} -> {temp_wav.name}")
-            return temp_wav.name, None
-        except subprocess.CalledProcessError as e:
-            return None, f"音频转换失败: ffmpeg转换失败 - {e.stderr}"
-        except Exception as e:
-            return None, f"音频转换失败: {str(e)}"
+        return None, "音频转换失败: pydub未安装且ffmpeg转换失败"
     except Exception as e:
         error_msg = f"音频转换失败: {str(e)}"
         if "ffmpeg" in str(e).lower() or "file not found" in str(e).lower():

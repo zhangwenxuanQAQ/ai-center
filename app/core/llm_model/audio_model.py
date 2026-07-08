@@ -63,15 +63,15 @@ class AudioModel(BaseLLM):
         """转录语音（非流式）"""
         if not self._validate_config():
             return {'error': 'Invalid configuration'}
-        
+
         temp_file_path = None
         converted_audio_path = None
-        
+
         try:
             temp_file_path, converted_audio_path, error_msg = self._prepare_audio_input(prompt)
             if error_msg:
                 return {'error': error_msg}
-            
+
             with open(converted_audio_path, 'rb') as f:
                 audio_data = f.read()
             audio_base64 = base64.b64encode(audio_data).decode('utf-8')
@@ -95,20 +95,59 @@ class AudioModel(BaseLLM):
                 'temperature': 0.0
             }
             params.update(kwargs)
-            
-            response = self.client.chat.completions.create(**params)
-            
-            result = {
-                'text': response.choices[0].message.content,
-                'model': response.model
-            }
-            
-            if hasattr(response, 'usage') and response.usage:
-                result['usage'] = response.usage.model_dump()
-            
-            return result
-        except Exception as e:
-            return {'error': str(e)}
+
+            # 第一次尝试使用纯base64
+            try:
+                response = self.client.chat.completions.create(**params)
+
+                result = {
+                    'text': response.choices[0].message.content,
+                    'model': response.model
+                }
+
+                if hasattr(response, 'usage') and response.usage:
+                    result['usage'] = response.usage.model_dump()
+
+                return result
+            except Exception as e:
+                # 检查是否是400错误，尝试添加data URI前缀
+                error_str = str(e)
+                if '400' in error_str or 'Bad Request' in error_str:
+                    logger.info(f"generate第一次调用失败(400)，尝试添加data URI前缀重试: {error_str}")
+                    try:
+                        # 添加data URI前缀后重试
+                        params_with_prefix = params.copy()
+                        params_with_prefix['messages'] = [
+                            {
+                                'role': 'user',
+                                'content': [
+                                    {
+                                        'type': 'input_audio',
+                                        'input_audio': {
+                                            'data': f"data:audio/wav;base64,{audio_base64}",
+                                            'format': 'wav'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+
+                        response = self.client.chat.completions.create(**params_with_prefix)
+
+                        result = {
+                            'text': response.choices[0].message.content,
+                            'model': response.model
+                        }
+
+                        if hasattr(response, 'usage') and response.usage:
+                            result['usage'] = response.usage.model_dump()
+
+                        return result
+                    except Exception as e2:
+                        logger.error(f"添加data URI前缀后仍然失败: {str(e2)}")
+                        return {'error': str(e2)}
+
+                return {'error': str(e)}
         finally:
             # 清理临时文件
             if isinstance(prompt, (str, Path)):
@@ -119,21 +158,116 @@ class AudioModel(BaseLLM):
                     cleanup_temp_files(temp_file_path, converted_audio_path)
             else:
                 cleanup_temp_files(temp_file_path, converted_audio_path)
-    
+
     def stream_generate(self, prompt: str, **kwargs) -> Generator[Dict[str, Any], None, None]:
         """
-        流式转录语音（语音转录暂不支持流式）
+        流式转录语音
         """
         if not self._validate_config():
             yield {'error': 'Invalid configuration'}
             return
-        
+
+        temp_file_path = None
+        converted_audio_path = None
+
         try:
-            response = self.generate(prompt, **kwargs)
-            if 'error' not in response:
-                yield response
-        except Exception as e:
-            yield {'error': str(e)}
+            temp_file_path, converted_audio_path, error_msg = self._prepare_audio_input(prompt)
+            if error_msg:
+                yield {'error': error_msg}
+                return
+
+            with open(converted_audio_path, 'rb') as f:
+                audio_data = f.read()
+            audio_base64 = base64.b64encode(audio_data).decode('utf-8')
+
+            params = {
+                'model': self.model_name,
+                'messages': [
+                    {
+                        'role': 'user',
+                        'content': [
+                            {
+                                'type': 'input_audio',
+                                'input_audio': {
+                                    'data': audio_base64,
+                                    'format': 'wav'
+                                }
+                            }
+                        ]
+                    }
+                ],
+                'temperature': 0.0,
+                'stream': True
+            }
+            params.update(kwargs)
+
+            # 第一次尝试使用纯base64
+            try:
+                stream = self.client.chat.completions.create(**params)
+
+                for chunk in stream:
+                    if chunk.choices:
+                        choice = chunk.choices[0]
+                        result = {
+                            'text': choice.delta.content or '',
+                            'finish_reason': choice.finish_reason,
+                            'usage': chunk.usage.model_dump() if chunk.usage else None
+                        }
+                        yield result
+
+                return
+            except Exception as e:
+                # 检查是否是400错误，尝试添加data URI前缀
+                error_str = str(e)
+                if '400' in error_str or 'Bad Request' in error_str:
+                    logger.info(f"stream_generate第一次调用失败(400)，尝试添加data URI前缀重试: {error_str}")
+                    try:
+                        # 添加data URI前缀后重试
+                        params_with_prefix = params.copy()
+                        params_with_prefix['messages'] = [
+                            {
+                                'role': 'user',
+                                'content': [
+                                    {
+                                        'type': 'input_audio',
+                                        'input_audio': {
+                                            'data': f"data:audio/wav;base64,{audio_base64}",
+                                            'format': 'wav'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+
+                        stream = self.client.chat.completions.create(**params_with_prefix)
+
+                        for chunk in stream:
+                            if chunk.choices:
+                                choice = chunk.choices[0]
+                                result = {
+                                    'text': choice.delta.content or '',
+                                    'finish_reason': choice.finish_reason,
+                                    'usage': chunk.usage.model_dump() if chunk.usage else None
+                                }
+                                yield result
+
+                        return
+                    except Exception as e2:
+                        logger.error(f"添加data URI前缀后仍然失败: {str(e2)}")
+                        yield {'error': str(e2)}
+                        return
+
+                yield {'error': str(e)}
+        finally:
+            # 清理临时文件
+            if isinstance(prompt, (str, Path)):
+                file_path = str(prompt)
+                if converted_audio_path == file_path:
+                    cleanup_temp_files(temp_file_path)
+                else:
+                    cleanup_temp_files(temp_file_path, converted_audio_path)
+            else:
+                cleanup_temp_files(temp_file_path, converted_audio_path)
     
     def generate_with_messages(self, messages: list, **kwargs) -> Dict[str, Any]:
         """
@@ -149,17 +283,18 @@ class AudioModel(BaseLLM):
         if not self._validate_config():
             return {'error': 'Invalid configuration'}
 
+        processed_messages = self._filter_user_messages(messages)
+
+        params = {
+            'model': self.model_name,
+            'messages': processed_messages,
+            'temperature': 0.0
+        }
+        params = self._handle_extra_body(params, kwargs)
+        params.update(kwargs)
+
+        # 第一次尝试使用纯base64
         try:
-            processed_messages = self._filter_user_messages(messages)
-
-            params = {
-                'model': self.model_name,
-                'messages': processed_messages,
-                'temperature': 0.0
-            }
-            params = self._handle_deep_thinking(params, kwargs)
-            params.update(kwargs)
-
             response = self.client.chat.completions.create(**params)
 
             result = {
@@ -172,7 +307,69 @@ class AudioModel(BaseLLM):
 
             return result
         except Exception as e:
+            # 检查是否是400错误，尝试添加data URI前缀
+            error_str = str(e)
+            if '400' in error_str or 'Bad Request' in error_str:
+                logger.info(f"第一次调用失败(400)，尝试添加data URI前缀重试: {error_str}")
+                try:
+                    # 添加data URI前缀后重试
+                    params_with_prefix = params.copy()
+                    params_with_prefix['messages'] = self._add_data_uri_prefix(params['messages'])
+
+                    response = self.client.chat.completions.create(**params_with_prefix)
+
+                    result = {
+                        'text': response.choices[0].message.content,
+                        'model': response.model
+                    }
+
+                    if hasattr(response, 'usage') and response.usage:
+                        result['usage'] = response.usage.model_dump()
+
+                    return result
+                except Exception as e2:
+                    logger.error(f"添加data URI前缀后仍然失败: {str(e2)}")
+                    return {'error': str(e2)}
+
             return {'error': str(e)}
+
+    def _add_data_uri_prefix(self, messages: list) -> list:
+        """
+        为消息中的input_audio添加data URI前缀
+
+        Args:
+            messages: 消息列表
+
+        Returns:
+            处理后的消息列表
+        """
+        prefixed_messages = []
+        for msg in messages:
+            if msg.get('role') == 'user' and isinstance(msg.get('content'), list):
+                prefixed_content = []
+                for item in msg['content']:
+                    if isinstance(item, dict) and item.get('type') == 'input_audio':
+                        input_audio = item.get('input_audio', {})
+                        data = input_audio.get('data', '')
+                        # 如果没有data URI前缀，则添加
+                        if data and not data.startswith('data:'):
+                            prefixed_input_audio = input_audio.copy()
+                            prefixed_input_audio['data'] = f"data:audio/wav;base64,{data}"
+                            prefixed_content.append({
+                                'type': 'input_audio',
+                                'input_audio': prefixed_input_audio
+                            })
+                        else:
+                            prefixed_content.append(item)
+                    else:
+                        prefixed_content.append(item)
+                prefixed_messages.append({
+                    'role': msg['role'],
+                    'content': prefixed_content
+                })
+            else:
+                prefixed_messages.append(msg)
+        return prefixed_messages
 
     def _filter_user_messages(self, messages: list) -> list:
         """
@@ -236,18 +433,19 @@ class AudioModel(BaseLLM):
             yield {'error': 'Invalid configuration'}
             return
 
+        processed_messages = self._filter_user_messages(messages)
+
+        params = {
+            'model': self.model_name,
+            'messages': processed_messages,
+            'temperature': 0.0,
+            'stream': True
+        }
+        params = self._handle_extra_body(params, kwargs)
+        params.update(kwargs)
+
+        # 第一次尝试使用纯base64
         try:
-            processed_messages = self._filter_user_messages(messages)
-
-            params = {
-                'model': self.model_name,
-                'messages': processed_messages,
-                'temperature': 0.0,
-                'stream': True
-            }
-            params = self._handle_deep_thinking(params, kwargs)
-            params.update(kwargs)
-
             stream = self.client.chat.completions.create(**params)
 
             for chunk in stream:
@@ -265,7 +463,40 @@ class AudioModel(BaseLLM):
 
                     yield result
 
+            return
         except Exception as e:
+            # 检查是否是400错误，尝试添加data URI前缀
+            error_str = str(e)
+            if '400' in error_str or 'Bad Request' in error_str:
+                logger.info(f"第一次流式调用失败(400)，尝试添加data URI前缀重试: {error_str}")
+                try:
+                    # 添加data URI前缀后重试
+                    params_with_prefix = params.copy()
+                    params_with_prefix['messages'] = self._add_data_uri_prefix(params['messages'])
+
+                    stream = self.client.chat.completions.create(**params_with_prefix)
+
+                    for chunk in stream:
+                        if chunk.choices:
+                            choice = chunk.choices[0]
+                            result = {
+                                'text': choice.delta.content or '',
+                                'finish_reason': choice.finish_reason,
+                                'usage': chunk.usage.model_dump() if chunk.usage else None
+                            }
+
+                            reasoning_content = self._extract_reasoning_content(choice.delta)
+                            if reasoning_content:
+                                result['reasoning_content'] = reasoning_content
+
+                            yield result
+
+                    return
+                except Exception as e2:
+                    logger.error(f"添加data URI前缀后仍然失败: {str(e2)}")
+                    yield {'error': str(e2)}
+                    return
+
             yield {'error': str(e)}
     
     def get_model_info(self) -> Dict[str, Any]:

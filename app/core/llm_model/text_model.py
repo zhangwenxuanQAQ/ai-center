@@ -94,7 +94,7 @@ class TextModel(BaseLLM):
             if tools:
                 params['tools'] = tools
             
-            params = self._handle_deep_thinking(params, kwargs)
+            params = self._handle_extra_body(params, kwargs)
             params.update(kwargs)
 
             response = self.client.chat.completions.create(**params)
@@ -154,7 +154,7 @@ class TextModel(BaseLLM):
             if tools:
                 params['tools'] = tools
             
-            params = self._handle_deep_thinking(params, kwargs)
+            params = self._handle_extra_body(params, kwargs)
             params.update(kwargs)
 
             response = self.client.chat.completions.create(**params)
@@ -252,7 +252,7 @@ class TextModel(BaseLLM):
             if tools:
                 params['tools'] = tools
             
-            params = self._handle_deep_thinking(params, kwargs)
+            params = self._handle_extra_body(params, kwargs)
             params.update(kwargs)
             
             stream = self.client.chat.completions.create(**params)
@@ -340,11 +340,11 @@ class TextModel(BaseLLM):
             if tools:
                 params['tools'] = tools
             
-            params = self._handle_deep_thinking(params, kwargs)
+            params = self._handle_extra_body(params, kwargs)
             params.update(kwargs)
             
             stream = self.client.chat.completions.create(**params)
-            
+
             tool_calls_data = {}
             
             for chunk in stream:

@@ -133,12 +133,12 @@ class BaseLLM(ABC):
 
         return ''
 
-    def _handle_deep_thinking(self, params: dict, kwargs: dict) -> dict:
+    def _handle_extra_body(self, params: dict, kwargs: dict) -> dict:
         """
-        处理深度思考参数，兼容不同模型厂商的开关字段
+        处理extra_body参数，兼容不同模型厂商的开关字段
 
         不同模型厂商使用不同的参数来控制深度思考：
-        - Qwen: extra_body.enable_thinking
+        - Qwen: extra_body.enable_thinking, thinking_budget
         - DeepSeek: 不需要特殊设置，模型自动开启
         - 其他厂商可能有不同的字段名
 
@@ -161,6 +161,12 @@ class BaseLLM(ABC):
                 if 'extra_body' not in params:
                     params['extra_body'] = {}
                 params['extra_body']['enable_thinking'] = bool(deep_thinking)
+
+                # 深度思考打开时添加thinking_budget参数（max_tokens的三分之一）
+                if bool(deep_thinking):
+                    max_tokens = params.get('max_tokens', 4096)
+                    thinking_budget = int(max_tokens / 3)
+                    params['extra_body']['thinking_budget'] = thinking_budget
 
             # DeepSeek模型深度思考开关（如果需要）
             # elif provider_lower == 'deepseek':

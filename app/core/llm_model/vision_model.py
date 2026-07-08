@@ -71,7 +71,7 @@ class VisionModel(BaseLLM):
             if tools:
                 params['tools'] = tools
             
-            params = self._handle_deep_thinking(params, kwargs)
+            params = self._handle_extra_body(params, kwargs)
             params.update(kwargs)
             params.pop('image_url', None)
             
@@ -143,7 +143,7 @@ class VisionModel(BaseLLM):
             if tools:
                 params['tools'] = tools
             
-            params = self._handle_deep_thinking(params, kwargs)
+            params = self._handle_extra_body(params, kwargs)
             params.update(kwargs)
             params.pop('image_url', None)
             
@@ -226,7 +226,7 @@ class VisionModel(BaseLLM):
             if tools:
                 params['tools'] = tools
             
-            params = self._handle_deep_thinking(params, kwargs)
+            params = self._handle_extra_body(params, kwargs)
             params.update(kwargs)
             
             response = self.client.chat.completions.create(**params)
@@ -279,7 +279,7 @@ class VisionModel(BaseLLM):
             if tools:
                 params['tools'] = tools
             
-            params = self._handle_deep_thinking(params, kwargs)
+            params = self._handle_extra_body(params, kwargs)
             params.update(kwargs)
             
             stream = self.client.chat.completions.create(**params)
