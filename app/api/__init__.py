@@ -11,21 +11,13 @@ from .datasource import router as datasource_router
 from .datasource_category import router as datasource_category_router
 from .system.monitor import router as system_monitor_router
 from .agent import router as agent_router
-
-# 只有当MCP服务启用时才导入mcp模块
-from app.configs.config import config
-mcp_enabled = config.config.get('mcp', {}).get('enabled', False)
-
-if mcp_enabled:
-    from .mcp import router as mcp_router
+from .mcp import router as mcp_router
 
 router = APIRouter()
 
 router.include_router(chatbot_router, prefix="/chatbot", tags=["chatbot"])
 router.include_router(chatbot_category_router, prefix="/chatbot_category", tags=["chatbot_category"])
-
-if mcp_enabled:
-    router.include_router(mcp_router, prefix="/mcp", tags=["mcp"])
+router.include_router(mcp_router, prefix="/mcp", tags=["mcp"])
 
 router.include_router(knowledgebase_router, prefix="/knowledgebase", tags=["knowledgebase"])
 router.include_router(llm_model_router, prefix="/llm_model", tags=["llm_model"])
