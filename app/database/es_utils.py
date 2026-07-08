@@ -763,7 +763,7 @@ class ESUtils:
 
         search_params = {
             "index": index_name if index_name else "_all",
-            "size": search_size,
+            "size": top_k,
             "from_": 0,
             "_source": source_fields,
         }
@@ -800,7 +800,7 @@ class ESUtils:
 
                 fallback_params = {
                     "index": index_name if index_name else "_all",
-                    "size": search_size,
+                    "size": top_k,
                     "from_": 0,
                 }
                 if knn_query:
@@ -845,42 +845,24 @@ class ESUtils:
                 sres, question, tkweight, vtweight, vector_field
             )
 
-        max_pages = rerank_limit // page_size
-        page_index = (page % max_pages) - 1 if max_pages > 0 else 0
-        begin = max(page_index * page_size, 0)
-        sim = sim[begin: begin + page_size]
-        tsim = tsim[begin: begin + page_size]
-        vsim = vsim[begin: begin + page_size]
-
         sim_np = np.array(sim, dtype=np.float64)
         idx = np.argsort(sim_np * -1)
 
         dim = len(query_vector) if query_vector else 0
         zero_vector = [0.0] * dim
 
-        filtered_count = 0
-        for i in idx:
-            if float(vsim[i]) < vector_similarity_threshold:
-                continue
-            if float(tsim[i]) < keyword_similarity_threshold:
-                continue
-            filtered_count += 1
-
-        ranks["total"] = filtered_count
-
+        # 先收集所有符合相似度条件的数据
+        filtered_chunks = []
         for i in idx:
             if float(vsim[i]) < vector_similarity_threshold:
                 continue
             if float(tsim[i]) < keyword_similarity_threshold:
                 continue
 
-            chunk_id = sres.ids[begin + int(i)] if (begin + int(i)) < len(sres.ids) else sres.ids[int(i)]
-            if chunk_id not in sres.field:
+            chunk_id = sres.ids[int(i)] if int(i) < len(sres.ids) else None
+            if chunk_id is None or chunk_id not in sres.field:
                 continue
             chunk = sres.field[chunk_id]
-
-            if len(ranks["chunks"]) >= page_size:
-                break
 
             d = {
                 "chunk_id": chunk_id,
@@ -900,14 +882,23 @@ class ESUtils:
                 d["vector"] = chunk[vector_field]
             else:
                 d["vector"] = zero_vector
-            ranks["chunks"].append(d)
+            filtered_chunks.append(d)
 
+        # 根据sort_by排序
         if sort_by == "vsim":
-            ranks["chunks"].sort(key=lambda x: x["vector_similarity"], reverse=True)
+            filtered_chunks.sort(key=lambda x: x["vector_similarity"], reverse=True)
         elif sort_by == "tsim":
-            ranks["chunks"].sort(key=lambda x: x["term_similarity"], reverse=True)
+            filtered_chunks.sort(key=lambda x: x["term_similarity"], reverse=True)
         else:
-            ranks["chunks"].sort(key=lambda x: x["similarity"], reverse=True)
+            filtered_chunks.sort(key=lambda x: x["similarity"], reverse=True)
+
+        # 设置总数
+        ranks["total"] = len(filtered_chunks)
+
+        # 根据page和page_size进行手动分页
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        ranks["chunks"] = filtered_chunks[start_idx:end_idx]
 
         return ranks
 
@@ -1091,21 +1082,23 @@ class ESUtils:
             fuzzy = field_config.get('fuzzy', False)
             relation = field_config.get('relation', 'INTERSECTS')
             
+            es_field_name = f"metadatas.{field_name}"
+            
             if field_name.endswith('_range'):
-                range_filter = self._build_range_filter(field_name, value, relation)
+                range_filter = self._build_range_filter(es_field_name, value, relation)
                 if range_filter:
                     filter_conditions.append(range_filter)
             elif fuzzy and isinstance(value, str):
                 filter_conditions.append({
-                    "match": {field_name: value}
+                    "match": {es_field_name: value}
                 })
             elif isinstance(value, list):
                 if len(value) == 1:
-                    filter_conditions.append({"term": {field_name: value[0]}})
+                    filter_conditions.append({"term": {es_field_name: value[0]}})
                 else:
-                    filter_conditions.append({"terms": {field_name: value}})
+                    filter_conditions.append({"terms": {es_field_name: value}})
             else:
-                filter_conditions.append({"term": {field_name: value}})
+                filter_conditions.append({"term": {es_field_name: value}})
         
         return filter_conditions
     

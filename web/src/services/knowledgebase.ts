@@ -1133,4 +1133,14 @@ export const knowledgebaseService = {
     const response = await http.get(`/aicenter/v1/knowledgebase/document/intelligent_extract_status_by_knowledge/${knowledgeId}`);
     return response;
   },
+
+  /**
+   * 中断智能提取并删除缓存
+   * @param knowledgeId 知识ID
+   * @returns 操作结果
+   */
+  interruptIntelligentExtract: async (knowledgeId: string): Promise<any> => {
+    const response = await http.delete(`/aicenter/v1/knowledgebase/document/intelligent_extract/${knowledgeId}`);
+    return response;
+  },
 };

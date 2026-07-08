@@ -1772,3 +1772,41 @@ async def intelligent_extract_status_by_knowledge(knowledge_id: str):
         return ResponseUtil.error(message=str(e))
 
 
+@router.delete("/document/intelligent_extract/{knowledge_id}", response_model=ApiResponse)
+async def interrupt_intelligent_extract(knowledge_id: str):
+    """
+    中断智能提取并删除缓存接口
+
+    Args:
+        knowledge_id: 知识ID
+
+    Returns:
+        ApiResponse: 操作结果
+    """
+    try:
+        from app.database.redis_utils import redis_utils
+
+        if not redis_utils.is_available:
+            return ResponseUtil.success(message='Redis不可用，无需清理')
+
+        # 根据知识ID查询提取任务ID
+        extract_id = redis_utils.get_obj(f"knowledge:{knowledge_id}:extract_id")
+
+        if not extract_id:
+            return ResponseUtil.success(message='没有提取任务，无需清理')
+
+        # 删除提取状态缓存
+        redis_utils.delete(f"extract:{extract_id}:status")
+
+        # 删除knowledgeId到extractId的映射
+        redis_utils.delete(f"knowledge:{knowledge_id}:extract_id")
+
+        logger.info(f"已清理知识 {knowledge_id} 的提取缓存")
+
+        return ResponseUtil.success(message='已清理提取缓存')
+
+    except Exception as e:
+        logger.error(f"中断提取失败: {e}")
+        return ResponseUtil.error(message=str(e))
+
+

@@ -86,7 +86,8 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
   selectedCategoryId,
 }) => {
   const isEdit = !!doc;
-  const knowledgeId = doc?.id || `new_${knowledgebase.id}_${Date.now()}`;
+  const [currentKnowledgeId, setCurrentKnowledgeId] = useState<string>(doc?.id || `new_${knowledgebase.id}_${Date.now()}`);
+  const knowledgeId = currentKnowledgeId;
   
   const [theme, setTheme] = useState<string>('dark');
   const [constants, setConstants] = useState<DocumentConstants | null>(null);
@@ -183,10 +184,10 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       } else {
         // localStorage没有状态，从后端查询是否有正在进行的提取任务
         try {
-          const response = await knowledgebaseApi.getIntelligentExtractStatusByKnowledgeId(knowledgeId);
+          const response = await knowledgebaseService.getIntelligentExtractStatusByKnowledgeId(knowledgeId);
           console.log('从后端查询的提取状态:', response);
 
-          if (response && response.data) {
+          if (response && response.code === 200 && response.data) {
             const statusData = response.data;
 
             if (statusData.status !== 'none') {
@@ -194,10 +195,19 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
               const { extract_id, status, full_reasoning, full_text, extracted_data, finish_reason } = statusData;
 
               if (status === 'extracting') {
-                extractManagerRef.current.setExtracting(knowledgeId, extract_id);
+                // 保存extractId和提取内容到localStorage
+                extractManagerRef.current.setState(knowledgeId, {
+                  status: 'extracting',
+                  extractId,
+                  reasoningContent: full_reasoning || '',
+                  textContent: full_text || '',
+                  extractParams: null,
+                  result: null
+                });
                 setIsExtracting(true);
               } else if (status === 'completed') {
-                extractManagerRef.current.setCompleted(knowledgeId, extract_id, extracted_data, full_reasoning, full_text);
+                // 保存完成状态和结果到localStorage
+                extractManagerRef.current.setCompleted(knowledgeId, extracted_data, full_reasoning, full_text);
                 setIsExtracting(false);
               }
             }
@@ -219,6 +229,11 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       unsubscribe();
     };
   }, [knowledgeId]);
+
+  // 监听页面关闭事件（不再清理缓存，以便刷新后能继续看到提取信息）
+  useEffect(() => {
+    // 注意：不再清理缓存，提取会继续在后台运行，刷新后可以从后端获取状态
+  }, []);
 
   // 格式化文件大小
   const formatFileSize = (bytes: number): string => {
@@ -1108,6 +1123,244 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     }
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
+  /**
+   * 校验document_config必填项并添加value_status字段
+   * @param documentConfig document_config对象
+   * @returns boolean 是否所有必填项都通过校验
+   */
+  const validateDocumentConfigRequiredFields = (documentConfig: Record<string, any>): boolean => {
+    let allPassed = true;
+
+    // 校验自定义字段必填项
+    if (documentConfig.custom_fields && Array.isArray(documentConfig.custom_fields)) {
+      documentConfig.custom_fields.forEach((field: any) => {
+        if (field.is_required) {
+          const value = field.value;
+          const isMissing = value === undefined || value === null || value === '' ||
+            (Array.isArray(value) && value.length === 0) ||
+            (typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0);
+
+          field.value_status = isMissing ? 'missing' : 'pass';
+          if (isMissing) {
+            allPassed = false;
+          }
+        }
+      });
+    }
+
+    // 校验章节字段必填项
+    if (documentConfig.chapters && Array.isArray(documentConfig.chapters)) {
+      documentConfig.chapters.forEach((chapter: any) => {
+        if (chapter.fields && Array.isArray(chapter.fields)) {
+          chapter.fields.forEach((field: any) => {
+            if (field.is_required) {
+              let value: any;
+
+              // 根据章节类型获取字段值
+              if (chapter.type === 'form') {
+                value = chapter.value && chapter.value[field.field_code];
+              } else if (chapter.type === 'list' && chapter.value && Array.isArray(chapter.value)) {
+                // 列表类型：检查每一行的字段值
+                const hasMissingInList = chapter.value.some((rowItem: any) => {
+                  const rowValue = rowItem[field.field_code];
+                  return rowValue === undefined || rowValue === null || rowValue === '' ||
+                    (Array.isArray(rowValue) && rowValue.length === 0) ||
+                    (typeof rowValue === 'object' && !Array.isArray(rowValue) && Object.keys(rowValue).length === 0);
+                });
+                value = hasMissingInList ? null : 'pass'; // 列表类型特殊处理
+              } else if (chapter.type === 'rich_text') {
+                value = chapter.value;
+              }
+
+              const isMissing = value === undefined || value === null || value === '' ||
+                (Array.isArray(value) && value.length === 0) ||
+                (typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0);
+
+              field.value_status = isMissing ? 'missing' : 'pass';
+              if (isMissing) {
+                allPassed = false;
+              }
+            }
+          });
+        }
+      });
+    }
+
+    // 在document_config根级别添加value_status字段，表示整体校验状态
+    documentConfig.value_status = allPassed ? 'pass' : 'missing';
+
+    return allPassed;
+  };
+
+  /**
+   * 智能提取前保存知识（仅校验标题并保存基础信息）
+   * @returns Promise<{success: boolean; knowledgeId?: string}> 是否成功保存，以及真实的knowledgeId
+   */
+  const handleSaveBeforeExtract = async (): Promise<{success: boolean; knowledgeId?: string}> => {
+    // 校验标题
+    if (!title.trim()) {
+      message.error('请输入知识标题');
+      return {success: false};
+    }
+
+    // 构建document_config对象
+    const documentConfig: Record<string, any> = {};
+
+    // 如果选择了知识目录，构建document_config
+    if (categoryId) {
+      const category = findCategoryById(categories, categoryId);
+      if (category && category.document_config?.template_type === 'custom_template') {
+        const categoryDocConfig = category.document_config;
+
+        // 合并字段定义
+        const categoryFields = categoryDocConfig.custom_fields || [];
+        const allCustomFields = [...categoryFields];
+        const existingFieldIds = new Set(allCustomFields.map((f: any) => f.id));
+        extraCustomFields.forEach(f => {
+          if (f.id && !existingFieldIds.has(f.id)) {
+            allCustomFields.push(f);
+          }
+        });
+
+        if (allCustomFields.length > 0) {
+          documentConfig.custom_fields = allCustomFields.map((field: any) => {
+            let value = customFieldValues[field.id];
+            if (value === undefined || value === null) {
+              if (field.default_value !== undefined && field.default_value !== null) {
+                value = field.default_value;
+              } else {
+                switch (field.field_type) {
+                  case 'object':
+                    value = {};
+                    break;
+                  case 'array':
+                    value = [];
+                    break;
+                  default:
+                    value = null;
+                }
+              }
+            }
+            return {
+              ...field,
+              value,
+            };
+          });
+        }
+
+        // 处理章节
+        if (categoryDocConfig.chapters && categoryDocConfig.chapters.length > 0) {
+          const chapterFieldsValues = customFieldValues.chapter_fields_values || {};
+
+          documentConfig.chapters = categoryDocConfig.chapters.map((chapter: any) => {
+            const chapterValue = chapterFieldsValues[chapter.id] || {};
+            let value: any = null;
+
+            switch (chapter.type) {
+              case 'form':
+                value = {};
+                if (chapter.fields && chapter.fields.length > 0) {
+                  for (const field of chapter.fields) {
+                    let fieldValue = chapterValue[field.id];
+                    if (fieldValue === undefined || fieldValue === null) {
+                      if (field.default_value !== undefined && field.default_value !== null) {
+                        fieldValue = field.default_value;
+                      } else {
+                        switch (field.field_type) {
+                          case 'object':
+                            fieldValue = {};
+                            break;
+                          case 'array':
+                            fieldValue = [];
+                            break;
+                          default:
+                            fieldValue = null;
+                        }
+                      }
+                    }
+                    value[field.id] = fieldValue;
+                  }
+                }
+                break;
+              case 'list':
+                value = chapterValue.list_data || [];
+                break;
+              case 'rich_text':
+                value = chapterValue.rich_text_content || '';
+                break;
+            }
+
+            return {
+              ...chapter,
+              value,
+            };
+          });
+        }
+
+        // 处理富文本章节类型
+        if (categoryDocConfig.chapter_type === 'rich_text') {
+          documentConfig.content = customFieldValues.chapter_rich_text_content || '';
+        }
+      }
+    }
+
+    // 如果是富文本类型，添加content字段
+    if (sourceType === 'rich_text') {
+      documentConfig.content = richTextContent;
+    }
+
+    // 校验document_config必填项并添加value_status字段
+    if (Object.keys(documentConfig).length > 0) {
+      validateDocumentConfigRequiredFields(documentConfig);
+    }
+
+    // 保存知识
+    try {
+      const metadatasObj: Record<string, any> = {};
+      const schema: Record<string, { type: string; label: string }> = {};
+      for (const item of metadatas) {
+        if (item.field_name) {
+          metadatasObj[item.field_name] = item.field_value;
+          schema[item.field_name] = {
+            type: item.field_type,
+            label: item.field_label,
+          };
+        }
+      }
+
+      const documentData: any = {
+        kb_id: knowledgebase.id,
+        title: title.trim(),
+        tags: tags,
+        chunk_method: chunkMethod || 'naive',
+        chunk_config: chunkConfig,
+        category_id: categoryId || undefined,
+        source_type: sourceType,
+        source_config: sourceType === 'datasource' ? {
+          datasource_id: selectedDatasourceId,
+          config: selectedDatasource?.type === 'file_storage' ? {
+            files: selectedFiles.map(f => f.path)
+          } : undefined
+        } : undefined,
+        metadatas: Object.keys(metadatasObj).length > 0 ? JSON.stringify(metadatasObj) : undefined,
+        schema: Object.keys(schema).length > 0 ? JSON.stringify(schema) : undefined,
+        document_config: Object.keys(documentConfig).length > 0 ? documentConfig : undefined,
+        status: status,
+      };
+
+      // 新增知识
+      const savedDoc = await knowledgebaseService.createDocument(knowledgebase.id, documentData);
+      message.success('知识保存成功');
+
+      // 返回真实的knowledgeId
+      return {success: true, knowledgeId: savedDoc.id};
+    } catch (error) {
+      console.error('保存知识失败:', error);
+      message.error('保存知识失败');
+      return {success: false};
+    }
+  };
+
   const handleSave = async () => {
     if (!title.trim()) {
       message.error('请输入知识标题');
@@ -1136,90 +1389,10 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         return;
       }
     }
-    
-    // 校验自定义字段必填项
-    if (categoryId) {
-      const category = findCategoryById(categories, categoryId);
-      if (category && category.document_config?.template_type === 'custom_template') {
-        const customFields = category.document_config.custom_fields || [];
-        for (const field of customFields) {
-          if (field.is_required) {
-            const fieldValue = customFieldValues[field.id];
-            if (fieldValue === undefined || fieldValue === null || fieldValue === '') {
-              message.error(`请填写必填字段：${field.field_name}`);
-              return;
-            }
-          }
-        }
-        
-        // 校验章节目录必填字段
-        // 如果是动态章节，使用dynamicChapters；如果是固定章节，使用category.document_config.chapters
-        const chapterType = category.document_config.chapter_type || 'fixed';
-        const chapters = chapterType === 'dynamic' ? dynamicChapters : (category.document_config.chapters || []);
-        const chapterFieldsValues = customFieldValues.chapter_fields_values || {};
-        
-        // 递归校验章节字段
-        const validateChapterFields = (chapterList: any[], parentPath: string = ''): boolean => {
-          for (const chapter of chapterList) {
-            const chapterPath = parentPath ? `${parentPath} > ${chapter.name}` : chapter.name;
-            
-            // 如果章节有字段（form或list类型）
-            if (chapter.fields && chapter.fields.length > 0) {
-              const chapterValues = chapterFieldsValues[chapter.id] || {};
-              
-              // 表单类型：校验字段值
-              if (chapter.type === 'form') {
-                for (const field of chapter.fields) {
-                  if (field.is_required) {
-                    const fieldValue = chapterValues[field.id];
-                    if (fieldValue === undefined || fieldValue === null || fieldValue === '') {
-                      message.error(`请填写章节"${chapterPath}"的必填字段：${field.field_name}`);
-                      return false;
-                    }
-                  }
-                }
-              }
-              
-              // 列表类型：校验每一行的字段值
-              if (chapter.type === 'list') {
-                const listData = chapterValues.list_data || [];
-                for (let rowIndex = 0; rowIndex < listData.length; rowIndex++) {
-                  const rowData = listData[rowIndex];
-                  for (const field of chapter.fields) {
-                    if (field.is_required) {
-                      const fieldValue = rowData[field.id];
-                      if (fieldValue === undefined || fieldValue === null || fieldValue === '') {
-                        message.error(`请填写章节"${chapterPath}"第${rowIndex + 1}行的必填字段：${field.field_name}`);
-                        return false;
-                      }
-                    }
-                  }
-                }
-              }
-            }
-            
-            // 递归校验子章节
-            const childChapters = chapters.filter((ch: any) => ch.parentId === chapter.id);
-            if (childChapters.length > 0) {
-              if (!validateChapterFields(childChapters, chapterPath)) {
-                return false;
-              }
-            }
-          }
-          return true;
-        };
-        
-        // 获取根章节（没有parentId的章节）
-        const rootChapters = chapters.filter((ch: any) => !ch.parentId);
-        if (!validateChapterFields(rootChapters)) {
-          return;
-        }
-      }
-    }
-    
+
     // 构建document_config对象
     const documentConfig: Record<string, any> = {};
-    
+
     // 如果是自定义模版类型，按照知识目录的document_config格式构建
     if (categoryId) {
       const category = findCategoryById(categories, categoryId);
@@ -1390,6 +1563,11 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     // 如果是富文本类型，添加content字段
     if (sourceType === 'rich_text') {
       documentConfig.content = richTextContent;
+    }
+
+    // 校验document_config必填项并添加value_status字段
+    if (Object.keys(documentConfig).length > 0) {
+      validateDocumentConfigRequiredFields(documentConfig);
     }
 
     setSaving(true);
@@ -1732,7 +1910,15 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
                   return false;
                 }
                 fileMapRef.current.set(file.uid, file);
-                setFileList(prev => [...prev, { uid: file.uid, name: file.name, size: file.size }]);
+                setFileList(prev => {
+                  const newFileList = [...prev, { uid: file.uid, name: file.name, size: file.size }];
+                  // 如果是第一个上传的文件且标题为空，自动填充标题（去掉文件后缀）
+                  if (prev.length === 0 && !title.trim()) {
+                    const fileNameWithoutExt = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+                    setTitle(fileNameWithoutExt);
+                  }
+                  return newFileList;
+                });
                 return false;
               }}
               onRemove={(file) => {
@@ -3009,6 +3195,17 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     );
   };
 
+  /**
+   * 处理知识状态更新（从新增变为编辑）
+   * @param newKnowledgeId 新的知识ID
+   */
+  const handleStatusUpdate = (newKnowledgeId: string) => {
+    console.log('知识状态更新，从新增变为编辑，新knowledgeId:', newKnowledgeId);
+    setCurrentKnowledgeId(newKnowledgeId);
+    // 更新URL或其他状态，使页面变为编辑模式
+    // 注意：这里只是更新knowledgeId，实际的页面状态切换由父组件或路由处理
+  };
+
   const handleIntelligentExtractConfirm = (extractedData: {
     title?: string;
     tags?: string[];
@@ -3231,6 +3428,12 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         currentCustomFieldValues={customFieldValues}
         currentRichTextContent={richTextContent}
         currentDynamicChapters={dynamicChapters}
+        isEdit={isEdit}
+        categories={categories}
+        categoryId={categoryId}
+        onSaveBeforeExtract={handleSaveBeforeExtract}
+        onTitleUpdate={setTitle}
+        onStatusUpdate={handleStatusUpdate}
         onCancel={() => setShowIntelligentExtract(false)}
         onConfirm={handleIntelligentExtractConfirm}
       />

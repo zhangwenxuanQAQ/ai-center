@@ -2095,8 +2095,8 @@ class KnowledgebaseDocumentService:
             # 如果提供了knowledge_id，保存knowledgeId到extractId的映射
             if knowledge_id:
                 redis_utils.set_obj(f"knowledge:{knowledge_id}:extract_id", extract_id, exp=3600)
-        
-        # 立即返回extract_id，让前端可以尽快开始轮询
+
+        # 立即返回extract_id和初始化进度消息，让前端可以尽快开始轮询
         yield {
             'reasoning_content': '',
             'text': '',
@@ -2105,7 +2105,7 @@ class KnowledgebaseDocumentService:
             'extracted_data': None,
             'extract_id': extract_id
         }
-            
+
         # 转换为用户消息
         user_message = convert_query_to_message(query_items, llm_model.model_type, model_id, chunk_method="one")
         

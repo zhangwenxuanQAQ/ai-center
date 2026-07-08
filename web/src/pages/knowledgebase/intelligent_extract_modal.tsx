@@ -17,13 +17,14 @@ interface ThinkingProcessDisplayProps {
   onInterrupt?: () => void;
   onClose?: () => void;
   extracting?: boolean;
+  inputType?: 'file' | 'text'; // 输入类型，用于显示不同的等待文本
 }
 
 /**
  * 思考过程展示组件
  * 用于实时展示模型的思考过程和正文内容
  */
-const ThinkingProcessDisplay: React.FC<ThinkingProcessDisplayProps> = ({ onInterrupt, onClose, extracting }) => {
+const ThinkingProcessDisplay: React.FC<ThinkingProcessDisplayProps> = ({ onInterrupt, onClose, extracting, inputType }) => {
   const [reasoningContent, setReasoningContent] = useState<string>('');
   const [textContent, setTextContent] = useState<string>('');
   const [theme, setTheme] = useState<string>('dark');
@@ -114,7 +115,7 @@ const ThinkingProcessDisplay: React.FC<ThinkingProcessDisplayProps> = ({ onInter
             lineHeight: 1.6,
           }}
         >
-          {textContent || '等待生成...'}
+          {textContent || (inputType === 'file' ? '文件读取中...' : '初始化中...')}
         </div>
       </div>
 
@@ -158,6 +159,12 @@ interface IntelligentExtractModalProps {
   currentCustomFieldValues?: Record<string, any>;
   currentRichTextContent?: string;
   currentDynamicChapters?: Chapter[];
+  isEdit: boolean;
+  categories: KnowledgebaseDocumentCategory[];
+  categoryId?: string;
+  onSaveBeforeExtract?: () => Promise<{success: boolean; knowledgeId?: string}>; // 保存知识前的回调，返回是否成功和真实的knowledgeId
+  onTitleUpdate?: (title: string) => void; // 标题更新回调
+  onStatusUpdate?: (knowledgeId: string) => void; // 状态更新回调（新增变为编辑）
   onCancel: () => void;
   onConfirm: (extractedData: {
     title?: string;
@@ -177,6 +184,12 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
   currentCustomFieldValues,
   currentRichTextContent,
   currentDynamicChapters,
+  isEdit,
+  categories,
+  categoryId,
+  onSaveBeforeExtract,
+  onTitleUpdate,
+  onStatusUpdate,
   onCancel,
   onConfirm,
 }) => {
@@ -267,88 +280,11 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
                 status.full_text || ''
               );
               
-              // 填充自定义字段值
-              if (extractedData.content) {
-                setCustomFieldValues(prev => ({
-                  ...prev,
-                  richTextContent: extractedData.content
-                }));
-              }
+              // 自动回填到知识配置
+              setTimeout(() => {
+                handleConfirm();
+              }, 500);
               
-              if (extractedData.custom_fields && Array.isArray(extractedData.custom_fields)) {
-                const newFieldValues: Record<string, any> = {};
-                extractedData.custom_fields.forEach((field: any) => {
-                  if (field.id && field.value !== undefined && field.value !== null) {
-                    newFieldValues[field.id] = field.value;
-                  }
-                });
-                setCustomFieldValues(prev => ({
-                  ...prev,
-                  ...newFieldValues
-                }));
-              }
-              
-              // 处理章节回填
-              if (extractedData.chapters && Array.isArray(extractedData.chapters)) {
-                const docConfig = selectedCategory?.document_config || {};
-                const chapterType = docConfig.chapter_type || 'fixed';
-                const isDynamicChapter = chapterType === 'dynamic';
-                
-                const newChapterFieldsValues: Record<string, any> = {};
-                extractedData.chapters.forEach((chapter: any) => {
-                  if (chapter.id && chapter.value !== undefined) {
-                    const chapterValues: Record<string, any> = {};
-                    if (chapter.type === 'form' && typeof chapter.value === 'object' && !Array.isArray(chapter.value)) {
-                      const fieldCodeToId = new Map(chapter.fields && Array.isArray(chapter.fields) ? chapter.fields.map((f: any) => [f.field_code, f.id]) : []);
-                      for (const [key, value] of Object.entries(chapter.value)) {
-                        const fieldId = fieldCodeToId.get(key) || key;
-                        chapterValues[fieldId] = value;
-                      }
-                    } else if (chapter.type === 'list' && Array.isArray(chapter.value)) {
-                      const fieldCodeToId = new Map();
-                      if (chapter.fields && Array.isArray(chapter.fields)) {
-                        chapter.fields.forEach((f: any) => {
-                          if (f.field_code && f.id) {
-                            fieldCodeToId.set(f.field_code, f.id);
-                          }
-                        });
-                      }
-                      const convertedListData = chapter.value.map((item: any) => {
-                        const convertedItem: Record<string, any> = {};
-                        for (const [key, value] of Object.entries(item)) {
-                          const fieldId = fieldCodeToId.get(key) || key;
-                          convertedItem[fieldId] = value;
-                        }
-                        return convertedItem;
-                      });
-                      chapterValues.list_data = convertedListData;
-                    } else if (chapter.type === 'rich_text' && typeof chapter.value === 'string') {
-                      chapterValues.rich_text_content = chapter.value;
-                    }
-                    if (Object.keys(chapterValues).length > 0) {
-                      newChapterFieldsValues[chapter.id] = chapterValues;
-                    }
-                  }
-                });
-                
-                if (isDynamicChapter) {
-                  setDynamicChapters(extractedData.chapters);
-                  setCustomFieldValues(prev => ({
-                    ...prev,
-                    chapter_fields_values: newChapterFieldsValues
-                  }));
-                } else {
-                  setCustomFieldValues(prev => ({
-                    ...prev,
-                    chapter_fields_values: {
-                      ...(prev.chapter_fields_values || {}),
-                      ...newChapterFieldsValues
-                    }
-                  }));
-                }
-              }
-              
-              message.success('智能提取成功，结果已回填到知识配置');
             } else {
               console.warn('提取完成，但extractedData为空');
               extractManagerRef.current.clearState(knowledgeId);
@@ -495,6 +431,11 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
               }));
             }
           }
+          
+          // 自动回填到知识配置
+          setTimeout(() => {
+            handleConfirm();
+          }, 500);
         }, 100);
       } else if (extractState?.status === 'extracting') {
         // 正在提取：使用轮询方式继续获取最新内容
@@ -516,12 +457,48 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
         if (extractState.extractId) {
           startPolling(extractState.extractId);
         } else {
-          // 如果没有extractId，尝试从后端查询
-          console.warn('No extractId found, trying to query from backend...');
-          // 由于无法直接查询，我们需要用户重新开始提取
-          message.warning('检测到提取状态，但无法获取提取任务ID，请重新开始提取');
-          extractManagerRef.current.clearState(knowledgeId);
-          setExtracting(false);
+          // 如果没有extractId，尝试从后端根据knowledgeId查询
+          const queryExtractIdFromBackend = async () => {
+            console.warn('No extractId found in localStorage, trying to query from backend...');
+            try {
+              const response = await knowledgebaseService.getIntelligentExtractStatusByKnowledgeId(knowledgeId);
+              if (response.code === 200 && response.data) {
+                const extractId = response.data.extract_id;
+                if (extractId) {
+                  // 保存extractId到localStorage
+                  extractManagerRef.current.setExtractId(knowledgeId, extractId);
+                  // 恢复提取内容
+                  if (response.data.full_reasoning) {
+                    streamRef.current.reasoningContent = response.data.full_reasoning;
+                  }
+                  if (response.data.full_text) {
+                    streamRef.current.textContent = response.data.full_text;
+                  }
+                  // 更新显示
+                  ThinkingProcessDisplay.updateData({
+                    reasoning_content: streamRef.current.reasoningContent,
+                    text: streamRef.current.textContent
+                  });
+                  // 开始轮询
+                  startPolling(extractId);
+                } else {
+                  message.warning('检测到提取状态，但无法获取提取任务ID，请重新开始提取');
+                  extractManagerRef.current.clearState(knowledgeId);
+                  setExtracting(false);
+                }
+              } else {
+                message.warning('检测到提取状态，但后端未找到对应任务，请重新开始提取');
+                extractManagerRef.current.clearState(knowledgeId);
+                setExtracting(false);
+              }
+            } catch (error) {
+              console.error('从后端查询提取状态失败:', error);
+              message.warning('检测到提取状态，但无法连接到后端查询，请重新开始提取');
+              extractManagerRef.current.clearState(knowledgeId);
+              setExtracting(false);
+            }
+          };
+          queryExtractIdFromBackend();
         }
       } else {
         // 无状态：初始化新状态
@@ -606,7 +583,17 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
       return false;
     }
     fileMapRef.current.set(file.uid, file);
-    setFileList(prev => [...prev, { uid: file.uid, name: file.name, size: file.size }]);
+    setFileList(prev => {
+      const newFileList = [...prev, { uid: file.uid, name: file.name, size: file.size }];
+
+      // 如果是第一个上传的文件且标题为空，立即填充标题（去掉后缀）
+      if (prev.length === 0 && !currentTitle && onTitleUpdate) {
+        const fileNameWithoutExt = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+        onTitleUpdate(fileNameWithoutExt);
+      }
+
+      return newFileList;
+    });
     return false;
   };
 
@@ -657,32 +644,57 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
     extractManagerRef.current.clearState(knowledgeId);
   };
 
+  const handleModalCancel = () => {
+    // 关闭弹窗时不中断提取，只隐藏弹窗
+    // 提取会继续在后台运行，下次打开弹窗可以继续查看结果
+    setShowProcessModal(false);
+    onCancel();
+  };
+
   const handleExtract = async () => {
     if (!selectedModelId) {
       message.error('请选择模型');
       return;
     }
-    
+
     if (inputType === 'file' && fileList.length === 0) {
       message.error('请上传文件');
       return;
     }
-    
+
     if (inputType === 'text' && !textContent.trim()) {
       message.error('请输入文本内容');
       return;
     }
 
+    // 新增知识时，先保存知识
+    let actualKnowledgeId = knowledgeId;
+    if (!isEdit && onSaveBeforeExtract) {
+      const result = await onSaveBeforeExtract();
+      if (!result.success) {
+        // 保存失败，不继续提取
+        return;
+      }
+      if (result.knowledgeId) {
+        // 使用真实的knowledgeId
+        actualKnowledgeId = result.knowledgeId;
+        // 通知父页面状态更新（从新增变为编辑）
+        if (onStatusUpdate) {
+          onStatusUpdate(result.knowledgeId);
+        }
+      }
+    }
+
     setExtracting(true);
     setExtractedResult(null);
     setShowProcessModal(true);
-    
+
     // 清空识别过程内容
     streamRef.current = { reasoningContent: '', textContent: '' };
     ThinkingProcessDisplay.updateData({ reasoning_content: '', text: '' });
-    
+
     abortControllerRef.current = new AbortController();
-    
+
     // 保存提取状态到localStorage（先设置为extracting，extractId会在收到第一个消息后更新）
     const extractParams = {
       inputType,
@@ -692,30 +704,30 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
       categoryId: selectedCategory?.id,
       deepThinking,
     };
-    extractManagerRef.current.setExtracting(knowledgeId, extractParams);
+    extractManagerRef.current.setExtracting(actualKnowledgeId, extractParams);
     
     try {
       let result: any;
-      
+
       // 流式回调：实时更新localStorage
       const onProgress = (data: { reasoning_content: string; text: string; extract_id?: string }) => {
         ThinkingProcessDisplay.updateData({ reasoning_content: data.reasoning_content, text: data.text });
-        streamRef.current = { 
-          reasoningContent: data.reasoning_content, 
-          textContent: data.text 
+        streamRef.current = {
+          reasoningContent: data.reasoning_content,
+          textContent: data.text
         };
         // 实时保存到localStorage
         extractManagerRef.current.updateStreamContent(
-          knowledgeId, 
-          data.reasoning_content, 
-          data.text 
+          actualKnowledgeId,
+          data.reasoning_content,
+          data.text
         );
         // 保存extract_id
         if (data.extract_id) {
-          extractManagerRef.current.setExtractId(knowledgeId, data.extract_id);
+          extractManagerRef.current.setExtractId(actualKnowledgeId, data.extract_id);
         }
       };
-      
+
       if (inputType === 'file') {
         const files = fileList.map(f => fileMapRef.current.get(f.uid)).filter(Boolean) as File[];
         result = await knowledgebaseService.intelligentExtractFromFileStream(
@@ -723,7 +735,7 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
           selectedModelId,
           extractPrompt,
           selectedCategory?.id || undefined,
-          knowledgeId,
+          actualKnowledgeId,
           deepThinking,
           onProgress,
           abortControllerRef.current.signal
@@ -734,18 +746,18 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
           extractPrompt,
           textContent,
           selectedCategory?.id || undefined,
-          knowledgeId,
+          actualKnowledgeId,
           deepThinking,
           onProgress,
           abortControllerRef.current.signal
         );
       }
-      
+
       console.log('流式提取完成，result:', result);
-      
+
       // 保存完成状态到localStorage（包含流式内容）
       extractManagerRef.current.setCompleted(
-        knowledgeId, 
+        actualKnowledgeId,
         result,
         streamRef.current.reasoningContent,
         streamRef.current.textContent
@@ -893,15 +905,25 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
     extractManagerRef.current.clearState(knowledgeId);
 
     const result: any = {};
-    
+
     // 处理标题
     if (overrideExisting) {
       if (extractedResult.title) {
         result.title = extractedResult.title;
+      } else if (fileList.length > 0) {
+        // 如果提取结果没有标题，则使用第一个上传的文件名称作为标题（去掉后缀）
+        const fileNameWithoutExt = fileList[0].name.substring(0, fileList[0].name.lastIndexOf('.')) || fileList[0].name;
+        result.title = fileNameWithoutExt;
       }
     } else {
-      if (!currentTitle && extractedResult.title) {
-        result.title = extractedResult.title;
+      if (!currentTitle) {
+        if (extractedResult.title) {
+          result.title = extractedResult.title;
+        } else if (fileList.length > 0) {
+          // 如果提取结果没有标题，则使用第一个上传的文件名称作为标题（去掉后缀）
+          const fileNameWithoutExt = fileList[0].name.substring(0, fileList[0].name.lastIndexOf('.')) || fileList[0].name;
+          result.title = fileNameWithoutExt;
+        }
       }
     }
     
@@ -1108,7 +1130,7 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
                 点击或拖拽文件到此区域上传
               </p>
               <p style={{ color: theme === 'dark' ? '#888' : '#999', fontSize: 12 }}>
-                支持上传文档、图片或音频文件
+                支持上传多个文档、图片或音频文件
               </p>
             </Upload.Dragger>
           </div>
@@ -1568,7 +1590,7 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
       <Modal
         title="智能提取"
         open={visible}
-        onCancel={onCancel}
+        onCancel={handleModalCancel}
         footer={null}
         width={1400}
       bodyStyle={{ maxHeight: '80vh', display: 'flex', flexDirection: 'column', paddingBottom: 0 }}
@@ -1686,10 +1708,11 @@ const IntelligentExtractModal: React.FC<IntelligentExtractModalProps> = ({
       bodyStyle={{ maxHeight: '70vh', padding: 20 }}
       centered
     >
-      <ThinkingProcessDisplay 
-        onInterrupt={handleInterrupt} 
+      <ThinkingProcessDisplay
+        onInterrupt={handleInterrupt}
         onClose={() => setShowProcessModal(false)}
         extracting={extracting}
+        inputType={inputType}
       />
     </Modal>
   </>
