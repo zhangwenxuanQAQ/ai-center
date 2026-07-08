@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Input, Button, Switch, Modal, Slider, message, Popconfirm, Tooltip, Dropdown, Empty, Spin, Popover, InputNumber, Select, Steps, Upload, List } from 'antd';
 import { SendOutlined, ClearOutlined, SettingOutlined, RobotOutlined, BulbOutlined, LoadingOutlined, DownOutlined, RightOutlined, CopyOutlined, ReloadOutlined, EditOutlined, InfoCircleOutlined, StopOutlined, PaperClipOutlined, FolderOpenOutlined, FileTextOutlined, UploadOutlined, CloseCircleOutlined, InboxOutlined, FilePdfOutlined, FileWordOutlined, FileImageOutlined, SoundOutlined, DownloadOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import DataSourceFileSelector from '../datasource/datasource data_select';
@@ -961,11 +961,108 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Enter发送消息，Ctrl+Enter或Shift+Enter换行
+    if (e.key === 'Enter') {
+      if (e.ctrlKey || e.shiftKey) {
+        // Ctrl+Enter或Shift+Enter：手动插入换行符
+        e.preventDefault();
+        const textarea = e.currentTarget;
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const newValue = inputValue.substring(0, start) + '\n' + inputValue.substring(end);
+        setInputValue(newValue);
+        // 设置光标位置到换行符之后
+        setTimeout(() => {
+          textarea.selectionStart = textarea.selectionEnd = start + 1;
+        }, 0);
+      } else {
+        // 纯Enter：阻止默认行为并发送消息
+        e.preventDefault();
+        handleSend();
+      }
     }
+  };
+
+  // 处理粘贴文件
+  const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData.items;
+    const files: File[] = [];
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind === 'file') {
+        const file = item.getAsFile();
+        if (file) {
+          // 检查是否是文件夹（文件夹的type通常是空字符串）
+          if (file.type === '' && file.size === 0) {
+            message.warning('不支持粘贴文件夹');
+            continue;
+          }
+          files.push(file);
+        }
+      }
+    }
+
+    if (files.length > 0) {
+      e.preventDefault();
+      for (const file of files) {
+        handleLocalFileUpload(file);
+      }
+      message.success(`已添加 ${files.length} 个文件`);
+    }
+  };
+
+  // 处理拖拽文件
+  const handleDrop = async (e: React.DragEvent<HTMLTextAreaElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const files: File[] = [];
+    const items = e.dataTransfer.items;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind === 'file') {
+        const entry = item.webkitGetAsEntry();
+        if (entry) {
+          if (entry.isDirectory) {
+            message.warning('不支持拖拽文件夹');
+            continue;
+          }
+          const file = item.getAsFile();
+          if (file) {
+            files.push(file);
+          }
+        }
+      }
+    }
+
+    // 如果items为空，尝试从files获取（某些浏览器不支持webkitGetAsEntry）
+    if (files.length === 0 && e.dataTransfer.files.length > 0) {
+      for (let i = 0; i < e.dataTransfer.files.length; i++) {
+        const file = e.dataTransfer.files[i];
+        // 检查是否是文件夹
+        if (file.type === '' && file.size === 0) {
+          message.warning('不支持拖拽文件夹');
+          continue;
+        }
+        files.push(file);
+      }
+    }
+
+    if (files.length > 0) {
+      for (const file of files) {
+        handleLocalFileUpload(file);
+      }
+      message.success(`已添加 ${files.length} 个文件`);
+    }
+  };
+
+  // 处理拖拽进入
+  const handleDragOver = (e: React.DragEvent<HTMLTextAreaElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
   };
 
   const handleClearMessages = async () => {
@@ -2279,9 +2376,21 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         )}
 
         {/* 工具调用阶段 */}
-        {(msg.step === 'tool_call' || msg.extra_content?.step === 'tool_call') && msg.tool_calls && msg.tool_calls.length > 0 && (
+        {(msg.step === 'tool_call' || msg.extra_content?.step === 'tool_call') && (
           <div className="tool-calls-container">
-            {msg.tool_calls.map((tc, tcIndex) => (
+            {/* 当tool_calls数组为空且status为start时，显示准备提示 */}
+            {(!msg.tool_calls || msg.tool_calls.length === 0) && msg.status === 'start' && (
+              <div className="tool-call-card tool-call-start">
+                <div className="tool-call-header">
+                  <div className="tool-call-header-left">
+                    <LoadingOutlined spin className="tool-call-icon-start" />
+                    <RightOutlined style={{ fontSize: 10 }} />
+                    <span className="tool-call-task-name">准备工具调用...</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            {msg.tool_calls && msg.tool_calls.length > 0 && msg.tool_calls.map((tc, tcIndex) => (
               <div key={tc.tool_call_id || `tc-${tcIndex}`} className={`tool-call-card tool-call-${tc.status}`}>
                 <div className="tool-call-header" onClick={() => toggleToolCall(tc.tool_call_id || `tc-${tcIndex}`)}>
                   <div className="tool-call-header-left">
@@ -2368,9 +2477,21 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         )}
 
         {/* 任务执行阶段 */}
-        {(msg.step === 'task_execution' || msg.extra_content?.step === 'task_execution') && msg.tool_calls && msg.tool_calls.length > 0 && (
+        {(msg.step === 'task_execution' || msg.extra_content?.step === 'task_execution') && (
           <div className="tool-calls-container">
-            {msg.tool_calls.map((tc, tcIndex) => (
+            {/* 当tool_calls数组为空且status为start时，显示准备提示 */}
+            {(!msg.tool_calls || msg.tool_calls.length === 0) && msg.status === 'start' && (
+              <div className="tool-call-card tool-call-start">
+                <div className="tool-call-header">
+                  <div className="tool-call-header-left">
+                    <LoadingOutlined spin className="tool-call-icon-start" />
+                    <RightOutlined style={{ fontSize: 10 }} />
+                    <span className="tool-call-task-name">准备任务执行...</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            {msg.tool_calls && msg.tool_calls.length > 0 && msg.tool_calls.map((tc, tcIndex) => (
               <div key={tc.tool_call_id || `tc-${tcIndex}`} className={`tool-call-card tool-call-${tc.status}`}>
                 <div className="tool-call-header" onClick={() => toggleToolCall(tc.tool_call_id || `tc-${tcIndex}`)}>
                   <div className="tool-call-header-left">
@@ -2995,9 +3116,21 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               )}
 
               {/* 任务执行阶段 */}
-              {(msg.step === 'task_execution' || msg.extra_content?.step === 'task_execution') && msg.tool_calls && msg.tool_calls.length > 0 && (
+              {(msg.step === 'task_execution' || msg.extra_content?.step === 'task_execution') && (
                 <div className="tool-calls-container">
-                  {msg.tool_calls.map((tc, tcIndex) => (
+                  {/* 当tool_calls数组为空且status为start时，显示准备提示 */}
+                  {(!msg.tool_calls || msg.tool_calls.length === 0) && msg.status === 'start' && (
+                    <div className="tool-call-card tool-call-start">
+                      <div className="tool-call-header">
+                        <div className="tool-call-header-left">
+                          <LoadingOutlined spin className="tool-call-icon-start" />
+                          <RightOutlined style={{ fontSize: 10 }} />
+                          <span className="tool-call-task-name">准备任务执行...</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {msg.tool_calls && msg.tool_calls.length > 0 && msg.tool_calls.map((tc, tcIndex) => (
                     <div key={tc.tool_call_id || `tc-${tcIndex}`} className={`tool-call-card tool-call-${tc.status}`}>
                       <div className="tool-call-header" onClick={() => toggleToolCall(tc.tool_call_id || `tc-${tcIndex}`)}>
                         <div className="tool-call-header-left">
@@ -3603,8 +3736,11 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               ref={inputRef}
               value={inputValue}
               onChange={e => setInputValue(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="输入消息... (Shift+Enter换行，Enter发送)"
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              placeholder="输入消息... (Ctrl/Shift+Enter换行，Enter发送)"
               autoSize={{ minRows: 5, maxRows: 12 }}
               className={`chat-input ${theme === 'dark' ? 'dark' : 'light'}`}
             />

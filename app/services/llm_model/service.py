@@ -537,9 +537,12 @@ class LLMModelService:
         # 测试模型
         result = ModelTestUtils.test_model(db_llm_model.model_type, model_config)
         
-        # 根据测试结果更新连接状态
+        # 根据测试结果更新连接状态和support_image字段
         if result['success']:
             db_llm_model.connection_status = 1  # 连接成功
+            # 更新support_image字段
+            if 'support_image' in result:
+                db_llm_model.support_image = result['support_image']
         else:
             db_llm_model.connection_status = 0  # 连接失败
         db_llm_model.updated_at = datetime.now()

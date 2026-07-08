@@ -77,9 +77,11 @@ const LLMModelManagement: React.FC = () => {
   const [hasTestedConnection, setHasTestedConnection] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<number>(-1);
+  const [testSupportImage, setTestSupportImage] = useState<boolean>(false);
   const [hasTestedEditConnection, setHasTestedEditConnection] = useState(false);
   const [testingEditConnection, setTestingEditConnection] = useState(false);
   const [editConnectionStatus, setEditConnectionStatus] = useState<number>(-1);
+  const [testEditSupportImage, setTestEditSupportImage] = useState<boolean>(false);
   const [originalEditModel, setOriginalEditModel] = useState<any>(null);
   
   const cardRefs = useRef<{ [key: string]: HTMLDivElement }>({});
@@ -392,6 +394,8 @@ const LLMModelManagement: React.FC = () => {
     setShowTagInput(false);
     setNewTag('');
     setHasTestedConnection(false);
+    setTestSupportImage(false);
+    setConnectionStatus(-1);
     form.setFieldsValue({ status: true, model_type: 'text' });
     setIsModalVisible(true);
   };
@@ -403,6 +407,8 @@ const LLMModelManagement: React.FC = () => {
     setShowEditTagInput(false);
     setNewEditTag('');
     setHasTestedEditConnection(false);
+    setTestEditSupportImage(model.support_image || false);
+    setEditConnectionStatus(-1);
     setOriginalEditModel({
       name: model.name,
       endpoint: model.endpoint,
@@ -425,7 +431,7 @@ const LLMModelManagement: React.FC = () => {
     try {
       const values = await form.validateFields();
       
-      let supportImage = false;
+      let supportImage = testSupportImage;
       
       if (!hasTestedConnection) {
         const testData = {
@@ -452,6 +458,7 @@ const LLMModelManagement: React.FC = () => {
           
           message.success({ content: `连接测试成功！`, key });
           supportImage = result.support_image || false;
+          setTestSupportImage(supportImage);
           setConnectionStatus(1);
         } catch (error: any) {
           setTestingConnection(false);
@@ -511,7 +518,7 @@ const LLMModelManagement: React.FC = () => {
         originalEditModel.model_type !== values.model_type
       );
       
-      let supportImage = false;
+      let supportImage = testEditSupportImage;
       
       if (hasParamsChanged && !hasTestedEditConnection) {
         const testData = {
@@ -534,10 +541,12 @@ const LLMModelManagement: React.FC = () => {
           if (result.success) {
             message.success({ content: `连接测试成功！`, key });
             supportImage = result.support_image || false;
+            setTestEditSupportImage(supportImage);
             setEditConnectionStatus(1);
           } else {
             message.error({ content: `连接测试失败: ${result.message}`, key });
             setEditConnectionStatus(0);
+            setTestEditSupportImage(false);
             return;
           }
         } catch (error: any) {
@@ -1239,10 +1248,12 @@ const LLMModelManagement: React.FC = () => {
                   message.success({ content: `连接测试成功！`, key });
                   setHasTestedConnection(true);
                   setConnectionStatus(1);
+                  setTestSupportImage(result.support_image || false);
                 } else {
                   message.error({ content: `连接测试失败: ${result.message}`, key });
                   setHasTestedConnection(false);
                   setConnectionStatus(0);
+                  setTestSupportImage(false);
                   form.setFieldValue('status', false);
                 }
               } catch (error: any) {
@@ -1286,10 +1297,13 @@ const LLMModelManagement: React.FC = () => {
                 if (result.success) {
                   message.success({ content: `连接测试成功！`, key });
                   setConnectionStatus(1);
+                  setTestSupportImage(result.support_image || false);
+                  setHasTestedConnection(true);
                   handleSubmit();
                 } else {
                   message.error({ content: `连接测试失败: ${result.message}`, key });
                   setConnectionStatus(0);
+                  setTestSupportImage(false);
                   form.setFieldValue('status', false);
                 }
               } catch (error: any) {
@@ -1456,10 +1470,12 @@ const LLMModelManagement: React.FC = () => {
                     message.success({ content: `连接测试成功！`, key });
                     setEditConnectionStatus(1);
                     setHasTestedEditConnection(true);
+                    setTestEditSupportImage(result.support_image || false);
                   } else {
                     message.error({ content: `连接测试失败: ${result.message}`, key });
                     setEditConnectionStatus(0);
                     setHasTestedEditConnection(false);
+                    setTestEditSupportImage(false);
                     editForm.setFieldValue('status', false);
                   }
                 }
@@ -1501,10 +1517,13 @@ const LLMModelManagement: React.FC = () => {
                   if (result.success) {
                     message.success({ content: `连接测试成功！`, key });
                     setEditConnectionStatus(1);
+                    setTestEditSupportImage(result.support_image || false);
+                    setHasTestedEditConnection(true);
                     handleEditSubmit();
                   } else {
                     message.error({ content: `连接测试失败: ${result.message}`, key });
                     setEditConnectionStatus(0);
+                    setTestEditSupportImage(false);
                     editForm.setFieldValue('status', false);
                   }
                 }
