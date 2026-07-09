@@ -637,5 +637,182 @@ export const chatService = {
       console.error('下载文件失败:', error);
       throw error;
     }
+  },
+
+  /**
+   * 查询指定对话的流式状态
+   * 用于F5刷新后检测是否有正在进行的流式任务
+   * @param chatId - 对话ID
+   */
+  getStreamingStatus: async (chatId: string): Promise<{ is_streaming: boolean; status: string; chunks_count: number }> => {
+    return http.get<{ is_streaming: boolean; status: string; chunks_count: number }>(`/aicenter/v1/chat/streaming_status/${chatId}`);
+  },
+
+  /**
+   * 重连流式输出
+   * F5刷新后，通过此方法重新获取流式数据（包含历史chunks + 新chunks）
+   * @param chatId - 对话ID
+   * @param onMessage - 消息回调函数
+   * @param onError - 错误回调函数
+   * @param onComplete - 完成回调函数
+   */
+  reconnectStream: async (
+    chatId: string,
+    onMessage?: (data: any) => void,
+    onError?: (error: any) => void,
+    onComplete?: () => void
+  ) => {
+    // 中断该对话之前的请求
+    const existingController = chatService.abortControllersMap.get(chatId);
+    if (existingController) {
+      existingController.abort();
+    }
+
+    const abortController = new AbortController();
+    chatService.abortControllersMap.set(chatId, abortController);
+
+    // 初始化流式消息缓存
+    chatService.streamingMessagesMap.set(chatId, {
+      messages: [],
+      isStreaming: true,
+      userMessageId: '',
+      assistantMessageId: '',
+      currentContent: '',
+      currentReasoningContent: ''
+    });
+
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+    const url = `${API_BASE_URL}/aicenter/v1/chat/reconnect_stream/${chatId}`;
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'text/event-stream',
+        },
+        signal: abortController.signal
+      });
+
+      if (!response.ok) {
+        if (chatId) {
+          chatService.streamingMessagesMap.delete(chatId);
+        }
+        if (onError) {
+          onError(new Error('重连失败'));
+        }
+        return;
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        if (chatId) {
+          chatService.streamingMessagesMap.delete(chatId);
+        }
+        if (onError) {
+          onError(new Error('No response body'));
+        }
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            break;
+          }
+
+          buffer += decoder.decode(value, { stream: true });
+
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const dataStr = line.substring(6);
+              if (dataStr === '[DONE]') {
+                // 完成时更新缓存状态
+                const cache = chatService.streamingMessagesMap.get(chatId);
+                if (cache) {
+                  cache.isStreaming = false;
+                }
+                if (onComplete) {
+                  onComplete();
+                }
+                return;
+              }
+
+              try {
+                const data = JSON.parse(dataStr);
+                // 将消息存储到缓存中
+                chatService.addToStreamingCache(chatId, data);
+                if (onMessage) {
+                  onMessage(data);
+                }
+              } catch (error) {
+                console.error('Error parsing SSE data:', error);
+              }
+            }
+          }
+        }
+
+        // 处理缓冲区中剩余的数据
+        if (buffer.trim()) {
+          const lines = buffer.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const dataStr = line.substring(6);
+              if (dataStr === '[DONE]') {
+                const cache = chatService.streamingMessagesMap.get(chatId);
+                if (cache) {
+                  cache.isStreaming = false;
+                }
+                if (onComplete) {
+                  onComplete();
+                }
+                return;
+              }
+              try {
+                const data = JSON.parse(dataStr);
+                chatService.addToStreamingCache(chatId, data);
+                if (onMessage) {
+                  onMessage(data);
+                }
+              } catch (error) {
+                console.error('Error parsing SSE data:', error);
+              }
+            }
+          }
+        }
+
+        // 流结束但未收到[DONE]
+        const cache = chatService.streamingMessagesMap.get(chatId);
+        if (cache) {
+          cache.isStreaming = false;
+        }
+        if (onComplete) {
+          onComplete();
+        }
+      } catch (error: any) {
+        if (error.name === 'AbortError') {
+          console.log('重连请求被中止');
+        } else {
+          console.error('重连流式读取错误:', error);
+          if (onError) {
+            onError(error);
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error('重连失败:', error);
+      if (chatId) {
+        chatService.streamingMessagesMap.delete(chatId);
+      }
+      if (onError) {
+        onError(error);
+      }
+    }
   }
 };

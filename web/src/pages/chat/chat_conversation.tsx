@@ -218,12 +218,9 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           }, 200);
         }
       } else {
-        // 无缓存：正常加载历史消息
-        setMessages([]);
-        setLoading(true);
-        shouldScrollToBottomOnLoad.current = true;
-        fetchMessages(conversation.id);
-        fetchConversationConfig(conversation.id);
+        // 无内存缓存：可能是F5刷新或首次进入
+        // 检查后端是否有正在进行的流式任务，如果有则重连
+        checkAndReconnectStream(conversation.id);
       }
     } else {
       // 新建对话时，清空消息列表
@@ -537,7 +534,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     }
   };
 
-  const fetchMessages = async (conversationId: string) => {
+  const fetchMessages = async (conversationId: string): Promise<Message[]> => {
     setLoading(true);
     try {
       const result = await chatService.getMessages(conversationId, 1, 50);
@@ -589,7 +586,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         };
       });
       setMessages(mappedMessages);
-      
+
       const durations: Record<string, number> = {};
       mappedMessages.forEach((msg: Message) => {
         if (msg.reasoning_time) {
@@ -597,11 +594,194 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         }
       });
       setThinkingDuration(durations);
+      return mappedMessages;
     } catch (error) {
       console.error('Failed to fetch messages:', error);
       setMessages([]);
+      return [];
     } finally {
       setLoading(false);
+    }
+  };
+
+  /**
+   * 检查并重连流式输出（F5刷新后恢复）
+   * 检查后端是否有正在进行的流式任务，如果有则重连获取所有流式数据
+   */
+  const checkAndReconnectStream = async (chatId: string) => {
+    try {
+      // 加载历史消息
+      const historyMessages = await fetchMessages(chatId);
+      fetchConversationConfig(chatId);
+
+      // 检查后端是否有正在进行的流式任务
+      const statusResult = await chatService.getStreamingStatus(chatId);
+      const statusData = (statusResult as any)?.data || statusResult;
+      if (statusData?.is_streaming) {
+        // 后端有正在进行的流式任务，重连获取流式数据
+        // 初始化流式消息ref，用于后续更新
+        streamingMessagesRef.current[chatId] = [...historyMessages];
+        setLoading(true);
+        shouldScrollToBottomOnLoad.current = true;
+
+        // idTracker用于匹配消息
+        const idTracker = { assistant: '', user: '' };
+
+        chatService.reconnectStream(
+          chatId,
+          (data) => {
+            // 处理重连接收到的SSE数据（与发送消息时的处理逻辑一致）
+            const status = data.status || 'running';
+            const stepId = data.step_id;
+
+            // 更新idTracker
+            if (data.assistant_message_id) {
+              idTracker.assistant = data.assistant_message_id;
+            }
+            if (data.user_message_id) {
+              idTracker.user = data.user_message_id;
+            }
+            if (data.chat_id) {
+              // 记录thinkingMessageId
+              if (idTracker.assistant && currentChatIdRef.current === chatId) {
+                setThinkingMessageId(idTracker.assistant);
+              }
+            }
+
+            // 处理 error 状态
+            if (status === 'error') {
+              updateStreamingMessages(chatId, prev => {
+                let updatedMessages = prev;
+                if (data.user_message_id) {
+                  updatedMessages = prev.map(msg => {
+                    if (msg.role === 'user' && (msg.id === idTracker.user || msg.message_id === idTracker.user)) {
+                      idTracker.user = data.user_message_id;
+                      return { ...msg, id: data.user_message_id, message_id: data.user_message_id };
+                    }
+                    return msg;
+                  });
+                }
+                const existingMsg = updatedMessages.find(msg =>
+                  msg.role === 'assistant' &&
+                  (msg.step_id === stepId || msg.message_id === data.assistant_message_id || msg.id === idTracker.assistant)
+                );
+                if (existingMsg) {
+                  return updatedMessages.map(msg => {
+                    if (msg.role === 'assistant' && (msg.step_id === stepId || msg.message_id === data.assistant_message_id || msg.id === idTracker.assistant)) {
+                      return {
+                        ...msg,
+                        content: data.text || '抱歉，处理您的请求时出现错误。',
+                        status: 'error',
+                        reasoning_content: undefined,
+                        reasoning_end: undefined
+                      };
+                    }
+                    return msg;
+                  });
+                } else {
+                  const errorMsg: Message = {
+                    id: stepId || idTracker.assistant,
+                    message_id: data.assistant_message_id,
+                    role: 'assistant',
+                    content: data.text || '抱歉，处理您的请求时出现错误。',
+                    created_at: new Date().toISOString(),
+                    status: 'error',
+                    step: data.step,
+                    step_id: stepId,
+                    avatar: data.avatar
+                  };
+                  return [...updatedMessages, errorMsg];
+                }
+              });
+              return;
+            }
+
+            // 处理 start 状态（新步骤开始）
+            if (status === 'start' && stepId && data.step) {
+              updateStreamingMessages(chatId, prev => {
+                let updatedMessages = prev;
+                if (data.user_message_id) {
+                  updatedMessages = prev.map(msg => {
+                    if (msg.role === 'user' && (msg.id === idTracker.user || msg.message_id === idTracker.user)) {
+                      idTracker.user = data.user_message_id;
+                      return { ...msg, id: data.user_message_id, message_id: data.user_message_id };
+                    }
+                    return msg;
+                  });
+                }
+                const existingStepMsg = updatedMessages.find(msg => msg.step_id === stepId && msg.role === 'assistant');
+                if (existingStepMsg) {
+                  return updatedMessages.map(msg => {
+                    if (msg.role === 'user') return processSSEMessageUpdate(msg, data, idTracker);
+                    if (msg.step_id === stepId) return processSSEMessageUpdate(msg, data, idTracker);
+                    return msg;
+                  });
+                }
+                const initialMsgIndex = updatedMessages.findIndex(msg => msg.role === 'assistant' && !msg.step_id && msg.status === 'start');
+                const newStepMsg: Message = {
+                  id: stepId,
+                  message_id: data.assistant_message_id,
+                  role: 'assistant',
+                  content: '',
+                  created_at: new Date().toISOString(),
+                  status: 'start',
+                  step: data.step,
+                  step_id: stepId,
+                  reasoning_content: '',
+                  reasoning_end: false,
+                  avatar: data.avatar,
+                  tool_calls: []
+                };
+                if (data.tool_call) {
+                  newStepMsg.tool_calls = [data.tool_call];
+                }
+                if (initialMsgIndex >= 0) {
+                  const newMessages = updatedMessages.filter((_, idx) => idx !== initialMsgIndex);
+                  return [...newMessages, newStepMsg];
+                }
+                return [...updatedMessages, newStepMsg];
+              });
+            } else {
+              // 处理内容/推理更新
+              updateStreamingMessages(chatId, prev => prev.map(msg => {
+                if (msg.role === 'user') return processSSEMessageUpdate(msg, data, idTracker);
+                if (!stepId) return processSSEMessageUpdate(msg, data, idTracker);
+                if (msg.step_id === stepId) return processSSEMessageUpdate(msg, data, idTracker);
+                return msg;
+              }));
+            }
+          },
+          (error) => {
+            console.error('重连流式输出失败:', error);
+            // 标记所有运行中的消息为done
+            updateStreamingMessages(chatId, prev => prev.map(msg => {
+              if (msg.role === 'assistant' && msg.status && msg.status !== 'done' && msg.status !== 'stop') {
+                return { ...msg, status: 'done' };
+              }
+              return msg;
+            }));
+            if (currentChatIdRef.current === chatId) {
+              setLoading(false);
+              setThinkingMessageId(null);
+            }
+          },
+          () => {
+            // 流式完成，标记所有运行中的消息为done
+            updateStreamingMessages(chatId, prev => prev.map(msg => {
+              if (msg.role === 'assistant' && msg.status && msg.status !== 'done' && msg.status !== 'stop') {
+                return { ...msg, status: 'done' };
+              }
+              return msg;
+            }));
+            if (currentChatIdRef.current === chatId) {
+              setLoading(false);
+              setThinkingMessageId(null);
+            }
+          }
+        );
+      }
+    } catch (error) {
+      console.error('检查流式状态失败:', error);
     }
   };
 

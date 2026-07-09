@@ -21,6 +21,8 @@ from app.database.models import Chat
 from app.utils.response import ResponseUtil, ApiResponse
 from app.core.exceptions import ResourceNotFoundError
 from app.services.chat.file_utils import get_file_from_datasource
+from app.core.chat.stream_manager import ChatStreamManager
+from app.database.redis_utils import redis_utils
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -337,52 +339,90 @@ async def chat_completions(
                     logger.error(f"更新chat表失败: {e}")
         
         if chat_request.stream:
-            async def generate():
-                current_chat_id = None
-                has_error = False
-                try:
-                    async for chunk in ChatCoreService.chat_stream(
-                        user_id=user_id,
-                        query=chat_request.query,
-                        model_id=chat_request.model_id,
-                        chatbot_id=chat_request.chatbot_id,
-                        chat_id=chat_request.chat_id,
-                        config=chat_request.config,
-                        message_id=chat_request.message_id,
-                        system_prompt=chat_request.system_prompt
-                    ):
-                        # 记录chat_id用于停止时更新消息
-                        if chunk.get('chat_id'):
-                            current_chat_id = chunk['chat_id']
-                        
-                        # 正常返回所有chunk，包括error响应
-                        yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
-                        await asyncio.sleep(0)
-                        
-                        # 记录是否有错误，但不提前返回
-                        if 'error' in chunk:
-                            has_error = True
+            # 使用后台任务+Redis模式：后台任务持续运行chat_stream并将chunks存入Redis，
+            # HTTP响应从Redis读取chunks发送给客户端。
+            # 这样即使客户端断开连接（如F5刷新），后台任务仍继续运行，
+            # 客户端可通过重连端点接着获取剩余输出。
+            stream_chat_id = chat_request.chat_id
 
-                    # 无论是否错误，最终都返回[DONE]消息
-                    yield "data: [DONE]\n\n"
-                except GeneratorExit:
-                    raise
-                except Exception as e:
-                    print(f"Error in generate: {e}")
-                    # 即使发生异常，也尝试返回[DONE]
-                    yield "data: [DONE]\n\n"
-                    raise
+            if stream_chat_id and redis_utils.is_available:
+                # 启动后台流式任务
+                chat_stream_gen = ChatCoreService.chat_stream(
+                    user_id=user_id,
+                    query=chat_request.query,
+                    model_id=chat_request.model_id,
+                    chatbot_id=chat_request.chatbot_id,
+                    chat_id=chat_request.chat_id,
+                    config=chat_request.config,
+                    message_id=chat_request.message_id,
+                    system_prompt=chat_request.system_prompt
+                )
+                await ChatStreamManager.start_background_stream(stream_chat_id, chat_stream_gen)
 
-            return StreamingResponse(
-                generate(),
-                media_type="text/event-stream",
-                headers={
-                    "Cache-Control": "no-cache",
-                    "Connection": "keep-alive",
-                    "X-Accel-Buffering": "no",
-                    "Transfer-Encoding": "chunked"
-                }
-            )
+                async def generate_from_redis():
+                    """从Redis读取流式数据并发送给客户端"""
+                    try:
+                        async for sse_data in ChatStreamManager.stream_from_redis(stream_chat_id, 0):
+                            yield sse_data
+                            await asyncio.sleep(0)
+                    except GeneratorExit:
+                        # 客户端断开连接，正常退出（后台任务仍继续运行）
+                        raise
+                    except Exception as e:
+                        print(f"Error in generate_from_redis: {e}")
+                        yield "data: [DONE]\n\n"
+                        raise
+
+                return StreamingResponse(
+                    generate_from_redis(),
+                    media_type="text/event-stream",
+                    headers={
+                        "Cache-Control": "no-cache",
+                        "Connection": "keep-alive",
+                        "X-Accel-Buffering": "no",
+                        "Transfer-Encoding": "chunked"
+                    }
+                )
+            else:
+                # 无chat_id或Redis不可用时，回退到原始直接流式模式
+                async def generate():
+                    current_chat_id = None
+                    has_error = False
+                    try:
+                        async for chunk in ChatCoreService.chat_stream(
+                            user_id=user_id,
+                            query=chat_request.query,
+                            model_id=chat_request.model_id,
+                            chatbot_id=chat_request.chatbot_id,
+                            chat_id=chat_request.chat_id,
+                            config=chat_request.config,
+                            message_id=chat_request.message_id,
+                            system_prompt=chat_request.system_prompt
+                        ):
+                            if chunk.get('chat_id'):
+                                current_chat_id = chunk['chat_id']
+                            yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+                            await asyncio.sleep(0)
+                            if 'error' in chunk:
+                                has_error = True
+                        yield "data: [DONE]\n\n"
+                    except GeneratorExit:
+                        raise
+                    except Exception as e:
+                        print(f"Error in generate: {e}")
+                        yield "data: [DONE]\n\n"
+                        raise
+
+                return StreamingResponse(
+                    generate(),
+                    media_type="text/event-stream",
+                    headers={
+                        "Cache-Control": "no-cache",
+                        "Connection": "keep-alive",
+                        "X-Accel-Buffering": "no",
+                        "Transfer-Encoding": "chunked"
+                    }
+                )
         else:
             result = ChatCoreService.chat(
                 user_id=user_id,
@@ -446,6 +486,84 @@ async def stop_chat(
     ChatStopManager().request_stop(stop_request.chat_id)
     
     return ResponseUtil.success(data={"updated_count": updated_count}, message="已停止回答")
+
+
+@router.get("/streaming_status/{chat_id}", summary="查询流式状态")
+async def get_streaming_status(
+    request: Request,
+    chat_id: str
+):
+    """
+    查询指定对话的流式处理状态
+
+    用于F5刷新后检测是否有正在进行的流式任务。
+
+    Args:
+        request: 请求对象
+        chat_id: 对话ID
+
+    Returns:
+        ApiResponse: 包含is_streaming、status和chunks_count字段
+    """
+    status = ChatStreamManager.get_status(chat_id)
+    chunks_count = ChatStreamManager.get_chunks_count(chat_id)
+
+    return ResponseUtil.success(data={
+        "is_streaming": status == "streaming",
+        "status": status,
+        "chunks_count": chunks_count
+    })
+
+
+@router.get("/reconnect_stream/{chat_id}", summary="重连流式输出")
+async def reconnect_stream(
+    request: Request,
+    chat_id: str
+):
+    """
+    重连流式输出
+
+    在F5刷新后，前端通过此端点重新获取流式数据。
+    从Redis list的开头读取所有已存储的chunks（包含历史输出），
+    然后继续读取新产生的chunks，直到收到[DONE]标记。
+
+    Args:
+        request: 请求对象
+        chat_id: 对话ID
+
+    Returns:
+        StreamingResponse: SSE流式响应
+    """
+    status = ChatStreamManager.get_status(chat_id)
+
+    # 如果没有流式记录，返回空响应
+    if not status:
+        return ResponseUtil.error(message="没有找到流式记录")
+
+    async def generate_reconnect():
+        """从Redis读取所有历史chunks + 新chunks，发送给客户端"""
+        try:
+            # 从索引0开始读取，获取所有已存储的chunks + 继续读取新chunks
+            async for sse_data in ChatStreamManager.stream_from_redis(chat_id, 0):
+                yield sse_data
+                await asyncio.sleep(0)
+        except GeneratorExit:
+            raise
+        except Exception as e:
+            print(f"Error in generate_reconnect: {e}")
+            yield "data: [DONE]\n\n"
+            raise
+
+    return StreamingResponse(
+        generate_reconnect(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Transfer-Encoding": "chunked"
+        }
+    )
 
 
 class DownloadFileRequest(BaseModel):
