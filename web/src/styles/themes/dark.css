@@ -399,6 +399,18 @@ body[data-theme="dark"] div.ant-tree-select-dropdown div.ant-select-tree-node-co
   background: rgba(255, 255, 255, 0.08) !important;
 }
 
+body[data-theme="dark"] .ant-tree-select-dropdown .ant-select-tree-node-content-wrapper.ant-select-tree-node-selected,
+body[data-theme="dark"] div.ant-tree-select-dropdown div.ant-select-tree-node-content-wrapper.ant-select-tree-node-selected {
+  background: linear-gradient(135deg, rgba(90, 111, 214, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%) !important;
+  color: #fff !important;
+}
+
+body[data-theme="dark"] .ant-tree-select-dropdown .ant-select-tree-treenode-selected .ant-select-tree-node-content-wrapper,
+body[data-theme="dark"] div.ant-tree-select-dropdown div.ant-select-tree-treenode-selected div.ant-select-tree-node-content-wrapper {
+  background: linear-gradient(135deg, rgba(90, 111, 214, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%) !important;
+  color: #fff !important;
+}
+
 body[data-theme="dark"] .ant-select-item,
 body[data-theme="dark"] div.ant-select-item {
   color: rgba(255, 255, 255, 0.75) !important;

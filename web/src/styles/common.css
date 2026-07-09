@@ -502,16 +502,154 @@ body[data-theme="dark"] .ant-form-item-label > label {
   color: var(--dark-text-secondary);
 }
 
-body[data-theme="light"] .ant-tag {
+body[data-theme="light"] .ant-tag:not([class*="ant-tag-"]) {
   background: rgba(0, 0, 0, 0.05);
   border-color: var(--light-border);
   color: var(--light-text-secondary);
 }
 
-body[data-theme="dark"] .ant-tag {
+body[data-theme="dark"] .ant-tag:not([class*="ant-tag-"]) {
   background: rgba(255, 255, 255, 0.05);
   border-color: var(--dark-border);
   color: var(--dark-text-secondary);
+}
+
+/* 白天主题预设颜色标签样式 */
+body[data-theme="light"] .ant-tag-green {
+  background: #f6ffed !important;
+  border-color: #b7eb8f !important;
+  color: #389e0d !important;
+}
+
+body[data-theme="light"] .ant-tag-blue {
+  background: #e6f7ff !important;
+  border-color: #91d5ff !important;
+  color: #096dd9 !important;
+}
+
+body[data-theme="light"] .ant-tag-orange,
+body[data-theme="light"] .ant-tag-gold {
+  background: #fff7e6 !important;
+  border-color: #ffd591 !important;
+  color: #d46b08 !important;
+}
+
+body[data-theme="light"] .ant-tag-red,
+body[data-theme="light"] .ant-tag-volcano {
+  background: #fff1f0 !important;
+  border-color: #ffa39e !important;
+  color: #cf1322 !important;
+}
+
+body[data-theme="light"] .ant-tag-cyan {
+  background: #e6fffb !important;
+  border-color: #87e8de !important;
+  color: #08979c !important;
+}
+
+body[data-theme="light"] .ant-tag-purple {
+  background: #f9f0ff !important;
+  border-color: #d3adf7 !important;
+  color: #722ed1 !important;
+}
+
+body[data-theme="light"] .ant-tag-success {
+  background: #f6ffed !important;
+  border-color: #b7eb8f !important;
+  color: #389e0d !important;
+}
+
+body[data-theme="light"] .ant-tag-processing {
+  background: #e6f7ff !important;
+  border-color: #91d5ff !important;
+  color: #096dd9 !important;
+}
+
+body[data-theme="light"] .ant-tag-error {
+  background: #fff1f0 !important;
+  border-color: #ffa39e !important;
+  color: #cf1322 !important;
+}
+
+body[data-theme="light"] .ant-tag-warning {
+  background: #fff7e6 !important;
+  border-color: #ffd591 !important;
+  color: #d46b08 !important;
+}
+
+body[data-theme="light"] .ant-tag-default {
+  background: #fafafa !important;
+  border-color: #d9d9d9 !important;
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+/* 夜间主题预设颜色标签样式 */
+body[data-theme="dark"] .ant-tag-green {
+  background: rgba(82, 196, 26, 0.15) !important;
+  border-color: rgba(82, 196, 26, 0.3) !important;
+  color: #73d13d !important;
+}
+
+body[data-theme="dark"] .ant-tag-blue {
+  background: rgba(24, 144, 255, 0.15) !important;
+  border-color: rgba(24, 144, 255, 0.3) !important;
+  color: #40a9ff !important;
+}
+
+body[data-theme="dark"] .ant-tag-orange,
+body[data-theme="dark"] .ant-tag-gold {
+  background: rgba(250, 140, 22, 0.15) !important;
+  border-color: rgba(250, 140, 22, 0.3) !important;
+  color: #ffa940 !important;
+}
+
+body[data-theme="dark"] .ant-tag-red,
+body[data-theme="dark"] .ant-tag-volcano {
+  background: rgba(245, 34, 45, 0.15) !important;
+  border-color: rgba(245, 34, 45, 0.3) !important;
+  color: #ff7875 !important;
+}
+
+body[data-theme="dark"] .ant-tag-cyan {
+  background: rgba(19, 194, 194, 0.15) !important;
+  border-color: rgba(19, 194, 194, 0.3) !important;
+  color: #36cfc9 !important;
+}
+
+body[data-theme="dark"] .ant-tag-purple {
+  background: rgba(114, 46, 209, 0.15) !important;
+  border-color: rgba(114, 46, 209, 0.3) !important;
+  color: #9254de !important;
+}
+
+body[data-theme="dark"] .ant-tag-success {
+  background: rgba(82, 196, 26, 0.15) !important;
+  border-color: rgba(82, 196, 26, 0.3) !important;
+  color: #73d13d !important;
+}
+
+body[data-theme="dark"] .ant-tag-processing {
+  background: rgba(24, 144, 255, 0.15) !important;
+  border-color: rgba(24, 144, 255, 0.3) !important;
+  color: #40a9ff !important;
+}
+
+body[data-theme="dark"] .ant-tag-error {
+  background: rgba(245, 34, 45, 0.15) !important;
+  border-color: rgba(245, 34, 45, 0.3) !important;
+  color: #ff7875 !important;
+}
+
+body[data-theme="dark"] .ant-tag-warning {
+  background: rgba(250, 140, 22, 0.15) !important;
+  border-color: rgba(250, 140, 22, 0.3) !important;
+  color: #ffa940 !important;
+}
+
+body[data-theme="dark"] .ant-tag-default {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: rgba(255, 255, 255, 0.65) !important;
 }
 
 body[data-theme="light"] .ant-menu {

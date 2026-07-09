@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿/* ==================== 白天模式主题样式 ==================== */
+﻿﻿﻿/* ==================== 白天模式主题样式 ==================== */
 
 body[data-theme="light"] .ant-card-bordered:not([data-card-type="model"]) {
   border-radius: 16px !important;
@@ -560,6 +560,16 @@ body[data-theme="light"] div.ant-pagination-options {
 body[data-theme="light"] .ant-switch-checked,
 body[data-theme="light"] button.ant-switch-checked {
   background: linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%) !important;
+}
+
+body[data-theme="light"] .ant-switch:not(.ant-switch-checked),
+body[data-theme="light"] button.ant-switch:not(.ant-switch-checked) {
+  background: rgba(0, 0, 0, 0.25) !important;
+}
+
+body[data-theme="light"] .ant-switch:not(.ant-switch-checked) .ant-switch-inner,
+body[data-theme="light"] button.ant-switch:not(.ant-switch-checked) .ant-switch-inner {
+  color: rgba(0, 0, 0, 0.85) !important;
 }
 
 /* Radio 样式 */
