@@ -49,36 +49,30 @@ class ModelTestUtils:
                     'support_image': False
                 }
 
-            # 文本生成成功（即使返回空内容也算连接成功）
-            if response['text'] is None or not response['text'].strip():
-                return {
-                    'success': True,
-                    'message': "测试成功！模型连接正常，但返回了空结果",
-                    'support_image': False
-                }
-
-            # 文本生成成功，现在测试图片支持能力
             image_path = get_test_image_path('support_image_test.jpg')
             support_image = False
 
             if image_path.exists():
-                # 测试图片识别
                 test_prompt = "请描述这张图片的内容"
                 try:
-                    # 将图片转换为base64
                     import base64
                     with open(image_path, 'rb') as f:
                         image_data = f.read()
                     image_base64 = base64.b64encode(image_data).decode('utf-8')
 
-                    # 调用模型识别图片
                     image_response = model.generate(test_prompt, image=image_base64, max_tokens=10, deep_thinking=False)
 
                     if 'text' in image_response and image_response['text'] and image_response['text'].strip() and 'error' not in image_response:
                         support_image = True
                 except Exception:
-                    # 图片识别失败，不支持图片
                     pass
+
+            if response['text'] is None or not response['text'].strip():
+                return {
+                    'success': True,
+                    'message': "测试成功！模型连接正常，但返回了空结果" + ("，并支持图片识别" if support_image else ""),
+                    'support_image': support_image
+                }
 
             return {
                 'success': True,

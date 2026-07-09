@@ -135,6 +135,23 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  // 追踪每个对话的流式消息（用于切换对话后恢复完整消息状态）
+  // key: conversationId, value: 该对话流式过程中的完整消息数组
+  const streamingMessagesRef = useRef<Record<string, Message[]>>({});
+
+  // 更新流式消息：同时更新ref和state（仅当当前对话匹配时更新state）
+  // 这样切换对话后流式消息仍会在ref中更新，切回来时可以恢复
+  const updateStreamingMessages = (chatId: string, updater: (prev: Message[]) => Message[]) => {
+    if (!chatId) return;
+    const prev = streamingMessagesRef.current[chatId] || [];
+    const newMsgs = updater(prev);
+    streamingMessagesRef.current[chatId] = newMsgs;
+    // 仅当当前显示的对话是流式对话时才更新state，避免污染其他对话的显示
+    if (currentChatIdRef.current === chatId) {
+      setMessages(newMsgs);
+    }
+  };
+
   useEffect(() => {
     fetchModels();
     fetchChatbots();
@@ -150,25 +167,36 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     if (conversation) {
       // 更新当前显示的对话ID，用于隔离流式消息更新
       currentChatIdRef.current = conversation.id;
-      
+
       // 检查是否有该对话的流式消息缓存
       const streamingCache = chatService.getStreamingCache(conversation.id);
-      
-      if (streamingCache && streamingCache.messages.length > 0) {
-        // 有缓存：恢复缓存的消息
-        // 先加载历史消息
+      // 检查是否有该对话的流式消息ref（包含完整的步骤消息状态）
+      const refMessages = streamingMessagesRef.current[conversation.id];
+
+      if (refMessages && refMessages.length > 0) {
+        // 有ref消息：直接从ref恢复完整的消息状态（包含所有步骤、工具调用等）
+        fetchConversationConfig(conversation.id);
+        shouldScrollToBottomOnLoad.current = true;
+        setMessages(refMessages);
+
+        // 根据流式状态恢复loading和thinkingMessageId
+        if (streamingCache && streamingCache.isStreaming) {
+          setLoading(true);
+          if (streamingCache.assistantMessageId) {
+            setThinkingMessageId(streamingCache.assistantMessageId);
+          }
+        } else {
+          setLoading(false);
+          setThinkingMessageId(null);
+        }
+      } else if (streamingCache && streamingCache.messages.length > 0) {
+        // 有缓存但无ref：兼容旧逻辑，从后端加载历史消息
         fetchMessages(conversation.id);
         fetchConversationConfig(conversation.id);
-        
-        // 设置标志：切换对话后需要滚动到底部
         shouldScrollToBottomOnLoad.current = true;
-        
-        // 恢复正在接收的助手消息
+
         if (streamingCache.isStreaming && streamingCache.assistantMessageId) {
-          // 添加正在接收的助手消息到 messages
           setThinkingMessageId(streamingCache.assistantMessageId);
-          
-          // 创建一个恢复的助手消息
           const restoredAssistantMessage: Message = {
             id: streamingCache.assistantMessageId,
             message_id: streamingCache.assistantMessageId,
@@ -180,16 +208,11 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             status: 'running',
             step: 'model_answer'
           };
-          
-          // 需要在历史消息加载后追加这条消息
-          // 使用 setTimeout 确保历史消息加载完成后再追加
           setTimeout(() => {
             setMessages(prev => {
-              // 检查是否已经有这条消息（避免重复）
               if (prev.find(m => m.id === streamingCache.assistantMessageId)) {
                 return prev;
               }
-              // 追加恢复的助手消息
               return [...prev, restoredAssistantMessage];
             });
           }, 200);
@@ -584,7 +607,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
 
   const handleStop = async () => {
     chatService.stopCurrentRequest();
-    
+
     // 调用后端停止接口，更新消息状态
     if (conversation?.id) {
       try {
@@ -593,9 +616,10 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         console.error('停止聊天失败:', e);
       }
     }
-    
-    // 更新当前正在运行的消息状态为stop
-    setMessages(prev => prev.map(msg => {
+
+    // 更新当前正在运行的消息状态为stop（同时更新ref和state）
+    const stopChatId = conversation?.id;
+    const stopUpdater = (prev: Message[]) => prev.map(msg => {
       if (msg.role === 'assistant' && (msg.status === 'start' || msg.status === 'running')) {
         return {
           ...msg,
@@ -604,8 +628,13 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         };
       }
       return msg;
-    }));
-    
+    });
+    if (stopChatId) {
+      updateStreamingMessages(stopChatId, stopUpdater);
+    } else {
+      setMessages(stopUpdater);
+    }
+
     setLoading(false);
     setThinkingMessageId(null);
   };
@@ -734,10 +763,16 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       thinkingStartTimeRef.current[assistantMessageId] = Date.now();
     }
 
+    // 初始化流式消息ref，用于切换对话后恢复完整消息状态
+    const streamingChatId = currentConversation?.id;
+    if (streamingChatId) {
+      streamingMessagesRef.current[streamingChatId] = [...newMessages, assistantMessage];
+    }
+
     try {
       // 发送消息到后端
       console.log('Sending message with config:', modelConfig);
-      
+
       const idTracker = { assistant: assistantMessageId, user: userMessage.id };
 
       // 使用流式发送（带文件）
@@ -750,17 +785,14 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         undefined, // messageId is undefined for new messages
         systemPrompt, // 系统提示词
         (data) => {
-          // 对话隔离：只处理当前显示对话的消息
-          if (currentChatIdRef.current !== currentConversation?.id) {
-            return;
-          }
-          
+          // 使用updateStreamingMessages：即使切换到其他对话，消息仍会在ref中更新
+          // 切回来时可以从ref恢复完整状态，实现"切换不中断，切回继续输出"
           const status = data.status || 'running';
           const stepId = data.step_id;
-          
+
           // 处理 error 状态：将错误内容显示到助手消息中，不抛出异常
           if (status === 'error') {
-            setMessages(prev => {
+            updateStreamingMessages(streamingChatId, prev => {
               // 先更新用户消息（如果有user_message_id）
               let updatedMessages = prev;
               if (data.user_message_id) {
@@ -772,13 +804,13 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                   return msg;
                 });
               }
-              
+
               // 检查是否有对应的助手消息（通过 step_id 或 assistant_message_id）
-              const existingMsg = updatedMessages.find(msg => 
-                msg.role === 'assistant' && 
+              const existingMsg = updatedMessages.find(msg =>
+                msg.role === 'assistant' &&
                 (msg.step_id === stepId || msg.message_id === data.assistant_message_id || msg.id === idTracker.assistant)
               );
-              
+
               if (existingMsg) {
                 // 更新现有消息为错误状态，显示错误内容
                 return updatedMessages.map(msg => {
@@ -812,10 +844,10 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             // 不清理状态，等待 [DONE] 消息来处理最终状态
             return;
           }
-          
+
           // 当收到status=start且有step_id时，处理消息新增或更新
           if (status === 'start' && stepId && data.step) {
-            setMessages(prev => {
+            updateStreamingMessages(streamingChatId, prev => {
               // 先更新用户消息（如果有user_message_id）
               let updatedMessages = prev;
               if (data.user_message_id) {
@@ -827,7 +859,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                   return msg;
                 });
               }
-              
+
               // 检查是否已有相同step_id的消息
               const existingStepMsg = updatedMessages.find(msg => msg.step_id === stepId && msg.role === 'assistant');
               if (existingStepMsg) {
@@ -840,10 +872,10 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                   return msg;
                 });
               }
-              
+
               // 检查是否有初始的"思考中..."消息（没有step_id），需要移除它
               const initialMsgIndex = updatedMessages.findIndex(msg => msg.role === 'assistant' && !msg.step_id && msg.status === 'start');
-              
+
               // 每个步骤创建独立的消息记录，不覆盖之前的步骤消息
               const newStepMsg: Message = {
                 id: stepId,
@@ -859,25 +891,25 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 avatar: data.avatar,
                 tool_calls: []
               };
-              
+
               // 如果当前消息包含 tool_call 数据，立即添加到 tool_calls
               if (data.tool_call) {
                 newStepMsg.tool_calls = [data.tool_call];
               }
-              
+
               // 如果有初始"思考中"消息，移除它并新增具体步骤消息
               if (initialMsgIndex >= 0) {
                 const newMessages = updatedMessages.filter((_, idx) => idx !== initialMsgIndex);
                 return [...newMessages, newStepMsg];
               }
-              
+
               return [...updatedMessages, newStepMsg];
             });
           } else {
             // 其他情况，更新现有消息
             // 更新用户消息和匹配的助手消息
             const stepId = data.step_id;
-            setMessages(prev => prev.map(msg => {
+            updateStreamingMessages(streamingChatId, prev => prev.map(msg => {
               // 用户消息也需要更新（处理user_message_id）
               if (msg.role === 'user') {
                 return processSSEMessageUpdate(msg, data, idTracker);
@@ -892,18 +924,20 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         (error) => {
           console.error('Failed to send message:', error);
           const errorMessage = typeof error === 'string' ? error : (error?.message || error?.error || '发送失败，请重试');
-          message.error(errorMessage);
-          
-          setMessages(prev => prev.map(msg => 
+          if (currentChatIdRef.current === streamingChatId) {
+            message.error(errorMessage);
+          }
+
+          updateStreamingMessages(streamingChatId, prev => prev.map(msg =>
             msg.id === idTracker.assistant
-              ? { 
-                  ...msg, 
+              ? {
+                  ...msg,
                   content: `抱歉，发送消息时出现错误：${errorMessage}`,
                   reasoning_content: undefined
                 }
               : msg
           ));
-          
+
           if (deepThinking && thinkingStartTimeRef.current[assistantMessageId]) {
             const duration = Date.now() - thinkingStartTimeRef.current[assistantMessageId];
             setThinkingDuration(prev => ({
@@ -911,8 +945,17 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               [idTracker.assistant]: duration
             }));
           }
-          setLoading(false);
-          setThinkingMessageId(null);
+          // 将所有仍在运行中的消息（包括 error 状态）更新为 done
+          updateStreamingMessages(streamingChatId, prev => prev.map(msg => {
+            if (msg.role === 'assistant' && msg.status && msg.status !== 'done' && msg.status !== 'stop') {
+              return { ...msg, status: 'done' };
+            }
+            return msg;
+          }));
+          if (currentChatIdRef.current === streamingChatId) {
+            setLoading(false);
+            setThinkingMessageId(null);
+          }
         },
         () => {
           if (deepThinking && thinkingStartTimeRef.current[assistantMessageId]) {
@@ -923,32 +966,46 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             }));
           }
           // 将所有仍在运行中的消息（包括 error 状态）更新为 done，以便显示重新回答和复制按钮
-          setMessages(prev => prev.map(msg => {
+          updateStreamingMessages(streamingChatId, prev => prev.map(msg => {
             if (msg.role === 'assistant' && msg.status && msg.status !== 'done' && msg.status !== 'stop') {
               return { ...msg, status: 'done' };
             }
             return msg;
           }));
-          setLoading(false);
-          setThinkingMessageId(null);
+          if (currentChatIdRef.current === streamingChatId) {
+            setLoading(false);
+            setThinkingMessageId(null);
+          }
         }
       );
     } catch (error) {
       console.error('Failed to send message:', error);
       const errorMessage = typeof error === 'string' ? error : (error?.message || error?.error || '发送失败，请重试');
       message.error(errorMessage);
-      
-      // 失败时显示错误消息
-      setMessages(prev => prev.map(msg => 
-        msg.id === assistantMessageId 
-          ? { 
-              ...msg, 
-              content: `抱歉，发送消息时出现错误：${errorMessage}`,
-              reasoning_content: undefined
-            }
-          : msg
-      ));
-      
+
+      // 失败时显示错误消息（同时更新ref和state）
+      if (streamingChatId) {
+        updateStreamingMessages(streamingChatId, prev => prev.map(msg =>
+          msg.id === assistantMessageId
+            ? {
+                ...msg,
+                content: `抱歉，发送消息时出现错误：${errorMessage}`,
+                reasoning_content: undefined
+              }
+            : msg
+        ));
+      } else {
+        setMessages(prev => prev.map(msg =>
+          msg.id === assistantMessageId
+            ? {
+                ...msg,
+                content: `抱歉，发送消息时出现错误：${errorMessage}`,
+                reasoning_content: undefined
+              }
+            : msg
+        ));
+      }
+
       if (deepThinking && thinkingStartTimeRef.current[assistantMessageId]) {
         const duration = Date.now() - thinkingStartTimeRef.current[assistantMessageId];
         setThinkingDuration(prev => ({
@@ -1274,6 +1331,12 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       thinkingStartTimeRef.current[assistantMessageId] = Date.now();
     }
 
+    // 初始化流式消息ref，用于切换对话后恢复完整消息状态
+    const streamingChatId = conversation?.id;
+    if (streamingChatId) {
+      streamingMessagesRef.current[streamingChatId] = [...newMessages, assistantMessage];
+    }
+
     try {
       // 检查是否需要发送文件
       let hasFiles = false;
@@ -1334,17 +1397,13 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           messageId,
           systemPrompt,
           (data) => {
-              // 对话隔离：只处理当前显示对话的消息
-              if (currentChatIdRef.current !== conversation?.id) {
-                return;
-              }
-              
+              // 使用updateStreamingMessages：即使切换到其他对话，消息仍会在ref中更新
               const status = data.status || 'running';
               const stepId = data.step_id;
-              
+
               // 处理 error 状态：将错误内容显示到助手消息中，不抛出异常
               if (status === 'error') {
-                setMessages(prev => {
+                updateStreamingMessages(streamingChatId, prev => {
                   // 先更新用户消息（如果有user_message_id）
                   let updatedMessages = prev;
                   if (data.user_message_id) {
@@ -1356,13 +1415,13 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                       return msg;
                     });
                   }
-                  
+
                   // 检查是否有对应的助手消息
-                  const existingMsg = updatedMessages.find(msg => 
-                    msg.role === 'assistant' && 
+                  const existingMsg = updatedMessages.find(msg =>
+                    msg.role === 'assistant' &&
                     (msg.step_id === stepId || msg.message_id === data.assistant_message_id || msg.id === idTracker.assistant)
                   );
-                  
+
                   if (existingMsg) {
                     // 更新现有消息为错误状态
                     return updatedMessages.map(msg => {
@@ -1396,23 +1455,23 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 // 不清理状态，等待 [DONE] 消息来处理最终状态
                 return;
               }
-              
+
               // 当收到status=start且有step_id时，处理消息新增或更新
               if (status === 'start' && stepId && data.step) {
-                setMessages(prev => {
+                updateStreamingMessages(streamingChatId, prev => {
                   // 检查是否已有相同step_id的消息
                   const existingStepMsg = prev.find(msg => msg.step_id === stepId && msg.role === 'assistant');
                   if (existingStepMsg) {
                     // 已存在，更新该消息
                     return prev.map(msg => msg.step_id === stepId ? processSSEMessageUpdate(msg, data, idTracker) : msg);
                   }
-                  
+
                   // 检查是否有初始的"思考中..."消息（没有step_id），需要移除它
                   const initialMsgIndex = prev.findIndex(msg => msg.role === 'assistant' && !msg.step_id && msg.status === 'start');
-                  
+
                   // 新增具体步骤消息，使用stepId作为唯一标识，确保不同步骤的消息不混淆
                   const newStepMsg: Message = {
-                    id: stepId,  // 使用stepId作为唯一标识，不使用assistant_message_id
+                    id: stepId,
                     message_id: data.assistant_message_id,
                     role: 'assistant',
                     content: '',
@@ -1425,7 +1484,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                     avatar: data.avatar,
                     tool_calls: []
                   };
-                  
+
                   // 如果当前消息包含 tool_call 数据，立即添加到 tool_calls
                   if (data.tool_call) {
                     newStepMsg.tool_calls = [data.tool_call];
@@ -1434,26 +1493,28 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                   if (data.assistant_message_id) {
                     idTracker.assistant = data.assistant_message_id;
                   }
-                  
+
                   // 如果有初始"思考中"消息，移除它并新增具体步骤消息
                   if (initialMsgIndex >= 0) {
                     const newMessages = prev.filter((_, idx) => idx !== initialMsgIndex);
                     return [...newMessages, newStepMsg];
                   }
-                  
+
                   return [...prev, newStepMsg];
                 });
               } else {
                 // 其他情况，更新现有消息
-                setMessages(prev => prev.map(msg => processSSEMessageUpdate(msg, data, idTracker)));
+                updateStreamingMessages(streamingChatId, prev => prev.map(msg => processSSEMessageUpdate(msg, data, idTracker)));
               }
             },
           (error) => {
             console.error('Failed to send message:', error);
             const errorMessage = typeof error === 'string' ? error : (error?.message || error?.error || '发送失败，请重试');
-            message.error(errorMessage);
+            if (currentChatIdRef.current === streamingChatId) {
+              message.error(errorMessage);
+            }
 
-            setMessages(prev => prev.map(msg =>
+            updateStreamingMessages(streamingChatId, prev => prev.map(msg =>
               msg.id === idTracker.assistant
                 ? {
                     ...msg,
@@ -1470,15 +1531,17 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 [idTracker.assistant]: duration
               }));
             }
-            // 将所有仍在运行中的消息（包括 error 状态）更新为 done，以便显示重新回答和复制按钮
-            setMessages(prev => prev.map(msg => {
+            // 将所有仍在运行中的消息（包括 error 状态）更新为 done
+            updateStreamingMessages(streamingChatId, prev => prev.map(msg => {
               if (msg.role === 'assistant' && msg.status && msg.status !== 'done' && msg.status !== 'stop') {
                 return { ...msg, status: 'done' };
               }
               return msg;
             }));
-            setLoading(false);
-            setThinkingMessageId(null);
+            if (currentChatIdRef.current === streamingChatId) {
+              setLoading(false);
+              setThinkingMessageId(null);
+            }
           },
           () => {
             if (deepThinking && thinkingStartTimeRef.current[assistantMessageId]) {
@@ -1489,14 +1552,16 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               }));
             }
             // 将所有仍在运行中的消息（包括 error 状态）更新为 done，以便显示重新回答和复制按钮
-            setMessages(prev => prev.map(msg => {
+            updateStreamingMessages(streamingChatId, prev => prev.map(msg => {
               if (msg.role === 'assistant' && msg.status && msg.status !== 'done' && msg.status !== 'stop') {
                 return { ...msg, status: 'done' };
               }
               return msg;
             }));
-            setLoading(false);
-            setThinkingMessageId(null);
+            if (currentChatIdRef.current === streamingChatId) {
+              setLoading(false);
+              setThinkingMessageId(null);
+            }
           }
         );
       } else {
@@ -1511,17 +1576,13 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           messageId,
           systemPrompt,
           (data) => {
-            // 对话隔离：只处理当前显示对话的消息
-            if (currentChatIdRef.current !== conversation?.id) {
-              return;
-            }
-            
+            // 使用updateStreamingMessages：即使切换到其他对话，消息仍会在ref中更新
             const status = data.status || 'running';
             const stepId = data.step_id;
-            
+
             // 处理 error 状态：将错误内容显示到助手消息中，不抛出异常
             if (status === 'error') {
-              setMessages(prev => {
+              updateStreamingMessages(streamingChatId, prev => {
                 // 先更新用户消息（如果有user_message_id）
                 let updatedMessages = prev;
                 if (data.user_message_id) {
@@ -1533,13 +1594,13 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                     return msg;
                   });
                 }
-                
+
                 // 检查是否有对应的助手消息
-                const existingMsg = updatedMessages.find(msg => 
-                  msg.role === 'assistant' && 
+                const existingMsg = updatedMessages.find(msg =>
+                  msg.role === 'assistant' &&
                   (msg.step_id === stepId || msg.message_id === data.assistant_message_id || msg.id === idTracker.assistant)
                 );
-                
+
                 if (existingMsg) {
                   // 更新现有消息为错误状态
                   return updatedMessages.map(msg => {
@@ -1573,10 +1634,10 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               // 不清理状态，等待 [DONE] 消息来处理最终状态
               return;
             }
-            
+
             // 当收到status=start且有step_id时，处理消息新增或更新
             if (status === 'start' && stepId && data.step) {
-              setMessages(prev => {
+              updateStreamingMessages(streamingChatId, prev => {
                 // 先更新用户消息（如果有user_message_id）
                 let updatedMessages = prev;
                 if (data.user_message_id) {
@@ -1588,7 +1649,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                     return msg;
                   });
                 }
-                
+
                 // 检查是否已有相同step_id的消息
                 const existingStepMsg = updatedMessages.find(msg => msg.step_id === stepId && msg.role === 'assistant');
                 if (existingStepMsg) {
@@ -1601,13 +1662,13 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                     return msg;
                   });
                 }
-                
+
                 // 检查是否有初始的"思考中..."消息（没有step_id），需要移除它
                 const initialMsgIndex = updatedMessages.findIndex(msg => msg.role === 'assistant' && !msg.step_id && msg.status === 'start');
-                
+
                 // 新增具体步骤消息，使用stepId作为唯一标识，确保不同步骤的消息不混淆
                 const newStepMsg: Message = {
-                  id: stepId,  // 使用stepId作为唯一标识，不使用assistant_message_id
+                  id: stepId,
                   message_id: data.assistant_message_id,
                   role: 'assistant',
                   content: '',
@@ -1623,26 +1684,28 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 if (data.assistant_message_id) {
                   idTracker.assistant = data.assistant_message_id;
                 }
-                
+
                 // 如果有初始"思考中"消息，移除它并新增具体步骤消息
                 if (initialMsgIndex >= 0) {
                   const newMessages = updatedMessages.filter((_, idx) => idx !== initialMsgIndex);
                   return [...newMessages, newStepMsg];
                 }
-                
+
                 return [...updatedMessages, newStepMsg];
               });
             } else {
               // 其他情况，更新现有消息
-              setMessages(prev => prev.map(msg => processSSEMessageUpdate(msg, data, idTracker)));
+              updateStreamingMessages(streamingChatId, prev => prev.map(msg => processSSEMessageUpdate(msg, data, idTracker)));
             }
           },
           (error) => {
             console.error('Failed to send message:', error);
             const errorMessage = typeof error === 'string' ? error : (error?.message || error?.error || '发送失败，请重试');
-            message.error(errorMessage);
+            if (currentChatIdRef.current === streamingChatId) {
+              message.error(errorMessage);
+            }
 
-            setMessages(prev => prev.map(msg =>
+            updateStreamingMessages(streamingChatId, prev => prev.map(msg =>
               msg.id === idTracker.assistant
                 ? {
                     ...msg,
@@ -1659,15 +1722,17 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 [idTracker.assistant]: duration
               }));
             }
-            // 将所有仍在运行中的消息（包括 error 状态）更新为 done，以便显示重新回答和复制按钮
-            setMessages(prev => prev.map(msg => {
+            // 将所有仍在运行中的消息（包括 error 状态）更新为 done
+            updateStreamingMessages(streamingChatId, prev => prev.map(msg => {
               if (msg.role === 'assistant' && msg.status && msg.status !== 'done' && msg.status !== 'stop') {
                 return { ...msg, status: 'done' };
               }
               return msg;
             }));
-            setLoading(false);
-            setThinkingMessageId(null);
+            if (currentChatIdRef.current === streamingChatId) {
+              setLoading(false);
+              setThinkingMessageId(null);
+            }
           },
           () => {
             if (deepThinking && thinkingStartTimeRef.current[assistantMessageId]) {
@@ -1678,24 +1743,35 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               }));
             }
             // 将所有仍在运行中的消息（包括 error 状态）更新为 done，以便显示重新回答和复制按钮
-            setMessages(prev => prev.map(msg => {
+            updateStreamingMessages(streamingChatId, prev => prev.map(msg => {
               if (msg.role === 'assistant' && msg.status && msg.status !== 'done' && msg.status !== 'stop') {
                 return { ...msg, status: 'done' };
               }
               return msg;
             }));
-            setLoading(false);
-            setThinkingMessageId(null);
+            if (currentChatIdRef.current === streamingChatId) {
+              setLoading(false);
+              setThinkingMessageId(null);
+            }
           }
         );
       }
     } catch (error) {
       console.error('Chat error:', error);
-      setMessages(prev => prev.map(msg =>
-        msg.id === assistantMessageId
-          ? { ...msg, content: '抱歉，生成回复时出现错误' }
-          : msg
-      ));
+      // 同时更新ref和state
+      if (streamingChatId) {
+        updateStreamingMessages(streamingChatId, prev => prev.map(msg =>
+          msg.id === assistantMessageId
+            ? { ...msg, content: '抱歉，生成回复时出现错误' }
+            : msg
+        ));
+      } else {
+        setMessages(prev => prev.map(msg =>
+          msg.id === assistantMessageId
+            ? { ...msg, content: '抱歉，生成回复时出现错误' }
+            : msg
+        ));
+      }
       setLoading(false);
       setThinkingMessageId(null);
     }
