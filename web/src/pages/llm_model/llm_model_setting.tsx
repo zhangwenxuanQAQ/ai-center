@@ -80,6 +80,7 @@ const LLMModelSetting: React.FC = () => {
   const [isDataSourceModalVisible, setIsDataSourceModalVisible] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const thinkingStartTimeRef = useRef<Record<string, number>>({});
 
@@ -1739,15 +1740,79 @@ const LLMModelSetting: React.FC = () => {
 
               <div className="chat-input-wrapper">
                 <TextArea
+                  ref={inputRef}
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
-                  placeholder="输入消息... (Shift+Enter换行，Enter发送)"
+                  placeholder="输入消息... (Ctrl/Shift+Enter换行，Enter发送)"
                   autoSize={{ minRows: 5, maxRows: 12 }}
-                  onPressEnter={(e) => {
-                    if (!e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      if (e.ctrlKey || e.shiftKey) {
+                        // Ctrl+Enter 或 Shift+Enter：手动插入换行符
+                        e.preventDefault();
+                        const textarea = e.currentTarget;
+                        const start = textarea.selectionStart;
+                        const end = textarea.selectionEnd;
+                        const newValue = inputMessage.substring(0, start) + '\n' + inputMessage.substring(end);
+                        setInputMessage(newValue);
+                        // 设置光标位置
+                        setTimeout(() => {
+                          textarea.selectionStart = textarea.selectionEnd = start + 1;
+                        }, 0);
+                      } else {
+                        // 纯 Enter：发送消息
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
                     }
+                  }}
+                  onPaste={(e) => {
+                    // 处理粘贴文件
+                    const items = e.clipboardData.items;
+                    for (const item of items) {
+                      if (item.kind === 'file') {
+                        const file = item.getAsFile();
+                        if (file) {
+                          // 检查是否是文件夹（文件夹的type通常为空且size为0）
+                          if (!file.type && file.size === 0) {
+                            continue;
+                          }
+                          handleLocalFileUpload(file);
+                        }
+                      }
+                    }
+                  }}
+                  onDrop={(e) => {
+                    // 处理拖拽文件
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const items = e.dataTransfer.items;
+                    for (const item of items) {
+                      if (item.kind === 'file') {
+                        const entry = item.webkitGetAsEntry?.();
+                        if (entry) {
+                          if (entry.isDirectory) {
+                            // 忽略文件夹
+                            continue;
+                          }
+                          // 处理文件
+                          const file = item.getAsFile();
+                          if (file) {
+                            handleLocalFileUpload(file);
+                          }
+                        } else {
+                          // 不支持 webkitGetAsEntry，直接获取文件
+                          const file = item.getAsFile();
+                          if (file && file.size > 0) {
+                            handleLocalFileUpload(file);
+                          }
+                        }
+                      }
+                    }
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                   }}
                   className="chat-input"
                 />

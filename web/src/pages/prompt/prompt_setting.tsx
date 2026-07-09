@@ -1,9 +1,9 @@
-﻿import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Form, Input, Select, TreeSelect, Button, message, Row, Col, Switch, Modal, Spin, Drawer, Tag, Popover, Slider, InputNumber, Tooltip } from 'antd';
+import { Form, Input, Select, TreeSelect, Button, message, Row, Col, Switch, Modal, Spin, Drawer, Tag, Popover, Slider, InputNumber, Tooltip, Dropdown } from 'antd';
 const { TextArea } = Input;
 const { Option } = Select;
-import { ArrowLeftOutlined, SaveOutlined, FileTextOutlined, TagsOutlined, PlayCircleOutlined, SendOutlined, PlusOutlined, SettingOutlined, ClearOutlined, BulbOutlined, CopyOutlined, EditOutlined, DownOutlined, RightOutlined, LoadingOutlined, InfoCircleOutlined, ReloadOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SaveOutlined, FileTextOutlined, TagsOutlined, PlayCircleOutlined, SendOutlined, PlusOutlined, SettingOutlined, ClearOutlined, BulbOutlined, CopyOutlined, EditOutlined, DownOutlined, RightOutlined, LoadingOutlined, InfoCircleOutlined, ReloadOutlined, PaperClipOutlined } from '@ant-design/icons';
 import MDEditor from '@uiw/react-md-editor';
 import { promptService, Prompt, PromptCategory } from '../../services/prompt';
 import { llmModelService, LLMModel } from '../../services/llm_model';
@@ -58,9 +58,11 @@ const PromptSetting: React.FC = () => {
   const [thinkingDuration, setThinkingDuration] = useState<Record<string, number>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatMessagesRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<any[]>([]);
   const thinkingStartTimeRef = useRef<Record<string, number>>({});
   const [configParams, setConfigParams] = useState<Record<string, ConfigParam[]>>({});
   const [modelConfig, setModelConfig] = useState<Record<string, any>>({});
@@ -223,6 +225,32 @@ const PromptSetting: React.FC = () => {
     setDescription(e.target.value);
   };
 
+  // 处理本地文件上传（用于拖拽和粘贴）
+  const handleLocalFileUpload = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64Content = (e.target?.result as string).split(',')[1];
+      const mimeType = file.type || 'application/octet-stream';
+
+      const newFile = {
+        type: 'file_base64',
+        content: base64Content,
+        mime_type: mimeType,
+        file_name: file.name,
+        file_size: file.size
+      };
+
+      setSelectedFiles(prev => [...prev, newFile]);
+    };
+    reader.readAsDataURL(file);
+    return false;
+  };
+
+  // 移除已选择的文件
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleAddTag = () => {
     if (newTag.trim() && !tags.includes(newTag.trim())) {
       setTags([...tags, newTag.trim()]);
@@ -303,38 +331,44 @@ const PromptSetting: React.FC = () => {
   };
 
   const handleSendTestMessage = async () => {
-    if (!testInput.trim() || !selectedModel || isGenerating) return;
-    
+    // 允许没有文本但有文件时发送
+    if ((!testInput.trim() && selectedFiles.length === 0) || !selectedModel || isGenerating) return;
+
     const userMessage = testInput.trim();
     const userMessageId = Date.now().toString();
-    setTestMessages(prev => [...prev, { 
-      id: userMessageId, 
-      role: 'user', 
+    // 保存本次发送的文件
+    const filesToSend = [...selectedFiles];
+    setTestMessages(prev => [...prev, {
+      id: userMessageId,
+      role: 'user',
       content: userMessage,
-      timestamp: new Date()
+      timestamp: new Date(),
+      files: filesToSend.length > 0 ? filesToSend : undefined // 存储本次上传的文件
     }]);
     setTestInput('');
+    // 发送后清空已选择的文件
+    setSelectedFiles([]);
     setIsGenerating(true);
     setIsUserScrolling(false);
-    
+
     const assistantMessageId = (Date.now() + 1).toString();
-    setTestMessages(prev => [...prev, { 
-      id: assistantMessageId, 
-      role: 'assistant', 
+    setTestMessages(prev => [...prev, {
+      id: assistantMessageId,
+      role: 'assistant',
       content: '',
       timestamp: new Date()
     }]);
     setThinkingMessageId(assistantMessageId);
-    
+
     if (deepThinking) {
       thinkingStartTimeRef.current[assistantMessageId] = Date.now();
     }
 
     try {
       abortControllerRef.current = new AbortController();
-      
+
       const chatMessages = [];
-      
+
       if (content && content.trim()) {
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = content;
@@ -344,21 +378,23 @@ const PromptSetting: React.FC = () => {
           content: textContent
         });
       }
-      
+
       testMessages.forEach(msg => {
         chatMessages.push({
           role: msg.role,
           content: msg.content
         });
       });
-      
+
       chatMessages.push({
         role: 'user',
         content: userMessage
       });
-      
+
       const requestBody = {
         messages: chatMessages,
+        // 使用 query 字段传递文件，与模型配置页保持一致
+        query: filesToSend.length > 0 ? filesToSend : [],
         config: {
           ...modelConfig,
           deep_thinking: deepThinking
@@ -1183,6 +1219,90 @@ const PromptSetting: React.FC = () => {
                     )}
                   </div>
                   <div className="message-content">
+                    {/* 显示用户上传的文件（在文本上方） */}
+                    {msg.role === 'user' && msg.files && msg.files.length > 0 && (
+                      <div style={{ marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {msg.files.map((file, fileIndex) => {
+                          // 计算文件大小
+                          let fileSize = '';
+                          if (file.file_size) {
+                            const size = file.file_size;
+                            if (size < 1024) {
+                              fileSize = `${size.toFixed(0)} B`;
+                            } else if (size < 1024 * 1024) {
+                              fileSize = `${(size / 1024).toFixed(2)} KB`;
+                            } else {
+                              fileSize = `${(size / (1024 * 1024)).toFixed(2)} MB`;
+                            }
+                          } else if (file.content && typeof file.content === 'string') {
+                            // Base64 编码的文件大小（作为后备）
+                            const base64Size = file.content.length * 3 / 4;
+                            if (base64Size < 1024) {
+                              fileSize = `${base64Size.toFixed(0)} B`;
+                            } else if (base64Size < 1024 * 1024) {
+                              fileSize = `${(base64Size / 1024).toFixed(2)} KB`;
+                            } else {
+                              fileSize = `${(base64Size / (1024 * 1024)).toFixed(2)} MB`;
+                            }
+                          }
+
+                          // 获取文件图标
+                          const getFileIcon = () => {
+                            const fileName = file.file_name || file.content?.file_name || '';
+                            if (fileName.endsWith('.pdf')) return '📄';
+                            if (fileName.match(/\.(doc|docx)$/i)) return '📝';
+                            if (fileName.match(/\.(jpg|jpeg|png|gif|bmp|webp)$/i)) return '🖼️';
+                            if (fileName.match(/\.(mp3|wav|ogg|m4a)$/i)) return '🎵';
+                            if (fileName.match(/\.(mp4|avi|mov|mkv)$/i)) return '🎬';
+                            if (fileName.match(/\.(zip|rar|7z)$/i)) return '📦';
+                            if (fileName.match(/\.(txt|md)$/i)) return '📃';
+                            return '📎';
+                          };
+
+                          // 获取文件名
+                          const fileName = file.file_name || file.content?.file_name || '';
+                          // 获取文件扩展名
+                          const extension = fileName.split('.').pop()?.toUpperCase() || '';
+
+                          return (
+                            <div
+                              key={fileName || `file-${fileIndex}`}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                padding: '10px 12px',
+                                borderRadius: 6,
+                                backgroundColor: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
+                                border: `1px solid ${theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
+                                transition: 'all 0.2s ease'
+                              }}
+                            >
+                              <div style={{ marginRight: 12, fontSize: 20 }}>
+                                {getFileIcon()}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{
+                                  fontSize: 14,
+                                  fontWeight: 500,
+                                  marginBottom: 2,
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis'
+                                }}>
+                                  {fileName}
+                                </div>
+                                <div style={{
+                                  fontSize: 12,
+                                  color: theme === 'dark' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(0, 0, 0, 0.45)'
+                                }}>
+                                  {extension} • {fileSize}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                     {msg.role === 'assistant' && (thinkingMessageId === msg.id && deepThinking) && (
                       <div className="message-reasoning">
                         <div className="reasoning-header" onClick={() => toggleReasoning(msg.id)}>
@@ -1330,16 +1450,170 @@ const PromptSetting: React.FC = () => {
           </div>
           
           <div className="chat-input-area" style={{ borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8', padding: '12px 16px', background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fff' }}>
+            {/* 显示已选择的文件列表 */}
+            {selectedFiles.length > 0 && (
+              <div style={{
+                marginBottom: 12,
+                display: 'flex',
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                gap: 8
+              }}>
+                {selectedFiles.map((file, index) => {
+                  // 计算文件大小
+                  let fileSize = '';
+                  if (file.file_size) {
+                    const size = file.file_size;
+                    if (size < 1024) {
+                      fileSize = `${size.toFixed(0)} B`;
+                    } else if (size < 1024 * 1024) {
+                      fileSize = `${(size / 1024).toFixed(2)} KB`;
+                    } else {
+                      fileSize = `${(size / (1024 * 1024)).toFixed(2)} MB`;
+                    }
+                  }
+
+                  // 获取文件图标
+                  const getFileNameIcon = () => {
+                    const fileName = file.file_name || '';
+                    if (fileName.endsWith('.pdf')) return <span style={{ marginRight: 8 }}>📄</span>;
+                    if (fileName.endsWith('.doc') || fileName.endsWith('.docx')) return <span style={{ marginRight: 8 }}>📝</span>;
+                    if (fileName.match(/\.(jpg|jpeg|png|gif|bmp|webp)$/i)) return <span style={{ marginRight: 8 }}>🖼️</span>;
+                    if (fileName.match(/\.(mp3|wav|ogg|m4a)$/i)) return <span style={{ marginRight: 8 }}>🎵</span>;
+                    return <span style={{ marginRight: 8 }}>📎</span>;
+                  };
+
+                  return (
+                    <div key={index} style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 12px',
+                      background: theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
+                      borderRadius: 6,
+                      border: `1px solid ${theme === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'}`,
+                      maxWidth: '33.33%',
+                      flex: '0 0 auto',
+                      minWidth: '200px'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                        {getFileNameIcon()}
+                        <span style={{
+                          fontSize: 14,
+                          color: theme === 'dark' ? '#fff' : '#333',
+                          flex: 1,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }}>
+                          {file.file_name}
+                        </span>
+                      </div>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                        marginLeft: 12
+                      }}>
+                        <span style={{
+                          fontSize: 12,
+                          color: theme === 'dark' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(0, 0, 0, 0.45)'
+                        }}>
+                          {fileSize}
+                        </span>
+                        <Tooltip title="移除文件">
+                          <Button
+                            type="text"
+                            size="small"
+                            onClick={() => handleRemoveFile(index)}
+                            style={{
+                              color: theme === 'dark' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(0, 0, 0, 0.45)'
+                            }}
+                          >
+                            ×
+                          </Button>
+                        </Tooltip>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             <div className="chat-input-wrapper" style={{ position: 'relative' }}>
               <TextArea
-                placeholder="输入消息... (Shift+Enter换行，Enter发送)"
+                ref={inputRef}
+                placeholder="输入消息... (Ctrl/Shift+Enter换行，Enter发送)"
                 value={testInput}
                 onChange={(e) => setTestInput(e.target.value)}
-                onPressEnter={(e) => {
-                  if (!e.shiftKey) {
-                    e.preventDefault();
-                    handleSendTestMessage();
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    if (e.ctrlKey || e.shiftKey) {
+                      // Ctrl+Enter 或 Shift+Enter：手动插入换行符
+                      e.preventDefault();
+                      const textarea = e.currentTarget;
+                      const start = textarea.selectionStart;
+                      const end = textarea.selectionEnd;
+                      const newValue = testInput.substring(0, start) + '\n' + testInput.substring(end);
+                      setTestInput(newValue);
+                      // 设置光标位置
+                      setTimeout(() => {
+                        textarea.selectionStart = textarea.selectionEnd = start + 1;
+                      }, 0);
+                    } else {
+                      // 纯 Enter：发送消息
+                      e.preventDefault();
+                      handleSendTestMessage();
+                    }
                   }
+                }}
+                onPaste={(e) => {
+                  // 处理粘贴文件
+                  const items = e.clipboardData.items;
+                  for (const item of items) {
+                    if (item.kind === 'file') {
+                      const file = item.getAsFile();
+                      if (file) {
+                        // 检查是否是文件夹（文件夹的type通常为空且size为0）
+                        if (!file.type && file.size === 0) {
+                          continue;
+                        }
+                        handleLocalFileUpload(file);
+                      }
+                    }
+                  }
+                }}
+                onDrop={(e) => {
+                  // 处理拖拽文件
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const items = e.dataTransfer.items;
+                  for (const item of items) {
+                    if (item.kind === 'file') {
+                      const entry = item.webkitGetAsEntry?.();
+                      if (entry) {
+                        if (entry.isDirectory) {
+                          // 忽略文件夹
+                          continue;
+                        }
+                        // 处理文件
+                        const file = item.getAsFile();
+                        if (file) {
+                          handleLocalFileUpload(file);
+                        }
+                      } else {
+                        // 不支持 webkitGetAsEntry，直接获取文件
+                        const file = item.getAsFile();
+                        if (file && file.size > 0) {
+                          handleLocalFileUpload(file);
+                        }
+                      }
+                    }
+                  }
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
                 }}
                 autoSize={{ minRows: 5, maxRows: 12 }}
                 className={`chat-input ${theme === 'dark' ? 'dark' : 'light'}`}
@@ -1354,25 +1628,71 @@ const PromptSetting: React.FC = () => {
                 }}
               />
               <div className="chat-input-inner-footer" style={{ position: 'absolute', bottom: '8px', left: '12px', zIndex: 10 }}>
-                <div 
-                  className={`deep-thinking-switch ${theme === 'dark' ? 'dark' : 'light'}`} 
-                  onClick={() => setDeepThinking(!deepThinking)}
-                  style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '8px', 
-                    padding: '4px 12px', 
-                    borderRadius: '16px', 
-                    cursor: 'pointer',
-                    transition: 'all 0.3s',
-                    fontSize: '14px',
-                    background: theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
-                    color: theme === 'dark' ? 'rgba(255, 255, 255, 0.65)' : 'rgba(0, 0, 0, 0.65)'
-                  }}
-                >
-                  <BulbOutlined style={{ color: deepThinking ? '#faad14' : undefined }} />
-                  <span style={{ userSelect: 'none' }}>深度思考</span>
-                  <Switch size="small" checked={deepThinking} onChange={setDeepThinking} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <div
+                    className={`deep-thinking-switch ${theme === 'dark' ? 'dark' : 'light'}`}
+                    onClick={() => setDeepThinking(!deepThinking)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '4px 12px',
+                      borderRadius: '16px',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s',
+                      fontSize: '14px',
+                      background: theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
+                      color: theme === 'dark' ? 'rgba(255, 255, 255, 0.65)' : 'rgba(0, 0, 0, 0.65)'
+                    }}
+                  >
+                    <BulbOutlined style={{ color: deepThinking ? '#faad14' : undefined }} />
+                    <span style={{ userSelect: 'none' }}>深度思考</span>
+                    <Switch size="small" checked={deepThinking} onChange={setDeepThinking} />
+                  </div>
+
+                  {/* 上传文件按钮 */}
+                  <Dropdown
+                    menu={{
+                      items: [
+                        {
+                          key: 'local',
+                          label: (
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                padding: '8px 16px',
+                                height: '36px',
+                                boxSizing: 'border-box',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              <PaperClipOutlined />
+                              <span>上传本地文件</span>
+                            </div>
+                          ),
+                          onClick: () => {
+                            // 触发文件选择
+                            const input = document.createElement('input');
+                            input.type = 'file';
+                            input.multiple = true;
+                            input.onchange = (e) => {
+                              const files = (e.target as HTMLInputElement).files;
+                              if (files) {
+                                Array.from(files).forEach(file => handleLocalFileUpload(file));
+                              }
+                            };
+                            input.click();
+                          }
+                        }
+                      ]
+                    }}
+                    trigger={['click']}
+                    placement="bottomRight"
+                  >
+                    <Button icon={<PaperClipOutlined />} type="text" />
+                  </Dropdown>
                 </div>
               </div>
               {isGenerating ? (
