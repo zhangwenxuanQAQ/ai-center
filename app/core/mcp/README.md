@@ -159,11 +159,11 @@ ToolRegistry.register_http(
 MCP SERVER 随主应用一起启动：
 
 ```bash
-python -m app.server_run
+python -m app.start_server
 ```
 
 服务启动后会同时运行：
-- FastAPI 服务：`http://0.0.0.0:8081`
+- FastAPI 服务：`http://0.0.0.0:8081`（多worker模式）
 - MCP SERVER (Streamable HTTP)：`http://0.0.0.0:8082/mcp`
 
 ## MCP协议方法

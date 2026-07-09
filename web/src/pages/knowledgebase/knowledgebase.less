@@ -1412,7 +1412,7 @@ body[data-theme="dark"] {
 
       .ant-tabs-tab {
         background: rgba(30, 30, 30, 0.8) !important;
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border: 1px solid rgba(90, 111, 214, 0.3) !important;
         color: rgba(255, 255, 255, 0.6) !important;
         margin-right: 8px !important;
         border-radius: 8px 8px 0 0 !important;
@@ -1422,6 +1422,7 @@ body[data-theme="dark"] {
         &:hover {
           color: rgba(255, 255, 255, 0.9) !important;
           background: rgba(40, 40, 40, 0.9) !important;
+          border-color: rgba(90, 111, 214, 0.5) !important;
         }
 
         &.ant-tabs-tab-active {
@@ -1449,7 +1450,7 @@ body[data-theme="dark"] {
       .ant-tabs-content {
         flex: 1;
         background: #ffffff;
-        border: 1px solid #e8e8e8;
+        border: 1px solid #d9d9d9;
         border-top: none;
         border-radius: 0 8px 8px 8px;
         padding: 20px;
@@ -1457,8 +1458,8 @@ body[data-theme="dark"] {
       }
 
       .ant-tabs-tab {
-        background: #f5f5f5 !important;
-        border: 1px solid #e8e8e8 !important;
+        background: #fafafa !important;
+        border: 1px solid #d9d9d9 !important;
         color: rgba(0, 0, 0, 0.6) !important;
         margin-right: 8px !important;
         border-radius: 8px 8px 0 0 !important;
@@ -1466,14 +1467,14 @@ body[data-theme="dark"] {
         transition: all 0.3s ease !important;
 
         &:hover {
-          color: rgba(0, 0, 0, 0.9) !important;
+          color: ~"var(--primary-color)" !important;
           background: #f0f0f0 !important;
         }
 
         &.ant-tabs-tab-active {
           background: #ffffff !important;
           border-color: ~"var(--primary-color)" !important;
-          color: #000000 !important;
+          color: ~"var(--primary-color)" !important;
           border-bottom: 1px solid #ffffff !important;
         }
       }

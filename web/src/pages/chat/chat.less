@@ -733,17 +733,35 @@
 
   &.dark {
     background: transparent;
+    color: rgba(255, 255, 255, 0.85);
 
     &:hover {
       background: rgba(255, 255, 255, 0.05);
+    }
+
+    .selector-name {
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .selector-arrow {
+      color: rgba(255, 255, 255, 0.45);
     }
   }
 
   &.light {
     background: transparent;
+    color: rgba(0, 0, 0, 0.85);
 
     &:hover {
       background: rgba(0, 0, 0, 0.04);
+    }
+
+    .selector-name {
+      color: rgba(0, 0, 0, 0.85);
+    }
+
+    .selector-arrow {
+      color: rgba(0, 0, 0, 0.45);
     }
   }
 
@@ -773,28 +791,28 @@
   &.dark {
     :global {
       .ant-dropdown-menu {
-        background: var(--dark-bg-card) !important;
+        background: #1a1a2e !important;
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 12px;
         padding: 8px;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
         max-height: 400px !important;
         overflow-y: auto !important;
-        color: var(--dark-text-primary) !important;
+        color: rgba(255, 255, 255, 0.85) !important;
       }
 
       .ant-dropdown-menu-item-group-title {
         padding: 0;
-        color: var(--dark-text-secondary) !important;
+        color: rgba(255, 255, 255, 0.45) !important;
       }
 
       .ant-dropdown-menu-item {
         padding: 0;
         border-radius: 8px;
-        color: var(--dark-text-primary) !important;
+        color: rgba(255, 255, 255, 0.85) !important;
 
         &:hover {
-          background: transparent;
+          background: rgba(255, 255, 255, 0.08);
         }
       }
 
@@ -807,28 +825,28 @@
   &.light {
     :global {
       .ant-dropdown-menu {
-        background: var(--light-bg-card) !important;
-        border: 1px solid rgba(0, 0, 0, 0.08);
+        background: #ffffff !important;
+        border: 1px solid #e8e8e8;
         border-radius: 12px;
         padding: 8px;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
         max-height: 400px !important;
         overflow-y: auto !important;
-        color: var(--light-text-primary) !important;
+        color: rgba(0, 0, 0, 0.85) !important;
       }
 
       .ant-dropdown-menu-item-group-title {
         padding: 0;
-        color: var(--light-text-secondary) !important;
+        color: rgba(0, 0, 0, 0.45) !important;
       }
 
       .ant-dropdown-menu-item {
         padding: 0;
         border-radius: 8px;
-        color: var(--light-text-primary) !important;
+        color: rgba(0, 0, 0, 0.85) !important;
 
         &:hover {
-          background: transparent;
+          background: rgba(0, 0, 0, 0.04);
         }
       }
 

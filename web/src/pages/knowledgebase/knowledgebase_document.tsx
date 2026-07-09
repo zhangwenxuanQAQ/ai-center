@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+﻿﻿import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Tabs } from 'antd';
 import { Layout, Tree, Table, Input, Select, Button, Tag, Spin, Pagination, Empty, Row, Col, Tooltip, Switch, message, Modal, Popconfirm, Form, TreeSelect, Popover, Descriptions, Dropdown } from 'antd';
@@ -527,17 +527,17 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
   const getStatusColor = useCallback((status: string) => {
     switch (status) {
       case 'done':
-        return 'success';
+        return 'green';
       case 'running':
-        return 'success';
+        return 'blue';
       case 'waiting':
-        return 'processing';
+        return 'orange';
       case 'pending':
       case 'schedule':
         return 'default';
       case 'fail':
       case 'cancel':
-        return 'error';
+        return 'red';
       default:
         return 'default';
     }
@@ -744,7 +744,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       title: '知识标题',
       dataIndex: 'title',
       key: 'title',
-      width: 250,
+      width: 180,
       render: (text: string, record: KnowledgebaseDocument) => {
         const displayTitle = text || record.file_name || '未命名知识';
         return (
@@ -771,7 +771,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       title: '文档名称',
       dataIndex: 'file_name',
       key: 'file_name',
-      width: 200,
+      width: 150,
       render: (text: string) => (
         <Tooltip title={text}>
           <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -784,23 +784,37 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       title: '数据来源',
       dataIndex: 'source_type',
       key: 'source_type',
-      width: 120,
+      width: 140,
       render: (sourceType: string) => {
+        let label = sourceType || '-';
         if (documentConstants?.source_types) {
           const sourceTypeItem = documentConstants.source_types.find((st: any) => st.key === sourceType);
-          return sourceTypeItem?.label || sourceType || '-';
+          label = sourceTypeItem?.label || sourceType || '-';
         }
-        return sourceType || '-';
+        return (
+          <Tooltip title={label}>
+            <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {label}
+            </span>
+          </Tooltip>
+        );
       },
     },
     {
       title: '更新时间',
       dataIndex: 'updated_at',
       key: 'updated_at',
-      width: 150,
-      render: (updatedAt: string) => (
-        <span>{updatedAt ? new Date(updatedAt).toLocaleString() : '-'}</span>
-      ),
+      width: 180,
+      render: (updatedAt: string) => {
+        const displayTime = updatedAt ? new Date(updatedAt).toLocaleString() : '-';
+        return (
+          <Tooltip title={displayTime}>
+            <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {displayTime}
+            </span>
+          </Tooltip>
+        );
+      },
     },
     {
       title: '切片方法',
@@ -819,7 +833,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       title: '解析状态',
       dataIndex: 'running_status',
       key: 'running_status',
-      width: 120,
+      width: 140,
       render: (status: string, record: KnowledgebaseDocument) => {
         const runningStatusMap = documentConstants?.running_status || {};
         const statusLabel = runningStatusMap[status] || status;
@@ -890,7 +904,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       title: '状态',
       dataIndex: 'status',
       key: 'status',
-      width: 100,
+      width: 120,
       render: (status: boolean, record: KnowledgebaseDocument) => (
         <Switch 
           checked={status}
@@ -904,7 +918,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
       title: '操作',
       key: 'action',
       width: 240,
-      // fixed: 'right' as const,
+      fixed: 'right' as const,
       render: (_: any, record: KnowledgebaseDocument) => {
         const getStatusButton = () => {
           switch (record.running_status) {

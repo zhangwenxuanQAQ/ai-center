@@ -369,6 +369,36 @@ body[data-theme="dark"] div.ant-select-dropdown {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4) !important;
 }
 
+/* TreeSelect Dropdown 样式 */
+body[data-theme="dark"] .ant-tree-select-dropdown,
+body[data-theme="dark"] div.ant-tree-select-dropdown {
+  background: #1a1a2e !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4) !important;
+}
+
+body[data-theme="dark"] .ant-tree-select-dropdown .ant-select-tree,
+body[data-theme="dark"] div.ant-tree-select-dropdown div.ant-select-tree {
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+body[data-theme="dark"] .ant-tree-select-dropdown .ant-select-tree-treenode,
+body[data-theme="dark"] div.ant-tree-select-dropdown div.ant-select-tree-treenode {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+body[data-theme="dark"] .ant-tree-select-dropdown .ant-select-tree-node-content-wrapper,
+body[data-theme="dark"] div.ant-tree-select-dropdown div.ant-select-tree-node-content-wrapper {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+body[data-theme="dark"] .ant-tree-select-dropdown .ant-select-tree-node-content-wrapper:hover,
+body[data-theme="dark"] div.ant-tree-select-dropdown div.ant-select-tree-node-content-wrapper:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
 body[data-theme="dark"] .ant-select-item,
 body[data-theme="dark"] div.ant-select-item {
   color: rgba(255, 255, 255, 0.75) !important;
@@ -385,6 +415,71 @@ body[data-theme="dark"] .ant-select-item-option-active,
 body[data-theme="dark"] div.ant-select-item-option-active {
   background: rgba(255, 255, 255, 0.08) !important;
   color: #fff !important;
+}
+
+/* ==================== 夜间模式下拉菜单样式 ==================== */
+
+/* Dropdown 菜单样式 */
+body[data-theme="dark"] .ant-dropdown-menu,
+body[data-theme="dark"] ul.ant-dropdown-menu {
+  background: #1a1a2e !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4) !important;
+  padding: 8px !important;
+}
+
+body[data-theme="dark"] .ant-dropdown-menu-item,
+body[data-theme="dark"] li.ant-dropdown-menu-item {
+  color: rgba(255, 255, 255, 0.85) !important;
+  border-radius: 6px !important;
+}
+
+body[data-theme="dark"] .ant-dropdown-menu-item:hover,
+body[data-theme="dark"] li.ant-dropdown-menu-item:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+body[data-theme="dark"] .ant-dropdown-menu-item-selected,
+body[data-theme="dark"] li.ant-dropdown-menu-item-selected {
+  background: rgba(90, 111, 214, 0.15) !important;
+  color: #fff !important;
+}
+
+body[data-theme="dark"] .ant-dropdown-menu-item-group-title,
+body[data-theme="dark"] div.ant-dropdown-menu-item-group-title {
+  color: rgba(255, 255, 255, 0.45) !important;
+}
+
+/* ==================== 夜间模式 Table 表头不换行 ==================== */
+body[data-theme="dark"] .ant-table-thead > tr > th,
+body[data-theme="dark"] thead.ant-table-thead > tr > th {
+  white-space: nowrap !important;
+}
+
+/* ==================== 夜间模式分页跳转输入框样式 ==================== */
+body[data-theme="dark"] .ant-pagination-options-quick-jumper input,
+body[data-theme="dark"] .ant-pagination-options-quick-jumper > input {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  border-radius: 4px !important;
+}
+
+body[data-theme="dark"] .ant-pagination-options-quick-jumper input:hover,
+body[data-theme="dark"] .ant-pagination-options-quick-jumper > input:hover {
+  border-color: var(--primary-color) !important;
+}
+
+body[data-theme="dark"] .ant-pagination-options-quick-jumper input:focus,
+body[data-theme="dark"] .ant-pagination-options-quick-jumper > input:focus {
+  border-color: var(--primary-color) !important;
+  box-shadow: 0 0 0 2px rgba(90, 111, 214, 0.2) !important;
+}
+
+body[data-theme="dark"] .ant-pagination-options-quick-jumper input::placeholder,
+body[data-theme="dark"] .ant-pagination-options-quick-jumper > input::placeholder {
+  color: rgba(255, 255, 255, 0.35) !important;
 }
 
 /* ==================== 夜间模式按钮样式 ==================== */
@@ -1154,7 +1249,6 @@ body[data-theme="dark"] .md-editor-container .cm-editor .cm-line {
 body[data-theme="dark"] .md-editor-wrapper .cm-editor .cm-line span,
 body[data-theme="dark"] .md-editor-container .cm-editor .cm-line span {
   color: #ffffff !important;
->>>>>>> 6daa4c40510493aee05772a513040527780328f5
 }
 
 body[data-theme="dark"] .ant-checkbox-indeterminate .ant-checkbox-inner::after,

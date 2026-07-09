@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿/* ==================== 白天模式主题样式 ==================== */
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿/* ==================== 白天模式主题样式 ==================== */
 
 body[data-theme="light"] .ant-card-bordered:not([data-card-type="model"]) {
   border-radius: 16px !important;
@@ -292,6 +292,45 @@ body[data-theme="light"] div.ant-select-dropdown {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12) !important;
 }
 
+/* Select 下拉框项文字颜色 */
+body[data-theme="light"] .ant-select-item,
+body[data-theme="light"] div.ant-select-item {
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+body[data-theme="light"] .ant-select-item-option-selected,
+body[data-theme="light"] div.ant-select-item-option-selected {
+  background: rgba(90, 111, 214, 0.12) !important;
+  color: var(--primary-color) !important;
+  font-weight: 600 !important;
+}
+
+body[data-theme="light"] .ant-select-item-option-selected .ant-select-item-option-content,
+body[data-theme="light"] div.ant-select-item-option-selected div.ant-select-item-option-content {
+  color: var(--primary-color) !important;
+}
+
+body[data-theme="light"] .ant-select-item-option-selected:not(.ant-select-item-option-disabled),
+body[data-theme="light"] div.ant-select-item-option-selected:not(div.ant-select-item-option-disabled) {
+  background: rgba(90, 111, 214, 0.12) !important;
+}
+
+body[data-theme="light"] .ant-select-item-option-active,
+body[data-theme="light"] div.ant-select-item-option-active {
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+
+/* Select 选择器内部文字颜色 */
+body[data-theme="light"] .ant-select-selection-item,
+body[data-theme="light"] span.ant-select-selection-item {
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+body[data-theme="light"] .ant-select-selection-placeholder,
+body[data-theme="light"] span.ant-select-selection-placeholder {
+  color: rgba(0, 0, 0, 0.35) !important;
+}
+
 /* ==================== 白天模式按钮样式 ==================== */
 
 body[data-theme="light"] .ant-btn-text,
@@ -319,6 +358,28 @@ body[data-theme="light"] button.ant-btn-primary {
 body[data-theme="light"] .ant-btn-primary:hover,
 body[data-theme="light"] button.ant-btn-primary:hover {
   background: var(--primary-gradient-hover) !important;
+}
+
+/* 默认按钮（取消按钮/测试连接按钮）样式 */
+body[data-theme="light"] .ant-btn-default,
+body[data-theme="light"] button.ant-btn-default {
+  background: #ffffff !important;
+  border: 1px solid #d9d9d9 !important;
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+body[data-theme="light"] .ant-btn-default:hover,
+body[data-theme="light"] button.ant-btn-default:hover {
+  background: #f5f7fa !important;
+  border-color: var(--primary-color) !important;
+  color: var(--primary-color) !important;
+}
+
+body[data-theme="light"] .ant-btn-default:active,
+body[data-theme="light"] button.ant-btn-default:active {
+  background: #e8eaed !important;
+  border-color: var(--primary-color) !important;
+  color: var(--primary-color) !important;
 }
 
 body[data-theme="light"] .ant-btn-danger,
@@ -459,6 +520,42 @@ body[data-theme="light"] a.ant-pagination-item-link {
   color: rgba(0, 0, 0, 0.65) !important;
 }
 
+/* 分页跳转输入框样式 */
+body[data-theme="light"] .ant-pagination-options-quick-jumper input,
+body[data-theme="light"] .ant-pagination-options-quick-jumper > input {
+  background: #ffffff !important;
+  border: 1px solid #d9d9d9 !important;
+  color: rgba(0, 0, 0, 0.85) !important;
+  border-radius: 4px !important;
+}
+
+body[data-theme="light"] .ant-pagination-options-quick-jumper input:hover,
+body[data-theme="light"] .ant-pagination-options-quick-jumper > input:hover {
+  border-color: var(--primary-color) !important;
+}
+
+body[data-theme="light"] .ant-pagination-options-quick-jumper input:focus,
+body[data-theme="light"] .ant-pagination-options-quick-jumper > input:focus {
+  border-color: var(--primary-color) !important;
+  box-shadow: 0 0 0 2px rgba(90, 111, 214, 0.15) !important;
+}
+
+body[data-theme="light"] .ant-pagination-options-quick-jumper input::placeholder,
+body[data-theme="light"] .ant-pagination-options-quick-jumper > input::placeholder {
+  color: rgba(0, 0, 0, 0.35) !important;
+}
+
+/* 分页跳转文字"前往""页"颜色 */
+body[data-theme="light"] .ant-pagination-options-quick-jumper,
+body[data-theme="light"] div.ant-pagination-options-quick-jumper {
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+body[data-theme="light"] .ant-pagination-options,
+body[data-theme="light"] div.ant-pagination-options {
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
 /* Switch 样式 */
 body[data-theme="light"] .ant-switch-checked,
 body[data-theme="light"] button.ant-switch-checked {
@@ -541,6 +638,61 @@ body[data-theme="light"] div.ant-tabs-tab-active {
   color: var(--primary-color) !important;
 }
 
+/* ==================== 白天模式 InputNumber 数字输入框样式 ==================== */
+body[data-theme="light"] .ant-input-number,
+body[data-theme="light"] div.ant-input-number {
+  background: #ffffff !important;
+  border: 1px solid #d9d9d9 !important;
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+body[data-theme="light"] .ant-input-number:hover,
+body[data-theme="light"] div.ant-input-number:hover {
+  border-color: var(--primary-color) !important;
+}
+
+body[data-theme="light"] .ant-input-number:focus,
+body[data-theme="light"] div.ant-input-number:focus,
+body[data-theme="light"] .ant-input-number-focused,
+body[data-theme="light"] div.ant-input-number-focused {
+  border-color: var(--primary-color) !important;
+  box-shadow: 0 0 0 2px rgba(90, 111, 214, 0.15) !important;
+}
+
+body[data-theme="light"] .ant-input-number-input,
+body[data-theme="light"] div.ant-input-number-input {
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+body[data-theme="light"] .ant-input-number-handler-wrap,
+body[data-theme="light"] div.ant-input-number-handler-wrap {
+  background: #ffffff !important;
+}
+
+body[data-theme="light"] .ant-input-number-handler,
+body[data-theme="light"] div.ant-input-number-handler {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+body[data-theme="light"] .ant-input-number-handler:hover,
+body[data-theme="light"] div.ant-input-number-handler:hover {
+  color: var(--primary-color) !important;
+}
+
+body[data-theme="light"] .ant-input-number-handler-up-inner,
+body[data-theme="light"] div.ant-input-number-handler-up-inner,
+body[data-theme="light"] .ant-input-number-handler-down-inner,
+body[data-theme="light"] div.ant-input-number-handler-down-inner {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+body[data-theme="light"] .ant-input-number-handler:hover .ant-input-number-handler-up-inner,
+body[data-theme="light"] div.ant-input-number-handler:hover div.ant-input-number-handler-up-inner,
+body[data-theme="light"] .ant-input-number-handler:hover .ant-input-number-handler-down-inner,
+body[data-theme="light"] div.ant-input-number-handler:hover div.ant-input-number-handler-down-inner {
+  color: var(--primary-color) !important;
+}
+
 body[data-theme="light"] .ant-tabs-tab-active::after,
 body[data-theme="light"] div.ant-tabs-tab-active::after {
   border-bottom-color: var(--primary-color) !important;
@@ -549,6 +701,32 @@ body[data-theme="light"] div.ant-tabs-tab-active::after {
 body[data-theme="light"] .ant-tabs-nav-wrap::after,
 body[data-theme="light"] div.ant-tabs-nav-wrap::after {
   border-bottom-color: rgba(90, 111, 214, 0.2) !important;
+}
+
+/* Card 类型 Tabs 标签边框样式 */
+body[data-theme="light"] .ant-tabs-card > .ant-tabs-nav .ant-tabs-tab,
+body[data-theme="light"] .ant-tabs-card > div.ant-tabs-nav div.ant-tabs-tab {
+  border: 1px solid #d9d9d9 !important;
+  background: #fafafa !important;
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+body[data-theme="light"] .ant-tabs-card > .ant-tabs-nav .ant-tabs-tab:hover,
+body[data-theme="light"] .ant-tabs-card > div.ant-tabs-nav div.ant-tabs-tab:hover {
+  color: var(--primary-color) !important;
+  background: #f0f0f0 !important;
+}
+
+body[data-theme="light"] .ant-tabs-card > .ant-tabs-nav .ant-tabs-tab-active,
+body[data-theme="light"] .ant-tabs-card > div.ant-tabs-nav div.ant-tabs-tab-active {
+  border-color: var(--primary-color) !important;
+  background: #ffffff !important;
+  color: var(--primary-color) !important;
+}
+
+body[data-theme="light"] .ant-tabs-card > .ant-tabs-nav .ant-tabs-tab-active::before,
+body[data-theme="light"] .ant-tabs-card > div.ant-tabs-nav div.ant-tabs-tab-active::before {
+  border-bottom-color: #ffffff !important;
 }
 
 /* Empty 样式 */
@@ -620,4 +798,153 @@ body[data-theme="light"] .ant-btn-dashed:hover,
 body[data-theme="light"] button.ant-btn-dashed:hover {
   background: #f5f7fa !important;
   border-color: #5a6fd6 !important;
+}
+
+/* ==================== 白天模式下拉菜单样式 ==================== */
+
+/* Dropdown 菜单样式 */
+body[data-theme="light"] .ant-dropdown-menu,
+body[data-theme="light"] ul.ant-dropdown-menu {
+  background: #ffffff !important;
+  border: 1px solid #e8e8e8 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12) !important;
+  padding: 8px !important;
+}
+
+body[data-theme="light"] .ant-dropdown-menu-item,
+body[data-theme="light"] li.ant-dropdown-menu-item {
+  color: rgba(0, 0, 0, 0.85) !important;
+  border-radius: 6px !important;
+}
+
+body[data-theme="light"] .ant-dropdown-menu-item:hover,
+body[data-theme="light"] li.ant-dropdown-menu-item:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+
+body[data-theme="light"] .ant-dropdown-menu-item-selected,
+body[data-theme="light"] li.ant-dropdown-menu-item-selected {
+  background: rgba(90, 111, 214, 0.08) !important;
+  color: var(--primary-color) !important;
+}
+
+body[data-theme="light"] .ant-dropdown-menu-item-group-title,
+body[data-theme="light"] div.ant-dropdown-menu-item-group-title {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+/* TreeSelect 下拉框样式 */
+body[data-theme="light"] .ant-tree-select-dropdown .ant-select-tree,
+body[data-theme="light"] div.ant-tree-select-dropdown div.ant-select-tree {
+  background: #ffffff !important;
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+body[data-theme="light"] .ant-select-tree .ant-select-tree-node-content-wrapper,
+body[data-theme="light"] div.ant-select-tree div.ant-select-tree-node-content-wrapper {
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+body[data-theme="light"] .ant-select-tree .ant-select-tree-node-content-wrapper:hover,
+body[data-theme="light"] div.ant-select-tree div.ant-select-tree-node-content-wrapper:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+
+/* TreeSelect 下拉框样式 */
+body[data-theme="light"] .ant-tree-select-dropdown,
+body[data-theme="light"] div.ant-tree-select-dropdown {
+  background: #ffffff !important;
+  border: 1px solid #e8e8e8 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12) !important;
+}
+
+body[data-theme="light"] .ant-tree-select-dropdown .ant-select-tree,
+body[data-theme="light"] div.ant-tree-select-dropdown div.ant-select-tree {
+  background: transparent !important;
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+body[data-theme="light"] .ant-tree-select-dropdown .ant-select-tree-treenode,
+body[data-theme="light"] div.ant-tree-select-dropdown div.ant-select-tree-treenode {
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+body[data-theme="light"] .ant-tree-select-dropdown .ant-select-tree-node-content-wrapper,
+body[data-theme="light"] div.ant-tree-select-dropdown div.ant-select-tree-node-content-wrapper {
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+body[data-theme="light"] .ant-tree-select-dropdown .ant-select-tree-node-content-wrapper:hover,
+body[data-theme="light"] div.ant-tree-select-dropdown div.ant-select-tree-node-content-wrapper:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+
+/* ==================== 白天模式 Table 表头不换行 ==================== */
+body[data-theme="light"] .ant-table-thead > tr > th,
+body[data-theme="light"] thead.ant-table-thead > tr > th {
+  white-space: nowrap !important;
+}
+
+/* ==================== 白天模式 Steps 步骤条样式 ==================== */
+body[data-theme="light"] .ant-steps-item-title,
+body[data-theme="light"] span.ant-steps-item-title {
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+body[data-theme="light"] .ant-steps-item-description,
+body[data-theme="light"] span.ant-steps-item-description {
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+body[data-theme="light"] .ant-steps-item-process .ant-steps-item-title,
+body[data-theme="light"] .ant-steps-item-process span.ant-steps-item-title {
+  color: rgba(0, 0, 0, 0.9) !important;
+  font-weight: 600 !important;
+}
+
+body[data-theme="light"] .ant-steps-item-wait .ant-steps-item-title,
+body[data-theme="light"] .ant-steps-item-wait span.ant-steps-item-title {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+body[data-theme="light"] .ant-steps-item-finish .ant-steps-item-title,
+body[data-theme="light"] .ant-steps-item-finish span.ant-steps-item-title {
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+body[data-theme="light"] .ant-steps-item-icon {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.25) !important;
+}
+
+body[data-theme="light"] .ant-steps-item-icon > .ant-steps-icon {
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+body[data-theme="light"] .ant-steps-item-process .ant-steps-item-icon {
+  background: var(--primary-color) !important;
+  border-color: var(--primary-color) !important;
+}
+
+body[data-theme="light"] .ant-steps-item-process .ant-steps-item-icon > .ant-steps-icon {
+  color: #ffffff !important;
+}
+
+body[data-theme="light"] .ant-steps-item-finish .ant-steps-item-icon {
+  background: #ffffff !important;
+  border-color: var(--primary-color) !important;
+}
+
+body[data-theme="light"] .ant-steps-item-finish .ant-steps-item-icon > .ant-steps-icon {
+  color: var(--primary-color) !important;
+}
+
+body[data-theme="light"] .ant-steps-item-tail::after {
+  background: #e8e8e8 !important;
+}
+
+body[data-theme="light"] .ant-steps-item-finish .ant-steps-item-tail::after {
+  background: var(--primary-color) !important;
 }
