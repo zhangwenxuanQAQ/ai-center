@@ -3030,7 +3030,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         padding: '16px 0 8px 0',
         borderTop: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}`,
         marginTop: 16,
-        backgroundColor: theme === 'dark' ? '#1e1e1e' : '#ffffff',
+        backgroundColor: theme === 'dark' ? '' : '#ffffff',
       }}>
         {isEdit && hasChanges && (
           <span style={{ color: '#faad14', fontSize: 12 }}>
@@ -3069,7 +3069,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       display: 'flex',
       flexDirection: 'column',
       overflowY: 'hidden',
-      backgroundColor: theme === 'dark' ? '#1e1e1e' : '#ffffff',
+      backgroundColor: theme === 'dark' ? '' : '#ffffff',
     }}>
       {/* <PageHeader
         items={[
@@ -3095,7 +3095,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         padding: '24px',
         scrollbarWidth: 'none',
         msOverflowStyle: 'none',
-        backgroundColor: theme === 'dark' ? '#1e1e1e' : '#ffffff'
+        backgroundColor: theme === 'dark' ? '' : '#ffffff'
       }} className="hide-scrollbar">
         <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; }`}</style>
         <Form layout="vertical" style={{ width: '100%' }}>

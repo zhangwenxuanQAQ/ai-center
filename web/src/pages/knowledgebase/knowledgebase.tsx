@@ -365,7 +365,11 @@ const KnowledgebaseManagement: React.FC = () => {
   };
 
   const handleAddKnowledgebase = () => {
-    navigate('/knowledgebase/create');
+    if (selectedCategory) {
+      navigate(`/knowledgebase/create?category_id=${selectedCategory}`);
+    } else {
+      navigate('/knowledgebase/create');
+    }
   };
 
   const handleEditKnowledgebase = (kb: Knowledgebase) => {

@@ -16,7 +16,7 @@ const breadcrumbMap: Record<string, { title: string; path?: string }[]> = {
   '/mcps': [{ title: '首页', path: '/' }, { title: 'MCP' }],
   '/mcp/setting/:id': [{ title: '首页', path: '/' }, { title: 'MCP', path: '/mcps' }, { title: 'MCP配置' }],
   '/knowledgebases': [{ title: '首页', path: '/' }, { title: '知识库' }],
-  '/knowledgebase/create': [{ title: '首页', path: '/' }, { title: '知识库', path: '/knowledgebases' }, { title: '创建知识库' }],
+  '/knowledgebase/create': [{ title: '首页', path: '/' }, { title: '知识库', path: '/knowledgebases' }, { title: '新增知识库' }],
   '/knowledgebase/detail/:id': [{ title: '首页', path: '/' }, { title: '知识库', path: '/knowledgebases' }, { title: '知识库详情' }],
   '/llm_models': [{ title: '首页', path: '/' }, { title: '模型管理' }],
   '/llm_model/setting/:id': [{ title: '首页', path: '/' }, { title: '模型管理', path: '/llm_models' }, { title: '模型配置' }],

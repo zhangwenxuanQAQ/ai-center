@@ -27,7 +27,7 @@ const ChatList: React.FC<ChatListProps> = ({
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [showSearch, setShowSearch] = useState(false);
-  const [activeTab, setActiveTab] = useState<'pinned' | 'all'>('pinned');
+  const [activeTab, setActiveTab] = useState<'pinned' | 'all'>('all');
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -386,6 +386,15 @@ const ChatList: React.FC<ChatListProps> = ({
       
       <div className={`sidebar-tabs ${theme === 'dark' ? 'dark' : 'light'}`}>
         <div 
+          className={`tab ${theme === 'dark' ? 'dark' : 'light'} ${activeTab === 'all' ? 'active' : ''}`}
+          onClick={() => setActiveTab('all')}
+          style={{ minWidth: 138,height: 32}}
+        >
+          <MessageOutlined />
+          <span>全部对话</span>
+          <span className="tab-badge">7天内</span>
+        </div>
+        <div 
           className={`tab ${theme === 'dark' ? 'dark' : 'light'} ${activeTab === 'pinned' ? 'active' : ''}`}
           onClick={() => setActiveTab('pinned')}
           style={{ minWidth:110,height: 32}}
@@ -395,15 +404,6 @@ const ChatList: React.FC<ChatListProps> = ({
           {pinnedConversations.length > 0 && (
             <span className="tab-badge">{pinnedConversations.length}</span>
           )}
-        </div>
-        <div 
-          className={`tab ${theme === 'dark' ? 'dark' : 'light'} ${activeTab === 'all' ? 'active' : ''}`}
-          onClick={() => setActiveTab('all')}
-          style={{ minWidth: 138,height: 32}}
-        >
-          <MessageOutlined />
-          <span>全部对话</span>
-          <span className="tab-badge">7天内</span>
         </div>
       </div>
       
