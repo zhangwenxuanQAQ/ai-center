@@ -1139,6 +1139,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
           display: 'flex',
           flexDirection: 'column',
           overflowY: 'hidden',
+          padding: '24px',
         }}>
         <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap', alignItems: 'center' }}>
           <Button
@@ -1336,7 +1337,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
         <div style={{ 
           flex: 1, 
           minHeight: 0,
-          overflowY: 'auto', 
+          overflow: 'auto', 
           marginBottom: '0',
           scrollbarWidth: 'none',
           msOverflowStyle: 'none'
@@ -1349,7 +1350,7 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
             pagination={false}
             loading={loading}
             className={`knowledgebase-document-table ${theme === 'dark' ? 'dark' : 'light'}`}
-            scroll={{ x: 1200, y: 'calc(100vh - 300px)' }}
+            scroll={{ x: 1200 }}
             rowSelection={{
               selectedRowKeys,
               onChange: (selectedKeys) => setSelectedRowKeys(selectedKeys),

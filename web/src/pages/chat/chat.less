@@ -29,7 +29,7 @@
   overflow: hidden;
 
   &.dark {
-    background: rgb(30, 30, 30);
+    background: #1a1a2e;
     border-right: 1px solid rgba(255, 255, 255, 0.08);
 
     &::after {
@@ -773,26 +773,33 @@
   &.dark {
     :global {
       .ant-dropdown-menu {
-        background: rgba(30, 30, 30, 0.98) !important;
+        background: var(--dark-bg-card) !important;
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 12px;
         padding: 8px;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
         max-height: 400px !important;
         overflow-y: auto !important;
+        color: var(--dark-text-primary) !important;
       }
 
       .ant-dropdown-menu-item-group-title {
         padding: 0;
+        color: var(--dark-text-secondary) !important;
       }
 
       .ant-dropdown-menu-item {
         padding: 0;
         border-radius: 8px;
+        color: var(--dark-text-primary) !important;
 
         &:hover {
           background: transparent;
         }
+      }
+
+      .ant-dropdown-menu-item-divider {
+        border-color: rgba(255, 255, 255, 0.08) !important;
       }
     }
   }
@@ -800,26 +807,33 @@
   &.light {
     :global {
       .ant-dropdown-menu {
-        background: rgba(255, 255, 255, 0.98) !important;
+        background: var(--light-bg-card) !important;
         border: 1px solid rgba(0, 0, 0, 0.08);
         border-radius: 12px;
         padding: 8px;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
         max-height: 400px !important;
         overflow-y: auto !important;
+        color: var(--light-text-primary) !important;
       }
 
       .ant-dropdown-menu-item-group-title {
         padding: 0;
+        color: var(--light-text-secondary) !important;
       }
 
       .ant-dropdown-menu-item {
         padding: 0;
         border-radius: 8px;
+        color: var(--light-text-primary) !important;
 
         &:hover {
           background: transparent;
         }
+      }
+
+      .ant-dropdown-menu-item-divider {
+        border-color: rgba(0, 0, 0, 0.08) !important;
       }
     }
   }

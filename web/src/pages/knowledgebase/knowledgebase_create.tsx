@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Form, Input, Select, TreeSelect, Button, message, Row, Col, Upload, Spin, Tag, Avatar, Modal, InputNumber, Switch, Slider, Tooltip, Drawer, Descriptions } from 'antd';
 const { TextArea } = Input;
 import { ArrowLeftOutlined, SaveOutlined, UploadOutlined, DatabaseOutlined, ApiOutlined, QuestionCircleOutlined, EyeOutlined, PlusOutlined, DeleteOutlined, SettingOutlined, CloseOutlined } from '@ant-design/icons';
@@ -20,6 +20,7 @@ const getProviderAvatar = (provider: string): string => {
 const KnowledgebaseCreate: React.FC = () => {
   const navigate = useNavigate();
   const [form] = Form.useForm();
+  const [searchParams] = useSearchParams();
   const [theme, setTheme] = useState<'dark' | 'light'>('light');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -87,9 +88,14 @@ const KnowledgebaseCreate: React.FC = () => {
       const data = await knowledgebaseService.getCategoryTree();
       setCategories(data);
       
-      const defaultCategory = data.find((cat: KnowledgebaseCategory) => cat.name === '默认分类');
-      if (defaultCategory) {
-        form.setFieldValue('category_id', defaultCategory.id);
+      const urlCategoryId = searchParams.get('category_id');
+      if (urlCategoryId) {
+        form.setFieldValue('category_id', urlCategoryId);
+      } else {
+        const defaultCategory = data.find((cat: KnowledgebaseCategory) => cat.name === '默认分类');
+        if (defaultCategory) {
+          form.setFieldValue('category_id', defaultCategory.id);
+        }
       }
     } catch (error) {
       console.error('Failed to fetch categories:', error);
@@ -289,14 +295,15 @@ const KnowledgebaseCreate: React.FC = () => {
   };
 
   const buildCategoryTreeSelectData = () => {
-    return categories.map(category => ({
-      title: category.name,
-      value: category.id,
-      children: category.children?.map(child => ({
-        title: child.name,
-        value: child.id
-      }))
-    }));
+    const buildTree = (cat: KnowledgebaseCategory): any => ({
+      title: cat.name,
+      value: String(cat.id),
+      children: cat.children && cat.children.length > 0 
+        ? cat.children.map(child => buildTree(child))
+        : undefined
+    });
+    
+    return categories.map(category => buildTree(category));
   };
 
   const renderRetrievalConfig = (param: any) => {
@@ -377,7 +384,7 @@ const KnowledgebaseCreate: React.FC = () => {
       {/* <PageHeader
         items={[
           { title: '知识库管理', icon: <DatabaseOutlined />, onClick: () => navigate('/knowledgebases') },
-          { title: '创建知识库' } 
+          { title: '新增知识库' } 
         ]}
         extra={
           <Button icon={<ArrowLeftOutlined />} onClick={handleBack}>

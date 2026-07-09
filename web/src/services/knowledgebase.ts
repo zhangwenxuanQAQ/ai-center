@@ -167,7 +167,7 @@ export const knowledgebaseService = {
   },
 
   /**
-   * 创建知识库
+   * 新增知识库
    */
   createKnowledgebase: async (data: Partial<Knowledgebase>): Promise<Knowledgebase> => {
     return http.post<Knowledgebase>(
