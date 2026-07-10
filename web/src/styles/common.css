@@ -1291,3 +1291,135 @@ body[data-theme="light"] .ant-steps .ant-steps-item-wait .ant-steps-item-icon .a
   color: rgba(0, 0, 0, 0.65) !important;
 }
 
+/* ===================== Collapsible Code Block ===================== */
+
+/* Dark theme */
+body[data-theme="dark"] .collapsible-code-block {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 6px !important;
+  overflow: hidden;
+  margin: 8px 0 !important;
+}
+
+body[data-theme="dark"] .collapsible-code-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 8px 12px !important;
+  cursor: pointer !important;
+  user-select: none !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  transition: background 0.2s ease !important;
+}
+
+body[data-theme="dark"] .collapsible-code-header:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+body[data-theme="dark"] .collapsible-code-header-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+body[data-theme="dark"] .collapsible-code-title {
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: #c8d3e8 !important;
+}
+
+body[data-theme="dark"] .collapsible-code-toggle {
+  font-size: 12px !important;
+  color: rgba(255, 255, 255, 0.45) !important;
+}
+
+body[data-theme="dark"] .collapsible-code-content {
+  padding: 12px 16px !important;
+  overflow-x: auto !important;
+  background: transparent !important;
+}
+
+body[data-theme="dark"] .collapsible-code-pre,
+body[data-theme="dark"] .collapsible-code-pre code,
+body[data-theme="dark"] .collapsible-code-pre code span,
+body[data-theme="dark"] .collapsible-code-pre span {
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
+  font-size: 13px !important;
+  line-height: 1.6 !important;
+  color: #d0d6e0 !important;
+}
+
+body[data-theme="dark"] .collapsible-code-block .collapsible-code-header-left .anticon {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+/* Light theme */
+body[data-theme="light"] .collapsible-code-block {
+  background: #f6f8fa !important;
+  border: 1px solid #d0d7de !important;
+  border-radius: 6px !important;
+  overflow: hidden;
+  margin: 8px 0 !important;
+}
+
+body[data-theme="light"] .collapsible-code-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 8px 12px !important;
+  cursor: pointer !important;
+  user-select: none !important;
+  background: #eaeef2 !important;
+  transition: background 0.2s ease !important;
+}
+
+body[data-theme="light"] .collapsible-code-header:hover {
+  background: #dde3e9 !important;
+}
+
+body[data-theme="light"] .collapsible-code-header-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+body[data-theme="light"] .collapsible-code-title {
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: #2c3e50 !important;
+}
+
+body[data-theme="light"] .collapsible-code-toggle {
+  font-size: 12px !important;
+  color: #6c757d !important;
+}
+
+body[data-theme="light"] .collapsible-code-content {
+  padding: 12px 16px !important;
+  overflow-x: auto !important;
+  background: transparent !important;
+}
+
+body[data-theme="light"] .collapsible-code-pre,
+body[data-theme="light"] .collapsible-code-pre code,
+body[data-theme="light"] .collapsible-code-pre code span,
+body[data-theme="light"] .collapsible-code-pre span {
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
+  font-size: 13px !important;
+  line-height: 1.6 !important;
+  color: #3c4a5a !important;
+}
+
+body[data-theme="light"] .collapsible-code-block .collapsible-code-header-left .anticon {
+  color: #6c757d !important;
+}
+

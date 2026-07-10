@@ -3,7 +3,7 @@ import { Input, Button, Switch, Modal, Slider, message, Popconfirm, Tooltip, Dro
 import { SendOutlined, ClearOutlined, SettingOutlined, RobotOutlined, BulbOutlined, LoadingOutlined, DownOutlined, RightOutlined, CopyOutlined, ReloadOutlined, EditOutlined, InfoCircleOutlined, StopOutlined, PaperClipOutlined, FolderOpenOutlined, FileTextOutlined, UploadOutlined, CloseCircleOutlined, InboxOutlined, FilePdfOutlined, FileWordOutlined, FileImageOutlined, SoundOutlined, DownloadOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import DataSourceFileSelector from '../datasource/datasource data_select';
 import type { MenuProps, UploadProps } from 'antd';
-import MDEditor from '@uiw/react-md-editor';
+import ChatMarkdown from '../../components/ChatMarkdown';
 import { llmModelService, LLMModel } from '../../services/llm_model';
 import { chatbotService, Chatbot } from '../../services/chatbot';
 import { chatService, Conversation, Message, QueryItem, FileInfo } from '../../services/chat';
@@ -2348,7 +2348,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 </div>
                 <div className="reasoning-text">
                   <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                    <MDEditor.Markdown
+                    <ChatMarkdown
                       source={msg.reasoning_content}
                       className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                     />
@@ -2379,7 +2379,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
                   <div className="reasoning-text">
                     <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                      <MDEditor.Markdown
+                      <ChatMarkdown
                         source={msg.reasoning_content}
                         className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                       />
@@ -2429,7 +2429,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 </div>
                 <div className="reasoning-text">
                   <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                    <MDEditor.Markdown
+                    <ChatMarkdown
                       source={msg.reasoning_content}
                       className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                     />
@@ -2460,7 +2460,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
                   <div className="reasoning-text">
                     <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                      <MDEditor.Markdown
+                      <ChatMarkdown
                         source={msg.reasoning_content}
                         className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                       />
@@ -2582,7 +2582,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 </div>
                 <div className="reasoning-text">
                   <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                    <MDEditor.Markdown
+                    <ChatMarkdown
                       source={msg.reasoning_content}
                       className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                     />
@@ -2613,7 +2613,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
                   <div className="reasoning-text">
                     <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                      <MDEditor.Markdown
+                      <ChatMarkdown
                         source={msg.reasoning_content}
                         className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                       />
@@ -2624,7 +2624,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             )}
             {msg.content && (msg.status !== 'start' || !msg.status) && (
               <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                <MDEditor.Markdown
+                <ChatMarkdown
                   source={msg.content}
                   className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                 />
@@ -2676,7 +2676,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                     {/* 思考过程 - 直接展示内容，不显示标题文字 */}
                     {tc.reasoning_content && (
                       <div className={`tool-call-reasoning-text ${theme === 'dark' ? 'dark' : 'light'}`}>
-                        <MDEditor.Markdown
+                        <ChatMarkdown
                           source={tc.reasoning_content}
                           className={`md-editor small-text ${theme === 'dark' ? 'dark' : 'light'}`}
                         />
@@ -2708,7 +2708,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                             {/* 工具调用消息 */}
                             {tc.message && (
                               <div className={`tool-call-message ${theme === 'dark' ? 'dark' : 'light'}`}>
-                                <MDEditor.Markdown
+                                <ChatMarkdown
                                   source={tc.message}
                                   className={`md-editor small-text ${theme === 'dark' ? 'dark' : 'light'}`}
                                 />
@@ -2717,7 +2717,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                             {/* 工具调用结果 */}
                             {tc.result && (
                               <div className={`tool-call-result ${theme === 'dark' ? 'dark' : 'light'}`}>
-                                <MDEditor.Markdown
+                                <ChatMarkdown
                                   source={typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result, null, 2)}
                                   className={`md-editor small-text ${theme === 'dark' ? 'dark' : 'light'}`}
                                 />
@@ -2776,7 +2776,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                   <div className="tool-call-content">
                     {tc.message && (
                       <div className={`tool-call-message ${theme === 'dark' ? 'dark' : 'light'}`}>
-                        <MDEditor.Markdown
+                        <ChatMarkdown
                           source={tc.message}
                           className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                         />
@@ -2784,7 +2784,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                     )}
                     {tc.result && (
                       <div className={`tool-call-result ${theme === 'dark' ? 'dark' : 'light'}`}>
-                        <MDEditor.Markdown
+                        <ChatMarkdown
                           source={JSON.stringify(tc.result, null, 2)}
                           className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                         />
@@ -2800,7 +2800,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         {/* 结果总结阶段 */}
         {(msg.step === 'result_summary' || msg.extra_content?.step === 'result_summary') && msg.content && (msg.status !== 'start' || !msg.status) && (
           <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-            <MDEditor.Markdown
+            <ChatMarkdown
               source={msg.content}
               className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
             />
@@ -2830,7 +2830,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
                   <div className="reasoning-text">
                     <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                      <MDEditor.Markdown
+                      <ChatMarkdown
                         source={msg.reasoning_content}
                         className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                       />
@@ -2841,7 +2841,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             )}
             {msg.content && (msg.status !== 'start' || !msg.status) && (
               <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                <MDEditor.Markdown
+                <ChatMarkdown
                   source={msg.content}
                   className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                 />
@@ -2978,7 +2978,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           <div className="tool-call-content">
             {hasReasoning && (
               <div className={`tool-call-reasoning-text ${theme === 'dark' ? 'dark' : 'light'}`}>
-                <MDEditor.Markdown
+                <ChatMarkdown
                   source={toolCall.reasoning_content}
                   className={`md-editor small-text ${theme === 'dark' ? 'dark' : 'light'}`}
                 />
@@ -3005,7 +3005,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                   <>
                     {hasMessage && (
                       <div className={`tool-call-message ${theme === 'dark' ? 'dark' : 'light'}`}>
-                        <MDEditor.Markdown
+                        <ChatMarkdown
                           source={msg.content}
                           className={`md-editor small-text ${theme === 'dark' ? 'dark' : 'light'}`}
                         />
@@ -3013,7 +3013,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                     )}
                     {hasResult && (
                       <div className={`tool-call-result ${theme === 'dark' ? 'dark' : 'light'}`}>
-                        <MDEditor.Markdown
+                        <ChatMarkdown
                           source={typeof toolCall.result === 'string' ? toolCall.result : JSON.stringify(toolCall.result, null, 2)}
                           className={`md-editor small-text ${theme === 'dark' ? 'dark' : 'light'}`}
                         />
@@ -3107,7 +3107,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                       {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
                         <div className="reasoning-text">
                           <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                            <MDEditor.Markdown
+                            <ChatMarkdown
                               source={msg.reasoning_content}
                               className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                             />
@@ -3139,7 +3139,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                       {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
                         <div className="reasoning-text">
                           <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                            <MDEditor.Markdown
+                            <ChatMarkdown
                               source={msg.reasoning_content}
                               className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                             />
@@ -3212,7 +3212,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                       {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
                         <div className="reasoning-text">
                           <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                            <MDEditor.Markdown
+                            <ChatMarkdown
                               source={msg.reasoning_content}
                               className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                             />
@@ -3244,7 +3244,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                       {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
                         <div className="reasoning-text">
                           <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                            <MDEditor.Markdown
+                            <ChatMarkdown
                               source={msg.reasoning_content}
                               className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                             />
@@ -3321,7 +3321,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                       {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
                         <div className="reasoning-text">
                           <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                            <MDEditor.Markdown
+                            <ChatMarkdown
                               source={msg.reasoning_content}
                               className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                             />
@@ -3353,7 +3353,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                       {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
                         <div className="reasoning-text">
                           <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                            <MDEditor.Markdown
+                            <ChatMarkdown
                               source={msg.reasoning_content}
                               className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                             />
@@ -3364,7 +3364,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                   )}
                   {msg.content && (msg.status !== 'start' || !msg.status) && (
                     <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                      <MDEditor.Markdown
+                      <ChatMarkdown
                         source={msg.content}
                         className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                       />
@@ -3440,7 +3440,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               {/* 结果总结阶段 */}
               {(msg.step === 'result_summary' || msg.extra_content?.step === 'result_summary') && msg.content && (msg.status !== 'start' || !msg.status) && (
                 <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                  <MDEditor.Markdown
+                  <ChatMarkdown
                     source={msg.content}
                     className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                   />
@@ -3470,7 +3470,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                       {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
                         <div className="reasoning-text">
                           <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                            <MDEditor.Markdown
+                            <ChatMarkdown
                               source={msg.reasoning_content}
                               className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                             />
@@ -3481,7 +3481,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                   )}
                   {msg.content && (msg.status !== 'start' || !msg.status) && (
                     <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                      <MDEditor.Markdown
+                      <ChatMarkdown
                         source={msg.content}
                         className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                       />
@@ -3661,7 +3661,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               )}
               {/* 显示用户消息内容 */}
               <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                <MDEditor.Markdown
+                <ChatMarkdown
                   source={msg.content}
                   className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                 />

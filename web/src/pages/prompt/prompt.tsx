@@ -5,6 +5,7 @@ const { TextArea } = Input;
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, FileTextOutlined, CheckCircleOutlined, CloseCircleOutlined, PlusSquareOutlined, UpOutlined, DownOutlined, CloseOutlined, EyeOutlined } from '@ant-design/icons';
 import type { TreeDataNode } from 'antd';
 import MDEditor from '@uiw/react-md-editor';
+import ChatMarkdown from '../../components/ChatMarkdown';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -1196,7 +1197,7 @@ const PromptManagement: React.FC = () => {
                   minHeight: '300px'
                 }}
               >
-                <MDEditor.Markdown
+                <ChatMarkdown
                   source={viewingPrompt.content || ''}
                   className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                 />

@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
 import { Card, Pagination, Input, Select, Switch, Spin, Empty, Tag, Tooltip, message, Image, Popover, Button, Popconfirm } from 'antd';
 import { SearchOutlined, ArrowLeftOutlined, DownOutlined, UpOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import MDEditor from '@uiw/react-md-editor';
+import ChatMarkdown from '../../components/ChatMarkdown';
 import { knowledgebaseService, KnowledgebaseDocument } from '../../services/knowledgebase';
 import ChunkSetting from './chunk_setting';
 import '../../styles/common.css';
@@ -441,7 +441,7 @@ const ChunkCard: React.FC<ChunkCardProps> = ({ chunk, theme, isExpanded, onToggl
               position: 'relative'
             }}
           >
-            <MDEditor.Markdown 
+            <ChatMarkdown 
               source={chunk.content_with_weight || ''} 
               className={`md-editor ${theme}`}
             />

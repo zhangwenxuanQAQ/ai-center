@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Layout, Slider, Select, Input, Button, Card, Tag, Spin, Empty, Pagination, Image, Popover, InputNumber, Tooltip, message, Switch, DatePicker, Space } from 'antd';
 import { SearchOutlined, FileTextOutlined, DownOutlined, UpOutlined, QuestionCircleOutlined, FilterOutlined } from '@ant-design/icons';
-import MDEditor from '@uiw/react-md-editor';
+import ChatMarkdown from '../../components/ChatMarkdown';
 import { knowledgebaseService, Knowledgebase } from '../../services/knowledgebase';
 import dayjs from 'dayjs';
 import zhCN from 'antd/es/date-picker/locale/zh_CN';
@@ -171,7 +171,7 @@ const ChunkCard: React.FC<{
               position: 'relative'
             }}
           >
-            <MDEditor.Markdown
+            <ChatMarkdown
               source={chunk.content_with_weight || ''}
               className={`md-editor ${theme}`}
             />

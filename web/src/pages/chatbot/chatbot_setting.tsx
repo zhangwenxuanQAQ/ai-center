@@ -1,11 +1,12 @@
 ﻿import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Form, Input, Select, TreeSelect, Button, message, Row, Col, Upload, Spin, Tag, Avatar, Modal, Table, Slider, InputNumber, Switch, Drawer, Descriptions, Dropdown, Tooltip } from 'antd';
+import { Form, Input, Select, TreeSelect, Button, message, Row, Col, Upload, Spin, Tag, Avatar, Modal, Table, Slider, InputNumber, Switch, Drawer, Descriptions, Dropdown, Tooltip, Tabs } from 'antd';
 const { TextArea } = Input;
-import { ArrowLeftOutlined, SaveOutlined, UndoOutlined, UploadOutlined, RobotOutlined, FileTextOutlined, DatabaseOutlined, ToolOutlined, ApiOutlined, CheckCircleOutlined, EyeOutlined, DeleteOutlined, PlusOutlined, SettingOutlined, CloseOutlined, EditOutlined, AppstoreOutlined, QuestionCircleOutlined, FormOutlined, UpOutlined, DownOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SaveOutlined, UndoOutlined, UploadOutlined, RobotOutlined, FileTextOutlined, DatabaseOutlined, ToolOutlined, ApiOutlined, CheckCircleOutlined, EyeOutlined, DeleteOutlined, PlusOutlined, SettingOutlined, CloseOutlined, EditOutlined, AppstoreOutlined, QuestionCircleOutlined, FormOutlined, UpOutlined, DownOutlined, CopyOutlined, ReloadOutlined, CodeOutlined, GlobalOutlined } from '@ant-design/icons';
 import type { UploadProps } from 'antd';
 import type { MenuProps } from 'antd';
 import MDEditor from '@uiw/react-md-editor';
+import ChatMarkdown from '../../components/ChatMarkdown';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -15,6 +16,7 @@ import { promptService, Prompt } from '../../services/prompt';
 import { knowledgebaseService, Knowledgebase } from '../../services/knowledgebase';
 import { mcpService, MCPServer } from '../../services/mcp';
 import { llmModelService, LLMModel } from '../../services/llm_model';
+import { integrationService, IntegrationConfig, IntegrationConfigsDetail } from '../../services/integration';
 import '../../styles/common.css';
 import './chatbot_setting.less';
 import { getDefaultAvatar } from '../../utils/avatar';
@@ -163,6 +165,13 @@ const ChatbotSetting: React.FC = () => {
   const [documentConstants, setDocumentConstants] = useState<any>(null);
   const [availableKnowledgebases, setAvailableKnowledgebases] = useState<Knowledgebase[]>([]);
 
+  // 插件集成相关state
+  const [integrationData, setIntegrationData] = useState<IntegrationConfigsDetail | null>(null);
+  const [integrationLoading, setIntegrationLoading] = useState(false);
+  const [integrationActiveTab, setIntegrationActiveTab] = useState<string>('api');
+  const [integrationCodeTab, setIntegrationCodeTab] = useState<string>('sidebar');
+  const [integrationCopied, setIntegrationCopied] = useState(false);
+
   useEffect(() => {
     const currentTheme = document.body.getAttribute('data-theme') || 'light';
     setTheme(currentTheme as 'light' | 'dark');
@@ -191,6 +200,7 @@ const ChatbotSetting: React.FC = () => {
       fetchBoundTools(id);
       fetchBoundKnowledgebases(id);
       fetchDocumentConstants();
+      fetchIntegrationConfigs(id);
     }
   }, [id]);
 
@@ -399,6 +409,59 @@ const ChatbotSetting: React.FC = () => {
       console.error('Failed to unbind knowledgebase:', error);
       message.error('知识库解绑失败');
     }
+  };
+
+  // 插件集成相关函数
+  const fetchIntegrationConfigs = async (chatbotId: string) => {
+    setIntegrationLoading(true);
+    try {
+      const result = await integrationService.getIntegrationConfigs(chatbotId);
+      setIntegrationData(result);
+    } catch (error) {
+      console.error('Failed to fetch integration configs:', error);
+    } finally {
+      setIntegrationLoading(false);
+    }
+  };
+
+  const handleEnableIntegration = async () => {
+    if (!chatbot) return;
+    try {
+      await integrationService.saveIntegration(chatbot.id);
+      message.success('集成配置已启用');
+      fetchIntegrationConfigs(chatbot.id);
+    } catch (error) {
+      console.error('Failed to enable integration:', error);
+      message.error('启用集成配置失败');
+    }
+  };
+
+  const handleRegenerateApiKey = async () => {
+    if (!chatbot) return;
+    Modal.confirm({
+      title: '确认重新生成API密钥？',
+      content: '重新生成后，旧的API密钥将失效，已集成的第三方服务需要重新配置。',
+      onOk: async () => {
+        try {
+          await integrationService.regenerateApiKey(chatbot.id);
+          message.success('API密钥已重新生成');
+          fetchIntegrationConfigs(chatbot.id);
+        } catch (error) {
+          console.error('Failed to regenerate API key:', error);
+          message.error('重新生成API密钥失败');
+        }
+      }
+    });
+  };
+
+  const handleCopyCode = (code: string) => {
+    navigator.clipboard.writeText(code).then(() => {
+      setIntegrationCopied(true);
+      message.success('代码已复制到剪贴板');
+      setTimeout(() => setIntegrationCopied(false), 2000);
+    }).catch(() => {
+      message.error('复制失败');
+    });
   };
 
   const handleBeforeUnload = useCallback((e: BeforeUnloadEvent) => {
@@ -1868,6 +1931,390 @@ const ChatbotSetting: React.FC = () => {
           </div>
 
         </div>
+
+        {/* 第三方插件集成 */}
+        <div style={{ 
+          padding: '16px', 
+          borderRadius: '4px', 
+          border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #d9d9d9', 
+          background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fafafa'
+        }}>
+          <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <GlobalOutlined style={{ fontSize: '14px', color: theme === 'dark' ? '#fff' : '#000' }} />
+            <span style={{ fontWeight: 500, fontSize: '14px', color: theme === 'dark' ? '#fff' : '#000' }}>第三方插件集成</span>
+          </div>
+          
+          {integrationLoading ? (
+            <div style={{ textAlign: 'center', padding: '24px' }}>
+              <Spin />
+            </div>
+          ) : !integrationData?.integration ? (
+            <div style={{ textAlign: 'center', padding: '24px' }}>
+              <div style={{ fontSize: '13px', color: theme === 'dark' ? '#aaa' : '#999', marginBottom: '12px' }}>
+                尚未启用第三方插件集成
+              </div>
+              <Button type="primary" onClick={handleEnableIntegration}>
+                启用集成
+              </Button>
+            </div>
+          ) : (
+            <Tabs
+              activeKey={integrationActiveTab}
+              onChange={setIntegrationActiveTab}
+              items={[
+                {
+                  key: 'api',
+                  label: <span><ApiOutlined /> API集成</span>,
+                  children: (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {/* API密钥 */}
+                      <div>
+                        <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', marginBottom: '4px' }}>API密钥</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Input
+                            value={integrationData.integration.api_key?.[0] || ''}
+                            readOnly
+                            style={{ flex: 1 }}
+                          />
+                          <Button
+                            icon={<CopyOutlined />}
+                            size="small"
+                            onClick={() => handleCopyCode(integrationData.integration.api_key?.[0] || '')}
+                          />
+                          <Button
+                            icon={<ReloadOutlined />}
+                            size="small"
+                            onClick={handleRegenerateApiKey}
+                          >
+                            重新生成
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      {/* Base URL */}
+                      <div>
+                        <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', marginBottom: '4px' }}>Base URL</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Input
+                            value={integrationData.integration.openai_base_url || ''}
+                            readOnly
+                            style={{ flex: 1 }}
+                          />
+                          <Button
+                            icon={<CopyOutlined />}
+                            size="small"
+                            onClick={() => handleCopyCode(integrationData.integration.openai_base_url || '')}
+                          />
+                        </div>
+                      </div>
+                      
+                      {/* 接口文档 */}
+                      <div>
+                        <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', marginBottom: '8px' }}>接口文档</div>
+                        <Tabs
+                          size="small"
+                          items={[
+                            {
+                              key: 'chat_api',
+                              label: '聊天接口',
+                              children: (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                  <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#666' }}>
+                                    POST {integrationData.integration.openai_base_url || ''}/chat/completions
+                                  </div>
+                                  <Tabs
+                                    size="small"
+                                    items={[
+                                      {
+                                        key: 'curl',
+                                        label: 'cURL',
+                                        children: (
+                                          <div style={{ position: 'relative' }}>
+                                            <pre style={{ 
+                                              background: theme === 'dark' ? '#1a1a2e' : '#f5f5f5', 
+                                              padding: '12px', 
+                                              borderRadius: '4px', 
+                                              fontSize: '12px',
+                                              overflow: 'auto',
+                                              maxHeight: '300px'
+                                            }}>
+                                              {integrationData.configs?.api_config?.chat?.request_example?.curl || ''}
+                                            </pre>
+                                            <Button
+                                              icon={<CopyOutlined />}
+                                              size="small"
+                                              style={{ position: 'absolute', top: '8px', right: '8px' }}
+                                              onClick={() => handleCopyCode(integrationData.configs?.api_config?.chat?.request_example?.curl || '')}
+                                            />
+                                          </div>
+                                        )
+                                      },
+                                      {
+                                        key: 'python',
+                                        label: 'Python',
+                                        children: (
+                                          <div style={{ position: 'relative' }}>
+                                            <pre style={{ 
+                                              background: theme === 'dark' ? '#1a1a2e' : '#f5f5f5', 
+                                              padding: '12px', 
+                                              borderRadius: '4px', 
+                                              fontSize: '12px',
+                                              overflow: 'auto',
+                                              maxHeight: '300px'
+                                            }}>
+                                              {integrationData.configs?.api_config?.chat?.request_example?.python || ''}
+                                            </pre>
+                                            <Button
+                                              icon={<CopyOutlined />}
+                                              size="small"
+                                              style={{ position: 'absolute', top: '8px', right: '8px' }}
+                                              onClick={() => handleCopyCode(integrationData.configs?.api_config?.chat?.request_example?.python || '')}
+                                            />
+                                          </div>
+                                        )
+                                      }
+                                    ]}
+                                  />
+                                  <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', marginTop: '4px' }}>响应示例</div>
+                                  <pre style={{ 
+                                    background: theme === 'dark' ? '#1a1a2e' : '#f5f5f5', 
+                                    padding: '12px', 
+                                    borderRadius: '4px', 
+                                    fontSize: '12px',
+                                    whiteSpace: 'pre-wrap',
+                                    maxHeight: '200px',
+                                    overflow: 'auto'
+                                  }}>
+                                    {integrationData.configs?.api_config?.chat?.response_example || ''}
+                                  </pre>
+                                </div>
+                              )
+                            },
+                            {
+                              key: 'messages_api',
+                              label: '获取聊天记录',
+                              children: (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                  <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#666' }}>
+                                    GET {integrationData.integration.openai_base_url || ''}/chat/{'{chat_id}'}/messages
+                                  </div>
+                                  <Tabs
+                                    size="small"
+                                    items={[
+                                      {
+                                        key: 'curl',
+                                        label: 'cURL',
+                                        children: (
+                                          <div style={{ position: 'relative' }}>
+                                            <pre style={{ 
+                                              background: theme === 'dark' ? '#1a1a2e' : '#f5f5f5', 
+                                              padding: '12px', 
+                                              borderRadius: '4px', 
+                                              fontSize: '12px',
+                                              overflow: 'auto'
+                                            }}>
+                                              {integrationData.configs?.api_config?.get_messages?.request_example?.curl || ''}
+                                            </pre>
+                                            <Button
+                                              icon={<CopyOutlined />}
+                                              size="small"
+                                              style={{ position: 'absolute', top: '8px', right: '8px' }}
+                                              onClick={() => handleCopyCode(integrationData.configs?.api_config?.get_messages?.request_example?.curl || '')}
+                                            />
+                                          </div>
+                                        )
+                                      },
+                                      {
+                                        key: 'python',
+                                        label: 'Python',
+                                        children: (
+                                          <div style={{ position: 'relative' }}>
+                                            <pre style={{ 
+                                              background: theme === 'dark' ? '#1a1a2e' : '#f5f5f5', 
+                                              padding: '12px', 
+                                              borderRadius: '4px', 
+                                              fontSize: '12px',
+                                              overflow: 'auto'
+                                            }}>
+                                              {integrationData.configs?.api_config?.get_messages?.request_example?.python || ''}
+                                            </pre>
+                                            <Button
+                                              icon={<CopyOutlined />}
+                                              size="small"
+                                              style={{ position: 'absolute', top: '8px', right: '8px' }}
+                                              onClick={() => handleCopyCode(integrationData.configs?.api_config?.get_messages?.request_example?.python || '')}
+                                            />
+                                          </div>
+                                        )
+                                      }
+                                    ]}
+                                  />
+                                  <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', marginTop: '4px' }}>响应示例</div>
+                                  <pre style={{ 
+                                    background: theme === 'dark' ? '#1a1a2e' : '#f5f5f5', 
+                                    padding: '12px', 
+                                    borderRadius: '4px', 
+                                    fontSize: '12px',
+                                    whiteSpace: 'pre-wrap',
+                                    maxHeight: '200px',
+                                    overflow: 'auto'
+                                  }}>
+                                    {integrationData.configs?.api_config?.get_messages?.response_example || ''}
+                                  </pre>
+                                </div>
+                              )
+                            }
+                          ]}
+                        />
+                      </div>
+                    </div>
+                  )
+                },
+                {
+                  key: 'interface',
+                  label: <span><CodeOutlined /> 界面集成</span>,
+                  children: (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      <div>
+                        <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', marginBottom: '8px' }}>
+                          悬浮球侧边栏
+                        </div>
+                        <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#666', marginBottom: '4px' }}>
+                          在网站右下角添加一个悬浮球，点击后展开侧边栏进行对话。
+                        </div>
+                        {integrationData.configs?.interface_config?.sidebar && (
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            {Object.entries(integrationData.configs.interface_config.sidebar).map(([key, value]) => (
+                              <Tag key={key}>{key}: {String(value)}</Tag>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', marginBottom: '8px' }}>
+                          iframe嵌入
+                        </div>
+                        <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#666', marginBottom: '4px' }}>
+                          通过iframe将聊天窗口嵌入到网页中。
+                        </div>
+                        {integrationData.configs?.interface_config?.iframe && (
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            {Object.entries(integrationData.configs.interface_config.iframe).map(([key, value]) => (
+                              <Tag key={key}>{key}: {String(value)}</Tag>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                },
+                {
+                  key: 'code',
+                  label: <span><CopyOutlined /> 嵌入代码</span>,
+                  children: (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <Tabs
+                        activeKey={integrationCodeTab}
+                        onChange={setIntegrationCodeTab}
+                        items={[
+                          {
+                            key: 'sidebar',
+                            label: '悬浮球侧边栏',
+                            children: (
+                              <div style={{ position: 'relative' }}>
+                                <pre style={{ 
+                                  background: theme === 'dark' ? '#1a1a2e' : '#f5f5f5', 
+                                  padding: '12px', 
+                                  borderRadius: '4px', 
+                                  fontSize: '12px',
+                                  overflow: 'auto',
+                                  maxHeight: '300px'
+                                }}>
+                                  {integrationData.configs?.html_code?.sidebar || ''}
+                                </pre>
+                                <Button
+                                  icon={<CopyOutlined />}
+                                  size="small"
+                                  style={{ position: 'absolute', top: '8px', right: '8px' }}
+                                  onClick={() => handleCopyCode(integrationData.configs?.html_code?.sidebar || '')}
+                                >
+                                  复制代码
+                                </Button>
+                              </div>
+                            )
+                          },
+                          {
+                            key: 'iframe',
+                            label: 'iframe嵌入',
+                            children: (
+                              <div style={{ position: 'relative' }}>
+                                <pre style={{ 
+                                  background: theme === 'dark' ? '#1a1a2e' : '#f5f5f5', 
+                                  padding: '12px', 
+                                  borderRadius: '4px', 
+                                  fontSize: '12px',
+                                  overflow: 'auto',
+                                  maxHeight: '300px'
+                                }}>
+                                  {integrationData.configs?.html_code?.iframe || ''}
+                                </pre>
+                                <Button
+                                  icon={<CopyOutlined />}
+                                  size="small"
+                                  style={{ position: 'absolute', top: '8px', right: '8px' }}
+                                  onClick={() => handleCopyCode(integrationData.configs?.html_code?.iframe || '')}
+                                >
+                                  复制代码
+                                </Button>
+                              </div>
+                            )
+                          }
+                        ]}
+                      />
+                    </div>
+                  )
+                },
+                {
+                  key: 'preview',
+                  label: <span><EyeOutlined /> 预览</span>,
+                  children: (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div style={{ fontSize: '13px', color: theme === 'dark' ? '#aaa' : '#666' }}>
+                        预览嵌入效果，确认无误后再发布。
+                      </div>
+                      <div style={{ 
+                        border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8',
+                        borderRadius: '8px',
+                        overflow: 'hidden',
+                        height: '500px'
+                      }}>
+                        <iframe
+                          src={integrationData.configs?.html_code?.iframe ? undefined : undefined}
+                          style={{ width: '100%', height: '100%', border: 'none' }}
+                          title="Preview"
+                        />
+                        <div style={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center',
+                          height: '100%',
+                          color: theme === 'dark' ? '#aaa' : '#999',
+                          fontSize: '13px'
+                        }}>
+                          <div style={{ textAlign: 'center' }}>
+                            <EyeOutlined style={{ fontSize: '32px', marginBottom: '8px' }} />
+                            <div>预览功能将在嵌入代码部署后可用</div>
+                            <div style={{ fontSize: '12px', marginTop: '4px' }}>请将上方嵌入代码复制到您的网站中查看效果</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                }
+              ]}
+            />
+          )}
+        </div>
       </div>
 
       {/* 模型选择弹窗 */}
@@ -2188,7 +2635,7 @@ const ChatbotSetting: React.FC = () => {
                   minHeight: '300px'
                 }}
               >
-                <MDEditor.Markdown
+                <ChatMarkdown
                   source={currentViewPrompt.prompt_content || currentViewPrompt.content || ''}
                   className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                 />
