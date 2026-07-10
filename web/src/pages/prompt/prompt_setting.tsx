@@ -5,6 +5,7 @@ const { TextArea } = Input;
 const { Option } = Select;
 import { ArrowLeftOutlined, SaveOutlined, FileTextOutlined, TagsOutlined, PlayCircleOutlined, SendOutlined, PlusOutlined, SettingOutlined, ClearOutlined, BulbOutlined, CopyOutlined, EditOutlined, DownOutlined, RightOutlined, LoadingOutlined, InfoCircleOutlined, ReloadOutlined, PaperClipOutlined } from '@ant-design/icons';
 import MDEditor from '@uiw/react-md-editor';
+import ChatMarkdown from '../../components/ChatMarkdown';
 import { promptService, Prompt, PromptCategory } from '../../services/prompt';
 import { llmModelService, LLMModel } from '../../services/llm_model';
 import PageHeader from '../../components/page-header';
@@ -1310,7 +1311,11 @@ const PromptSetting: React.FC = () => {
                           <BulbOutlined /> 正在思考中
                         </div>
                         {expandedReasoning.has(msg.id) && msg.reasoning_content && (
-                          <div className="reasoning-text">{msg.reasoning_content}</div>
+                          <div className="reasoning-text">
+                            <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                              <ChatMarkdown source={msg.reasoning_content} className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`} />
+                            </div>
+                          </div>
                         )}
                       </div>
                     )}
@@ -1330,7 +1335,11 @@ const PromptSetting: React.FC = () => {
                           )}
                         </div>
                         {expandedReasoning.has(msg.id) && (
-                          <div className="reasoning-text">{msg.reasoning_content}</div>
+                          <div className="reasoning-text">
+                            <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                              <ChatMarkdown source={msg.reasoning_content} className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`} />
+                            </div>
+                          </div>
                         )}
                       </div>
                     )}
@@ -1350,10 +1359,8 @@ const PromptSetting: React.FC = () => {
                     ) : (
                       <>
                         {msg.content && (
-                          <div 
-                            className="message-text"
-                          >
-                            {msg.content}
+                          <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                            <ChatMarkdown source={msg.content} className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`} />
                           </div>
                         )}
                         {msg.stopped && (

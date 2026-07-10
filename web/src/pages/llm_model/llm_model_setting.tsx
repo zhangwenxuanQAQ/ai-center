@@ -10,6 +10,7 @@ import PageHeader from '../../components/page-header';
 import '../../styles/common.css';
 import './llm_model_setting.less';
 import { getDefaultAvatar } from '../../utils/avatar';
+import ChatMarkdown from '../../components/ChatMarkdown';
 
 const { Option } = Select;
 
@@ -1453,7 +1454,11 @@ const LLMModelSetting: React.FC = () => {
                             <BulbOutlined /> 正在思考中
                           </div>
                           {expandedReasoning.has(msg.id) && msg.reasoning_content && (
-                            <div className="reasoning-text">{msg.reasoning_content}</div>
+                            <div className="reasoning-text">
+                              <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                                <ChatMarkdown source={msg.reasoning_content} className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`} />
+                              </div>
+                            </div>
                           )}
                         </div>
                       )}
@@ -1473,7 +1478,11 @@ const LLMModelSetting: React.FC = () => {
                             )}
                           </div>
                           {expandedReasoning.has(msg.id) && (
-                            <div className="reasoning-text">{msg.reasoning_content}</div>
+                            <div className="reasoning-text">
+                              <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                                <ChatMarkdown source={msg.reasoning_content} className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`} />
+                              </div>
+                            </div>
                           )}
                         </div>
                       )}
@@ -1575,7 +1584,9 @@ const LLMModelSetting: React.FC = () => {
                               })}
                             </div>
                           )}
-                          <div className="message-text">{msg.content}</div>
+                          <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                            <ChatMarkdown source={msg.content || ''} className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`} />
+                          </div>
                         </>
                       )}
                       <div className="message-footer">
