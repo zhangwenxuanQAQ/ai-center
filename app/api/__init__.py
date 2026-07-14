@@ -12,6 +12,7 @@ from .datasource_category import router as datasource_category_router
 from .system.monitor import router as system_monitor_router
 from .agent import router as agent_router
 from .mcp import router as mcp_router
+from .integration.management import router as integration_management_router
 
 router = APIRouter()
 
@@ -29,3 +30,4 @@ router.include_router(datasource_router, prefix="/datasource", tags=["datasource
 router.include_router(datasource_category_router, prefix="/datasource_category", tags=["datasource_category"])
 router.include_router(system_monitor_router, prefix="/system", tags=["system"])
 router.include_router(agent_router, prefix="/agent", tags=["agent"])
+router.include_router(integration_management_router, prefix="/integration", tags=["integration"])

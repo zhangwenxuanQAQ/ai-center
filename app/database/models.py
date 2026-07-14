@@ -539,6 +539,64 @@ class Datasource(SoftDeleteModel):
         table_name = 'datasource'
 
 
+class ChatbotIntegration(BaseModel):
+    """
+    机器人插件集成模型
+    
+    存储机器人第三方插件集成信息
+    """
+    deleted = BooleanField(default=False, verbose_name="是否删除")
+    deleted_at = DateTimeField(null=True, verbose_name="删除时间")
+    deleted_user_id = CharField(max_length=40, null=True, verbose_name="删除用户ID")
+    chatbot_id = CharField(max_length=40, verbose_name="机器人ID")
+    api_key = TextField(verbose_name="API密钥JSON数组")
+    openai_base_url = CharField(max_length=500, verbose_name="OpenAI基础URL")
+    configs = TextField(null=True, verbose_name="配置JSON")
+    
+    class Meta:
+        table_name = 'chatbot_integration'
+        indexes = (
+            (('chatbot_id',), True),
+        )
+
+
+class ChatbotChat(BaseModel):
+    """
+    机器人聊天模型
+    
+    存储通过插件集成产生的聊天信息
+    """
+    integration_id = CharField(max_length=40, index=True, verbose_name="插件集成ID")
+    chatbot_id = CharField(max_length=40, index=True, verbose_name="机器人ID")
+    messages = TextField(null=True, verbose_name="聊天记录JSON数组")
+    
+    class Meta:
+        table_name = 'chatbot_chat'
+
+
+class ChatbotChatMessage(BaseModel):
+    """
+    机器人聊天消息模型
+    
+    存储插件集成聊天中的每条消息
+    """
+    chatbot_id = CharField(max_length=40, index=True, verbose_name="机器人ID")
+    chat_id = CharField(max_length=40, index=True, verbose_name="机器人聊天ID")
+    message_id = CharField(max_length=40, index=True, verbose_name="消息ID")
+    role = CharField(max_length=20, verbose_name="角色：user/assistant/system")
+    content = TextField(verbose_name="消息内容")
+    extra_content = TextField(null=True, verbose_name="额外内容JSON")
+    reasoning_content = TextField(null=True, verbose_name="思考过程内容")
+    reasoning_time = IntegerField(null=True, verbose_name="思考耗时（毫秒）")
+    model_id = CharField(max_length=40, null=True, index=True, verbose_name="模型ID")
+    
+    class Meta:
+        table_name = 'chatbot_chat_message'
+        indexes = (
+            (('chat_id', 'created_at'), False),
+        )
+
+
 class AgentCategory(SoftDeleteModel):
     """
     智能体分类模型
@@ -631,6 +689,9 @@ def create_tables():
         AgentCategory,
         AgentComponent,
         AgentInstance,
+        ChatbotIntegration,
+        ChatbotChat,
+        ChatbotChatMessage,
     ]
     
     for table in tables:

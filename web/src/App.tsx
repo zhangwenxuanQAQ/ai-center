@@ -1,4 +1,4 @@
-﻿import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { Layout, Menu, Button, Card, Breadcrumb, ConfigProvider, theme as antTheme } from 'antd';
 import { HomeOutlined, MessageOutlined, SettingOutlined, LogoutOutlined, RobotOutlined, BookOutlined, DatabaseOutlined, CommentOutlined, MoonOutlined, SunOutlined, MenuFoldOutlined, MenuUnfoldOutlined, HistoryOutlined, TeamOutlined, ToolOutlined, FileTextOutlined, CloudServerOutlined, DashboardOutlined, DesktopOutlined, ApartmentOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { useState, useEffect } from 'react';
@@ -25,6 +25,9 @@ import Datasource from './pages/datasource/datasource.tsx';
 import SystemMonitor from './pages/system/monitor/monitor.tsx';
 import Agent from './pages/agent/agent.tsx';
 import AgentSetting from './pages/agent/agent_setting.tsx';
+import IntegrationChatPage from './integration/chat/index.tsx';
+import IntegrationSidebarPage from './integration/sidebar/index.tsx';
+import IntegrationPreviewPage from './integration/preview/index.tsx';
 
 const { Header, Content, Sider } = Layout;
 
@@ -81,6 +84,17 @@ function AppContent() {
   const toggleCollapsed = () => {
     setCollapsed(!collapsed);
   };
+
+  // 集成页面路由 - 不使用主布局
+  if (location.pathname.startsWith('/integration/')) {
+    return (
+      <Routes>
+        <Route path="/integration/chat" element={<IntegrationChatPage />} />
+        <Route path="/integration/sidebar" element={<IntegrationSidebarPage />} />
+        <Route path="/integration/preview/:token" element={<IntegrationPreviewPage />} />
+      </Routes>
+    );
+  }
 
   return (
     <Layout style={{ height: '100vh', overflow: 'hidden' }} className={theme === 'dark' ? 'dark-theme' : 'light-theme'}>

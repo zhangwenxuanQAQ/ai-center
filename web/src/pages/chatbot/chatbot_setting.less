@@ -1,4 +1,4 @@
-﻿.chatbot-setting-container {
+.chatbot-setting-container {
   padding: 8px;
   display: flex;
   gap: 8px;
@@ -137,6 +137,37 @@
   
   &::-webkit-scrollbar {
     display: none;
+  }
+}
+
+.publish-anchor-container {
+  border-right: 1px solid #f0f0f0;
+  padding-right: 12px;
+
+  &.dark {
+    border-right-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .ant-anchor {
+    background: transparent;
+
+    // 移除锚点组件 ::before 伪元素的左边线
+    &::before {
+      border-inline-start: none !important;
+    }
+  }
+
+  .ant-anchor-link {
+    padding: 10px 0 !important;
+
+    // 移除锚点链接 ::before 伪元素的左边线
+    &::before {
+      border-inline-start: none !important;
+    }
+  }
+
+  .ant-anchor-ink {
+    display: none !important;
   }
 }
 

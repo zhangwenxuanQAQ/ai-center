@@ -38,6 +38,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ node, inline, className, children
         style={theme === 'dark' ? oneDark : oneLight}
         language={language}
         PreTag="div"
+        customStyle={{ background: theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#f5f5f5' }}
         {...props}
       >
         {String(children).replace(/\n$/, '')}
