@@ -1060,46 +1060,52 @@ class ESUtils:
     def _build_metadata_filter(self, metadatas: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
         构建元数据过滤条件
-        
+
         Args:
             metadatas: 元数据过滤条件，格式为{字段名: {value: 值, fuzzy: 是否模糊查询, relation: 范围关系}}
-        
+
         Returns:
             List[Dict]: ES过滤条件列表
         """
         if not metadatas:
             return []
-        
+
         filter_conditions = []
         for field_name, field_config in metadatas.items():
             if not field_config or not isinstance(field_config, dict):
                 continue
-            
+
             value = field_config.get('value')
             if value is None or value == '':
                 continue
-            
+
             fuzzy = field_config.get('fuzzy', False)
             relation = field_config.get('relation', 'INTERSECTS')
-            
-            es_field_name = f"metadatas.{field_name}"
-            
+
+            # 基础字段名和精准查询字段名
+            base_field_name = f"metadatas.{field_name}"
+            keyword_field_name = f"metadatas.{field_name}.keyword"
+
             if field_name.endswith('_range'):
-                range_filter = self._build_range_filter(es_field_name, value, relation)
+                # 范围查询使用基础字段名
+                range_filter = self._build_range_filter(base_field_name, value, relation)
                 if range_filter:
                     filter_conditions.append(range_filter)
             elif fuzzy and isinstance(value, str):
+                # 模糊查询使用基础字段名(不带.keyword)
                 filter_conditions.append({
-                    "match": {es_field_name: value}
+                    "match": {base_field_name: value}
                 })
             elif isinstance(value, list):
+                # 精准查询使用.keyword后缀
                 if len(value) == 1:
-                    filter_conditions.append({"term": {es_field_name: value[0]}})
+                    filter_conditions.append({"term": {keyword_field_name: value[0]}})
                 else:
-                    filter_conditions.append({"terms": {es_field_name: value}})
+                    filter_conditions.append({"terms": {keyword_field_name: value}})
             else:
-                filter_conditions.append({"term": {es_field_name: value}})
-        
+                # 精准查询使用.keyword后缀
+                filter_conditions.append({"term": {keyword_field_name: value}})
+
         return filter_conditions
     
     def _build_range_filter(self, field_name: str, value: Any, relation: str) -> Optional[Dict[str, Any]]:
