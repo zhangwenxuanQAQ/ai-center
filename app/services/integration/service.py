@@ -9,6 +9,7 @@ import io
 import zipfile
 from datetime import datetime
 from typing import Optional, List, Dict, Any
+from urllib.parse import quote
 
 from app.database.models import ChatbotIntegration, Chatbot, ChatbotChat, ChatbotChatMessage
 from app.database.db_utils import handle_transaction
@@ -83,7 +84,31 @@ class ChatbotIntegrationService:
             # 更新现有配置
             if data:
                 if data.get('configs'):
-                    integration.configs = json.dumps(data['configs'])
+                    user_configs = data['configs']
+                    # 重新生成html_code：先获取默认配置作为基底，合并用户配置
+                    try:
+                        api_keys = json.loads(integration.api_key)
+                        api_key = api_keys[0] if api_keys else ""
+                    except (json.JSONDecodeError, TypeError):
+                        api_key = ""
+                    base_url = ChatbotIntegrationService._get_base_url()
+                    full_configs = get_integration_default_configs(base_url, api_key)
+                    # 合并用户配置
+                    for key, value in user_configs.items():
+                        if isinstance(value, dict) and key in full_configs:
+                            full_configs[key].update(value)
+                        else:
+                            full_configs[key] = value
+                    # 应用 fallback
+                    sidebar_cfg = full_configs.get('interface_config', {}).get('sidebar', {})
+                    if not sidebar_cfg.get('title'):
+                        sidebar_cfg['title'] = chatbot.name or 'AI助手'
+                    chat_cfg = full_configs.get('chat_config', {})
+                    if not chat_cfg.get('welcome_messages') and chatbot.greeting:
+                        chat_cfg['welcome_messages'] = [chatbot.greeting]
+                    # 重新生成html_code
+                    full_configs['html_code'] = ChatbotIntegrationService._render_html_codes(full_configs, api_key, base_url)
+                    integration.configs = json.dumps(full_configs)
                 integration.save()
             logger.info(f"更新集成配置成功 - chatbot_id: {chatbot_id}")
             return integration
@@ -104,15 +129,16 @@ class ChatbotIntegrationService:
                 else:
                     default_configs[key] = value
         
-        # fallback逻辑：panel_title为空时取机器人名称，title为空时取机器人名称，welcome_messages为空时取机器人欢迎语
+        # fallback逻辑：title为空时取机器人名称，welcome_messages为空时取机器人欢迎语
         sidebar_cfg = default_configs.get('interface_config', {}).get('sidebar', {})
-        if not sidebar_cfg.get('panel_title'):
-            sidebar_cfg['panel_title'] = chatbot.name or ''
         if not sidebar_cfg.get('title') or sidebar_cfg.get('title') == 'AI助手':
             sidebar_cfg['title'] = chatbot.name or 'AI助手'
         chat_cfg = default_configs.get('chat_config', {})
         if not chat_cfg.get('welcome_messages') and chatbot.greeting:
             chat_cfg['welcome_messages'] = [chatbot.greeting]
+        
+        # 生成html_code
+        default_configs['html_code'] = ChatbotIntegrationService._render_html_codes(default_configs, api_key, base_url)
         
         integration = ChatbotIntegration(
             chatbot_id=chatbot_id,
@@ -205,10 +231,76 @@ class ChatbotIntegrationService:
         except (json.JSONDecodeError, TypeError):
             pass
         
+        # 重新生成html_code
+        new_configs['html_code'] = ChatbotIntegrationService._render_html_codes(new_configs, new_api_key, base_url)
         integration.configs = json.dumps(new_configs)
         integration.save()
         logger.info(f"重新生成API密钥成功 - chatbot_id: {chatbot_id}")
         return integration
+
+    @staticmethod
+    def _render_html_codes(configs: dict, api_key: str, base_url: str) -> dict:
+        """
+        根据配置参数渲染HTML嵌入代码，将模板中的变量替换为实际值
+
+        Args:
+            configs: 完整配置参数
+            api_key: API密钥
+            base_url: 后端服务地址
+
+        Returns:
+            dict: 包含sidebar和iframe嵌入代码的字典
+        """
+        # 获取原始模板（未替换变量的）
+        templates = get_integration_default_configs('', '')['html_code']
+
+        # 从配置中提取实际值
+        common_cfg = configs.get('interface_config', {}).get('common_config', {})
+        sidebar_cfg = configs.get('interface_config', {}).get('sidebar', {})
+        iframe_cfg = configs.get('interface_config', {}).get('iframe', {})
+
+        theme = common_cfg.get('theme', '#1677ff')
+        theme_mode = common_cfg.get('theme_mode', 'light')
+        gradient_end_color = common_cfg.get('gradient_end_color', '#06b6d4')
+        title = sidebar_cfg.get('title', 'AI助手')
+        position = sidebar_cfg.get('position', 'bottom-right')
+        width = sidebar_cfg.get('width', 400)
+        height = sidebar_cfg.get('height', 600)
+        resizable = 'true' if sidebar_cfg.get('resizable', True) else 'false'
+        maximizable = 'true' if sidebar_cfg.get('maximizable', True) else 'false'
+        iframe_width = iframe_cfg.get('width', '100%')
+        iframe_height = iframe_cfg.get('height', '100%')
+
+        # 替换变量
+        sidebar_code = templates['sidebar'].format(
+            api_key=api_key,
+            base_url=base_url,
+            theme=theme,
+            theme_mode=theme_mode,
+            gradient_end_color=gradient_end_color,
+            position=position,
+            title=title,
+            width=width,
+            height=height,
+            resizable=resizable,
+            maximizable=maximizable
+        )
+
+        iframe_code = templates['iframe'].format(
+            api_key=api_key,
+            base_url=base_url,
+            theme_encoded=quote(theme, safe=''),
+            theme_mode=theme_mode,
+            gradient_end_color_encoded=quote(gradient_end_color, safe=''),
+            title_encoded=quote(title, safe=''),
+            iframe_width=iframe_width,
+            iframe_height=iframe_height
+        )
+
+        return {
+            'sidebar': sidebar_code,
+            'iframe': iframe_code
+        }
 
     @staticmethod
     def get_html_code(chatbot_id: str, integration_type: str = 'sidebar') -> str:
@@ -233,17 +325,13 @@ class ChatbotIntegrationService:
             api_key = ""
 
         base_url = ChatbotIntegrationService._get_base_url()
-        configs = get_integration_default_configs(base_url, api_key)
         try:
-            user_configs = json.loads(integration.configs) if integration.configs else {}
-            if 'interface_config' in user_configs:
-                configs['interface_config'] = user_configs['interface_config']
-            if 'chat_config' in user_configs:
-                configs['chat_config'] = user_configs['chat_config']
+            configs = json.loads(integration.configs) if integration.configs else {}
         except (json.JSONDecodeError, TypeError):
-            pass
+            configs = {}
 
-        html_codes = configs.get('html_code', {})
+        # 动态渲染html_code，确保变量替换为实际值
+        html_codes = ChatbotIntegrationService._render_html_codes(configs, api_key, base_url)
         return html_codes.get(integration_type, '')
 
     @staticmethod
@@ -288,8 +376,6 @@ class ChatbotIntegrationService:
         
         # fallback逻辑
         sidebar_cfg = default_configs.get('interface_config', {}).get('sidebar', {})
-        if not sidebar_cfg.get('panel_title') and chatbot:
-            sidebar_cfg['panel_title'] = chatbot.name or ''
         if (not sidebar_cfg.get('title') or sidebar_cfg.get('title') == 'AI助手') and chatbot:
             sidebar_cfg['title'] = chatbot.name or 'AI助手'
         chat_cfg = default_configs.get('chat_config', {})
@@ -298,6 +384,8 @@ class ChatbotIntegrationService:
 
         # 重置 openai_base_url 为当前服务地址
         integration.openai_base_url = f"{base_url}/aicenter/api/v1"
+        # 重新生成html_code
+        default_configs['html_code'] = ChatbotIntegrationService._render_html_codes(default_configs, api_key, base_url)
         integration.configs = json.dumps(default_configs)
         integration.save()
         logger.info(f"重置集成配置成功 - chatbot_id: {chatbot_id}")
@@ -391,14 +479,16 @@ class ChatbotIntegrationService:
             'html_code': default_configs.get('html_code', {}),
         }
         
-        # 保留用户自定义的interface_config
+        # 保留用户自定义的interface_config（深度合并）
         if "interface_config" in configs:
-            fresh_configs["interface_config"] = configs["interface_config"]
+            for sub_key, sub_val in configs["interface_config"].items():
+                if isinstance(sub_val, dict) and sub_key in fresh_configs.get("interface_config", {}):
+                    fresh_configs["interface_config"][sub_key].update(sub_val)
+                else:
+                    fresh_configs["interface_config"][sub_key] = sub_val
         if "chat_config" in configs:
-            fresh_configs["chat_config"] = configs["chat_config"]
-        # 保留用户自定义的common_config
-        if "common_config" in configs:
-            fresh_configs["common_config"] = configs["common_config"]
+            for sub_key, sub_val in configs["chat_config"].items():
+                fresh_configs["chat_config"][sub_key] = sub_val
         configs = fresh_configs
         
         # 应用fallback逻辑：title为空取机器人名称，welcome_messages为空取机器人欢迎语
@@ -408,8 +498,6 @@ class ChatbotIntegrationService:
                 (Chatbot.deleted == False)
             )
             sidebar_cfg = configs.get('interface_config', {}).get('sidebar', {})
-            if not sidebar_cfg.get('panel_title'):
-                sidebar_cfg['panel_title'] = chatbot.name or ''
             if not sidebar_cfg.get('title') or sidebar_cfg.get('title') == 'AI助手':
                 sidebar_cfg['title'] = chatbot.name or 'AI助手'
             chat_cfg = configs.get('chat_config', {})
@@ -417,6 +505,9 @@ class ChatbotIntegrationService:
                 chat_cfg['welcome_messages'] = [chatbot.greeting]
         except Chatbot.DoesNotExist:
             pass
+        
+        # 重新渲染html_code，用合并后的配置参数替换变量
+        configs['html_code'] = ChatbotIntegrationService._render_html_codes(configs, api_key, base_url)
         
         return {
             'integration': integration,
@@ -460,7 +551,7 @@ class ChatbotIntegrationService:
         chat_cfg = configs.get('chat_config', {})
         
         theme_color = (sidebar_cfg if widget_type == 'sidebar' else iframe_cfg).get('theme', '#1677ff')
-        title = sidebar_cfg.get('panel_title') or sidebar_cfg.get('title', 'AI助手')
+        title = sidebar_cfg.get('title', 'AI助手')
         position = sidebar_cfg.get('position', 'bottom-right')
         ball_size = sidebar_cfg.get('size', 52)
         animation = sidebar_cfg.get('animation', 'bounce')

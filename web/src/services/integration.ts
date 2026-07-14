@@ -26,6 +26,7 @@ export interface IntegrationConfigParam {
   description?: string;
   options?: Array<{ label: string; value: string; color?: string }>;
   presets?: Array<{ label: string; key: string; color: string }>;
+  avatar_type?: 'user' | 'bot';
   children?: IntegrationConfigParam[];
 }
 
@@ -49,12 +50,15 @@ export interface IntegrationConfigsDetail {
       };
     };
     interface_config: {
+      common_config: {
+        theme: string;
+        theme_mode: string;
+        gradient_end_color: string;
+        user_avatar: string;
+        bot_avatar: string;
+      };
       sidebar: Record<string, any>;
       iframe: Record<string, any>;
-    };
-    common_config: {
-      user_avatar: string;
-      bot_avatar: string;
     };
     chat_config: {
       input_placeholder: string;

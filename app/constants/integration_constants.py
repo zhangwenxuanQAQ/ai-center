@@ -126,8 +126,8 @@ INTEGRATION_CONFIG_PARAMS = [
                         "key": "title",
                         "label": "聊天框标题",
                         "type": "text",
-                        "default": "AI助手",
-                        "description": "聊天框顶部标题"
+                        "default": "",
+                        "description": "聊天框顶部标题（为空时默认取机器人名称）"
                     },
                     {
                         "key": "width",
@@ -361,7 +361,7 @@ def get_integration_default_configs(base_url: str = "", api_key: str = "") -> di
                 "position": "bottom-right",
                 "size": 52,
                 "animation": "bounce",
-                "title": "AI助手",
+                "title": "",
                 "width": 400,
                 "height": 600,
                 "resizable": True,
@@ -385,15 +385,15 @@ def get_integration_default_configs(base_url: str = "", api_key: str = "") -> di
                 '    var config = {{\n'
                 '      apiKey: "{api_key}",\n'
                 '      baseUrl: "{base_url}",\n'
-                '      theme: "#1677ff",\n'
-                '      themeMode: "light",\n'
-                '      gradientEndColor: "#06b6d4",\n'
-                '      position: "bottom-right",\n'
-                '      title: "AI助手",\n'
-                '      width: 400,\n'
-                '      height: 600,\n'
-                '      resizable: true,\n'
-                '      maximizable: true\n'
+                '      theme: "{theme}",\n'
+                '      themeMode: "{theme_mode}",\n'
+                '      gradientEndColor: "{gradient_end_color}",\n'
+                '      position: "{position}",\n'
+                '      title: "{title}",\n'
+                '      width: {width},\n'
+                '      height: {height},\n'
+                '      resizable: {resizable},\n'
+                '      maximizable: {maximizable}\n'
                 '    }};\n'
                 '    var ball = document.createElement("div");\n'
                 '    ball.id = "ai-widget-ball";\n'
@@ -422,8 +422,8 @@ def get_integration_default_configs(base_url: str = "", api_key: str = "") -> di
             "iframe": (
                 '<!-- AI助手iframe嵌入 -->\n'
                 '<iframe\n'
-                '  src="{base_url}/integration/chat?api_key={api_key}&theme=%231677ff&theme_mode=light&gradient_end_color=%2306b6d4&title=AI%E5%8A%A9%E6%89%8B"\n'
-                '  style="width: 100%; height: 600px; border: 1px solid #e8e8e8; border-radius: 8px;"\n'
+                '  src="{base_url}/integration/chat?api_key={api_key}&theme={theme_encoded}&theme_mode={theme_mode}&gradient_end_color={gradient_end_color_encoded}&title={title_encoded}"\n'
+                '  style="width: {iframe_width}; height: {iframe_height}; border: 1px solid #e8e8e8; border-radius: 8px;"\n'
                 '  allow="microphone"\n'
                 '></iframe>'
             )

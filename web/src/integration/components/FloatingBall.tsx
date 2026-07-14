@@ -6,7 +6,6 @@ interface FloatingBallProps {
   themeMode?: string;
   size?: number;
   animation?: string; // bounce, fade, scale, none
-  panelTitle?: string;
   width?: number;
   height?: number;
   gradientEnabled?: boolean;
@@ -53,13 +52,16 @@ const FloatingBall: React.FC<FloatingBallProps> = ({
 
   const animationClass = !isDragging && animation !== 'none' ? `animation-${animation}` : '';
 
+  // 判断是否启用渐变（根据 gradientEndColor 自动判断）
+  const useGradient = gradientEndColor && gradientEndColor !== 'none' && gradientEndColor !== '';
+
   // 计算球体背景：渐变 or 纯色（使用径向渐变，圆心扩散）
-  const ballBackground = gradientEnabled && gradientEndColor && gradientEndColor !== 'none'
+  const ballBackground = useGradient
     ? `radial-gradient(circle at center, ${theme} 0%, ${gradientEndColor} 100%)`
     : theme;
 
   // 计算控制按钮背景样式（使用径向渐变）
-  const controlBtnBackground = gradientEnabled && gradientEndColor && gradientEndColor !== 'none'
+  const controlBtnBackground = useGradient
     ? `radial-gradient(circle at center, ${theme} 0%, ${gradientEndColor} 100%)`
     : theme;
 

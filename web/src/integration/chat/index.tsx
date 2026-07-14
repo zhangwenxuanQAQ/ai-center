@@ -11,7 +11,6 @@ import '../styles/integration.css';
  *   theme - 边框颜色
  *   theme_mode - 主题模式 (light/dark)
  *   title - 标题
- *   panel_title - 面板标题
  *   input_placeholder - 输入框占位符
  *   max_input_length - 最大输入长度
  *   welcome_messages - 欢迎语 (JSON 数组字符串)
@@ -33,7 +32,6 @@ const IntegrationChatPage: React.FC = () => {
       theme: params.get('theme') || '#ffffff',
       themeMode: params.get('theme_mode') || 'light',
       title: params.get('title') || 'AI助手',
-      panelTitle: params.get('panel_title') || '',
       inputPlaceholder: params.get('input_placeholder') || '请输入您的问题...',
       maxInputLength: parseInt(params.get('max_input_length') || '4000', 10),
       welcomeMessages,

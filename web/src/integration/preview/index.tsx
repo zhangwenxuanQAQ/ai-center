@@ -1,140 +1,121 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import ChatWidget, { ChatWidgetConfig } from '../components/ChatWidget';
 import FloatingBall from '../components/FloatingBall';
 import '../styles/integration.css';
 
 /**
  * 预览页面
- * 通过token从后端获取配置参数，渲染聊天界面
+ * 通过 URL params 传入配置参数，渲染聊天界面
+ * 预览模式下所有对话均为临时的，不保存到数据库
+ *
+ * URL 参数:
+ *   api_key (必须) - API 密钥
+ *   type - 预览类型 (sidebar/iframe)，默认 sidebar
+ *   theme - 主题颜色
+ *   theme_mode - 主题模式 (light/dark)
+ *   gradient_end_color - 渐变色
+ *   title - 标题
+ *   position - 悬浮球位置
+ *   width - 面板宽度
+ *   height - 面板高度
+ *   input_placeholder - 输入框占位符
+ *   max_input_length - 最大输入长度
+ *   welcome_messages - 欢迎语 (JSON 数组字符串)
  */
 const IntegrationPreviewPage: React.FC = () => {
-  const [config, setConfig] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const config = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
 
-  // 从URL路径获取token
-  const token = useMemo(() => {
-    const pathParts = window.location.pathname.split('/');
-    return pathParts[pathParts.length - 1];
+    let welcomeMessages: string[] = [];
+    try {
+      const wm = params.get('welcome_messages');
+      if (wm) welcomeMessages = JSON.parse(wm);
+    } catch { /* ignore */ }
+
+    return {
+      type: params.get('type') || 'sidebar',
+      apiKey: params.get('api_key') || '',
+      theme: params.get('theme') || '#1677ff',
+      themeMode: params.get('theme_mode') || 'light',
+      gradientEndColor: params.get('gradient_end_color') || 'none',
+      title: params.get('title') || 'AI助手',
+      position: params.get('position') || 'bottom-right',
+      width: parseInt(params.get('width') || '400', 10),
+      height: parseInt(params.get('height') || '600', 10),
+      inputPlaceholder: params.get('input_placeholder') || '请输入您的问题...',
+      maxInputLength: parseInt(params.get('max_input_length') || '4000', 10),
+      welcomeMessages,
+      size: parseInt(params.get('size') || '52', 10),
+      animation: params.get('animation') || 'bounce',
+    };
   }, []);
 
-  useEffect(() => {
-    const fetchConfig = async () => {
-      try {
-        const response = await fetch(`/aicenter/v1/integration/preview/${token}`);
-        const result = await response.json();
-        
-        if (result.code === 0 && result.data) {
-          setConfig(result.data);
-        } else {
-          setError(result.message || '获取配置失败');
-        }
-      } catch (err) {
-        setError('网络错误，请稍后重试');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (token) {
-      fetchConfig();
-    }
-  }, [token]);
-
-  if (loading) {
-    return (
-      <div className="integration-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div className="int-loading">
-            <div className="int-loading-dot" />
-            <div className="int-loading-dot" />
-            <div className="int-loading-dot" />
-          </div>
-          <div style={{ marginTop: '12px', color: '#666' }}>加载中...</div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
+  if (!config.apiKey) {
     return (
       <div className="integration-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ textAlign: 'center', color: '#ff4d4f' }}>
           <div style={{ fontSize: '48px', marginBottom: '12px' }}>⚠️</div>
-          <div>{error}</div>
+          <div>缺少 API 密钥参数 (api_key)</div>
         </div>
       </div>
     );
   }
 
-  if (!config) {
-    return (
-      <div className="integration-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ textAlign: 'center', color: '#666' }}>
-          <div style={{ fontSize: '48px', marginBottom: '12px' }}>📋</div>
-          <div>配置不存在或已过期</div>
-        </div>
-      </div>
-    );
-  }
-
-  const previewType = config.type || 'sidebar';
-
-  // 构建ChatWidget配置
+  // ChatWidget 配置 - 始终设置 temporary=true，预览不保存对话
   const widgetConfig: ChatWidgetConfig = {
-    apiKey: config.api_key || '',
-    theme: config.theme || '#ffffff',
-    themeMode: config.theme_mode || 'light',
-    title: config.title || 'AI助手',
-    inputPlaceholder: config.input_placeholder || '请输入您的问题...',
-    maxInputLength: parseInt(config.max_input_length || '4000', 10),
-    welcomeMessages: config.welcome_messages || [],
+    apiKey: config.apiKey,
+    theme: config.theme,
+    themeMode: config.themeMode,
+    title: config.title,
+    inputPlaceholder: config.inputPlaceholder,
+    maxInputLength: config.maxInputLength,
+    welcomeMessages: config.welcomeMessages,
     showHistory: true,
     temporary: true,
-    gradientEndColor: config.gradient_end_color || 'none',
+    gradientEndColor: config.gradientEndColor,
   };
 
-  // 构建悬浮球配置
+  // 悬浮球配置
   const sidebarConfig = {
-    position: config.position || 'bottom-right',
-    theme: config.theme || '#ffffff',
-    themeMode: config.theme_mode || 'light',
-    size: parseInt(config.size || '52', 10),
-    animation: config.animation || 'bounce',
-    gradientEndColor: config.gradient_end_color || 'none',
-    width: parseInt(config.width || '400', 10),
-    height: parseInt(config.height || '600', 10),
-    resizable: config.resizable !== false,
-    maximizable: config.maximizable !== false,
+    position: config.position,
+    theme: config.theme,
+    themeMode: config.themeMode,
+    size: config.size,
+    animation: config.animation,
+    gradientEndColor: config.gradientEndColor,
+    width: config.width,
+    height: config.height,
+    resizable: true,
+    maximizable: true,
   };
 
-  if (previewType === 'sidebar') {
-    return (
-      <div className="integration-page">
-        <FloatingBall
-          position={sidebarConfig.position}
-          theme={sidebarConfig.theme}
-          themeMode={sidebarConfig.themeMode}
-          size={sidebarConfig.size}
-          animation={sidebarConfig.animation}
-          width={sidebarConfig.width}
-          height={sidebarConfig.height}
-          gradientEndColor={sidebarConfig.gradientEndColor}
-          resizable={sidebarConfig.resizable}
-          maximizable={sidebarConfig.maximizable}
-        >
-          <ChatWidget config={widgetConfig} compact />
-        </FloatingBall>
-      </div>
-    );
-  } else {
-    // iframe预览
+  if (config.type === 'iframe') {
     return (
       <div className="integration-page">
         <ChatWidget config={widgetConfig} />
       </div>
     );
   }
+
+  // 默认 sidebar 模式
+  return (
+    <div className="integration-page">
+      <FloatingBall
+        position={sidebarConfig.position}
+        theme={sidebarConfig.theme}
+        themeMode={sidebarConfig.themeMode}
+        size={sidebarConfig.size}
+        animation={sidebarConfig.animation}
+        width={sidebarConfig.width}
+        height={sidebarConfig.height}
+        gradientEndColor={sidebarConfig.gradientEndColor}
+        resizable={sidebarConfig.resizable}
+        maximizable={sidebarConfig.maximizable}
+      >
+        <ChatWidget config={widgetConfig} compact />
+      </FloatingBall>
+    </div>
+  );
 };
 
 export default IntegrationPreviewPage;

@@ -1,8 +1,8 @@
-﻿﻿import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Form, Input, Select, TreeSelect, Button, message, Row, Col, Upload, Spin, Tag, Avatar, Modal, Table, Slider, InputNumber, Switch, Drawer, Descriptions, Dropdown, Tooltip, Tabs } from 'antd';
+import { Form, Input, Select, TreeSelect, Button, message, Row, Col, Upload, Spin, Tag, Avatar, Modal, Table, Slider, InputNumber, Switch, Drawer, Descriptions, Dropdown, Tooltip, Tabs, Anchor } from 'antd';
 const { TextArea } = Input;
-import { ArrowLeftOutlined, SaveOutlined, UndoOutlined, UploadOutlined, RobotOutlined, FileTextOutlined, DatabaseOutlined, ToolOutlined, ApiOutlined, CheckCircleOutlined, EyeOutlined, DeleteOutlined, PlusOutlined, SettingOutlined, CloseOutlined, EditOutlined, AppstoreOutlined, QuestionCircleOutlined, FormOutlined, UpOutlined, DownOutlined, CopyOutlined, ReloadOutlined, CodeOutlined, GlobalOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SaveOutlined, UndoOutlined, UploadOutlined, RobotOutlined, FileTextOutlined, DatabaseOutlined, ToolOutlined, ApiOutlined, CheckCircleOutlined, EyeOutlined, EyeInvisibleOutlined, DeleteOutlined, PlusOutlined, SettingOutlined, CloseOutlined, EditOutlined, AppstoreOutlined, QuestionCircleOutlined, FormOutlined, UpOutlined, DownOutlined, CopyOutlined, ReloadOutlined, CodeOutlined, GlobalOutlined, DownloadOutlined, LinkOutlined, ExportOutlined, SendOutlined, MinusOutlined } from '@ant-design/icons';
 import type { UploadProps } from 'antd';
 import type { MenuProps } from 'antd';
 import MDEditor from '@uiw/react-md-editor';
@@ -16,10 +16,30 @@ import { promptService, Prompt } from '../../services/prompt';
 import { knowledgebaseService, Knowledgebase } from '../../services/knowledgebase';
 import { mcpService, MCPServer } from '../../services/mcp';
 import { llmModelService, LLMModel } from '../../services/llm_model';
-import { integrationService, IntegrationConfig, IntegrationConfigsDetail } from '../../services/integration';
+import { integrationService, IntegrationConfig, IntegrationConfigsDetail, IntegrationConfigParam } from '../../services/integration';
 import '../../styles/common.css';
 import './chatbot_setting.less';
 import { getDefaultAvatar } from '../../utils/avatar';
+
+// 默认头像资源
+import userAvatar1 from '../../chat/user-1.svg';
+import userAvatar2 from '../../chat/user-2.svg';
+import userAvatar3 from '../../chat/user-3.svg';
+import assistantAvatar1 from '../../chat/assistant-1.svg';
+import assistantAvatar2 from '../../chat/assistant-2.svg';
+import assistantAvatar3 from '../../chat/assistant-3.svg';
+
+const DEFAULT_USER_AVATARS = [
+  { key: 'user-1', src: userAvatar1, label: '用户1' },
+  { key: 'user-2', src: userAvatar2, label: '用户2' },
+  { key: 'user-3', src: userAvatar3, label: '用户3' },
+];
+
+const DEFAULT_BOT_AVATARS = [
+  { key: 'assistant-1', src: assistantAvatar1, label: '机器人1' },
+  { key: 'assistant-2', src: assistantAvatar2, label: '机器人2' },
+  { key: 'assistant-3', src: assistantAvatar3, label: '机器人3' },
+];
 
 interface CodeBlockProps {
   node: any;
@@ -32,9 +52,18 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ node, inline, className, children
   const match = /language-(\w+)/.exec(className || '');
   const language = match ? match[1] : '';
   
-  const [theme] = useState<'light' | 'dark'>(() => {
-    return document.body.getAttribute('data-theme') as 'light' | 'dark' || 'light';
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    return (document.body.getAttribute('data-theme') as 'light' | 'dark') || 'light';
   });
+
+  React.useEffect(() => {
+    const observer = new MutationObserver(() => {
+      const updatedTheme = (document.body.getAttribute('data-theme') as 'light' | 'dark') || 'light';
+      setTheme(updatedTheme);
+    });
+    observer.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => observer.disconnect();
+  }, []);
 
   if (!inline && (className || language)) {
     return (
@@ -150,7 +179,12 @@ const ChatbotSetting: React.FC = () => {
   const [isToolSelectModalVisible, setIsToolSelectModalVisible] = useState(false);
   const [mcpServersWithTools, setMcpServersWithTools] = useState<any[]>([]);
   const [expandedServers, setExpandedServers] = useState<string[]>([]);
+  // 读取全局主色（与 tab 选中色保持一致）
+  const primaryColor = (() => { try { return getComputedStyle(document.documentElement).getPropertyValue('--primary-color').trim() || '#5a6fd6'; } catch { return '#5a6fd6'; } })();
   const [expandedModalServers, setExpandedModalServers] = useState<string[]>([]);
+  const [apiKeyVisible, setApiKeyVisible] = useState(false);
+  const [integrationConfigParams, setIntegrationConfigParams] = useState<IntegrationConfigParam[]>([]);
+
   const [selectedTools, setSelectedTools] = useState<Record<string, string[]>>({});
   const [serverFilter, setServerFilter] = useState<string>('');
   const [toolFilter, setToolFilter] = useState<string>('');
@@ -170,15 +204,50 @@ const ChatbotSetting: React.FC = () => {
   const [integrationLoading, setIntegrationLoading] = useState(false);
   const [integrationActiveTab, setIntegrationActiveTab] = useState<string>('api');
   const [integrationCodeTab, setIntegrationCodeTab] = useState<string>('sidebar');
-  const [integrationCopied, setIntegrationCopied] = useState(false);
+  const [integrationConfigValues, setIntegrationConfigValues] = useState<Record<string, any>>({});
+  const [originalIntegrationConfigValues, setOriginalIntegrationConfigValues] = useState<Record<string, any>>({});
+  // 发布页签锚点高亮状态
+  const [pubActiveAnchor, setPubActiveAnchor] = useState<string>('preview');
+
+  // 监听发布滚动容器，更新锚点高亮（requestAnimationFrame 防抖）
+  const pubScrollRef = React.useRef<HTMLDivElement>(null);
+  const pubScrollRafRef = React.useRef<number>(0);
+  const onPubScroll = React.useCallback(() => {
+    cancelAnimationFrame(pubScrollRafRef.current);
+    pubScrollRafRef.current = requestAnimationFrame(() => {
+      const container = pubScrollRef.current;
+      if (!container) return;
+      const containerTop = container.getBoundingClientRect().top;
+      const sections = ['preview', 'code', 'download'];
+      let active = 'preview';
+      for (const sec of sections) {
+        const el = container.querySelector(`#pub-${sec}`);
+        if (el) {
+          const elTop = (el as HTMLElement).getBoundingClientRect().top;
+          if (elTop <= containerTop + 30) {
+            active = sec;
+          }
+        }
+      }
+      setPubActiveAnchor(active);
+    });
+  }, []);
+
+  // 计算集成配置是否有变动（脏状态）
+  const isIntegrationDirty = React.useMemo(() => {
+    if (!integrationData?.integration) return false;
+    return JSON.stringify(integrationConfigValues) !== JSON.stringify(originalIntegrationConfigValues);
+  }, [integrationConfigValues, originalIntegrationConfigValues, integrationData]);
 
   useEffect(() => {
     const currentTheme = document.body.getAttribute('data-theme') || 'light';
     setTheme(currentTheme as 'light' | 'dark');
 
     const observer = new MutationObserver(() => {
-      const newTheme = document.body.getAttribute('data-theme') || 'light';
-      setTheme(newTheme as 'light' | 'dark');
+      const updatedTheme = document.body.getAttribute('data-theme') || 'light';
+      setTheme(updatedTheme as 'light' | 'dark');
+      fetchIntegrationConfigs(id);
+      fetchIntegrationConfigParams();
     });
 
     observer.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
@@ -201,6 +270,7 @@ const ChatbotSetting: React.FC = () => {
       fetchBoundKnowledgebases(id);
       fetchDocumentConstants();
       fetchIntegrationConfigs(id);
+      fetchIntegrationConfigParams();
     }
   }, [id]);
 
@@ -411,7 +481,518 @@ const ChatbotSetting: React.FC = () => {
     }
   };
 
-  // 插件集成相关函数
+  const fetchIntegrationConfigParams = async () => {
+    try {
+      const params = await integrationService.getConfigParams();
+      setIntegrationConfigParams(params || []);
+    } catch (error) {
+      console.error('Failed to fetch integration config params:', error);
+    }
+  };
+
+  // 根据CONFIG_PARAMS从 integrationData 中提取配置值
+  const initConfigValues = (data: IntegrationConfigsDetail | null, params: any[]) => {
+    if (!data?.configs || !params?.length) return;
+    const values: Record<string, any> = {};
+    const configs = data.configs;
+    const flattenParams = (items: any[], prefix: string) => {
+      for (const item of items) {
+        const fullKey = prefix ? `${prefix}.${item.key}` : item.key;
+        if (item.type === 'section' && item.children) {
+          flattenParams(item.children, fullKey);
+        } else {
+          // 从 configs中获取值
+          const parts = fullKey.split('.');
+          let val: any = configs;
+          for (const p of parts) {
+            val = val?.[p];
+          }
+          values[fullKey] = val !== undefined ? val : (item.default ?? '');
+        }
+      }
+    };
+    flattenParams(params, '');
+    // 标题和欢迎语为空时，使用机器人名称和欢迎语作为默认值
+    if (chatbot) {
+      const titleKey = 'interface_config.sidebar.title';
+      const wmKey = 'chat_config.welcome_messages';
+      if (!values[titleKey]) {
+        values[titleKey] = chatbot.name || '';
+      }
+      if (!values[wmKey] || (Array.isArray(values[wmKey]) && values[wmKey].length === 0)) {
+        values[wmKey] = chatbot.greeting ? [chatbot.greeting] : [];
+      }
+    }
+    setIntegrationConfigValues(values);
+    setOriginalIntegrationConfigValues(JSON.parse(JSON.stringify(values))); // 保存原始值用于恢复
+  };
+
+  const handleConfigValueChange = (key: string, value: any) => {
+    setIntegrationConfigValues(prev => ({ ...prev, [key]: value }));
+  };
+
+  // 恢复集成配置到原始值
+  const handleRestoreIntegrationConfigs = () => {
+    setIntegrationConfigValues(JSON.parse(JSON.stringify(originalIntegrationConfigValues)));
+    message.success('配置已恢复');
+  };
+
+  // 恢复到初始状态（重置到默认参数）
+  const handleResetToDefault = () => {
+    Modal.confirm({
+      title: '确认重置？',
+      content: '此操作将重置所有插件配置参数为默认值，并保存到数据库。',
+      okText: '确定',
+      cancelText: '取消',
+      onOk: async () => {
+        if (!chatbot) return;
+        try {
+          // 从配置参数定义中提取默认值
+          const defaultValues: Record<string, any> = {};
+          const extractDefaults = (items: any[], prefix: string = '') => {
+            for (const item of items) {
+              const fullKey = prefix ? `${prefix}.${item.key}` : item.key;
+              if (item.type === 'section' && item.children) {
+                extractDefaults(item.children, fullKey);
+              } else if (item.default !== undefined) {
+                defaultValues[fullKey] = item.default;
+              }
+            }
+          };
+          extractDefaults(integrationConfigParams);
+
+          // 重建嵌套的configs对象
+          const configs: Record<string, any> = {};
+          for (const [fullKey, value] of Object.entries(defaultValues)) {
+            const parts = fullKey.split('.');
+            let obj = configs;
+            for (let i = 0; i < parts.length - 1; i++) {
+              if (!obj[parts[i]]) obj[parts[i]] = {};
+              obj = obj[parts[i]];
+            }
+            obj[parts[parts.length - 1]] = value;
+          }
+
+          await integrationService.saveIntegration(chatbot.id, { configs });
+          message.success('已重置');
+          // 更新配置值和原始值，不重新获取
+          setIntegrationConfigValues(JSON.parse(JSON.stringify(defaultValues)));
+          setOriginalIntegrationConfigValues(JSON.parse(JSON.stringify(defaultValues)));
+          // 更新integrationData中的configs
+          setIntegrationData(prev => prev ? { ...prev, configs: { ...prev.configs, ...configs } } : prev);
+        } catch (error) {
+          console.error('Failed to reset to default:', error);
+          message.error('重置失败');
+        }
+      }
+    });
+  };
+
+  const handleSaveIntegrationConfigs = async () => {
+    if (!chatbot) return;
+    try {
+      // 从 integrationConfigValues 重建嵌套的configs对象
+      const configs: Record<string, any> = {};
+      for (const [fullKey, value] of Object.entries(integrationConfigValues)) {
+        const parts = fullKey.split('.');
+        let obj = configs;
+        for (let i = 0; i < parts.length - 1; i++) {
+          if (!obj[parts[i]]) obj[parts[i]] = {};
+          obj = obj[parts[i]];
+        }
+        obj[parts[parts.length - 1]] = value;
+      }
+      await integrationService.saveIntegration(chatbot.id, { configs });
+      message.success('配置已保存');
+      // 更新原始值，不重新获取配置
+      setOriginalIntegrationConfigValues(JSON.parse(JSON.stringify(integrationConfigValues)));
+      // 更新integrationData中的configs
+      setIntegrationData(prev => prev ? { ...prev, configs: { ...prev.configs, ...configs } } : prev);
+    } catch (error) {
+      console.error('Failed to save integration configs:', error);
+      message.error('保存配置失败');
+    }
+  };
+
+  // 生成预览URL：直接打开 /integration/preview 路由页面（临时对话，不保存数据库）
+  const generatePreviewUrl = (widgetType: 'sidebar' | 'iframe'): string => {
+    const cfg = integrationData?.configs;
+    if (!cfg) return '';
+    const apiKey = integrationData?.integration?.api_key?.[0] || '';
+    if (!apiKey) return '';
+    const common = cfg.interface_config?.common_config || {};
+    const sidebar = cfg.interface_config?.sidebar || {};
+    const params = new URLSearchParams();
+    params.set('type', widgetType);
+    params.set('api_key', apiKey);
+    params.set('theme', common.theme || '#1677ff');
+    params.set('theme_mode', common.theme_mode || 'light');
+    params.set('gradient_end_color', common.gradient_end_color || 'none');
+    params.set('title', sidebar.title || chatbot?.name || 'AI助手');
+    params.set('position', sidebar.position || 'bottom-right');
+    params.set('width', String(sidebar.width || 400));
+    params.set('height', String(sidebar.height || 600));
+    return '/integration/preview?' + params.toString();
+  };
+
+  // 生成嵌入代码：从配置参数中提取实际值并替换模板变量
+  const generateEmbedCode = (widgetType: 'sidebar' | 'iframe'): string => {
+    const cfg = integrationData?.configs;
+    if (!cfg) return '';
+    const apiKey = integrationData?.integration?.api_key?.[0] || '';
+    const code = cfg.html_code?.[widgetType] || '';
+    // 如果后端返回了已替换变量的代码，直接使用
+    if (code && !code.includes('{api_key}') && !code.includes('{base_url}')) return code;
+    // 后端返回了模板但未替换变量，前端替换
+    if (code) {
+      const baseUrl = cfg.api_config?.chat?.request_example?.curl?.match(/https?:\/\/[^\s'"\?]+/)?.[0] || window.location.origin;
+      const common = cfg.interface_config?.common_config || {};
+      const sidebar = cfg.interface_config?.sidebar || {};
+      const iframe = cfg.interface_config?.iframe || {};
+      return code
+        .replace(/\{api_key\}/g, apiKey)
+        .replace(/\{base_url\}/g, baseUrl)
+        .replace(/\{theme\}/g, common.theme || '#1677ff')
+        .replace(/\{theme_mode\}/g, common.theme_mode || 'light')
+        .replace(/\{gradient_end_color\}/g, common.gradient_end_color || 'none')
+        .replace(/\{position\}/g, sidebar.position || 'bottom-right')
+        .replace(/\{title\}/g, encodeURIComponent(sidebar.title || chatbot?.name || 'AI助手'))
+        .replace(/\{width\}/g, String(sidebar.width || 400))
+        .replace(/\{height\}/g, String(sidebar.height || 600))
+        .replace(/\{resizable\}/g, String(sidebar.resizable ?? true))
+        .replace(/\{maximizable\}/g, String(sidebar.maximizable ?? true))
+        .replace(/\{theme_encoded\}/g, encodeURIComponent(common.theme || '#1677ff'))
+        .replace(/\{gradient_end_color_encoded\}/g, encodeURIComponent(common.gradient_end_color || 'none'))
+        .replace(/\{title_encoded\}/g, encodeURIComponent(sidebar.title || chatbot?.name || 'AI助手'))
+        .replace(/\{iframe_width\}/g, String(iframe.width || '100%'))
+        .replace(/\{iframe_height\}/g, String(iframe.height || '100%'));
+    }
+    // 后端未返回 html_code，前端直接生成
+    const baseUrl = window.location.origin;
+    const common = cfg.interface_config?.common_config || {};
+    const sidebar = cfg.interface_config?.sidebar || {};
+    const iframe = cfg.interface_config?.iframe || {};
+    const theme = common.theme || '#1677ff';
+    const themeMode = common.theme_mode || 'light';
+    const gradientEndColor = common.gradient_end_color || 'none';
+    const title = encodeURIComponent(sidebar.title || chatbot?.name || 'AI助手');
+    const width = sidebar.width || 400;
+    const height = sidebar.height || 600;
+    const resizable = String(sidebar.resizable ?? true);
+    const maximizable = String(sidebar.maximizable ?? true);
+    const themeEncoded = encodeURIComponent(theme);
+    const gradientEncoded = encodeURIComponent(gradientEndColor);
+    if (widgetType === 'sidebar') {
+      return '<!-- AI助手悬浮球侧边栏 -->\n<script>\n  (function() {\n    var config = {\n      apiKey: "' + apiKey + '",\n      baseUrl: "' + baseUrl + '",\n      theme: "' + theme + '",\n      themeMode: "' + themeMode + '",\n      gradientEndColor: "' + gradientEndColor + '",\n      position: "' + (sidebar.position || 'bottom-right') + '",\n      title: "' + decodeURIComponent(title) + '",\n      width: ' + width + ',\n      height: ' + height + ',\n      resizable: ' + resizable + ',\n      maximizable: ' + maximizable + '\n    };\n    var ball = document.createElement("div");\n    ball.id = "ai-widget-ball";\n    ball.innerHTML = "💬";\n    var ballBg = config.gradientEndColor && config.gradientEndColor !== "none" ? "radial-gradient(circle at center,"+config.theme+","+config.gradientEndColor+")" : config.theme;\n    ball.style.cssText = "position:fixed;width:52px;height:52px;border-radius:50%;background:"+ballBg+";color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;cursor:grab;box-shadow:0 6px 24px rgba(0,0,0,0.12);z-index:99999;user-select:none;touch-action:none;";\n    var pos = {"bottom-right":"bottom:48px;right:48px","bottom-left":"bottom:48px;left:48px","top-right":"top:48px;right:48px","top-left":"top:48px;left:48px"};\n    ball.style.cssText += (pos[config.position]||pos["bottom-right"]);\n    var panel = document.createElement("iframe");\n    var params = "api_key="+encodeURIComponent(config.apiKey)+"&theme="+encodeURIComponent(config.theme)+"&theme_mode="+config.themeMode+"&title="+encodeURIComponent(config.title)+"&gradient_end_color="+encodeURIComponent(config.gradientEndColor);\n    panel.src = config.baseUrl+"/integration/chat?"+params;\n    panel.style.cssText = "position:fixed;width:"+config.width+"px;height:"+config.height+"px;border:none;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,0.15);z-index:99998;display:none;";\n    panel.style.cssText += (pos[config.position]||pos["bottom-right"]).replace(/bottom:\s*48px/,"bottom:112px").replace(/top:\s*48px/,"top:112px");\n    var isOpen=false,hasMoved=false,dragStart=null;\n    ball.addEventListener("mousedown",function(e){hasMoved=false;var r=ball.getBoundingClientRect();dragStart={x:e.clientX,y:e.clientY,bx:r.left,by:r.top};});\n    document.addEventListener("mousemove",function(e){if(!dragStart)return;var dx=e.clientX-dragStart.x,dy=e.clientY-dragStart.y;if(Math.abs(dx)>3||Math.abs(dy)>3)hasMoved=true;ball.style.top=Math.max(0,Math.min(window.innerHeight-52,dragStart.by+dy))+"px";ball.style.left=Math.max(0,Math.min(window.innerWidth-52,dragStart.bx+dx))+"px";ball.style.bottom="auto";ball.style.right="auto";ball.style.cursor="grabbing";});\n    document.addEventListener("mouseup",function(){if(!dragStart)return;dragStart=null;ball.style.cursor="grab";if(hasMoved)return;isOpen=!isOpen;panel.style.display=isOpen?"block":"none";ball.innerHTML=isOpen?"✕":"💬";});\n    ball.addEventListener("touchstart",function(e){var t=e.touches[0];hasMoved=false;var r=ball.getBoundingClientRect();dragStart={x:t.clientX,y:t.clientY,bx:r.left,by:r.top};});\n    document.addEventListener("touchmove",function(e){if(!dragStart)return;var t=e.touches[0],dx=t.clientX-dragStart.x,dy=t.clientY-dragStart.y;if(Math.abs(dx)>3||Math.abs(dy)>3){hasMoved=true;e.preventDefault();}ball.style.top=Math.max(0,Math.min(window.innerHeight-52,dragStart.by+dy))+"px";ball.style.left=Math.max(0,Math.min(window.innerWidth-52,dragStart.bx+dx))+"px";ball.style.bottom="auto";ball.style.right="auto";},{passive:false});\n    document.addEventListener("touchend",function(){if(!dragStart)return;dragStart=null;if(!hasMoved){isOpen=!isOpen;panel.style.display=isOpen?"block":"none";ball.innerHTML=isOpen?"✕":"💬";}});\n    document.body.appendChild(panel);\n    document.body.appendChild(ball);\n  })();\n<\/script>';
+    } else {
+      return '<!-- AI助手iframe嵌入 -->\n<iframe\n  src="' + baseUrl + '/integration/chat?api_key=' + apiKey + '&theme=' + themeEncoded + '&theme_mode=' + themeMode + '&gradient_end_color=' + gradientEncoded + '&title=' + title + '"\n  style="width: ' + (iframe.width || '100%') + '; height: ' + (iframe.height || '100%') + '; border: 1px solid #e8e8e8; border-radius: 8px;"\n  allow="microphone"\n></iframe>';
+    }
+  };
+
+  // 当配置参数或集成数据加载完成后初始化配置值
+  useEffect(() => {
+    if (integrationData && integrationConfigParams.length > 0) {
+      initConfigValues(integrationData, integrationConfigParams);
+    }
+  }, [integrationData, integrationConfigParams]);
+
+  // 配置有变动时，F5刷新页面提示
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isIntegrationDirty || hasChanges) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isIntegrationDirty, hasChanges]);
+
+  // 渲染单个配置参数的控件
+  const renderConfigControl = (param: any, fullKey: string) => {
+    const value = integrationConfigValues[fullKey];
+    switch (param.type) {
+      case 'text':
+        return (
+          <Input
+            value={value ?? param.default ?? ''}
+            onChange={e => handleConfigValueChange(fullKey, e.target.value)}
+            placeholder={param.description}
+          />
+        );
+      case 'number':
+        return (
+          <InputNumber
+            value={value ?? param.default ?? 0}
+            onChange={v => handleConfigValueChange(fullKey, v)}
+            min={param.min}
+            max={param.max}
+            style={{ width: '100%' }}
+          />
+        );
+      case 'switch':
+        return (
+          <div style={{ display: 'inline-flex' }}>
+            <Switch
+              checked={value ?? param.default ?? false}
+              onChange={v => handleConfigValueChange(fullKey, v)}
+            />
+          </div>
+        );
+      case 'select':
+        return (
+          <Select
+            value={value ?? param.default}
+            onChange={v => handleConfigValueChange(fullKey, v)}
+            style={{ width: '100%' }}
+            options={param.options?.map((opt: any) => ({ label: opt.label, value: opt.value }))}
+          />
+        );
+      case 'theme_select':
+        return (
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+            {(param.options || []).map((opt: any) => (
+              <div
+                key={opt.key}
+                onClick={() => handleConfigValueChange(fullKey, opt.color)}
+                style={{
+                  width: 32, height: 32, borderRadius: '50%',
+                  background: opt.color,
+                  border: (value ?? param.default) === opt.color
+                    ? '3px solid var(--primary-color)'
+                    : theme === 'dark' ? '2px solid rgba(255,255,255,0.2)' : '2px solid #d9d9d9',
+                  cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '12px', color: opt.color === '#ffffff' ? '#333' : '#fff'
+                }}
+                title={opt.label}
+              >
+                {(value ?? param.default) === opt.color && '✓'}
+              </div>
+            ))}
+            {/* 自定义颜色输入 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <div
+                style={{
+                  width: 32, height: 32, borderRadius: '50%',
+                  background: value && !param.options?.some((opt: any) => opt.color === value) ? value : 'transparent',
+                  border: value && !param.options?.some((opt: any) => opt.color === value)
+                    ? '3px solid var(--primary-color)'
+                    : theme === 'dark' ? '2px solid rgba(255,255,255,0.2)' : '2px solid #d9d9d9',
+                  cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  position: 'relative',
+                  overflow: 'hidden'
+                }}
+                title="自定义颜色"
+              >
+                <input
+                  type="color"
+                  value={value && /^#[0-9A-Fa-f]{6}$/.test(value) ? value : '#ffffff'}
+                  onChange={e => handleConfigValueChange(fullKey, e.target.value)}
+                  style={{
+                    position: 'absolute',
+                    width: '100%',
+                    height: '100%',
+                    opacity: 0,
+                    cursor: 'pointer'
+                  }}
+                />
+                <span style={{ fontSize: '14px', color: theme === 'dark' ? '#aaa' : '#999' }}>+</span>
+              </div>
+            </div>
+          </div>
+        );
+      case 'color':
+        return (
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+            {(param.presets || []).map((opt: any) => (
+              <div
+                key={opt.key}
+                onClick={() => handleConfigValueChange(fullKey, opt.color)}
+                style={{
+                  width: 32, height: 32, borderRadius: '50%',
+                  background: opt.color === 'none' ? 'transparent' : opt.color,
+                  border: (value ?? param.default) === opt.color
+                    ? '3px solid var(--primary-color)'
+                    : theme === 'dark' ? '2px solid rgba(255,255,255,0.2)' : '2px solid #d9d9d9',
+                  cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '12px',
+                  position: 'relative'
+                }}
+                title={opt.label}
+              >
+                {opt.color === 'none' ? (
+                  <span style={{ fontSize: '18px', color: theme === 'dark' ? '#aaa' : '#999' }}>∅</span>
+                ) : (
+                  (value ?? param.default) === opt.color && <span style={{ color: '#fff' }}>✓</span>
+                )}
+              </div>
+            ))}
+            {/* 自定义颜色输入 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <div
+                style={{
+                  width: 32, height: 32, borderRadius: '50%',
+                  background: value && !param.presets?.some((opt: any) => opt.color === value) ? value : 'transparent',
+                  border: value && !param.presets?.some((opt: any) => opt.color === value)
+                    ? '3px solid var(--primary-color)'
+                    : theme === 'dark' ? '2px solid rgba(255,255,255,0.2)' : '2px solid #d9d9d9',
+                  cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  position: 'relative',
+                  overflow: 'hidden'
+                }}
+                title="自定义颜色"
+              >
+                <input
+                  type="color"
+                  value={value && /^#[0-9A-Fa-f]{6}$/.test(value) ? value : '#ffffff'}
+                  onChange={e => handleConfigValueChange(fullKey, e.target.value)}
+                  style={{
+                    position: 'absolute',
+                    width: '100%',
+                    height: '100%',
+                    opacity: 0,
+                    cursor: 'pointer'
+                  }}
+                />
+                <span style={{ fontSize: '16px', color: theme === 'dark' ? '#aaa' : '#999' }}>+</span>
+              </div>
+            </div>
+          </div>
+        );
+      case 'tag_list':
+        return (
+          <Select
+            mode="tags"
+            value={value ?? param.default ?? []}
+            onChange={v => handleConfigValueChange(fullKey, v)}
+            style={{ width: '100%' }}
+            placeholder={param.description || '输入后回车添加'}
+            tokenSeparators={[',']}
+          />
+        );
+      case 'upload': {
+        const defaultAvatars = param.avatar_type === 'user' ? DEFAULT_USER_AVATARS : DEFAULT_BOT_AVATARS;
+        return (
+          <div style={{ gridColumn: 'span 2' }}>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+              {defaultAvatars.map(av => (
+                <div
+                  key={av.key}
+                  onClick={() => handleConfigValueChange(fullKey, av.src)}
+                  style={{
+                    width: 36, height: 36, borderRadius: '50%',
+                    overflow: 'hidden', cursor: 'pointer',
+                    border: value === av.src
+                      ? `2px solid var(--primary-color)`
+                      : theme === 'dark' ? '2px solid rgba(255,255,255,0.15)' : '2px solid #e8e8e8',
+                    transition: 'all 0.2s',
+                    boxShadow: value === av.src ? '0 0 0 2px rgba(90, 111, 214, 0.3)' : 'none'
+                  }}
+                  title={av.label}
+                >
+                  <img src={av.src} alt={av.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+              ))}
+              <Upload
+                beforeUpload={(file) => {
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    handleConfigValueChange(fullKey, reader.result as string);
+                  };
+                  reader.readAsDataURL(file);
+                  return false;
+                }}
+                showUploadList={false}
+                accept="image/*"
+              >
+                <div style={{
+                  width: 36, height: 36, borderRadius: '50%',
+                  border: theme === 'dark' ? 'none' : '1px dashed #d9d9d9',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', fontSize: '14px',
+                  color: theme === 'dark' ? '#888' : '#bbb',
+                  background: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'transparent'
+                }}>
+                  <PlusOutlined />
+                </div>
+              </Upload>
+              {value && !defaultAvatars.find(a => a.src === value) && (
+                <div style={{ position: 'relative' }}>
+                  <img src={value} alt="custom" style={{
+                    width: 36, height: 36, borderRadius: '50%', objectFit: 'cover',
+                    border: '2px solid var(--primary-color)',
+                    boxShadow: '0 0 0 2px rgba(90, 111, 214, 0.3)'
+                  }} />
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<CloseOutlined />}
+                    onClick={() => handleConfigValueChange(fullKey, '')}
+                    style={{ position: 'absolute', top: -6, right: -6, fontSize: '10px', padding: 0 }}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+      default:
+        return (
+          <Input
+            value={value ?? param.default ?? ''}
+            onChange={e => handleConfigValueChange(fullKey, e.target.value)}
+            size="small"
+          />
+        );
+    }
+  };
+
+  // 渲染配置参数区块
+  const renderConfigSection = (items: any[], prefix: string, depth: number = 0) => {
+    return items.map(item => {
+      const fullKey = prefix ? `${prefix}.${item.key}` : item.key;
+      if (item.type === 'section' && item.children) {
+        return (
+          <div key={fullKey} style={{
+            padding: depth > 0 ? '12px' : '0',
+            border: depth > 0 ? (theme === 'dark' ? '1px solid rgba(255,255,255,0.08)' : '1px solid #f0f0f0') : 'none',
+            borderRadius: depth > 0 ? '6px' : '0',
+            background: depth > 0 ? (theme === 'dark' ? 'rgba(255,255,255,0.02)' : '#fafafa') : 'transparent'
+          }}>
+            <div style={{
+              fontSize: depth === 0 ? '14px' : '14px',
+              fontWeight: 500,
+              color: theme === 'dark' ? '#fff' : '#000',
+              marginBottom: '12px',
+              textAlign: 'left'
+            }}>
+              {item.label}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingLeft: depth === 0 ? '0' : '0' }}>
+              {renderConfigSection(item.children, fullKey, depth + 1)}
+            </div>
+          </div>
+        );
+      }
+      return (
+        <div key={fullKey} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#ccc' : '#333', textAlign: 'left' }}>
+            {item.label}
+            {item.description && (
+              <Tooltip title={item.description}>
+                <QuestionCircleOutlined style={{ marginLeft: '4px', color: theme === 'dark' ? '#888' : '#bbb', fontSize: '12px' }} />
+              </Tooltip>
+            )}
+          </div>
+          {renderConfigControl(item, fullKey)}
+        </div>
+      );
+    });
+  };
+
   const fetchIntegrationConfigs = async (chatbotId: string) => {
     setIntegrationLoading(true);
     try {
@@ -427,7 +1008,26 @@ const ChatbotSetting: React.FC = () => {
   const handleEnableIntegration = async () => {
     if (!chatbot) return;
     try {
-      await integrationService.saveIntegration(chatbot.id);
+      // 启用时使用机器人名称和欢迎语作为默认值
+      const defaultConfigs: Record<string, any> = {};
+      if (chatbot.name) {
+        defaultConfigs['interface_config.sidebar.title'] = chatbot.name;
+      }
+      if (chatbot.greeting) {
+        defaultConfigs['chat_config.welcome_messages'] = [chatbot.greeting];
+      }
+      // 重建嵌套configs对象
+      const configs: Record<string, any> = {};
+      for (const [fullKey, value] of Object.entries(defaultConfigs)) {
+        const parts = fullKey.split('.');
+        let obj = configs;
+        for (let i = 0; i < parts.length - 1; i++) {
+          if (!obj[parts[i]]) obj[parts[i]] = {};
+          obj = obj[parts[i]];
+        }
+        obj[parts[parts.length - 1]] = value;
+      }
+      await integrationService.saveIntegration(chatbot.id, Object.keys(configs).length > 0 ? { configs } : undefined);
       message.success('集成配置已启用');
       fetchIntegrationConfigs(chatbot.id);
     } catch (error) {
@@ -465,11 +1065,11 @@ const ChatbotSetting: React.FC = () => {
   };
 
   const handleBeforeUnload = useCallback((e: BeforeUnloadEvent) => {
-    if (hasChanges) {
+    if (hasChanges || isIntegrationDirty) {
       e.preventDefault();
       e.returnValue = '';
     }
-  }, [hasChanges]);
+  }, [hasChanges, isIntegrationDirty]);
 
   useEffect(() => {
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -1045,7 +1645,7 @@ const ChatbotSetting: React.FC = () => {
       <div className="chatbot-setting-container" style={{ display: 'flex', gap: '8px', height: 'calc(100% - 60px)', overflow: 'hidden' }}>
         {/* 左侧基本信息 */}
         <div style={{ width: '30%', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto', overflowX: 'hidden' }} className="hide-scrollbar">
-          <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; } .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; } .hide-scrollbar-inner::-webkit-scrollbar { display: none; } .hide-scrollbar-inner { -ms-overflow-style: none; scrollbar-width: none; }`}</style>
+          <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; } .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; } .hide-scrollbar-inner::-webkit-scrollbar { display: none; } .hide-scrollbar-inner { -ms-overflow-style: none; scrollbar-width: none; } .pub-anchor .ant-anchor::before { border-inline-start: none !important; } .pub-anchor .ant-anchor-ink { display: none !important; } .pub-anchor .ant-anchor-link { padding-block: 6px; padding-inline-start: 16px; position: relative; cursor: pointer; } .pub-anchor .ant-anchor-link::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 6px; height: 6px; border-radius: 50%; background: transparent; transition: background 0.2s; } .pub-anchor .ant-anchor-link-active::before { background: #1677ff; } .pub-anchor[data-theme="dark"] .ant-anchor-link-title { color: rgba(255,255,255,0.65); font-size: 13px; white-space: nowrap; } .pub-anchor[data-theme="dark"] .ant-anchor-link-title:hover { color: #1677ff; } .pub-anchor[data-theme="dark"] .ant-anchor-link-active .ant-anchor-link-title { color: #1677ff; font-weight: 500; } .pub-anchor[data-theme="light"] .ant-anchor-link-title { color: rgba(0,0,0,0.65); font-size: 13px; white-space: nowrap; } .pub-anchor[data-theme="light"] .ant-anchor-link-title:hover { color: #1677ff; } .pub-anchor[data-theme="light"] .ant-anchor-link-active .ant-anchor-link-title { color: #1677ff; font-weight: 500; } code { background: transparent !important; }`}</style>
           <div 
             className={`setting-section ${theme === 'dark' ? 'dark' : 'light'}`}
             style={{ 
@@ -1930,18 +2530,51 @@ const ChatbotSetting: React.FC = () => {
             )}
           </div>
 
-        </div>
-
-        {/* 第三方插件集成 */}
-        <div style={{ 
-          padding: '16px', 
-          borderRadius: '4px', 
-          border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #d9d9d9', 
+          {/* 第三方插件集成 */}
+        <div style={{
+          padding: '16px',
+          borderRadius: '4px',
+          border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #d9d9d9',
           background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fafafa'
         }}>
-          <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <GlobalOutlined style={{ fontSize: '14px', color: theme === 'dark' ? '#fff' : '#000' }} />
-            <span style={{ fontWeight: 500, fontSize: '14px', color: theme === 'dark' ? '#fff' : '#000' }}>第三方插件集成</span>
+          <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <GlobalOutlined style={{ fontSize: '14px', color: theme === 'dark' ? '#fff' : '#000' }} />
+              <span style={{ fontWeight: 500, fontSize: '14px', color: theme === 'dark' ? '#fff' : '#000' }}>第三方插件集成</span>
+            </div>
+            {integrationData?.integration && (
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <Button
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  onClick={handleResetToDefault}
+                >
+                  重置
+                </Button>
+                <Button
+                  size="small"
+                  icon={<UndoOutlined />}
+                  onClick={handleRestoreIntegrationConfigs}
+                  disabled={!isIntegrationDirty}
+                >
+                  恢复
+                </Button>
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<SaveOutlined />}
+                  onClick={handleSaveIntegrationConfigs}
+                  disabled={!isIntegrationDirty}
+                >
+                  保存
+                </Button>
+                {isIntegrationDirty && (
+                  <span style={{ color: '#faad14', fontSize: '12px', marginLeft: '4px' }}>
+                    • 有未保存的变动
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           
           {integrationLoading ? (
@@ -1969,12 +2602,17 @@ const ChatbotSetting: React.FC = () => {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       {/* API密钥 */}
                       <div>
-                        <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', marginBottom: '4px' }}>API密钥</div>
+                        <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', marginBottom: '4px', textAlign: 'left' }}>API密钥</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <Input
-                            value={integrationData.integration.api_key?.[0] || ''}
+                            value={apiKeyVisible ? (integrationData.integration.api_key?.[0] || '') : '••••••••••••••••••••••'}
                             readOnly
                             style={{ flex: 1 }}
+                          />
+                          <Button
+                            icon={apiKeyVisible ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+                            size="small"
+                            onClick={() => setApiKeyVisible(!apiKeyVisible)}
                           />
                           <Button
                             icon={<CopyOutlined />}
@@ -1993,7 +2631,7 @@ const ChatbotSetting: React.FC = () => {
                       
                       {/* Base URL */}
                       <div>
-                        <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', marginBottom: '4px' }}>Base URL</div>
+                        <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', marginBottom: '4px', textAlign: 'left' }}>Base URL</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <Input
                             value={integrationData.integration.openai_base_url || ''}
@@ -2010,7 +2648,7 @@ const ChatbotSetting: React.FC = () => {
                       
                       {/* 接口文档 */}
                       <div>
-                        <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', marginBottom: '8px' }}>接口文档</div>
+                        <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', marginBottom: '8px', textAlign: 'left' }}>接口文档</div>
                         <Tabs
                           size="small"
                           items={[
@@ -2019,9 +2657,10 @@ const ChatbotSetting: React.FC = () => {
                               label: '聊天接口',
                               children: (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                  <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#666' }}>
+                                  <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#666', textAlign: 'left' }}>
                                     POST {integrationData.integration.openai_base_url || ''}/chat/completions
                                   </div>
+                                  <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', textAlign: 'left' }}>请求示例</div>
                                   <Tabs
                                     size="small"
                                     items={[
@@ -2030,16 +2669,14 @@ const ChatbotSetting: React.FC = () => {
                                         label: 'cURL',
                                         children: (
                                           <div style={{ position: 'relative' }}>
-                                            <pre style={{ 
-                                              background: theme === 'dark' ? '#1a1a2e' : '#f5f5f5', 
-                                              padding: '12px', 
-                                              borderRadius: '4px', 
-                                              fontSize: '12px',
-                                              overflow: 'auto',
-                                              maxHeight: '300px'
-                                            }}>
+                                            <SyntaxHighlighter
+                                              language="bash"
+                                              style={theme === 'dark' ? oneDark : oneLight}
+                                              customStyle={{ margin: 0, borderRadius: '4px', fontSize: '12px', maxWidth: '100%', overflowX: 'auto', background: theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#f5f5f5' }}
+                                              wrapLongLines
+                                            >
                                               {integrationData.configs?.api_config?.chat?.request_example?.curl || ''}
-                                            </pre>
+                                            </SyntaxHighlighter>
                                             <Button
                                               icon={<CopyOutlined />}
                                               size="small"
@@ -2054,16 +2691,14 @@ const ChatbotSetting: React.FC = () => {
                                         label: 'Python',
                                         children: (
                                           <div style={{ position: 'relative' }}>
-                                            <pre style={{ 
-                                              background: theme === 'dark' ? '#1a1a2e' : '#f5f5f5', 
-                                              padding: '12px', 
-                                              borderRadius: '4px', 
-                                              fontSize: '12px',
-                                              overflow: 'auto',
-                                              maxHeight: '300px'
-                                            }}>
+                                            <SyntaxHighlighter
+                                              language="python"
+                                              style={theme === 'dark' ? oneDark : oneLight}
+                                              customStyle={{ margin: 0, borderRadius: '4px', fontSize: '12px', maxWidth: '100%', overflowX: 'auto', background: theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#f5f5f5' }}
+                                              wrapLongLines
+                                            >
                                               {integrationData.configs?.api_config?.chat?.request_example?.python || ''}
-                                            </pre>
+                                            </SyntaxHighlighter>
                                             <Button
                                               icon={<CopyOutlined />}
                                               size="small"
@@ -2075,18 +2710,56 @@ const ChatbotSetting: React.FC = () => {
                                       }
                                     ]}
                                   />
-                                  <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', marginTop: '4px' }}>响应示例</div>
-                                  <pre style={{ 
-                                    background: theme === 'dark' ? '#1a1a2e' : '#f5f5f5', 
-                                    padding: '12px', 
-                                    borderRadius: '4px', 
-                                    fontSize: '12px',
-                                    whiteSpace: 'pre-wrap',
-                                    maxHeight: '200px',
-                                    overflow: 'auto'
-                                  }}>
-                                    {integrationData.configs?.api_config?.chat?.response_example || ''}
-                                  </pre>
+                                  <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', textAlign: 'left' }}>响应示例</div>
+                                  <Tabs
+                                    size="small"
+                                    items={[
+                                      {
+                                        key: 'stream',
+                                        label: '流式响应',
+                                        children: (
+                                          <div style={{ position: 'relative' }}>
+                                            <SyntaxHighlighter
+                                              language="text"
+                                              style={theme === 'dark' ? oneDark : oneLight}
+                                              customStyle={{ margin: 0, borderRadius: '4px', fontSize: '12px', maxWidth: '100%', overflowX: 'auto', background: theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#f5f5f5' }}
+                                              wrapLongLines
+                                            >
+                                              {integrationData.configs?.api_config?.chat?.stream_response_example || ''}
+                                            </SyntaxHighlighter>
+                                            <Button
+                                              icon={<CopyOutlined />}
+                                              size="small"
+                                              style={{ position: 'absolute', top: '8px', right: '8px' }}
+                                              onClick={() => handleCopyCode(integrationData.configs?.api_config?.chat?.stream_response_example || '')}
+                                            />
+                                          </div>
+                                        )
+                                      },
+                                      {
+                                        key: 'non_stream',
+                                        label: '非流式响应',
+                                        children: (
+                                          <div style={{ position: 'relative' }}>
+                                            <SyntaxHighlighter
+                                              language="json"
+                                              style={theme === 'dark' ? oneDark : oneLight}
+                                              customStyle={{ margin: 0, borderRadius: '4px', fontSize: '12px', maxWidth: '100%', overflowX: 'auto', background: theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#f5f5f5' }}
+                                              wrapLongLines
+                                            >
+                                              {integrationData.configs?.api_config?.chat?.non_stream_response_example || ''}
+                                            </SyntaxHighlighter>
+                                            <Button
+                                              icon={<CopyOutlined />}
+                                              size="small"
+                                              style={{ position: 'absolute', top: '8px', right: '8px' }}
+                                              onClick={() => handleCopyCode(integrationData.configs?.api_config?.chat?.non_stream_response_example || '')}
+                                            />
+                                          </div>
+                                        )
+                                      }
+                                    ]}
+                                  />
                                 </div>
                               )
                             },
@@ -2095,9 +2768,10 @@ const ChatbotSetting: React.FC = () => {
                               label: '获取聊天记录',
                               children: (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                  <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#666' }}>
+                                  <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#666', textAlign: 'left' }}>
                                     GET {integrationData.integration.openai_base_url || ''}/chat/{'{chat_id}'}/messages
                                   </div>
+                                  <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', textAlign: 'left' }}>请求示例</div>
                                   <Tabs
                                     size="small"
                                     items={[
@@ -2106,15 +2780,14 @@ const ChatbotSetting: React.FC = () => {
                                         label: 'cURL',
                                         children: (
                                           <div style={{ position: 'relative' }}>
-                                            <pre style={{ 
-                                              background: theme === 'dark' ? '#1a1a2e' : '#f5f5f5', 
-                                              padding: '12px', 
-                                              borderRadius: '4px', 
-                                              fontSize: '12px',
-                                              overflow: 'auto'
-                                            }}>
+                                            <SyntaxHighlighter
+                                              language="bash"
+                                              style={theme === 'dark' ? oneDark : oneLight}
+                                              customStyle={{ margin: 0, borderRadius: '4px', fontSize: '12px', maxWidth: '100%', overflowX: 'auto', background: theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#f5f5f5' }}
+                                              wrapLongLines
+                                            >
                                               {integrationData.configs?.api_config?.get_messages?.request_example?.curl || ''}
-                                            </pre>
+                                            </SyntaxHighlighter>
                                             <Button
                                               icon={<CopyOutlined />}
                                               size="small"
@@ -2129,15 +2802,14 @@ const ChatbotSetting: React.FC = () => {
                                         label: 'Python',
                                         children: (
                                           <div style={{ position: 'relative' }}>
-                                            <pre style={{ 
-                                              background: theme === 'dark' ? '#1a1a2e' : '#f5f5f5', 
-                                              padding: '12px', 
-                                              borderRadius: '4px', 
-                                              fontSize: '12px',
-                                              overflow: 'auto'
-                                            }}>
+                                            <SyntaxHighlighter
+                                              language="python"
+                                              style={theme === 'dark' ? oneDark : oneLight}
+                                              customStyle={{ margin: 0, borderRadius: '4px', fontSize: '12px', maxWidth: '100%', overflowX: 'auto', background: theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#f5f5f5' }}
+                                              wrapLongLines
+                                            >
                                               {integrationData.configs?.api_config?.get_messages?.request_example?.python || ''}
-                                            </pre>
+                                            </SyntaxHighlighter>
                                             <Button
                                               icon={<CopyOutlined />}
                                               size="small"
@@ -2149,18 +2821,23 @@ const ChatbotSetting: React.FC = () => {
                                       }
                                     ]}
                                   />
-                                  <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', marginTop: '4px' }}>响应示例</div>
-                                  <pre style={{ 
-                                    background: theme === 'dark' ? '#1a1a2e' : '#f5f5f5', 
-                                    padding: '12px', 
-                                    borderRadius: '4px', 
-                                    fontSize: '12px',
-                                    whiteSpace: 'pre-wrap',
-                                    maxHeight: '200px',
-                                    overflow: 'auto'
-                                  }}>
-                                    {integrationData.configs?.api_config?.get_messages?.response_example || ''}
-                                  </pre>
+                                  <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', textAlign: 'left' }}>响应示例</div>
+                                  <div style={{ position: 'relative' }}>
+                                    <SyntaxHighlighter
+                                      language="json"
+                                      style={theme === 'dark' ? oneDark : oneLight}
+                                      customStyle={{ margin: 0, borderRadius: '4px', fontSize: '12px', maxWidth: '100%', overflowX: 'auto', background: theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#f5f5f5' }}
+                                      wrapLongLines
+                                    >
+                                      {integrationData.configs?.api_config?.get_messages?.response_example || ''}
+                                    </SyntaxHighlighter>
+                                    <Button
+                                      icon={<CopyOutlined />}
+                                      size="small"
+                                      style={{ position: 'absolute', top: '8px', right: '8px' }}
+                                      onClick={() => handleCopyCode(integrationData.configs?.api_config?.get_messages?.response_example || '')}
+                                    />
+                                  </div>
                                 </div>
                               )
                             }
@@ -2172,148 +2849,452 @@ const ChatbotSetting: React.FC = () => {
                 },
                 {
                   key: 'interface',
-                  label: <span><CodeOutlined /> 界面集成</span>,
+                  label: <span><CodeOutlined /> 界面配置</span>,
                   children: (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                      <div>
-                        <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', marginBottom: '8px' }}>
-                          悬浮球侧边栏
+                      {integrationConfigParams.length > 0 ? (
+                        <Tabs
+                          size="small"
+                          items={[
+                            {
+                              key: 'common',
+                              label: '通用配置',
+                              children: (
+                                <div style={{
+                                  display: 'grid',
+                                  gridTemplateColumns: 'repeat(2, 1fr)',
+                                  gap: '16px 24px'
+                                }}>
+                                  {integrationConfigParams.filter(p => p.key === 'interface_config').flatMap(p => p.children?.find(c => c.key === 'common_config')?.children?.map((item: any) => {
+                                    const fullKey = `interface_config.common_config.${item.key}`;
+                                    const isAvatar = item.type === 'upload';
+                                    return (
+                                      <div key={fullKey} style={{ display: 'flex', flexDirection: 'column', gap: '4px', ...(isAvatar ? { gridColumn: 'span 2' } : {}) }}>
+                                        <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#ccc' : '#333', textAlign: 'left' }}>
+                                          {item.label}
+                                          {item.description && (
+                                            <Tooltip title={item.description}>
+                                              <QuestionCircleOutlined style={{ marginLeft: '4px', color: theme === 'dark' ? '#888' : '#bbb', fontSize: '12px' }} />
+                                            </Tooltip>
+                                          )}
+                                        </div>
+                                        {renderConfigControl(item, fullKey)}
+                                      </div>
+                                    );
+                                  }) || []) || []}
+                                </div>
+                              )
+                            },
+                            {
+                              key: 'sidebar',
+                              label: '悬浮球',
+                              children: (
+                                <div style={{
+                                  display: 'grid',
+                                  gridTemplateColumns: 'repeat(2, 1fr)',
+                                  gap: '16px 24px'
+                                }}>
+                                  {integrationConfigParams.filter(p => p.key === 'interface_config').flatMap(p => p.children?.find(c => c.key === 'sidebar')?.children?.map((item: any) => {
+                                    const fullKey = `interface_config.sidebar.${item.key}`;
+                                    return (
+                                      <div key={fullKey} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#ccc' : '#333', textAlign: 'left' }}>
+                                          {item.label}
+                                          {item.description && (
+                                            <Tooltip title={item.description}>
+                                              <QuestionCircleOutlined style={{ marginLeft: '4px', color: theme === 'dark' ? '#888' : '#bbb', fontSize: '12px' }} />
+                                            </Tooltip>
+                                          )}
+                                        </div>
+                                        {renderConfigControl(item, fullKey)}
+                                      </div>
+                                    );
+                                  }) || []) || []}
+                                </div>
+                              )
+                            },
+                            {
+                              key: 'iframe',
+                              label: 'iframe',
+                              children: (
+                                <div style={{
+                                  display: 'grid',
+                                  gridTemplateColumns: 'repeat(2, 1fr)',
+                                  gap: '16px 24px'
+                                }}>
+                                  {integrationConfigParams.filter(p => p.key === 'interface_config').flatMap(p => p.children?.find(c => c.key === 'iframe')?.children?.map((item: any) => {
+                                    const fullKey = `interface_config.iframe.${item.key}`;
+                                    return (
+                                      <div key={fullKey} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#ccc' : '#333', textAlign: 'left' }}>
+                                          {item.label}
+                                          {item.description && (
+                                            <Tooltip title={item.description}>
+                                              <QuestionCircleOutlined style={{ marginLeft: '4px', color: theme === 'dark' ? '#888' : '#bbb', fontSize: '12px' }} />
+                                            </Tooltip>
+                                          )}
+                                        </div>
+                                        {renderConfigControl(item, fullKey)}
+                                      </div>
+                                    );
+                                  }) || []) || []}
+                                </div>
+                              )
+                            }
+                          ]}
+                        />
+                      ) : (
+                        <div style={{ textAlign: 'center', padding: '24px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+                          加载配置参数中...
                         </div>
-                        <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#666', marginBottom: '4px' }}>
-                          在网站右下角添加一个悬浮球，点击后展开侧边栏进行对话。
-                        </div>
-                        {integrationData.configs?.interface_config?.sidebar && (
-                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                            {Object.entries(integrationData.configs.interface_config.sidebar).map(([key, value]) => (
-                              <Tag key={key}>{key}: {String(value)}</Tag>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', marginBottom: '8px' }}>
-                          iframe嵌入
-                        </div>
-                        <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#666', marginBottom: '4px' }}>
-                          通过iframe将聊天窗口嵌入到网页中。
-                        </div>
-                        {integrationData.configs?.interface_config?.iframe && (
-                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                            {Object.entries(integrationData.configs.interface_config.iframe).map(([key, value]) => (
-                              <Tag key={key}>{key}: {String(value)}</Tag>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                      )}
                     </div>
                   )
                 },
                 {
-                  key: 'code',
-                  label: <span><CopyOutlined /> 嵌入代码</span>,
+                  key: 'chat_config',
+                  label: <span><SettingOutlined /> 聊天配置</span>,
+                  children: (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      {integrationConfigParams.length > 0 ? (
+                        <>
+                          {/* 非欢迎语配置项 - 两列布局 */}
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px 24px' }}>
+                            {integrationConfigParams.filter(p => p.key === 'chat_config').flatMap(p => p.children?.filter((c: any) => c.key !== 'welcome_messages').map((item: any) => {
+                              const fullKey = `chat_config.${item.key}`;
+                              return (
+                                <div key={fullKey} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                  <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#ccc' : '#333', textAlign: 'left' }}>
+                                    {item.label}
+                                    {item.description && (
+                                      <Tooltip title={item.description}>
+                                        <QuestionCircleOutlined style={{ marginLeft: '4px', color: theme === 'dark' ? '#888' : '#bbb', fontSize: '12px' }} />
+                                      </Tooltip>
+                                    )}
+                                  </div>
+                                  {renderConfigControl(item, fullKey)}
+                                </div>
+                              );
+                            }) || []) || []}
+                          </div>
+                          {/* 欢迎语 - 输入框形式 */}
+                          {(() => {
+                            const wmParam = integrationConfigParams.filter(p => p.key === 'chat_config').flatMap(p => p.children?.filter((c: any) => c.key === 'welcome_messages') || [])[0];
+                            if (!wmParam) return null;
+                            const wmKey = 'chat_config.welcome_messages';
+                            const wmValues: string[] = integrationConfigValues[wmKey] || [];
+                            return (
+                              <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                  <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#ccc' : '#333', textAlign: 'left' }}>
+                                    {wmParam.label}
+                                    {wmParam.description && (
+                                      <Tooltip title={wmParam.description}>
+                                        <QuestionCircleOutlined style={{ marginLeft: '4px', color: theme === 'dark' ? '#888' : '#bbb', fontSize: '12px' }} />
+                                      </Tooltip>
+                                    )}
+                                  </div>
+                                  <Button
+                                    size="small"
+                                    icon={<PlusOutlined />}
+                                    onClick={() => handleConfigValueChange(wmKey, [...wmValues, ''])}
+                                  >
+                                    添加
+                                  </Button>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                  {wmValues.map((msg, idx) => (
+                                    <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                      <Input
+                                        value={msg}
+                                        onChange={e => {
+                                          const newVals = [...wmValues];
+                                          newVals[idx] = e.target.value;
+                                          handleConfigValueChange(wmKey, newVals);
+                                        }}
+                                        placeholder="输入欢迎语"
+                                        style={{ flex: 1 }}
+                                      />
+                                      <Button
+                                        size="small"
+                                        icon={<MinusOutlined />}
+                                        onClick={() => {
+                                          const newVals = wmValues.filter((_, i) => i !== idx);
+                                          handleConfigValueChange(wmKey, newVals);
+                                        }}
+                                      />
+                                    </div>
+                                  ))}
+                                  {wmValues.length === 0 && (
+                                    <div style={{ fontSize: '12px', color: theme === 'dark' ? '#888' : '#999', textAlign: 'left' }}>
+                                      暂无欢迎语，点击上方"添加"按钮新增
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </>
+                      ) : (
+                        <div style={{ textAlign: 'center', padding: '24px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+                          加载配置参数中...
+                        </div>
+                      )}
+                    </div>
+                  )
+                },
+                {
+                  key: 'publish',
+                  label: <span><SendOutlined /> 发布</span>,
                   children: (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       <Tabs
                         activeKey={integrationCodeTab}
-                        onChange={setIntegrationCodeTab}
+                        onChange={(key) => { setIntegrationCodeTab(key); setPubActiveAnchor('preview'); }}
                         items={[
                           {
                             key: 'sidebar',
                             label: '悬浮球侧边栏',
-                            children: (
-                              <div style={{ position: 'relative' }}>
-                                <pre style={{ 
-                                  background: theme === 'dark' ? '#1a1a2e' : '#f5f5f5', 
-                                  padding: '12px', 
-                                  borderRadius: '4px', 
-                                  fontSize: '12px',
-                                  overflow: 'auto',
-                                  maxHeight: '300px'
-                                }}>
-                                  {integrationData.configs?.html_code?.sidebar || ''}
-                                </pre>
-                                <Button
-                                  icon={<CopyOutlined />}
-                                  size="small"
-                                  style={{ position: 'absolute', top: '8px', right: '8px' }}
-                                  onClick={() => handleCopyCode(integrationData.configs?.html_code?.sidebar || '')}
-                                >
-                                  复制代码
-                                </Button>
-                              </div>
-                            )
+                            children: (() => {
+                              const wt = 'sidebar';
+                              const containerId = `publish-scroll-${wt}`;
+                              const cardBorder = theme === 'dark' ? '1px solid rgba(255,255,255,0.1)' : '1px solid #e8e8e8';
+                              const embedCode = generateEmbedCode(wt);
+                              return (
+                                <div style={{ display: 'flex', gap: '16px' }}>
+                                  <div className="pub-anchor" data-theme={theme} style={{ width: '110px', flexShrink: 0, paddingRight: '12px', borderRight: theme === 'dark' ? '1px solid rgba(255,255,255,0.1)' : '1px solid #e8e8e8' }}>
+                                    <Anchor
+                                      affix={false}
+                                      targetOffset={20}
+                                      target={`#${containerId}`}
+                                      getCurrentAnchor={() => `#pub-${pubActiveAnchor}`}
+                                      onClick={(e, link) => {
+                                        e.preventDefault();
+                                        const sec = link.href.replace('#pub-', '');
+                                        const container = pubScrollRef.current;
+                                        const target = container?.querySelector(`#pub-${sec}`);
+                                        if (target && container) {
+                                          const containerTop = container.getBoundingClientRect().top;
+                                          const targetTop = (target as HTMLElement).getBoundingClientRect().top;
+                                          container.scrollTo({ top: container.scrollTop + (targetTop - containerTop) - 8, behavior: 'smooth' });
+                                        }
+                                        setPubActiveAnchor(sec);
+                                      }}
+                                      items={[
+                                        { key: 'preview', href: '#pub-preview', title: '预览' },
+                                        { key: 'code', href: '#pub-code', title: '嵌入代码' },
+                                        { key: 'download', href: '#pub-download', title: '下载文件' },
+                                      ]}
+                                    />
+                                  </div>
+                                  <div
+                                    id={containerId}
+                                    ref={pubScrollRef}
+                                    onScroll={onPubScroll}
+                                    style={{ flex: 1, maxHeight: '520px', overflowY: 'auto' }}
+                                    className="hide-scrollbar"
+                                  >
+                                    <div id="pub-preview">
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                        <span style={{ fontSize: '14px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>预览</span>
+                                        <Tooltip title="生成临时URL并在新窗口预览插件效果">
+                                          <EyeOutlined style={{ color: theme === 'dark' ? '#aaa' : '#999', fontSize: '12px' }} />
+                                        </Tooltip>
+                                      </div>
+                                      <div style={{ marginBottom: '12px', textAlign: 'left' }}>
+                                        <Button
+                                          type="primary"
+                                          icon={<EyeOutlined />}
+                                          onClick={() => {
+                                            const url = generatePreviewUrl('sidebar');
+                                            if (!url) { message.warning('配置参数不完整，无法预览'); return; }
+                                            window.open(url, '_blank');
+                                          }}
+                                        >
+                                          打开预览
+                                        </Button>
+                                      </div>
+                                    </div>
+                                    <hr style={{ border: 'none', borderTop: cardBorder, margin: '16px 0' }} />
+                                    <div id="pub-code">
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                        <span style={{ fontSize: '14px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>嵌入代码</span>
+                                        <Tooltip title="将代码复制到您的网站中使用，变量已替换为实际值">
+                                          <EyeOutlined style={{ color: theme === 'dark' ? '#aaa' : '#999', fontSize: '12px' }} />
+                                        </Tooltip>
+                                      </div>
+                                      <div style={{ position: 'relative', marginBottom: '12px', overflow: 'hidden', width: '100%' }}>
+                                        <SyntaxHighlighter
+                                          language="html"
+                                          style={theme === 'dark' ? oneDark : oneLight}
+                                          customStyle={{ margin: 0, borderRadius: '4px', fontSize: '12px', overflowX: 'hidden', wordBreak: 'break-all', background: theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#f5f5f5' }}
+                                          wrapLongLines
+                                        >
+                                          {embedCode}
+                                        </SyntaxHighlighter>
+                                        <Button
+                                          icon={<CopyOutlined />}
+                                          size="small"
+                                          style={{ position: 'absolute', top: '8px', right: '8px' }}
+                                          onClick={() => handleCopyCode(embedCode)}
+                                        >
+                                          复制代码
+                                        </Button>
+                                      </div>
+                                    </div>
+                                    <hr style={{ border: 'none', borderTop: cardBorder, margin: '16px 0' }} />
+                                    <div id="pub-download">
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                        <span style={{ fontSize: '14px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>下载文件</span>
+                                        <Tooltip title="下载离线部署包（zip），解压后可直接使用">
+                                          <EyeOutlined style={{ color: theme === 'dark' ? '#aaa' : '#999', fontSize: '12px' }} />
+                                        </Tooltip>
+                                      </div>
+                                      <div style={{ textAlign: 'left' }}>
+                                        <Button
+                                          type="primary"
+                                          icon={<DownloadOutlined />}
+                                          onClick={() => {
+                                            if (chatbot) {
+                                              window.open(integrationService.downloadPackage(chatbot.id, wt), '_blank');
+                                            }
+                                          }}
+                                        >
+                                          下载部署包
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })()
                           },
                           {
                             key: 'iframe',
                             label: 'iframe嵌入',
-                            children: (
-                              <div style={{ position: 'relative' }}>
-                                <pre style={{ 
-                                  background: theme === 'dark' ? '#1a1a2e' : '#f5f5f5', 
-                                  padding: '12px', 
-                                  borderRadius: '4px', 
-                                  fontSize: '12px',
-                                  overflow: 'auto',
-                                  maxHeight: '300px'
-                                }}>
-                                  {integrationData.configs?.html_code?.iframe || ''}
-                                </pre>
-                                <Button
-                                  icon={<CopyOutlined />}
-                                  size="small"
-                                  style={{ position: 'absolute', top: '8px', right: '8px' }}
-                                  onClick={() => handleCopyCode(integrationData.configs?.html_code?.iframe || '')}
-                                >
-                                  复制代码
-                                </Button>
-                              </div>
-                            )
+                            children: (() => {
+                              const wt = 'iframe';
+                              const containerId = `publish-scroll-${wt}`;
+                              const cardBorder = theme === 'dark' ? '1px solid rgba(255,255,255,0.1)' : '1px solid #e8e8e8';
+                              const embedCode = generateEmbedCode(wt);
+                              return (
+                                <div style={{ display: 'flex', gap: '16px' }}>
+                                  <div className="pub-anchor" data-theme={theme} style={{ width: '110px', flexShrink: 0, paddingRight: '12px', borderRight: theme === 'dark' ? '1px solid rgba(255,255,255,0.1)' : '1px solid #e8e8e8' }}>
+                                    <Anchor
+                                      affix={false}
+                                      targetOffset={20}
+                                      target={`#${containerId}`}
+                                      getCurrentAnchor={() => `#pub-${pubActiveAnchor}`}
+                                      onClick={(e, link) => {
+                                        e.preventDefault();
+                                        const sec = link.href.replace('#pub-', '');
+                                        const container = pubScrollRef.current;
+                                        const target = container?.querySelector(`#pub-${sec}`);
+                                        if (target && container) {
+                                          const containerTop = container.getBoundingClientRect().top;
+                                          const targetTop = (target as HTMLElement).getBoundingClientRect().top;
+                                          container.scrollTo({ top: container.scrollTop + (targetTop - containerTop) - 8, behavior: 'smooth' });
+                                        }
+                                        setPubActiveAnchor(sec);
+                                      }}
+                                      items={[
+                                        { key: 'preview', href: '#pub-preview', title: '预览' },
+                                        { key: 'code', href: '#pub-code', title: '嵌入代码' },
+                                        { key: 'download', href: '#pub-download', title: '下载文件' },
+                                      ]}
+                                    />
+                                  </div>
+                                  <div
+                                    id={containerId}
+                                    ref={pubScrollRef}
+                                    onScroll={onPubScroll}
+                                    style={{ flex: 1, maxHeight: '520px', overflowY: 'auto' }}
+                                    className="hide-scrollbar"
+                                  >
+                                    <div id="pub-preview">
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                        <span style={{ fontSize: '14px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>预览</span>
+                                        <Tooltip title="生成临时URL并在新窗口预览插件效果">
+                                          <EyeOutlined style={{ color: theme === 'dark' ? '#aaa' : '#999', fontSize: '12px' }} />
+                                        </Tooltip>
+                                      </div>
+                                      <div style={{ marginBottom: '12px', textAlign: 'left' }}>
+                                        <Button
+                                          type="primary"
+                                          icon={<EyeOutlined />}
+                                          onClick={() => {
+                                            const url = generatePreviewUrl('iframe');
+                                            if (!url) { message.warning('配置参数不完整，无法预览'); return; }
+                                            window.open(url, '_blank');
+                                          }}
+                                        >
+                                          打开预览
+                                        </Button>
+                                      </div>
+                                    </div>
+                                    <hr style={{ border: 'none', borderTop: cardBorder, margin: '16px 0' }} />
+                                    <div id="pub-code">
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                        <span style={{ fontSize: '14px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>嵌入代码</span>
+                                        <Tooltip title="将代码复制到您的网站中使用，变量已替换为实际值">
+                                          <EyeOutlined style={{ color: theme === 'dark' ? '#aaa' : '#999', fontSize: '12px' }} />
+                                        </Tooltip>
+                                      </div>
+                                      <div style={{ position: 'relative', marginBottom: '12px', overflow: 'hidden', width: '100%' }}>
+                                        <SyntaxHighlighter
+                                          language="html"
+                                          style={theme === 'dark' ? oneDark : oneLight}
+                                          customStyle={{ margin: 0, borderRadius: '4px', fontSize: '12px', overflowX: 'hidden', wordBreak: 'break-all', background: theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#f5f5f5' }}
+                                          wrapLongLines
+                                        >
+                                          {embedCode}
+                                        </SyntaxHighlighter>
+                                        <Button
+                                          icon={<CopyOutlined />}
+                                          size="small"
+                                          style={{ position: 'absolute', top: '8px', right: '8px' }}
+                                          onClick={() => handleCopyCode(embedCode)}
+                                        >
+                                          复制代码
+                                        </Button>
+                                      </div>
+                                    </div>
+                                    <hr style={{ border: 'none', borderTop: cardBorder, margin: '16px 0' }} />
+                                    <div id="pub-download">
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                        <span style={{ fontSize: '14px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>下载文件</span>
+                                        <Tooltip title="下载离线部署包（zip），解压后可直接使用">
+                                          <EyeOutlined style={{ color: theme === 'dark' ? '#aaa' : '#999', fontSize: '12px' }} />
+                                        </Tooltip>
+                                      </div>
+                                      <div style={{ textAlign: 'left' }}>
+                                        <Button
+                                          type="primary"
+                                          icon={<DownloadOutlined />}
+                                          onClick={() => {
+                                            if (chatbot) {
+                                              window.open(integrationService.downloadPackage(chatbot.id, wt), '_blank');
+                                            }
+                                          }}
+                                        >
+                                          下载部署包
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })()
                           }
                         ]}
                       />
-                    </div>
-                  )
-                },
-                {
-                  key: 'preview',
-                  label: <span><EyeOutlined /> 预览</span>,
-                  children: (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      <div style={{ fontSize: '13px', color: theme === 'dark' ? '#aaa' : '#666' }}>
-                        预览嵌入效果，确认无误后再发布。
-                      </div>
-                      <div style={{ 
-                        border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8',
-                        borderRadius: '8px',
-                        overflow: 'hidden',
-                        height: '500px'
-                      }}>
-                        <iframe
-                          src={integrationData.configs?.html_code?.iframe ? undefined : undefined}
-                          style={{ width: '100%', height: '100%', border: 'none' }}
-                          title="Preview"
-                        />
-                        <div style={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          justifyContent: 'center',
-                          height: '100%',
-                          color: theme === 'dark' ? '#aaa' : '#999',
-                          fontSize: '13px'
-                        }}>
-                          <div style={{ textAlign: 'center' }}>
-                            <EyeOutlined style={{ fontSize: '32px', marginBottom: '8px' }} />
-                            <div>预览功能将在嵌入代码部署后可用</div>
-                            <div style={{ fontSize: '12px', marginTop: '4px' }}>请将上方嵌入代码复制到您的网站中查看效果</div>
-                          </div>
-                        </div>
-                      </div>
                     </div>
                   )
                 }
               ]}
             />
           )}
+        </div>
         </div>
       </div>
 

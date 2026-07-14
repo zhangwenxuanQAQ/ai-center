@@ -12,7 +12,6 @@ import '../styles/integration.css';
  *   theme - 边框颜色
  *   theme_mode - 主题模式 (light/dark)
  *   title - 标题
- *   panel_title - 面板标题
  *   position - 悬浮球位置 (top-left/top-right/bottom-left/bottom-right)
  *   size - 悬浮球大小
  *   animation - 动画效果 (bounce/fade/scale/none)
@@ -39,7 +38,6 @@ const IntegrationSidebarPage: React.FC = () => {
       theme: params.get('theme') || '#ffffff',
       themeMode: params.get('theme_mode') || 'light',
       title: params.get('title') || 'AI助手',
-      panelTitle: params.get('panel_title') || '',
       position: params.get('position') || 'bottom-right',
       inputPlaceholder: params.get('input_placeholder') || '请输入您的问题...',
       maxInputLength: parseInt(params.get('max_input_length') || '4000', 10),

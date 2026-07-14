@@ -9,7 +9,6 @@ export interface ChatWidgetConfig {
   themeMode?: string;
   title?: string;
   position?: string;
-  panelTitle?: string;
   inputPlaceholder?: string;
   maxInputLength?: number;
   welcomeMessages?: string[];
@@ -45,7 +44,7 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ config, compact = false }) => {
     setRefreshTrigger((prev) => prev + 1);
   }, []);
 
-  const displayTitle = config.panelTitle || config.title || 'AI助手';
+  const displayTitle = config.title || 'AI助手';
 
   return (
     <div className="int-widget-container">

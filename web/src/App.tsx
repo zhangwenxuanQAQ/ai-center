@@ -91,6 +91,7 @@ function AppContent() {
       <Routes>
         <Route path="/integration/chat" element={<IntegrationChatPage />} />
         <Route path="/integration/sidebar" element={<IntegrationSidebarPage />} />
+        <Route path="/integration/preview" element={<IntegrationPreviewPage />} />
         <Route path="/integration/preview/:token" element={<IntegrationPreviewPage />} />
       </Routes>
     );
