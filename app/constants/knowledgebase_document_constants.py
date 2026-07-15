@@ -216,6 +216,13 @@ NAIVE_CHUNK_CONFIG: List[ChunkConfigField] = [
         max_value=1.0,
         step=0.01,
     ),
+    ChunkConfigField(
+        key="extract_keywords",
+        label="提取关键词",
+        field_type="switch",
+        default=True,
+        description="是否从切片内容中提取关键词",
+    ),
 ]
 
 QA_CHUNK_CONFIG: List[ChunkConfigField] = [
@@ -236,9 +243,24 @@ QA_CHUNK_CONFIG: List[ChunkConfigField] = [
         default="",
         description="文本分块的分隔符",
     ),
+    ChunkConfigField(
+        key="extract_keywords",
+        label="提取关键词",
+        field_type="switch",
+        default=True,
+        description="是否从切片内容中提取关键词",
+    ),
 ]
 
-RESUME_CHUNK_CONFIG: List[ChunkConfigField] = []
+RESUME_CHUNK_CONFIG: List[ChunkConfigField] = [
+    ChunkConfigField(
+        key="extract_keywords",
+        label="提取关键词",
+        field_type="switch",
+        default=True,
+        description="是否从切片内容中提取关键词",
+    ),
+]
 
 MANUAL_CHUNK_CONFIG: List[ChunkConfigField] = [
     ChunkConfigField(
@@ -262,6 +284,13 @@ MANUAL_CHUNK_CONFIG: List[ChunkConfigField] = [
             {"label": "纯文本", "value": "Plain Text"},
         ],
     ),
+    ChunkConfigField(
+        key="extract_keywords",
+        label="提取关键词",
+        field_type="switch",
+        default=True,
+        description="是否从切片内容中提取关键词",
+    ),
 ]
 
 TABLE_CHUNK_CONFIG: List[ChunkConfigField] = [
@@ -274,6 +303,13 @@ TABLE_CHUNK_CONFIG: List[ChunkConfigField] = [
         min_value=1,
         max_value=2048,
         step=1,
+    ),
+    ChunkConfigField(
+        key="extract_keywords",
+        label="提取关键词",
+        field_type="switch",
+        default=True,
+        description="是否从切片内容中提取关键词",
     ),
 ]
 
@@ -298,6 +334,13 @@ PAPER_CHUNK_CONFIG: List[ChunkConfigField] = [
             {"label": "DeepDOC", "value": "DeepDOC"},
             {"label": "纯文本", "value": "Plain Text"},
         ],
+    ),
+    ChunkConfigField(
+        key="extract_keywords",
+        label="提取关键词",
+        field_type="switch",
+        default=True,
+        description="是否从切片内容中提取关键词",
     ),
 ]
 
@@ -330,6 +373,13 @@ BOOK_CHUNK_CONFIG: List[ChunkConfigField] = [
             {"label": "纯文本", "value": "Plain Text"},
         ],
     ),
+    ChunkConfigField(
+        key="extract_keywords",
+        label="提取关键词",
+        field_type="switch",
+        default=True,
+        description="是否从切片内容中提取关键词",
+    ),
 ]
 
 LAWS_CHUNK_CONFIG: List[ChunkConfigField] = [
@@ -350,17 +400,64 @@ LAWS_CHUNK_CONFIG: List[ChunkConfigField] = [
         default="",
         description="文本分块的分隔符集合",
     ),
+    ChunkConfigField(
+        key="extract_keywords",
+        label="提取关键词",
+        field_type="switch",
+        default=True,
+        description="是否从切片内容中提取关键词",
+    ),
 ]
 
-PRESENTATION_CHUNK_CONFIG: List[ChunkConfigField] = []
+PRESENTATION_CHUNK_CONFIG: List[ChunkConfigField] = [
+    ChunkConfigField(
+        key="extract_keywords",
+        label="提取关键词",
+        field_type="switch",
+        default=True,
+        description="是否从切片内容中提取关键词",
+    ),
+]
 
-PICTURE_CHUNK_CONFIG: List[ChunkConfigField] = []
+PICTURE_CHUNK_CONFIG: List[ChunkConfigField] = [
+    ChunkConfigField(
+        key="extract_keywords",
+        label="提取关键词",
+        field_type="switch",
+        default=True,
+        description="是否从切片内容中提取关键词",
+    ),
+]
 
-ONE_CHUNK_CONFIG: List[ChunkConfigField] = []
+ONE_CHUNK_CONFIG: List[ChunkConfigField] = [
+    ChunkConfigField(
+        key="extract_keywords",
+        label="提取关键词",
+        field_type="switch",
+        default=True,
+        description="是否从切片内容中提取关键词",
+    ),
+]
 
-AUDIO_CHUNK_CONFIG: List[ChunkConfigField] = []
+AUDIO_CHUNK_CONFIG: List[ChunkConfigField] = [
+    ChunkConfigField(
+        key="extract_keywords",
+        label="提取关键词",
+        field_type="switch",
+        default=True,
+        description="是否从切片内容中提取关键词",
+    ),
+]
 
-EMAIL_CHUNK_CONFIG: List[ChunkConfigField] = []
+EMAIL_CHUNK_CONFIG: List[ChunkConfigField] = [
+    ChunkConfigField(
+        key="extract_keywords",
+        label="提取关键词",
+        field_type="switch",
+        default=True,
+        description="是否从切片内容中提取关键词",
+    ),
+]
 
 
 CHUNK_METHOD_CONFIGS: Dict[str, List[ChunkConfigField]] = {

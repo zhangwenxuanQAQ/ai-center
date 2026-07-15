@@ -906,7 +906,9 @@ class TaskExecutor:
 
         auto_keywords = task.parser_config.get("auto_keywords", 1)
         text_model_id = getattr(task, "text_model_id", None)
-        if auto_keywords > 0 and text_model_id:
+        # 判断是否提取关键词（默认为True）
+        extract_keywords = task.parser_config.get("extract_keywords", True)
+        if auto_keywords > 0 and text_model_id and extract_keywords:
             self._extract_keywords(task, result, auto_keywords)
         else:
             self._set_progress(task, 0.60, "跳过关键词提取")
