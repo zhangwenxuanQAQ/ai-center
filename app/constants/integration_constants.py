@@ -3,20 +3,34 @@
 """
 
 # 预设主题色（白色默认选中）
-INTEGRATION_THEME_PRESETS = [
-    {"key": "white", "label": "白色", "color": "#ffffff"},
-    {"key": "dark", "label": "深色", "color": "#1f2937"},
+# INTEGRATION_THEME_PRESETS = [
+#     {"key": "white", "label": "白色", "color": "#ffffff"},
+#     {"key": "dark", "label": "深色", "color": "#1f2937"},
+#     {"key": "default_blue", "label": "经典蓝", "color": "#1677ff"},
+#     {"key": "emerald", "label": "翡翠绿", "color": "#10b981"},
+#     {"key": "violet", "label": "紫罗兰", "color": "#8b5cf6"},
+#     {"key": "orange", "label": "活力橙", "color": "#f97316"},
+#     {"key": "rose", "label": "玫瑰红", "color": "#f43f5e"},
+# ]
+
+# 预设渐变色（none表示不使用渐变色，白色默认选中）
+# INTEGRATION_GRADIENT_PRESETS = [
+#     {"key": "none", "label": "无", "color": "none"},
+#     {"key": "white", "label": "白色", "color": "#ffffff"},
+#     {"key": "cyan", "label": "天蓝", "color": "#06b6d4"},
+#     {"key": "pink", "label": "粉红", "color": "#ec4899"},
+#     {"key": "amber", "label": "琥珀", "color": "#f59e0b"},
+#     {"key": "teal", "label": "青绿", "color": "#14b8a6"},
+#     {"key": "indigo", "label": "靛青", "color": "#6366f1"},
+# ]
+
+# 颜色主题预设
+INTEGRATION_COLOR_THEMES = [
     {"key": "default_blue", "label": "经典蓝", "color": "#1677ff"},
     {"key": "emerald", "label": "翡翠绿", "color": "#10b981"},
     {"key": "violet", "label": "紫罗兰", "color": "#8b5cf6"},
     {"key": "orange", "label": "活力橙", "color": "#f97316"},
     {"key": "rose", "label": "玫瑰红", "color": "#f43f5e"},
-]
-
-# 预设渐变色（none表示不使用渐变色，白色默认选中）
-INTEGRATION_GRADIENT_PRESETS = [
-    {"key": "none", "label": "无", "color": "none"},
-    {"key": "white", "label": "白色", "color": "#ffffff"},
     {"key": "cyan", "label": "天蓝", "color": "#06b6d4"},
     {"key": "pink", "label": "粉红", "color": "#ec4899"},
     {"key": "amber", "label": "琥珀", "color": "#f59e0b"},
@@ -49,21 +63,40 @@ INTEGRATION_CONFIG_PARAMS = [
                         ]
                     },
                     {
-                        "key": "theme",
-                        "label": "边框颜色",
-                        "type": "theme_select",
-                        "default": "#ffffff",
-                        "description": "悬浮球、聊天界面标题头和按钮的边框颜色",
-                        "options": INTEGRATION_THEME_PRESETS
+                        "key": "color_theme",
+                        "label": "颜色主题",
+                        "type": "select",
+                        "default": "default_blue",
+                        "description": "聊天界面的配色主题，影响悬浮球、标题栏、按钮和用户消息气泡的颜色",
+                        "options": [
+                            {"label": "经典蓝", "value": "default_blue"},
+                            {"label": "翡翠绿", "value": "emerald"},
+                            {"label": "紫罗兰", "value": "violet"},
+                            {"label": "活力橙", "value": "orange"},
+                            {"label": "玫瑰红", "value": "rose"},
+                            {"label": "天蓝", "value": "cyan"},
+                            {"label": "粉红", "value": "pink"},
+                            {"label": "琥珀", "value": "amber"},
+                            {"label": "青绿", "value": "teal"},
+                            {"label": "靛青", "value": "indigo"},
+                        ]
                     },
-                    {
-                        "key": "gradient_end_color",
-                        "label": "渐变色",
-                        "type": "color",
-                        "default": "none",
-                        "description": "悬浮球渐变的终止颜色，选择「无」表示不使用渐变",
-                        "presets": INTEGRATION_GRADIENT_PRESETS
-                    },
+                    # {
+                    #     "key": "boder_color",
+                    #     "label": "边框颜色",
+                    #     "type": "theme_select",
+                    #     "default": "#ffffff",
+                    #     "description": "悬浮球、聊天界面标题头和按钮的边框颜色",
+                    #     "options": INTEGRATION_THEME_PRESETS
+                    # },
+                    # {
+                    #     "key": "gradient_end_color",
+                    #     "label": "渐变色",
+                    #     "type": "color",
+                    #     "default": "none",
+                    #     "description": "悬浮球渐变的终止颜色，选择「无」表示不使用渐变",
+                    #     "presets": INTEGRATION_GRADIENT_PRESETS
+                    # },
                     {
                         "key": "user_avatar",
                         "label": "用户头像",
@@ -351,9 +384,8 @@ def get_integration_default_configs(base_url: str = "", api_key: str = "") -> di
         },
         "interface_config": {
             "common_config": {
-                "theme": "#ffffff",
                 "theme_mode": "light",
-                "gradient_end_color": "none",
+                "color_theme": "default_blue",
                 "user_avatar": "",
                 "bot_avatar": ""
             },
@@ -385,9 +417,8 @@ def get_integration_default_configs(base_url: str = "", api_key: str = "") -> di
                 '    var config = {{\n'
                 '      apiKey: "{api_key}",\n'
                 '      baseUrl: "{base_url}",\n'
-                '      theme: "{theme}",\n'
+                '      colorTheme: "{color_theme}",\n'
                 '      themeMode: "{theme_mode}",\n'
-                '      gradientEndColor: "{gradient_end_color}",\n'
                 '      position: "{position}",\n'
                 '      title: "{title}",\n'
                 '      width: {width},\n'
@@ -395,15 +426,16 @@ def get_integration_default_configs(base_url: str = "", api_key: str = "") -> di
                 '      resizable: {resizable},\n'
                 '      maximizable: {maximizable}\n'
                 '    }};\n'
+                '    var THEME_COLORS = {{"default_blue":"#1677ff","emerald":"#10b981","violet":"#8b5cf6","orange":"#f97316","rose":"#f43f5e","cyan":"#06b6d4","pink":"#ec4899","amber":"#f59e0b","teal":"#14b8a6","indigo":"#6366f1"}};\n'
+                '    var themeColor = THEME_COLORS[config.colorTheme] || "#1677ff";\n'
                 '    var ball = document.createElement("div");\n'
                 '    ball.id = "ai-widget-ball";\n'
                 '    ball.innerHTML = "\U0001f4ac";\n'
-                '    var ballBg = config.gradientEndColor && config.gradientEndColor !== "none" ? "radial-gradient(circle at center,"+config.theme+","+config.gradientEndColor+")" : config.theme;\n'
-                '    ball.style.cssText = "position:fixed;width:52px;height:52px;border-radius:50%;background:"+ballBg+";color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;cursor:grab;box-shadow:0 6px 24px rgba(0,0,0,0.12);z-index:99999;user-select:none;touch-action:none;";\n'
+                '    ball.style.cssText = "position:fixed;width:52px;height:52px;border-radius:50%;background:"+themeColor+";color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;cursor:grab;box-shadow:0 6px 24px rgba(0,0,0,0.12);z-index:99999;user-select:none;touch-action:none;";\n'
                 '    var pos = {{"bottom-right":"bottom:48px;right:48px","bottom-left":"bottom:48px;left:48px","top-right":"top:48px;right:48px","top-left":"top:48px;left:48px"}};\n'
                 '    ball.style.cssText += (pos[config.position]||pos["bottom-right"]);\n'
                 '    var panel = document.createElement("iframe");\n'
-                '    var params = "api_key="+encodeURIComponent(config.apiKey)+"&theme="+encodeURIComponent(config.theme)+"&theme_mode="+config.themeMode+"&title="+encodeURIComponent(config.title)+"&gradient_end_color="+encodeURIComponent(config.gradientEndColor);\n'
+                '    var params = "api_key="+encodeURIComponent(config.apiKey)+"&color_theme="+config.colorTheme+"&theme_mode="+config.themeMode+"&title="+encodeURIComponent(config.title);\n'
                 '    panel.src = config.baseUrl+"/integration/chat?"+params;\n'
                 '    panel.style.cssText = "position:fixed;width:"+config.width+"px;height:"+config.height+"px;border:none;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,0.15);z-index:99998;display:none;";\n'
                 '    panel.style.cssText += (pos[config.position]||pos["bottom-right"]).replace(/bottom:\s*48px/,"bottom:112px").replace(/top:\s*48px/,"top:112px");\n'
@@ -422,7 +454,7 @@ def get_integration_default_configs(base_url: str = "", api_key: str = "") -> di
             "iframe": (
                 '<!-- AI助手iframe嵌入 -->\n'
                 '<iframe\n'
-                '  src="{base_url}/integration/chat?api_key={api_key}&theme={theme_encoded}&theme_mode={theme_mode}&gradient_end_color={gradient_end_color_encoded}&title={title_encoded}"\n'
+                '  src="{base_url}/integration/chat?api_key={api_key}&color_theme={color_theme}&theme_mode={theme_mode}&title={title_encoded}"\n'
                 '  style="width: {iframe_width}; height: {iframe_height}; border: 1px solid #e8e8e8; border-radius: 8px;"\n'
                 '  allow="microphone"\n'
                 '></iframe>'

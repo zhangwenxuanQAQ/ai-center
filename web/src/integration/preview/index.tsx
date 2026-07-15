@@ -13,7 +13,7 @@ import '../styles/integration.css';
  *   type - 预览类型 (sidebar/iframe)，默认 sidebar
  *   theme - 主题颜色
  *   theme_mode - 主题模式 (light/dark)
- *   gradient_end_color - 渐变色
+ *   color_theme - 颜色主题 (default_blue/emerald/violet/orange/rose/cyan/pink/amber/teal/indigo)
  *   title - 标题
  *   position - 悬浮球位置
  *   width - 面板宽度
@@ -37,7 +37,7 @@ const IntegrationPreviewPage: React.FC = () => {
       apiKey: params.get('api_key') || '',
       theme: params.get('theme') || '#1677ff',
       themeMode: params.get('theme_mode') || 'light',
-      gradientEndColor: params.get('gradient_end_color') || 'none',
+      colorTheme: params.get('color_theme') || 'default_blue',
       title: params.get('title') || 'AI助手',
       position: params.get('position') || 'bottom-right',
       width: parseInt(params.get('width') || '400', 10),
@@ -66,13 +66,13 @@ const IntegrationPreviewPage: React.FC = () => {
     apiKey: config.apiKey,
     theme: config.theme,
     themeMode: config.themeMode,
+    colorTheme: config.colorTheme,
     title: config.title,
     inputPlaceholder: config.inputPlaceholder,
     maxInputLength: config.maxInputLength,
     welcomeMessages: config.welcomeMessages,
     showHistory: true,
     temporary: true,
-    gradientEndColor: config.gradientEndColor,
   };
 
   // 悬浮球配置
@@ -80,9 +80,9 @@ const IntegrationPreviewPage: React.FC = () => {
     position: config.position,
     theme: config.theme,
     themeMode: config.themeMode,
+    colorTheme: config.colorTheme,
     size: config.size,
     animation: config.animation,
-    gradientEndColor: config.gradientEndColor,
     width: config.width,
     height: config.height,
     resizable: true,
@@ -91,7 +91,7 @@ const IntegrationPreviewPage: React.FC = () => {
 
   if (config.type === 'iframe') {
     return (
-      <div className="integration-page">
+      <div className="integration-page" data-theme={config.themeMode} data-color-theme={config.colorTheme}>
         <ChatWidget config={widgetConfig} />
       </div>
     );
@@ -99,16 +99,16 @@ const IntegrationPreviewPage: React.FC = () => {
 
   // 默认 sidebar 模式
   return (
-    <div className="integration-page">
+    <div className="integration-page" data-theme={config.themeMode} data-color-theme={config.colorTheme}>
       <FloatingBall
         position={sidebarConfig.position}
         theme={sidebarConfig.theme}
         themeMode={sidebarConfig.themeMode}
+        colorTheme={sidebarConfig.colorTheme}
         size={sidebarConfig.size}
         animation={sidebarConfig.animation}
         width={sidebarConfig.width}
         height={sidebarConfig.height}
-        gradientEndColor={sidebarConfig.gradientEndColor}
         resizable={sidebarConfig.resizable}
         maximizable={sidebarConfig.maximizable}
       >

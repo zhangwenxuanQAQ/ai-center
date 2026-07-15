@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import MDEditor from '@uiw/react-md-editor';
 import ChatMarkdown from '../../components/ChatMarkdown';
 import { integrationChatService, IntegrationMessage, IntegrationQueryItem } from '../services/integrationChat';
+import { usePanelDrag } from './PanelDragContext';
+import { usePanelMinimize } from './PanelMinimizeContext';
 
 interface ChatAreaProps {
   apiKey: string;
@@ -9,6 +11,7 @@ interface ChatAreaProps {
   title?: string;
   theme?: string;
   themeMode?: string;
+  colorTheme?: string;
   gradientEndColor?: string;
   inputPlaceholder?: string;
   maxInputLength?: number;
@@ -32,8 +35,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   apiKey,
   chatId,
   title = 'AI助手',
-  theme = '#ffffff',
+  theme = '#1677ff',
   themeMode = 'light',
+  colorTheme = 'default_blue',
   gradientEndColor = 'none',
   inputPlaceholder = '请输入您的问题...',
   maxInputLength = 4000,
@@ -230,31 +234,28 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
   const showWelcome = messages.length === 0 && !loading;
 
-  // 计算头部背景样式（使用径向渐变，圆心扩散）
-  const headerBackground = gradientEndColor && gradientEndColor !== 'none'
-    ? `radial-gradient(circle at center, ${theme} 0%, ${gradientEndColor} 100%)`
-    : theme;
-
-  // 计算发送按钮背景样式
-  const sendBtnBackground = gradientEndColor && gradientEndColor !== 'none'
-    ? `radial-gradient(circle at center, ${theme} 0%, ${gradientEndColor} 100%)`
-    : theme;
-
-  // 计算停止按钮背景样式（使用渐变色或默认红色）
-  const stopBtnBackground = gradientEndColor && gradientEndColor !== 'none'
-    ? `radial-gradient(circle at center, ${theme} 0%, ${gradientEndColor} 100%)`
-    : '#ff4d4f';
+  // 面板拖拽处理（从 FloatingBall 通过 Context 传入）
+  const panelDrag = usePanelDrag();
+  const panelMinimize = usePanelMinimize();
+  const minimized = panelMinimize?.isMinimized ?? false;
 
   return (
-    <div className="int-chat-area" data-theme={themeMode}>
-      {/* Header */}
-      <div className="int-chat-header" style={{ background: headerBackground }}>
+    <div className="int-chat-area" data-theme={themeMode} data-color-theme={colorTheme}>
+      {/* Header（支持拖拽移动面板） */}
+      <div
+        className="int-chat-header"
+        onMouseDown={panelDrag || undefined}
+        style={{ cursor: panelDrag ? 'move' : undefined }}
+      >
         <button className="int-toggle-history-btn" onClick={onToggleHistory} title={historyCollapsed ? '展开历史' : '收起历史'}>
           ☰
         </button>
         <div className="int-chat-header-title">{title}</div>
       </div>
 
+      {/* 最小化时隐藏消息和输入区域 */}
+      {!minimized && (
+        <>
       {/* Messages or Welcome */}
       <div className="int-messages">
         {showWelcome ? (
@@ -308,7 +309,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             disabled={loading}
           />
           {loading ? (
-            <button className="int-send-btn stop" onClick={handleStop} title="停止" style={{ background: stopBtnBackground }}>
+            <button className="int-send-btn stop" onClick={handleStop} title="停止">
               ■
             </button>
           ) : (
@@ -316,7 +317,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({
               className="int-send-btn"
               onClick={handleSend}
               disabled={!inputValue.trim()}
-              style={{ background: sendBtnBackground }}
               title="发送"
             >
               ➤
@@ -324,6 +324,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           )}
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 };

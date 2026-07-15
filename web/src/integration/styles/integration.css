@@ -38,6 +38,63 @@
   --int-shadow-lg: 0 6px 24px rgba(0, 0, 0, 0.4);
 }
 
+/* ========== 颜色主题 (Color Themes) ========== */
+/* 经典蓝 (default) - 已在 :root 中定义 */
+
+[data-color-theme="emerald"] {
+  --int-primary: #10b981;
+  --int-primary-hover: #34d399;
+  --int-msg-user-bg: #10b981;
+}
+
+[data-color-theme="violet"] {
+  --int-primary: #8b5cf6;
+  --int-primary-hover: #a78bfa;
+  --int-msg-user-bg: #8b5cf6;
+}
+
+[data-color-theme="orange"] {
+  --int-primary: #f97316;
+  --int-primary-hover: #fb923c;
+  --int-msg-user-bg: #f97316;
+}
+
+[data-color-theme="rose"] {
+  --int-primary: #f43f5e;
+  --int-primary-hover: #fb7185;
+  --int-msg-user-bg: #f43f5e;
+}
+
+[data-color-theme="cyan"] {
+  --int-primary: #06b6d4;
+  --int-primary-hover: #22d3ee;
+  --int-msg-user-bg: #06b6d4;
+}
+
+[data-color-theme="pink"] {
+  --int-primary: #ec4899;
+  --int-primary-hover: #f472b6;
+  --int-msg-user-bg: #ec4899;
+}
+
+[data-color-theme="amber"] {
+  --int-primary: #f59e0b;
+  --int-primary-hover: #fbbf24;
+  --int-msg-user-bg: #f59e0b;
+}
+
+[data-color-theme="teal"] {
+  --int-primary: #14b8a6;
+  --int-primary-hover: #2dd4bf;
+  --int-msg-user-bg: #14b8a6;
+}
+
+[data-color-theme="indigo"] {
+  --int-primary: #6366f1;
+  --int-primary-hover: #818cf8;
+  --int-msg-user-bg: #6366f1;
+}
+
 /* Dark theme - 聊天区域组件级别 */
 .int-chat-area[data-theme="dark"],
 .int-history-sidebar[data-theme="dark"] {
@@ -76,7 +133,43 @@
   overflow: hidden;
 }
 
-/* History sidebar */
+/* compact 模式（悬浮球）：历史记录作为抽屉覆盖层，不影响消息区域 */
+.int-widget-container.compact {
+  position: relative;
+}
+
+/* 遮罩层 */
+.int-widget-container.compact .int-history-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 10;
+}
+
+/* compact 模式下历史侧边栏作为绝对定位抽屉 */
+.int-widget-container.compact .int-history-sidebar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 11;
+  transform: translateX(0);
+  transition: transform 0.3s ease;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
+}
+
+.int-widget-container.compact .int-history-sidebar.collapsed {
+  transform: translateX(-100%);
+  width: 260px;
+  min-width: 200px;
+  max-width: 360px;
+  border-right: none;
+}
+
+/* History sidebar — flex 内侧展开（通用布局，非compact模式） */
 .int-history-sidebar {
   width: 260px;
   min-width: 200px;
@@ -87,6 +180,7 @@
   background: var(--int-bg);
   transition: width 0.3s ease;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .int-history-sidebar.collapsed {
@@ -101,7 +195,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   flex-shrink: 0;
+  background: var(--int-primary);
 }
 
 .int-history-header h3 {
@@ -109,6 +205,7 @@
   font-size: 14px;
   font-weight: 600;
   color: #fff;
+  line-height: 1.4;
 }
 
 .int-history-list {
@@ -189,6 +286,7 @@
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+  background: var(--int-primary);
 }
 
 .int-chat-header-title {
@@ -495,7 +593,7 @@
   border-radius: var(--int-radius-lg);
   box-shadow: var(--int-shadow-lg);
   overflow: hidden;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: width 0.3s ease, height 0.25s ease, opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   display: flex;
   flex-direction: column;
 }
@@ -566,6 +664,7 @@
   font-weight: 600;
   transition: all 0.2s;
   opacity: 0.8;
+  background: var(--int-primary);
 }
 
 .int-panel-control-btn:hover {

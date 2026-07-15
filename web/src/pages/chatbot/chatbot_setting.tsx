@@ -614,78 +614,92 @@ const ChatbotSetting: React.FC = () => {
     }
   };
 
+  // 从扁平的 integrationConfigValues 中获取嵌套配置值
+  const getConfigValue = (path: string, defaultValue?: any) => {
+    return integrationConfigValues[path] ?? defaultValue;
+  };
+
   // 生成预览URL：直接打开 /integration/preview 路由页面（临时对话，不保存数据库）
   const generatePreviewUrl = (widgetType: 'sidebar' | 'iframe'): string => {
-    const cfg = integrationData?.configs;
-    if (!cfg) return '';
+    // 优先从 integrationConfigValues 获取最新配置值，确保保存后能重新渲染
     const apiKey = integrationData?.integration?.api_key?.[0] || '';
     if (!apiKey) return '';
-    const common = cfg.interface_config?.common_config || {};
-    const sidebar = cfg.interface_config?.sidebar || {};
+
+    const colorTheme = getConfigValue('interface_config.common_config.color_theme', 'default_blue');
+    const themeMode = getConfigValue('interface_config.common_config.theme_mode', 'light');
+    const title = getConfigValue('interface_config.sidebar.title', '') || chatbot?.name || 'AI助手';
+    const position = getConfigValue('interface_config.sidebar.position', 'bottom-right');
+    const width = getConfigValue('interface_config.sidebar.width', 400);
+    const height = getConfigValue('interface_config.sidebar.height', 600);
+
     const params = new URLSearchParams();
     params.set('type', widgetType);
     params.set('api_key', apiKey);
-    params.set('theme', common.theme || '#1677ff');
-    params.set('theme_mode', common.theme_mode || 'light');
-    params.set('gradient_end_color', common.gradient_end_color || 'none');
-    params.set('title', sidebar.title || chatbot?.name || 'AI助手');
-    params.set('position', sidebar.position || 'bottom-right');
-    params.set('width', String(sidebar.width || 400));
-    params.set('height', String(sidebar.height || 600));
+    params.set('color_theme', colorTheme);
+    params.set('theme_mode', themeMode);
+    params.set('title', title);
+    params.set('position', position);
+    params.set('width', String(width));
+    params.set('height', String(height));
     return '/integration/preview?' + params.toString();
   };
 
   // 生成嵌入代码：从配置参数中提取实际值并替换模板变量
   const generateEmbedCode = (widgetType: 'sidebar' | 'iframe'): string => {
-    const cfg = integrationData?.configs;
-    if (!cfg) return '';
+    // 优先从 integrationConfigValues 获取最新配置值，确保保存后能重新渲染
+    const common = {
+      color_theme: getConfigValue('interface_config.common_config.color_theme', 'default_blue'),
+      theme_mode: getConfigValue('interface_config.common_config.theme_mode', 'light'),
+    };
+    const sidebar = {
+      title: getConfigValue('interface_config.sidebar.title', ''),
+      position: getConfigValue('interface_config.sidebar.position', 'bottom-right'),
+      width: getConfigValue('interface_config.sidebar.width', 400),
+      height: getConfigValue('interface_config.sidebar.height', 600),
+      resizable: getConfigValue('interface_config.sidebar.resizable', true),
+      maximizable: getConfigValue('interface_config.sidebar.maximizable', true),
+    };
+    const iframe = {
+      width: getConfigValue('interface_config.iframe.width', '100%'),
+      height: getConfigValue('interface_config.iframe.height', '100%'),
+    };
+
     const apiKey = integrationData?.integration?.api_key?.[0] || '';
-    const code = cfg.html_code?.[widgetType] || '';
+    const code = integrationData?.configs?.html_code?.[widgetType] || '';
     // 如果后端返回了已替换变量的代码，直接使用
     if (code && !code.includes('{api_key}') && !code.includes('{base_url}')) return code;
     // 后端返回了模板但未替换变量，前端替换
+    const cfg = integrationData?.configs;
     if (code) {
-      const baseUrl = cfg.api_config?.chat?.request_example?.curl?.match(/https?:\/\/[^\s'"\?]+/)?.[0] || window.location.origin;
-      const common = cfg.interface_config?.common_config || {};
-      const sidebar = cfg.interface_config?.sidebar || {};
-      const iframe = cfg.interface_config?.iframe || {};
+      const baseUrl = cfg?.api_config?.chat?.request_example?.curl?.match(/https?:\/\/[^\s'"\?]+/)?.[0] || window.location.origin;
       return code
         .replace(/\{api_key\}/g, apiKey)
         .replace(/\{base_url\}/g, baseUrl)
-        .replace(/\{theme\}/g, common.theme || '#1677ff')
+        .replace(/\{color_theme\}/g, common.color_theme || 'default_blue')
         .replace(/\{theme_mode\}/g, common.theme_mode || 'light')
-        .replace(/\{gradient_end_color\}/g, common.gradient_end_color || 'none')
         .replace(/\{position\}/g, sidebar.position || 'bottom-right')
         .replace(/\{title\}/g, encodeURIComponent(sidebar.title || chatbot?.name || 'AI助手'))
         .replace(/\{width\}/g, String(sidebar.width || 400))
         .replace(/\{height\}/g, String(sidebar.height || 600))
         .replace(/\{resizable\}/g, String(sidebar.resizable ?? true))
         .replace(/\{maximizable\}/g, String(sidebar.maximizable ?? true))
-        .replace(/\{theme_encoded\}/g, encodeURIComponent(common.theme || '#1677ff'))
-        .replace(/\{gradient_end_color_encoded\}/g, encodeURIComponent(common.gradient_end_color || 'none'))
         .replace(/\{title_encoded\}/g, encodeURIComponent(sidebar.title || chatbot?.name || 'AI助手'))
         .replace(/\{iframe_width\}/g, String(iframe.width || '100%'))
         .replace(/\{iframe_height\}/g, String(iframe.height || '100%'));
     }
     // 后端未返回 html_code，前端直接生成
     const baseUrl = window.location.origin;
-    const common = cfg.interface_config?.common_config || {};
-    const sidebar = cfg.interface_config?.sidebar || {};
-    const iframe = cfg.interface_config?.iframe || {};
-    const theme = common.theme || '#1677ff';
+    const colorTheme = common.color_theme || 'default_blue';
     const themeMode = common.theme_mode || 'light';
-    const gradientEndColor = common.gradient_end_color || 'none';
     const title = encodeURIComponent(sidebar.title || chatbot?.name || 'AI助手');
     const width = sidebar.width || 400;
     const height = sidebar.height || 600;
     const resizable = String(sidebar.resizable ?? true);
     const maximizable = String(sidebar.maximizable ?? true);
-    const themeEncoded = encodeURIComponent(theme);
-    const gradientEncoded = encodeURIComponent(gradientEndColor);
     if (widgetType === 'sidebar') {
-      return '<!-- AI助手悬浮球侧边栏 -->\n<script>\n  (function() {\n    var config = {\n      apiKey: "' + apiKey + '",\n      baseUrl: "' + baseUrl + '",\n      theme: "' + theme + '",\n      themeMode: "' + themeMode + '",\n      gradientEndColor: "' + gradientEndColor + '",\n      position: "' + (sidebar.position || 'bottom-right') + '",\n      title: "' + decodeURIComponent(title) + '",\n      width: ' + width + ',\n      height: ' + height + ',\n      resizable: ' + resizable + ',\n      maximizable: ' + maximizable + '\n    };\n    var ball = document.createElement("div");\n    ball.id = "ai-widget-ball";\n    ball.innerHTML = "💬";\n    var ballBg = config.gradientEndColor && config.gradientEndColor !== "none" ? "radial-gradient(circle at center,"+config.theme+","+config.gradientEndColor+")" : config.theme;\n    ball.style.cssText = "position:fixed;width:52px;height:52px;border-radius:50%;background:"+ballBg+";color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;cursor:grab;box-shadow:0 6px 24px rgba(0,0,0,0.12);z-index:99999;user-select:none;touch-action:none;";\n    var pos = {"bottom-right":"bottom:48px;right:48px","bottom-left":"bottom:48px;left:48px","top-right":"top:48px;right:48px","top-left":"top:48px;left:48px"};\n    ball.style.cssText += (pos[config.position]||pos["bottom-right"]);\n    var panel = document.createElement("iframe");\n    var params = "api_key="+encodeURIComponent(config.apiKey)+"&theme="+encodeURIComponent(config.theme)+"&theme_mode="+config.themeMode+"&title="+encodeURIComponent(config.title)+"&gradient_end_color="+encodeURIComponent(config.gradientEndColor);\n    panel.src = config.baseUrl+"/integration/chat?"+params;\n    panel.style.cssText = "position:fixed;width:"+config.width+"px;height:"+config.height+"px;border:none;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,0.15);z-index:99998;display:none;";\n    panel.style.cssText += (pos[config.position]||pos["bottom-right"]).replace(/bottom:\s*48px/,"bottom:112px").replace(/top:\s*48px/,"top:112px");\n    var isOpen=false,hasMoved=false,dragStart=null;\n    ball.addEventListener("mousedown",function(e){hasMoved=false;var r=ball.getBoundingClientRect();dragStart={x:e.clientX,y:e.clientY,bx:r.left,by:r.top};});\n    document.addEventListener("mousemove",function(e){if(!dragStart)return;var dx=e.clientX-dragStart.x,dy=e.clientY-dragStart.y;if(Math.abs(dx)>3||Math.abs(dy)>3)hasMoved=true;ball.style.top=Math.max(0,Math.min(window.innerHeight-52,dragStart.by+dy))+"px";ball.style.left=Math.max(0,Math.min(window.innerWidth-52,dragStart.bx+dx))+"px";ball.style.bottom="auto";ball.style.right="auto";ball.style.cursor="grabbing";});\n    document.addEventListener("mouseup",function(){if(!dragStart)return;dragStart=null;ball.style.cursor="grab";if(hasMoved)return;isOpen=!isOpen;panel.style.display=isOpen?"block":"none";ball.innerHTML=isOpen?"✕":"💬";});\n    ball.addEventListener("touchstart",function(e){var t=e.touches[0];hasMoved=false;var r=ball.getBoundingClientRect();dragStart={x:t.clientX,y:t.clientY,bx:r.left,by:r.top};});\n    document.addEventListener("touchmove",function(e){if(!dragStart)return;var t=e.touches[0],dx=t.clientX-dragStart.x,dy=t.clientY-dragStart.y;if(Math.abs(dx)>3||Math.abs(dy)>3){hasMoved=true;e.preventDefault();}ball.style.top=Math.max(0,Math.min(window.innerHeight-52,dragStart.by+dy))+"px";ball.style.left=Math.max(0,Math.min(window.innerWidth-52,dragStart.bx+dx))+"px";ball.style.bottom="auto";ball.style.right="auto";},{passive:false});\n    document.addEventListener("touchend",function(){if(!dragStart)return;dragStart=null;if(!hasMoved){isOpen=!isOpen;panel.style.display=isOpen?"block":"none";ball.innerHTML=isOpen?"✕":"💬";}});\n    document.body.appendChild(panel);\n    document.body.appendChild(ball);\n  })();\n<\/script>';
+      return '<!-- AI助手悬浮球侧边栏 -->\n<script>\n  (function() {\n    var config = {\n      apiKey: "' + apiKey + '",\n      baseUrl: "' + baseUrl + '",\n      colorTheme: "' + colorTheme + '",\n      themeMode: "' + themeMode + '",\n      position: "' + (sidebar.position || 'bottom-right') + '",\n      title: "' + decodeURIComponent(title) + '",\n      width: ' + width + ',\n      height: ' + height + ',\n      resizable: ' + resizable + ',\n      maximizable: ' + maximizable + '\n    };\n    var THEME_COLORS = {"default_blue":"#1677ff","emerald":"#10b981","violet":"#8b5cf6","orange":"#f97316","rose":"#f43f5e","cyan":"#06b6d4","pink":"#ec4899","amber":"#f59e0b","teal":"#14b8a6","indigo":"#6366f1"};\n    var themeColor = THEME_COLORS[config.colorTheme] || "#1677ff";\n    var ball = document.createElement("div");\n    ball.id = "ai-widget-ball";\n    ball.innerHTML = "💬";\n    ball.style.cssText = "position:fixed;width:52px;height:52px;border-radius:50%;background:"+themeColor+";color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;cursor:grab;box-shadow:0 6px 24px rgba(0,0,0,0.12);z-index:99999;user-select:none;touch-action:none;";\n    var pos = {"bottom-right":"bottom:48px;right:48px","bottom-left":"bottom:48px;left:48px","top-right":"top:48px;right:48px","top-left":"top:48px;left:48px"};\n    ball.style.cssText += (pos[config.position]||pos["bottom-right"]);\n    var panel = document.createElement("iframe");\n    var params = "api_key="+encodeURIComponent(config.apiKey)+"&color_theme="+config.colorTheme+"&theme_mode="+config.themeMode+"&title="+encodeURIComponent(config.title);\n    panel.src = config.baseUrl+"/integration/chat?"+params;\n    panel.style.cssText = "position:fixed;width:"+config.width+"px;height:"+config.height+"px;border:none;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,0.15);z-index:99998;display:none;";\n    panel.style.cssText += (pos[config.position]||pos["bottom-right"]).replace(/bottom:\s*48px/,"bottom:112px").replace(/top:\s*48px/,"top:112px");\n    var isOpen=false,hasMoved=false,dragStart=null;\n    ball.addEventListener("mousedown",function(e){hasMoved=false;var r=ball.getBoundingClientRect();dragStart={x:e.clientX,y:e.clientY,bx:r.left,by:r.top};});\n    document.addEventListener("mousemove",function(e){if(!dragStart)return;var dx=e.clientX-dragStart.x,dy=e.clientY-dragStart.y;if(Math.abs(dx)>3||Math.abs(dy)>3)hasMoved=true;ball.style.top=Math.max(0,Math.min(window.innerHeight-52,dragStart.by+dy))+"px";ball.style.left=Math.max(0,Math.min(window.innerWidth-52,dragStart.bx+dx))+"px";ball.style.bottom="auto";ball.style.right="auto";ball.style.cursor="grabbing";});\n    document.addEventListener("mouseup",function(){if(!dragStart)return;dragStart=null;ball.style.cursor="grab";if(hasMoved)return;isOpen=!isOpen;panel.style.display=isOpen?"block":"none";ball.innerHTML=isOpen?"✕":"💬";});\n    ball.addEventListener("touchstart",function(e){var t=e.touches[0];hasMoved=false;var r=ball.getBoundingClientRect();dragStart={x:t.clientX,y:t.clientY,bx:r.left,by:r.top};});\n    document.addEventListener("touchmove",function(e){if(!dragStart)return;var t=e.touches[0],dx=t.clientX-dragStart.x,dy=t.clientY-dragStart.y;if(Math.abs(dx)>3||Math.abs(dy)>3){hasMoved=true;e.preventDefault();}ball.style.top=Math.max(0,Math.min(window.innerHeight-52,dragStart.by+dy))+"px";ball.style.left=Math.max(0,Math.min(window.innerWidth-52,dragStart.bx+dx))+"px";ball.style.bottom="auto";ball.style.right="auto";},{passive:false});\n    document.addEventListener("touchend",function(){if(!dragStart)return;dragStart=null;if(!hasMoved){isOpen=!isOpen;panel.style.display=isOpen?"block":"none";ball.innerHTML=isOpen?"✕":"💬";}});\n    document.body.appendChild(panel);\n    document.body.appendChild(ball);\n  })();\n<\/script>';
     } else {
-      return '<!-- AI助手iframe嵌入 -->\n<iframe\n  src="' + baseUrl + '/integration/chat?api_key=' + apiKey + '&theme=' + themeEncoded + '&theme_mode=' + themeMode + '&gradient_end_color=' + gradientEncoded + '&title=' + title + '"\n  style="width: ' + (iframe.width || '100%') + '; height: ' + (iframe.height || '100%') + '; border: 1px solid #e8e8e8; border-radius: 8px;"\n  allow="microphone"\n></iframe>';
+      return '<!-- AI助手iframe嵌入 -->\n<iframe\n  src="' + baseUrl + '/integration/chat?api_key=' + apiKey + '&color_theme=' + colorTheme + '&theme_mode=' + themeMode + '&title=' + title + '"\n  style="width: ' + (iframe.width || '100%') + '; height: ' + (iframe.height || '100%') + '; border: 1px solid #e8e8e8; border-radius: 8px;"\n  allow="microphone"\n></iframe>';
     }
   };
 
@@ -2887,7 +2901,7 @@ const ChatbotSetting: React.FC = () => {
                             },
                             {
                               key: 'sidebar',
-                              label: '悬浮球',
+                              label: '悬浮球侧边栏',
                               children: (
                                 <div style={{
                                   display: 'grid',

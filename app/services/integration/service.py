@@ -259,9 +259,8 @@ class ChatbotIntegrationService:
         sidebar_cfg = configs.get('interface_config', {}).get('sidebar', {})
         iframe_cfg = configs.get('interface_config', {}).get('iframe', {})
 
-        theme = common_cfg.get('theme', '#1677ff')
         theme_mode = common_cfg.get('theme_mode', 'light')
-        gradient_end_color = common_cfg.get('gradient_end_color', '#06b6d4')
+        color_theme = common_cfg.get('color_theme', 'default_blue')
         title = sidebar_cfg.get('title', 'AI助手')
         position = sidebar_cfg.get('position', 'bottom-right')
         width = sidebar_cfg.get('width', 400)
@@ -275,9 +274,8 @@ class ChatbotIntegrationService:
         sidebar_code = templates['sidebar'].format(
             api_key=api_key,
             base_url=base_url,
-            theme=theme,
+            color_theme=color_theme,
             theme_mode=theme_mode,
-            gradient_end_color=gradient_end_color,
             position=position,
             title=title,
             width=width,
@@ -289,9 +287,8 @@ class ChatbotIntegrationService:
         iframe_code = templates['iframe'].format(
             api_key=api_key,
             base_url=base_url,
-            theme_encoded=quote(theme, safe=''),
+            color_theme=color_theme,
             theme_mode=theme_mode,
-            gradient_end_color_encoded=quote(gradient_end_color, safe=''),
             title_encoded=quote(title, safe=''),
             iframe_width=iframe_width,
             iframe_height=iframe_height
@@ -546,11 +543,13 @@ class ChatbotIntegrationService:
         
         # 获取界面配置
         interface_cfg = configs.get('interface_config', {})
+        common_cfg = interface_cfg.get('common_config', {})
         sidebar_cfg = interface_cfg.get('sidebar', {})
         iframe_cfg = interface_cfg.get('iframe', {})
         chat_cfg = configs.get('chat_config', {})
         
         theme_color = (sidebar_cfg if widget_type == 'sidebar' else iframe_cfg).get('theme', '#1677ff')
+        color_theme = common_cfg.get('color_theme', 'default_blue')
         title = sidebar_cfg.get('title', 'AI助手')
         position = sidebar_cfg.get('position', 'bottom-right')
         ball_size = sidebar_cfg.get('size', 52)
@@ -560,8 +559,6 @@ class ChatbotIntegrationService:
         input_placeholder = chat_cfg.get('input_placeholder', '请输入您的问题...')
         max_input_length = chat_cfg.get('max_input_length', 4000)
         welcome_messages = chat_cfg.get('welcome_messages', [])
-        gradient_enabled = sidebar_cfg.get('gradient_enabled', False)
-        gradient_end_color = sidebar_cfg.get('gradient_end_color', '')
         
         # 生成自包含HTML
         html_content = ChatbotIntegrationService._generate_standalone_html(
@@ -569,6 +566,7 @@ class ChatbotIntegrationService:
             base_url=base_url,
             widget_type=widget_type,
             theme_color=theme_color,
+            color_theme=color_theme,
             title=title,
             position=position,
             ball_size=ball_size,
@@ -578,8 +576,6 @@ class ChatbotIntegrationService:
             input_placeholder=input_placeholder,
             max_input_length=max_input_length,
             welcome_messages=welcome_messages,
-            gradient_enabled=gradient_enabled,
-            gradient_end_color=gradient_end_color,
         )
         
         # 打包为zip
@@ -604,12 +600,10 @@ class ChatbotIntegrationService:
     @staticmethod
     def _generate_standalone_html(
         api_key: str, base_url: str, widget_type: str,
-        theme_color: str, title: str, position: str,
+        theme_color: str, color_theme: str, title: str, position: str,
         ball_size: int, animation: str, panel_width: int, panel_height: int,
         input_placeholder: str, max_input_length: int,
         welcome_messages: List[str],
-        gradient_enabled: bool = False,
-        gradient_end_color: str = '',
     ) -> str:
         """生成自包含的独立HTML聊天插件页面"""
         welcome_json = json.dumps(welcome_messages, ensure_ascii=False)
@@ -660,8 +654,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;f
 .ld span:nth-child(2){animation-delay:.2s}.ld span:nth-child(3){animation-delay:.4s}
 @keyframes dp{0%,80%,100%{opacity:.3;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
 """ + (
-            f'.fb{{position:fixed;width:{ball_size}px;height:{ball_size}px;border-radius:50%;background:linear-gradient(135deg,{theme_color},{gradient_end_color});color:#fff;cursor:grab;display:flex;align-items:center;justify-content:center;font-size:{int(ball_size*0.46)}px;box-shadow:var(--shl);z-index:99999;user-select:none;touch-action:none}}'
-            if gradient_enabled and gradient_end_color else
             f'.fb{{position:fixed;width:{ball_size}px;height:{ball_size}px;border-radius:50%;background:var(--p);color:#fff;cursor:grab;display:flex;align-items:center;justify-content:center;font-size:{int(ball_size*0.46)}px;box-shadow:var(--shl);z-index:99999;user-select:none;touch-action:none}}'
         ) + """
 .fb:hover{box-shadow:0 8px 32px rgba(0,0,0,.2)}

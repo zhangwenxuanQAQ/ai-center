@@ -37,6 +37,7 @@ const IntegrationSidebarPage: React.FC = () => {
       apiKey: params.get('api_key') || '',
       theme: params.get('theme') || '#ffffff',
       themeMode: params.get('theme_mode') || 'light',
+      colorTheme: params.get('color_theme') || 'default_blue',
       title: params.get('title') || 'AI助手',
       position: params.get('position') || 'bottom-right',
       inputPlaceholder: params.get('input_placeholder') || '请输入您的问题...',
@@ -44,19 +45,17 @@ const IntegrationSidebarPage: React.FC = () => {
       welcomeMessages,
       showHistory: true,
       temporary: params.get('temporary') === 'true',
-      gradientEndColor: params.get('gradient_end_color') || 'none',
     };
   }, [params]);
 
   const sidebarConfig = useMemo(() => ({
     position: params.get('position') || 'bottom-right',
     theme: params.get('theme') || '#1677ff',
+    colorTheme: params.get('color_theme') || 'default_blue',
     size: parseInt(params.get('size') || '52', 10),
     animation: params.get('animation') || 'bounce',
     width: parseInt(params.get('width') || '400', 10),
     height: parseInt(params.get('height') || '600', 10),
-    gradientEnabled: params.get('gradient_enabled') === 'true',
-    gradientEndColor: params.get('gradient_end_color') || '',
   }), [params]);
 
   const isDark = params.get('dark') === 'true';
@@ -72,16 +71,15 @@ const IntegrationSidebarPage: React.FC = () => {
   }
 
   return (
-    <div className="integration-page" data-theme={isDark ? 'dark' : 'light'} style={{ background: 'transparent' }}>
+    <div className="integration-page" data-theme={isDark ? 'dark' : 'light'} data-color-theme={sidebarConfig.colorTheme} style={{ background: 'transparent' }}>
       <FloatingBall
         position={sidebarConfig.position}
         theme={sidebarConfig.theme}
+        colorTheme={sidebarConfig.colorTheme}
         size={sidebarConfig.size}
         animation={sidebarConfig.animation}
         width={sidebarConfig.width}
         height={sidebarConfig.height}
-        gradientEnabled={sidebarConfig.gradientEnabled}
-        gradientEndColor={sidebarConfig.gradientEndColor}
       >
         <ChatWidget config={config} compact />
       </FloatingBall>

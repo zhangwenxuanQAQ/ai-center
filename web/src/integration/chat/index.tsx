@@ -16,7 +16,7 @@ import '../styles/integration.css';
  *   welcome_messages - 欢迎语 (JSON 数组字符串)
  *   dark - 是否暗色主题 (true/false)
  *   temporary - 临时会话模式，不保存到数据库 (true/false)
- *   gradient_end_color - 渐变色，值为"none"表示不使用渐变
+ *   color_theme - 颜色主题 (default_blue/emerald/violet/orange/rose/cyan/pink/amber/teal/indigo)
  */
 const IntegrationChatPage: React.FC = () => {
   const config = useMemo<ChatWidgetConfig>(() => {
@@ -31,22 +31,18 @@ const IntegrationChatPage: React.FC = () => {
       apiKey: params.get('api_key') || '',
       theme: params.get('theme') || '#ffffff',
       themeMode: params.get('theme_mode') || 'light',
+      colorTheme: params.get('color_theme') || 'default_blue',
       title: params.get('title') || 'AI助手',
       inputPlaceholder: params.get('input_placeholder') || '请输入您的问题...',
       maxInputLength: parseInt(params.get('max_input_length') || '4000', 10),
       welcomeMessages,
       showHistory: true,
       temporary: params.get('temporary') === 'true',
-      gradientEndColor: params.get('gradient_end_color') || 'none',
     };
   }, []);
 
-  // Set theme from URL
-  const params = new URLSearchParams(window.location.search);
-  const isDark = params.get('dark') === 'true';
-
   return (
-    <div className="integration-page" data-theme={isDark ? 'dark' : 'light'}>
+    <div className="integration-page" data-theme={config.themeMode} data-color-theme={config.colorTheme}>
       <ChatWidget config={config} />
     </div>
   );

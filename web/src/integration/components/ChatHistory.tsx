@@ -10,6 +10,7 @@ interface ChatHistoryProps {
   refreshTrigger?: number;
   theme?: string;
   themeMode?: string;
+  colorTheme?: string;
   gradientEndColor?: string;
 }
 
@@ -22,6 +23,7 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
   refreshTrigger,
   theme = '#1677ff',
   themeMode = 'light',
+  colorTheme = 'default_blue',
   gradientEndColor = 'none',
 }) => {
   const [chats, setChats] = useState<IntegrationChat[]>([]);
@@ -44,16 +46,10 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
     fetchChats();
   }, [apiKey, refreshTrigger]);
 
-  if (collapsed) return null;
-
-  // 计算头部背景样式（使用径向渐变，圆心扩散）
-  const headerBackground = gradientEndColor && gradientEndColor !== 'none'
-    ? `radial-gradient(circle at center, ${theme} 0%, ${gradientEndColor} 100%)`
-    : theme;
-
+  // 始终渲染，CSS transform 控制显隐动画（collapsed 时 translateX(-100%) 滑出视野）
   return (
-    <div className="int-history-sidebar" data-theme={themeMode}>
-      <div className="int-history-header" style={{ background: headerBackground }}>
+    <div className={`int-history-sidebar${collapsed ? ' collapsed' : ''}`} data-theme={themeMode} data-color-theme={colorTheme}>
+      <div className="int-history-header">
         <h3>对话历史</h3>
       </div>
       <button className="int-new-chat-btn" onClick={onNewChat}>
