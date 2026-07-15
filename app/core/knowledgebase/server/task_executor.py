@@ -16,6 +16,7 @@
 import json
 import logging
 import os
+import re
 import threading
 import time
 import uuid
@@ -25,6 +26,11 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from enum import Enum
 from typing import Optional, Dict, Any, List
+
+try:
+    from xpinyin import Pinyin
+except ImportError:
+    Pinyin = None
 
 from app.database.redis_utils import redis_utils
 from app.database.es_utils import es_utils
@@ -375,16 +381,41 @@ class TaskExecutor:
 
         try:
             index_name = kb_id
+            
+            # 将自定义字段映射包装到metadatas.properties中
+            # 保留原字段类型，并添加keyword子类型
+            metadatas_mappings = None
+            if custom_field_mappings:
+                metadata_properties = {}
+                for field_name, field_config in custom_field_mappings.items():
+                    field_type = field_config.get('type', 'text')
+                    
+                    # 保留原字段类型并添加keyword子类型
+                    metadata_properties[field_name] = {
+                        "type": field_type,
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                            }
+                        }
+                    }
+                
+                metadatas_mappings = {
+                    "metadatas": {
+                        "properties": metadata_properties
+                    }
+                }
+            
             if es_utils.client.indices.exists(index=index_name):
                 logger.info(f"ES索引已存在: {index_name}")
                 # 如果索引已存在，需要更新映射以添加自定义字段
-                if custom_field_mappings:
+                if metadatas_mappings:
                     try:
                         es_utils.client.indices.put_mapping(
                             index=index_name,
-                            body={"properties": custom_field_mappings}
+                            body={"properties": metadatas_mappings}
                         )
-                        logger.info(f"成功更新ES索引映射，添加自定义字段: {list(custom_field_mappings.keys())}")
+                        logger.info(f"成功更新ES索引映射，添加metadatas自定义字段: {list(custom_field_mappings.keys())}")
                     except Exception as e:
                         logger.warning(f"更新ES索引映射失败: {e}")
                 return True
@@ -394,27 +425,27 @@ class TaskExecutor:
                 mappings = self._mapping_config.get("mappings", {})
                 settings = self._mapping_config.get("settings", {})
                 
-                # 添加自定义字段映射
-                if custom_field_mappings:
+                # 添加metadatas字段映射（包装在metadatas.properties中）
+                if metadatas_mappings:
                     if "properties" not in mappings:
                         mappings["properties"] = {}
-                    mappings["properties"].update(custom_field_mappings)
+                    mappings["properties"].update(metadatas_mappings)
                 
                 body = {"settings": settings, "mappings": mappings}
                 es_utils.client.indices.create(index=index_name, body=body)
                 logger.info(f"成功使用mapping.json创建ES索引: {index_name}")
                 if custom_field_mappings:
-                    logger.info(f"已添加自定义字段映射: {list(custom_field_mappings.keys())}")
+                    logger.info(f"已添加metadatas自定义字段映射: {list(custom_field_mappings.keys())}")
             else:
                 es_utils.create_index(index_name)
                 # 如果使用默认创建，也需要添加自定义字段映射
-                if custom_field_mappings:
+                if metadatas_mappings:
                     try:
                         es_utils.client.indices.put_mapping(
                             index=index_name,
-                            body={"properties": custom_field_mappings}
+                            body={"properties": metadatas_mappings}
                         )
-                        logger.info(f"成功更新ES索引映射，添加自定义字段: {list(custom_field_mappings.keys())}")
+                        logger.info(f"成功更新ES索引映射，添加metadatas自定义字段: {list(custom_field_mappings.keys())}")
                     except Exception as e:
                         logger.warning(f"更新ES索引映射失败: {e}")
 
@@ -1087,12 +1118,24 @@ class TaskExecutor:
                     # 将字段编码作为索引字段（keyword类型）
                     custom_field_mappings[field['field_code']] = {"type": "keyword"}
         
+        # 处理元数据字段的映射（保留原字段类型）
+        if task.metadatas and isinstance(task.metadatas, dict):
+            metadatas_schema = task.metadatas.get('_schema', {})
+            for field_name, field_config in metadatas_schema.items():
+                if field_name:
+                    # 保留元数据字段的原始类型
+                    field_type = field_config.get('type', 'text')  # 默认为text类型
+                    custom_field_mappings[field_name] = {"type": field_type}
+        
         self._init_kb_index(task.kb_id, vector_size, custom_field_mappings)
 
         docs_to_insert = []
 
         # 处理metadatas（在循环外部定义）
         metadatas = task.metadatas or {}
+        
+        # 解析_schema，用于关联表头
+        metadatas_schema = metadatas.get('_schema', {}) if isinstance(metadatas, dict) else {}
 
         # 如果是自定义模版知识，将所有自定义字段添加到metadatas中
         if task.doc and task.doc.source_type == 'custom_template':
@@ -1141,7 +1184,47 @@ class TaskExecutor:
 
             # 将处理后的metadatas添加到每个切片中
             if metadatas:
-                doc["metadatas"] = metadatas
+                # 处理关联表头的元数据字段
+                chunk_metadatas = dict(metadatas)
+                if metadatas_schema:
+                    # 获取chunk中的原始字段映射
+                    original_fields = chunk.get('_original_fields', {})
+                    field_name_map = chunk.get('_field_name_map', {})
+                    
+                    for field_name, field_config in metadatas_schema.items():
+                        related_header = field_config.get('related_header', '')
+                        if related_header and field_name in chunk_metadatas:
+                            header_value = None
+                            
+                            # 方法1：直接从_original_fields中查找原始字段名对应的值
+                            if original_fields and related_header in original_fields:
+                                header_value = original_fields.get(related_header)
+                                logger.debug(f"从_original_fields中找到字段 '{related_header}' 的值: {header_value}")
+                            
+                            # 方法2：将中文表头名转为拼音后查找
+                            elif Pinyin:
+                                # 使用与table.py相同的拼音转换方式
+                                py_header = Pinyin().get_pinyins(
+                                    re.sub(r"(/.*|（[^（）]+?）|\([^()]+?\))", "", str(related_header)), "_"
+                                )[0].lower()
+                                
+                                # 从field_name_map中查找拼音字段名对应的原始字段名
+                                if field_name_map:
+                                    # 遍历field_name_map，找到拼音开头的字段
+                                    for py_field, orig_field in field_name_map.items():
+                                        if py_field.startswith(py_header) and '_' in py_field:
+                                            # 从original_fields中获取值
+                                            header_value = original_fields.get(orig_field)
+                                            if header_value is not None:
+                                                logger.debug(f"通过拼音 '{py_header}' 找到字段 '{orig_field}' 的值: {header_value}")
+                                                break
+                            
+                            # 如果找到了表头值，则更新元数据字段
+                            if header_value is not None:
+                                chunk_metadatas[field_name] = header_value
+                                logger.info(f"元数据字段 '{field_name}' 关联表头 '{related_header}' 的值: {header_value}")
+                
+                doc["metadatas"] = chunk_metadatas
 
             if "image" in doc:
                 img = doc["image"]

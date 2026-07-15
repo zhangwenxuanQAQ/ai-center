@@ -100,7 +100,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
   const [chunkConfig, setChunkConfig] = useState<Record<string, unknown>>({});
   const [userTags, setUserTags] = useState<string[]>([]);
   const [categoryTags, setCategoryTags] = useState<string[]>([]);
-  const [metadatas, setMetadatas] = useState<Array<{ field_name: string; field_label: string; field_type: string; field_value: any }>>([]);
+  const [metadatas, setMetadatas] = useState<Array<{ field_name: string; field_label: string; field_type: string; field_value: any; related_header?: string }>>([]);
   const [metadataFieldTypes, setMetadataFieldTypes] = useState<Array<{ key: string; label: string; es_type: string; type: string }>>([]);
   const [fileList, setFileList] = useState<Array<{ uid: string; name: string; size: number }>>([]);
   const [status, setStatus] = useState<boolean>(true);
@@ -637,7 +637,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
       const docCategoryId = doc.category_id || '';
 
       // 解析元数据
-      const initMetadatas: Array<{ field_name: string; field_label: string; field_type: string; field_value: any }> = [];
+      const initMetadatas: Array<{ field_name: string; field_label: string; field_type: string; field_value: any; related_header?: string }> = [];
       if (doc.metadatas) {
         try {
           const metadatasObj = typeof doc.metadatas === 'string' ? JSON.parse(doc.metadatas) : doc.metadatas;
@@ -650,7 +650,8 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
                 field_name: key, 
                 field_label: fieldSchema.label || '', 
                 field_type: fieldSchema.type || 'text', 
-                field_value: value 
+                field_value: value,
+                related_header: fieldSchema.related_header || '',
               });
             }
           }
@@ -1317,15 +1318,20 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
     // 保存知识
     try {
       const metadatasObj: Record<string, any> = {};
-      const schema: Record<string, { type: string; label: string }> = {};
+      const schema: Record<string, { type: string; label: string; related_header?: string }> = {};
       for (const item of metadatas) {
         if (item.field_name) {
           metadatasObj[item.field_name] = item.field_value;
           schema[item.field_name] = {
             type: item.field_type,
             label: item.field_label,
+            related_header: item.related_header || '',
           };
         }
+      }
+      // 将schema添加到metadatasObj中
+      if (Object.keys(schema).length > 0) {
+        metadatasObj._schema = schema;
       }
 
       const documentData: any = {
@@ -1343,7 +1349,6 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
           } : undefined
         } : undefined,
         metadatas: Object.keys(metadatasObj).length > 0 ? JSON.stringify(metadatasObj) : undefined,
-        schema: Object.keys(schema).length > 0 ? JSON.stringify(schema) : undefined,
         document_config: Object.keys(documentConfig).length > 0 ? documentConfig : undefined,
         status: status,
       };
@@ -1576,13 +1581,14 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
           // 保存元数据
           if (metadatas.length > 0) {
             const metadatasObj: Record<string, any> = {};
-            const schema: Record<string, { type: string; label: string }> = {};
+            const schema: Record<string, { type: string; label: string; related_header?: string }> = {};
             for (const item of metadatas) {
               if (item.field_name) {
                 metadatasObj[item.field_name] = item.field_value;
                 schema[item.field_name] = {
                   type: item.field_type,
                   label: item.field_label,
+                  related_header: item.related_header || '',
                 };
               }
             }
@@ -1608,6 +1614,24 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         if (sourceType === 'local_document') {
           const files = fileList.map(f => fileMapRef.current.get(f.uid)).filter(Boolean) as File[];
           console.log('准备上传的文件:', files);
+          // 构建metadatas对象
+          const metadatasObj: Record<string, any> = {};
+          const schema: Record<string, { type: string; label: string; related_header?: string }> = {};
+          for (const item of metadatas) {
+            if (item.field_name) {
+              metadatasObj[item.field_name] = item.field_value;
+              schema[item.field_name] = {
+                type: item.field_type,
+                label: item.field_label,
+                related_header: item.related_header || '',
+              };
+            }
+          }
+          // 将schema添加到metadatasObj中
+          if (Object.keys(schema).length > 0) {
+            metadatasObj._schema = schema;
+          }
+
           const result = await knowledgebaseService.uploadDocuments(
             knowledgebase.id,
             files,
@@ -1618,7 +1642,8 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
             tags,
             status,
             title.trim(),
-            Object.keys(documentConfig).length > 0 ? documentConfig : undefined
+            Object.keys(documentConfig).length > 0 ? documentConfig : undefined,
+            Object.keys(metadatasObj).length > 0 ? metadatasObj : undefined
           );
           if (result.errors && result.errors.length > 0) {
             message.warning(`${result.errors.length}个文件上传失败`);
@@ -1909,6 +1934,11 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
                   message.error('不支持上传可执行文件（.exe）');
                   return false;
                 }
+                
+                // 判断是否为Excel或CSV文件
+                const fileName = file.name.toLowerCase();
+                const isExcelOrCsv = fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv');
+                
                 fileMapRef.current.set(file.uid, file);
                 setFileList(prev => {
                   const newFileList = [...prev, { uid: file.uid, name: file.name, size: file.size }];
@@ -1919,6 +1949,12 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
                   }
                   return newFileList;
                 });
+                
+                // 如果是Excel或CSV文件，自动设置切片方法为Table
+                if (isExcelOrCsv && sourceType === 'local_document') {
+                  setChunkMethod('table');
+                }
+                
                 return false;
               }}
               onRemove={(file) => {
@@ -2748,7 +2784,7 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
 
   const renderMetadatas = () => {
     const handleAddMetadata = () => {
-      setMetadatas([...metadatas, { field_name: '', field_label: '', field_type: 'text', field_value: '' }]);
+      setMetadatas([...metadatas, { field_name: '', field_label: '', field_type: 'text', field_value: '', related_header: '' }]);
     };
 
     const handleRemoveMetadata = (index: number) => {
@@ -2809,9 +2845,10 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
         <div style={{ width: '100%' }}>
           {metadatas.length > 0 && (
             <div style={{ display: 'flex', gap: 8, marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#aaa' : '#666', fontSize: 12 }}>
-              <div style={{ width: 120 }}>字段名称</div>
-              <div style={{ width: 120 }}>字段中文名</div>
-              <div style={{ width: 140 }}>字段类型</div>
+              <div style={{ width: 100 }}>字段名称</div>
+              <div style={{ width: 100 }}>字段中文名</div>
+              <div style={{ width: 120 }}>字段类型</div>
+              <div style={{ flex: 1 }}>关联表头</div>
               <div style={{ flex: 1 }}>字段值</div>
               <div style={{ width: 32 }}></div>
             </div>
@@ -2822,26 +2859,34 @@ const KnowledgebaseDocumentSetting: React.FC<KnowledgebaseDocumentSettingProps> 
                 value={item.field_name}
                 onChange={(e) => handleMetadataChange(index, 'field_name', e.target.value)}
                 placeholder="字段名称"
-                style={{ width: 120, background: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff', color: theme === 'dark' ? '#fff' : '#000' }}
+                style={{ width: 100, background: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff', color: theme === 'dark' ? '#fff' : '#000' }}
                 size="small"
               />
               <Input
                 value={item.field_label}
                 onChange={(e) => handleMetadataChange(index, 'field_label', e.target.value)}
                 placeholder="字段中文名"
-                style={{ width: 120, background: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff', color: theme === 'dark' ? '#fff' : '#000' }}
+                style={{ width: 100, background: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff', color: theme === 'dark' ? '#fff' : '#000' }}
                 size="small"
               />
               <Select
                 value={item.field_type}
                 onChange={(v) => handleMetadataChange(index, 'field_type', v)}
-                style={{ width: 140 }}
+                style={{ width: 120 }}
                 size="small"
               >
                 {metadataFieldTypes.map(ft => (
                   <Option key={ft.key} value={ft.key}>{ft.label}</Option>
                 ))}
               </Select>
+              <Input
+                value={item.related_header || ''}
+                onChange={(e) => handleMetadataChange(index, 'related_header', e.target.value)}
+                placeholder="表头名称"
+                style={{ flex: 1, background: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff', color: theme === 'dark' ? '#fff' : '#000' }}
+                size="small"
+                disabled={chunkMethod !== 'table'}
+              />
               <div style={{ flex: 1 }}>
                 {renderValueInput(item, index)}
               </div>

@@ -526,6 +526,9 @@ class KnowledgebaseDocumentService:
         if doc_data.get('tags') and isinstance(doc_data['tags'], list):
             doc_data['tags'] = json.dumps(doc_data['tags'], ensure_ascii=False)
 
+        if doc_data.get('metadatas') and isinstance(doc_data['metadatas'], dict):
+            doc_data['metadatas'] = json.dumps(doc_data['metadatas'], ensure_ascii=False)
+
         # 自动获取 mime_type 和 file_type
         from app.core.knowledgebase.utils.file_utils import get_mime_type, filename_type
         from app.constants.knowledgebase_document_constants import validate_chunk_method, get_default_chunk_method

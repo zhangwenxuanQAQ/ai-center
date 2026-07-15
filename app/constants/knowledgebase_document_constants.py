@@ -405,8 +405,9 @@ EXTENSION_CHUNK_METHODS: Dict[str, List[str]] = {
     "pages": [ChunkMethod.PRESENTATION],
     "msg": [ChunkMethod.EMAIL],
     "eml": [ChunkMethod.EMAIL],
-    "xls": [ChunkMethod.NAIVE, ChunkMethod.QA, ChunkMethod.TABLE, ChunkMethod.ONE],
-    "xlsx": [ChunkMethod.NAIVE, ChunkMethod.QA, ChunkMethod.TABLE, ChunkMethod.ONE],
+    "xls": [ChunkMethod.TABLE, ChunkMethod.NAIVE, ChunkMethod.QA, ChunkMethod.ONE],
+    "xlsx": [ChunkMethod.TABLE, ChunkMethod.NAIVE, ChunkMethod.QA, ChunkMethod.ONE],
+    "csv": [ChunkMethod.TABLE, ChunkMethod.NAIVE, ChunkMethod.QA, ChunkMethod.ONE],
 }
 
 # 数据来源类型对应的可选切片方法配置

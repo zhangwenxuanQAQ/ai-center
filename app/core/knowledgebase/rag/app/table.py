@@ -376,6 +376,12 @@ def chunk(filename, binary=None, from_page=0, to_page=10000000000, lang="Chinese
             if not row_fields:
                 continue
             
+            # 保存原始字段名和字段值到chunk中，用于元数据关联
+            # 格式: _original_fields: {"原始字段名": "值", ...}
+            d["_original_fields"] = {str(field): str(value) for field, value in row_fields}
+            # 保存拼音字段名和原始字段名的映射，用于元数据关联
+            d["_field_name_map"] = {clmns_map[j][0]: str(clmns[j]) for j in range(len(clmns)) if j < len(row_fields)}
+            
             # 添加位置信息
             d["page_num_int"] = [page_num + 1]
             d["top_int"] = [int(top_int)]

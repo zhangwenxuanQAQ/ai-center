@@ -548,6 +548,7 @@ async def upload_documents(
     status: bool = Form(None, description="状态：true/false"),
     title: str = Form(None, description="知识标题"),
     document_config: str = Form(None, description="知识配置，JSON字符串"),
+    metadatas: str = Form(None, description="元数据，JSON字符串"),
 ):
     """
     批量上传文档到知识库
@@ -614,6 +615,14 @@ async def upload_documents(
             except (json.JSONDecodeError, TypeError):
                 return ResponseUtil.bad_request(message="知识配置格式错误")
 
+        # 处理 metadatas 参数
+        document_metadatas = None
+        if metadatas:
+            try:
+                document_metadatas = json.loads(metadatas)
+            except (json.JSONDecodeError, TypeError):
+                return ResponseUtil.bad_request(message="元数据格式错误")
+
         logger.info(f"准备上传 {len(file_data_list)} 个文件到知识库 {kb_id}")
         errors, documents = DocumentService.upload_documents(
             kb_id=kb_id,
@@ -626,6 +635,7 @@ async def upload_documents(
             status=status,
             title=title,
             document_config=document_document_config,
+            metadatas=document_metadatas,
         )
 
         docs_data = []

@@ -375,7 +375,8 @@ export const knowledgebaseService = {
     tags?: string[],
     status?: boolean,
     title?: string,
-    documentConfig?: Record<string, unknown>
+    documentConfig?: Record<string, unknown>,
+    metadatas?: Record<string, unknown>
   ): Promise<{ errors: string[]; documents: KnowledgebaseDocument[] }> => {
     const formData = new FormData();
     files.forEach(file => {
@@ -402,6 +403,9 @@ export const knowledgebaseService = {
     }
     if (documentConfig) {
       formData.append('document_config', JSON.stringify(documentConfig));
+    }
+    if (metadatas) {
+      formData.append('metadatas', JSON.stringify(metadatas));
     }
     return http.post(
       `/aicenter/v1/knowledgebase/${kbId}/document/upload`,

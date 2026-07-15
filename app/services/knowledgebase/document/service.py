@@ -22,7 +22,7 @@ class DocumentService:
     """
 
     @staticmethod
-    def upload_documents(kb_id, file_data_list, source_type=SourceType.LOCAL_DOCUMENT, category_id=None, chunk_method=None, chunk_config=None, tags=None, status=None, title=None, document_config=None):
+    def upload_documents(kb_id, file_data_list, source_type=SourceType.LOCAL_DOCUMENT, category_id=None, chunk_method=None, chunk_config=None, tags=None, status=None, title=None, document_config=None, metadatas=None):
         """
         批量上传文档到知识库
 
@@ -37,6 +37,7 @@ class DocumentService:
             status: 状态，可选
             title: 知识标题，可选
             document_config: 知识配置，可选
+            metadatas: 元数据，可选
 
         Returns:
             tuple: (errors, documents) 错误列表和文档记录列表
@@ -56,6 +57,7 @@ class DocumentService:
             status=status,
             title=title,
             document_config=document_config,
+            metadatas=metadatas,
         )
         return errors, documents
 

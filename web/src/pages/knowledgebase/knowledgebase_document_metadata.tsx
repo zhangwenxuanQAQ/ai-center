@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal, Button, Select, Input, InputNumber, DatePicker, Space, message, Row, Col } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { KnowledgebaseDocument } from '../../services/knowledgebase';
@@ -21,6 +21,7 @@ interface MetadataItem {
   field_label: string;
   field_type: string;
   field_value: any;
+  related_header?: string; // 关联表头
 }
 
 interface MetadataModalProps {
@@ -66,8 +67,8 @@ const MetadataModal: React.FC<MetadataModalProps> = ({ visible, document, knowle
 
   const loadMetadata = () => {
     if (document?.metadatas) {
-      const metadatas = typeof document.metadatas === 'string' 
-        ? JSON.parse(document.metadatas) 
+      const metadatas = typeof document.metadatas === 'string'
+        ? JSON.parse(document.metadatas)
         : document.metadatas;
       if (typeof metadatas === 'object' && metadatas !== null) {
         const items: MetadataItem[] = [];
@@ -80,6 +81,7 @@ const MetadataModal: React.FC<MetadataModalProps> = ({ visible, document, knowle
             field_label: fieldSchema.label || '',
             field_type: fieldSchema.type || 'text',
             field_value: value,
+            related_header: fieldSchema.related_header || '',
           });
         }
         setMetadataItems(items);
@@ -92,7 +94,7 @@ const MetadataModal: React.FC<MetadataModalProps> = ({ visible, document, knowle
   };
 
   const handleAddItem = () => {
-    setMetadataItems([...metadataItems, { field_name: '', field_label: '', field_type: 'text', field_value: '' }]);
+    setMetadataItems([...metadataItems, { field_name: '', field_label: '', field_type: 'text', field_value: '', related_header: '' }]);
   };
 
   const handleRemoveItem = (index: number) => {
@@ -274,7 +276,7 @@ const MetadataModal: React.FC<MetadataModalProps> = ({ visible, document, knowle
     }
 
     const metadatas: Record<string, any> = {};
-    const schema: Record<string, { type: string; label: string }> = {};
+    const schema: Record<string, { type: string; label: string; related_header?: string }> = {};
 
     for (const item of metadataItems) {
       let value = item.field_value;
@@ -290,6 +292,7 @@ const MetadataModal: React.FC<MetadataModalProps> = ({ visible, document, knowle
       schema[item.field_name] = {
         type: item.field_type,
         label: item.field_label,
+        related_header: item.related_header || '',
       };
     }
     metadatas._schema = schema;
@@ -319,7 +322,7 @@ const MetadataModal: React.FC<MetadataModalProps> = ({ visible, document, knowle
       title="设置元数据"
       open={visible}
       onCancel={onCancel}
-      width={900}
+      width={1000}
       footer={[
         <Button key="cancel" onClick={onCancel}>
           取消
@@ -339,15 +342,16 @@ const MetadataModal: React.FC<MetadataModalProps> = ({ visible, document, knowle
         ) : (
           <div>
             <Row gutter={8} style={{ marginBottom: 8, fontWeight: 500, color: theme === 'dark' ? '#aaa' : '#666' }}>
-              <Col span={4}><div style={{ height: inputHeight, display: 'flex', alignItems: 'center' }}>字段名称</div></Col>
-              <Col span={4}><div style={{ height: inputHeight, display: 'flex', alignItems: 'center' }}>字段中文名</div></Col>
-              <Col span={4}><div style={{ height: inputHeight, display: 'flex', alignItems: 'center' }}>字段类型</div></Col>
+              <Col span={3}><div style={{ height: inputHeight, display: 'flex', alignItems: 'center' }}>字段名称</div></Col>
+              <Col span={3}><div style={{ height: inputHeight, display: 'flex', alignItems: 'center' }}>字段中文名</div></Col>
+              <Col span={3}><div style={{ height: inputHeight, display: 'flex', alignItems: 'center' }}>字段类型</div></Col>
+              <Col span={3}><div style={{ height: inputHeight, display: 'flex', alignItems: 'center' }}>关联表头</div></Col>
               <Col span={10}><div style={{ height: inputHeight, display: 'flex', alignItems: 'center' }}>字段值</div></Col>
               <Col span={2}></Col>
             </Row>
             {metadataItems.map((item, index) => (
               <Row key={index} gutter={8} style={{ marginBottom: 8 }}>
-                <Col span={4}>
+                <Col span={3}>
                   <Input
                     value={item.field_name}
                     onChange={(e) => handleItemChange(index, 'field_name', e.target.value)}
@@ -355,7 +359,7 @@ const MetadataModal: React.FC<MetadataModalProps> = ({ visible, document, knowle
                     style={inputStyle}
                   />
                 </Col>
-                <Col span={4}>
+                <Col span={3}>
                   <Input
                     value={item.field_label}
                     onChange={(e) => handleItemChange(index, 'field_label', e.target.value)}
@@ -363,7 +367,7 @@ const MetadataModal: React.FC<MetadataModalProps> = ({ visible, document, knowle
                     style={inputStyle}
                   />
                 </Col>
-                <Col span={4}>
+                <Col span={3}>
                   <Select
                     value={item.field_type}
                     onChange={(v) => handleItemChange(index, 'field_type', v)}
@@ -373,6 +377,15 @@ const MetadataModal: React.FC<MetadataModalProps> = ({ visible, document, knowle
                       <Option key={ft.key} value={ft.key}>{ft.label}</Option>
                     ))}
                   </Select>
+                </Col>
+                <Col span={3}>
+                  <Input
+                    value={item.related_header}
+                    onChange={(e) => handleItemChange(index, 'related_header', e.target.value)}
+                    placeholder="表头名称"
+                    style={inputStyle}
+                    disabled={document?.chunk_method !== 'table'}
+                  />
                 </Col>
                 <Col span={10}>
                   <div style={{ height: inputHeight }}>
@@ -385,7 +398,7 @@ const MetadataModal: React.FC<MetadataModalProps> = ({ visible, document, knowle
                     danger
                     icon={<DeleteOutlined />}
                     onClick={() => handleRemoveItem(index)}
-                    style={{ 
+                    style={{
                       color: '#ff4d4f',
                       height: inputHeight,
                       display: 'flex',

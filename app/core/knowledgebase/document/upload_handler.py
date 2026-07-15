@@ -32,7 +32,7 @@ class DocumentUploadHandler:
     """
 
     @staticmethod
-    def upload_documents(kb_id, file_data_list, source_type=SourceType.LOCAL_DOCUMENT, category_id=None, chunk_method=None, chunk_config=None, tags=None, status=None, title=None, document_config=None):
+    def upload_documents(kb_id, file_data_list, source_type=SourceType.LOCAL_DOCUMENT, category_id=None, chunk_method=None, chunk_config=None, tags=None, status=None, title=None, document_config=None, metadatas=None):
         """
         批量上传文档到知识库
 
@@ -47,6 +47,7 @@ class DocumentUploadHandler:
             status: 状态，可选
             title: 知识标题，可选
             document_config: 知识配置，可选
+            metadatas: 元数据，可选
 
         Returns:
             tuple: (errors, documents) 错误列表和文档记录列表
@@ -91,6 +92,7 @@ class DocumentUploadHandler:
                     status=status,
                     title=title,
                     document_config=document_config,
+                    metadatas=metadatas,
                 )
                 documents.append(doc)
                 logger.info(f"文件处理成功: {file_data.get('filename')}")
@@ -104,7 +106,7 @@ class DocumentUploadHandler:
         return errors, documents
 
     @staticmethod
-    def _upload_single_document(kb_id, kb, file_data, source_type, category_id, chunk_method=None, chunk_config=None, tags=None, status=None, title=None, document_config=None):
+    def _upload_single_document(kb_id, kb, file_data, source_type, category_id, chunk_method=None, chunk_config=None, tags=None, status=None, title=None, document_config=None, metadatas=None):
         """
         上传单个文档
 
@@ -120,6 +122,7 @@ class DocumentUploadHandler:
             status: 状态，可选
             title: 知识标题，可选
             document_config: 知识配置，可选
+            metadatas: 元数据，可选
 
         Returns:
             KnowledgebaseDocument: 创建的文档记录
@@ -181,6 +184,7 @@ class DocumentUploadHandler:
             status=status,
             title=title,
             document_config=document_config,
+            metadatas=metadatas,
         )
 
         # 文档上传后不自动执行切片任务，用户需手动触发
@@ -245,7 +249,7 @@ class DocumentUploadHandler:
     @staticmethod
     def _create_document_record(
         kb_id, kb, filename, original_filename, location, blob,
-        file_type, source_type, category_id, thumbnail, chunk_method=None, chunk_config=None, tags=None, status=None, title=None, document_config=None
+        file_type, source_type, category_id, thumbnail, chunk_method=None, chunk_config=None, tags=None, status=None, title=None, document_config=None, metadatas=None
     ):
         """
         创建文档数据库记录
@@ -267,6 +271,7 @@ class DocumentUploadHandler:
             status: 状态，可选
             title: 知识标题，可选
             document_config: 知识配置，可选
+            metadatas: 元数据，可选
 
         Returns:
             KnowledgebaseDocument: 创建的文档记录
@@ -321,6 +326,11 @@ class DocumentUploadHandler:
         if document_document_config and isinstance(document_document_config, dict):
             document_document_config = json.dumps(document_document_config, ensure_ascii=False)
 
+        # 处理元数据
+        document_metadatas = metadatas
+        if document_metadatas and isinstance(document_metadatas, dict):
+            document_metadatas = json.dumps(document_metadatas, ensure_ascii=False)
+
         doc = KnowledgebaseDocument(
             kb_id=kb_id,
             category_id=category_id,
@@ -339,6 +349,7 @@ class DocumentUploadHandler:
             status=document_status,
             tags=document_tags,
             document_config=document_document_config,
+            metadatas=document_metadatas,
         )
         doc.save(force_insert=True)
 

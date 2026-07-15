@@ -214,6 +214,7 @@ class KnowledgebaseDocumentBase(BaseModel):
         title: 知识标题
         tags: 文档标签JSON数组
         document_config: 知识配置JSON对象
+        metadatas: 元数据JSON对象
         chunk_method: 文档Chunk方法
         chunk_config: 文档Chunk配置JSON
         token_num: 文档Token数
@@ -237,6 +238,7 @@ class KnowledgebaseDocumentBase(BaseModel):
     title: Optional[str] = Field(None, max_length=255, description="知识标题")
     tags: Optional[list] = Field(None, description="文档标签JSON数组")
     document_config: Optional[dict] = Field(None, description="知识配置JSON对象")
+    metadatas: Optional[dict] = Field(None, description="元数据JSON对象")
     chunk_method: str = Field(..., min_length=1, max_length=50, description="文档Chunk方法")
     chunk_config: Optional[dict] = Field(None, description="文档Chunk配置JSON对象")
     token_num: int = Field(default=0, description="文档Token数")
