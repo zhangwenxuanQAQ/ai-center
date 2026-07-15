@@ -1528,11 +1528,13 @@ class TaskExecutor:
                 
             elif not task.binary:
                 # 本地文件或数据源：保持现有逻辑
-                self._set_progress(task, 0.02, f"从RustFS读取文件: {task.kb_id}/{task.filename}")
-                logger.info(f"从RustFS读取文件: {task.kb_id}/{task.filename}")
-                binary = rustfs_utils.download_object(task.kb_id, task.filename)
+                # 使用location字段作为文件路径（存储在RustFS中的完整路径）
+                file_location = task.doc.location if task.doc else task.filename
+                self._set_progress(task, 0.02, f"从RustFS读取文件: {task.kb_id}/{file_location}")
+                logger.info(f"从RustFS读取文件: {task.kb_id}/{file_location}")
+                binary = rustfs_utils.download_object(task.kb_id, file_location)
                 if not binary:
-                    raise RuntimeError(f"从RustFS读取文件失败: {task.kb_id}/{task.filename}")
+                    raise RuntimeError(f"从RustFS读取文件失败: {task.kb_id}/{file_location}")
                 task.binary = binary
             
             self._set_progress(task, 0.05, "文件读取完成，开始切片...")
