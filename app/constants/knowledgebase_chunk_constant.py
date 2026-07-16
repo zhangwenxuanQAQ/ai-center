@@ -29,6 +29,7 @@ CHUNK_FIELDS = [
     "char_count_int",
     "doc_type_kwd",
     "image_base64",
+    "metadatas",
 ]
 
 RETRIEVAL_CONFIGS = [{

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { PanelDragProvider } from './PanelDragContext';
 import { PanelMinimizeProvider } from './PanelMinimizeContext';
 
@@ -59,13 +59,6 @@ const FloatingBall: React.FC<FloatingBallProps> = ({
   const panelDragStartRef = useRef<{ x: number; y: number; panelX: number; panelY: number } | null>(null);
   const hasMovedRef = useRef(false);
   const minimizedHeaderTopRef = useRef<number | null>(null); // 最小化时保持 header 位置
-  const HISTORY_WIDTH = 260; // 对话历史侧边栏宽度
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false); // 历史是否展开
-
-  // 历史状态变化回调（传递给 ChatWidget）
-  const handleHistoryChange = useCallback((open: boolean) => {
-    setIsHistoryOpen(open);
-  }, []);
 
   const animationClass = !isDragging && animation !== 'none' ? `animation-${animation}` : '';
 
@@ -124,8 +117,7 @@ const FloatingBall: React.FC<FloatingBallProps> = ({
         minimizedHeaderTopRef.current = null; // 拖动时清除最小化位置记忆
       }
       const currentH = isMinimized ? HEADER_HEIGHT : panelSize.height;
-      const currentW = panelSize.width + (isHistoryOpen ? HISTORY_WIDTH : 0);
-      const newX = Math.max(0, Math.min(window.innerWidth - currentW, panelDragStartRef.current.panelX + dx));
+      const newX = Math.max(0, Math.min(window.innerWidth - panelSize.width, panelDragStartRef.current.panelX + dx));
       const newY = Math.max(0, Math.min(window.innerHeight - currentH, panelDragStartRef.current.panelY + dy));
       setPanelPos({ x: newX, y: newY });
     };
@@ -146,7 +138,7 @@ const FloatingBall: React.FC<FloatingBallProps> = ({
       window.removeEventListener('mousemove', handlePanelDragMove);
       window.removeEventListener('mouseup', handlePanelDragEnd);
     };
-  }, [isPanelDragging, panelSize, isHistoryOpen]);
+  }, [isPanelDragging, panelSize]);
 
   // 缩放开始
   const handleResizeStart = (e: React.MouseEvent) => {
@@ -307,10 +299,8 @@ const FloatingBall: React.FC<FloatingBallProps> = ({
   const isInLowerHalf = ballTop > window.innerHeight / 2;
 
   // 计算面板默认位置（根据悬浮球位置，紧贴悬浮球）
-  // effectiveWidth 包含历史侧边栏宽度，确保面板向左扩展而非向右
-  const effectiveWidth = panelSize.width + (isHistoryOpen ? HISTORY_WIDTH : 0);
   const getDefaultPanelPos = (): React.CSSProperties => {
-    const pw = effectiveWidth;
+    const pw = panelSize.width;
     const ph = isMinimized ? HEADER_HEIGHT : panelSize.height;
     // 水平位置：紧贴悬浮球左侧或右侧
     const left = isInRightHalf
@@ -354,7 +344,7 @@ const FloatingBall: React.FC<FloatingBallProps> = ({
         className={`int-sidebar-panel ${isOpen ? 'visible' : 'hidden'} ${isMaximized ? 'maximized' : ''}`}
         data-color-theme={colorTheme}
         style={{
-          width: isMaximized ? 'auto' : `${effectiveWidth}px`,
+          width: isMaximized ? 'auto' : `${panelSize.width}px`,
           height: panelHeightStyle,
           ...panelPosStyle,
         }}
@@ -397,11 +387,7 @@ const FloatingBall: React.FC<FloatingBallProps> = ({
 
         {/* 内容区域 */}
         <div className="int-panel-content">
-          {React.Children.map(children, child =>
-            React.isValidElement(child)
-              ? React.cloneElement(child as React.ReactElement<any>, { onHistoryChange: handleHistoryChange })
-              : child
-          )}
+          {children}
         </div>
 
         {/* 缩放区域（配置允许时显示，最小化和最大化时隐藏） */}

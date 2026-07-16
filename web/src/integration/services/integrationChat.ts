@@ -19,22 +19,34 @@ export interface IntegrationChat {
 }
 
 export interface IntegrationQueryItem {
-  type: 'text';
+  type: 'text' | 'file_base64';
   content: string;
+  mime_type?: string;
+  file_name?: string;
+  file_size?: number;
 }
 
-const getBaseUrl = (): string => {
-  // 在嵌入环境中，使用当前页面的 origin
-  return window.location.origin;
+/**
+ * 获取API基础URL
+ * 使用环境变量配置，与 request.ts 保持一致
+ */
+const getApiBaseUrl = (): string => {
+  const envUrl = import.meta.env.VITE_API_BASE_URL;
+  if (envUrl) {
+    return envUrl;
+  }
+  // 生产环境或同域部署时使用相对路径
+  return '';
 };
+
+const API_BASE_URL = getApiBaseUrl();
 
 export const integrationChatService = {
   /**
    * 获取对话列表
    */
   getChats: async (apiKey: string): Promise<{ items: IntegrationChat[]; total: number }> => {
-    const baseUrl = getBaseUrl();
-    const res = await fetch(`${baseUrl}/aicenter/api/v1/chats`, {
+    const res = await fetch(`${API_BASE_URL}/aicenter/api/v1/chats`, {
       headers: {
         'Authorization': `Bearer ${apiKey}`,
       },
@@ -48,8 +60,7 @@ export const integrationChatService = {
    * 获取对话消息
    */
   getMessages: async (apiKey: string, chatId: string): Promise<{ items: IntegrationMessage[]; total: number }> => {
-    const baseUrl = getBaseUrl();
-    const res = await fetch(`${baseUrl}/aicenter/api/v1/chat/${chatId}/messages`, {
+    const res = await fetch(`${API_BASE_URL}/aicenter/api/v1/chat/${chatId}/messages`, {
       headers: {
         'Authorization': `Bearer ${apiKey}`,
       },
@@ -70,18 +81,19 @@ export const integrationChatService = {
     onError?: (error: any) => void,
     onComplete?: () => void,
     abortSignal?: AbortSignal,
-    temporary?: boolean
+    temporary?: boolean,
+    deepThinking?: boolean
   ): Promise<void> => {
-    const baseUrl = getBaseUrl();
     const body: Record<string, any> = {
       query,
       stream: true,
     };
     if (chatId) body.chat_id = chatId;
     if (temporary) body.temporary = true;
+    if (deepThinking) body.deep_thinking = true;
 
     try {
-      const res = await fetch(`${baseUrl}/aicenter/api/v1/chat/completions`, {
+      const res = await fetch(`${API_BASE_URL}/aicenter/api/v1/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

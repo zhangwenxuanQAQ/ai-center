@@ -25,17 +25,19 @@ logger = logging.getLogger(__name__)
 class IntegrationChatRequest(BaseModel):
     """
     集成聊天请求体
-    
+
     Attributes:
         query: 查询数组，每个元素包含type、content、mime_type
         chat_id: 对话ID（可选，不传则创建新对话）
         stream: 是否流式输出
         temporary: 临时会话模式，不保存对话和消息到数据库
+        deep_thinking: 是否启用深度思考
     """
     query: List[QueryItem] = Field(..., description="查询数组")
     chat_id: Optional[str] = Field(None, max_length=40, description="对话ID")
     stream: bool = Field(True, description="是否流式输出")
     temporary: bool = Field(False, description="临时会话模式，不保存到数据库")
+    deep_thinking: bool = Field(False, description="是否启用深度思考")
 
 
 def get_api_key_from_header(authorization: Optional[str]) -> Optional[str]:
@@ -99,7 +101,8 @@ async def chat_completions(
                         chat_id=chat_request.chat_id,
                         integration=integration,
                         stream=True,
-                        temporary=chat_request.temporary
+                        temporary=chat_request.temporary,
+                        deep_thinking=chat_request.deep_thinking
                     ):
                         yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
                         await asyncio.sleep(0)
@@ -125,7 +128,8 @@ async def chat_completions(
                 query=chat_request.query,
                 chat_id=chat_request.chat_id,
                 integration=integration,
-                temporary=chat_request.temporary
+                temporary=chat_request.temporary,
+                deep_thinking=chat_request.deep_thinking
             )
             
             if 'error' in result:

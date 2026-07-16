@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { PaperClipOutlined } from '@ant-design/icons';
 import MDEditor from '@uiw/react-md-editor';
 import ChatMarkdown from '../../components/ChatMarkdown';
 import { integrationChatService, IntegrationMessage, IntegrationQueryItem } from '../services/integrationChat';
@@ -31,6 +32,14 @@ interface DisplayMessage {
   status?: 'start' | 'streaming' | 'done';
 }
 
+interface SelectedFile {
+  type: 'file_base64';
+  content: string;
+  mime_type: string;
+  file_name: string;
+  file_size?: number;
+}
+
 const ChatArea: React.FC<ChatAreaProps> = ({
   apiKey,
   chatId,
@@ -51,10 +60,14 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(false);
+  const [deepThinking, setDeepThinking] = useState(true);
+  const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | undefined>(chatId);
+  const [randomWelcome, setRandomWelcome] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Scroll to bottom
   const scrollToBottom = useCallback(() => {
@@ -62,6 +75,16 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 50);
   }, []);
+
+  // 随机选择欢迎语
+  useEffect(() => {
+    if (welcomeMessages && welcomeMessages.length > 0) {
+      const randomIndex = Math.floor(Math.random() * welcomeMessages.length);
+      setRandomWelcome(welcomeMessages[randomIndex]);
+    } else {
+      setRandomWelcome('你好，有什么可以帮助您的吗？');
+    }
+  }, [welcomeMessages]);
 
   // Load messages when chatId changes
   useEffect(() => {
@@ -100,21 +123,94 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     }
   };
 
+  // 文件上传处理
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    Array.from(files).forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64 = event.target?.result as string;
+        const base64Content = base64.split(',')[1]; // 移除 data:xxx;base64, 前缀
+
+        const selectedFile: SelectedFile = {
+          type: 'file_base64',
+          content: base64Content,
+          mime_type: file.type,
+          file_name: file.name,
+          file_size: file.size,
+        };
+        setSelectedFiles(prev => [...prev, selectedFile]);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // 清空input，允许重复上传同一文件
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // 移除已选文件
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // 格式化文件大小
+  const formatFileSize = (bytes?: number): string => {
+    if (!bytes) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   // Send message
   const handleSend = async () => {
     const text = inputValue.trim();
-    if (!text || loading) return;
+    // 有文件或有文本时都可以发送
+    if ((selectedFiles.length === 0 && !text) || loading) return;
 
     setInputValue('');
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
 
+    // Build query items
+    const query: IntegrationQueryItem[] = [];
+
+    // Add files first
+    selectedFiles.forEach(file => {
+      query.push({
+        type: file.type,
+        content: file.content,
+        mime_type: file.mime_type,
+        file_name: file.file_name,
+        file_size: file.file_size,
+      });
+    });
+
+    // Add text
+    if (text) {
+      query.push({ type: 'text', content: text });
+    }
+
+    // Clear selected files
+    const filesForDisplay = [...selectedFiles];
+    setSelectedFiles([]);
+
+    // Build display content
+    let displayContent = text;
+    if (filesForDisplay.length > 0) {
+      const fileNames = filesForDisplay.map(f => f.file_name).join(', ');
+      displayContent = text ? `${text}\n\n[文件: ${fileNames}]` : `[文件: ${fileNames}]`;
+    }
+
     // Add user message
     const userMsg: DisplayMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
-      content: text,
+      content: displayContent,
       status: 'done',
     };
 
@@ -130,7 +226,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     scrollToBottom();
     setLoading(true);
 
-    const query: IntegrationQueryItem[] = [{ type: 'text', content: text }];
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
@@ -202,7 +297,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           onMessageSent();
         },
         controller.signal,
-        temporary
+        temporary,
+        deepThinking  // 传递深度思考参数
       );
     } catch (err) {
       setLoading(false);
@@ -260,14 +356,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       <div className="int-messages">
         {showWelcome ? (
           <div className="int-welcome-area">
-            <div className="int-welcome-title">{title}</div>
-            {welcomeMessages.length > 0 && (
-              <div className="int-welcome-msgs">
-                {welcomeMessages.map((msg, idx) => (
-                  <div key={idx} className="int-welcome-msg">{msg}</div>
-                ))}
-              </div>
-            )}
+            <div className="int-welcome-icon">💬</div>
+            <div className="int-welcome-text">{randomWelcome}</div>
+            <div className="int-welcome-hint">输入消息开始对话</div>
           </div>
         ) : (
           messages.map((msg) => (
@@ -298,6 +389,28 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
       {/* Input */}
       <div className="int-input-area">
+        {/* 已选择的文件显示 */}
+        {selectedFiles.length > 0 && (
+          <div className="int-selected-files">
+            {selectedFiles.map((file, index) => (
+              <div key={index} className="int-selected-file">
+                <span className="int-file-icon">📄</span>
+                <div className="int-file-info">
+                  <span className="int-file-name">{file.file_name}</span>
+                  <span className="int-file-size">{formatFileSize(file.file_size)}</span>
+                </div>
+                <button
+                  className="int-file-remove"
+                  onClick={() => handleRemoveFile(index)}
+                  title="移除"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="int-input-wrapper">
           <textarea
             ref={textareaRef}
@@ -308,20 +421,51 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             rows={1}
             disabled={loading}
           />
-          {loading ? (
-            <button className="int-send-btn stop" onClick={handleStop} title="停止">
-              ■
-            </button>
-          ) : (
-            <button
-              className="int-send-btn"
-              onClick={handleSend}
-              disabled={!inputValue.trim()}
-              title="发送"
-            >
-              ➤
-            </button>
-          )}
+          {/* 输入框底部工具栏 */}
+          <div className="int-input-toolbar">
+            <div className="int-input-tools-left">
+              {/* 深度思考开关 */}
+              <div
+                className={`int-deep-thinking ${deepThinking ? 'active' : ''}`}
+                onClick={() => setDeepThinking(!deepThinking)}
+                title="深度思考"
+              >
+                <span className="int-deep-thinking-icon">💡</span>
+                <span className="int-deep-thinking-label">深度思考</span>
+                <span className={`int-deep-thinking-switch ${deepThinking ? 'on' : ''}`}></span>
+              </div>
+              {/* 文件上传按钮 */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                style={{ display: 'none' }}
+                onChange={handleFileUpload}
+              />
+              <button
+                className="int-upload-btn"
+                onClick={() => fileInputRef.current?.click()}
+                title="上传文件"
+              >
+                <PaperClipOutlined />
+              </button>
+            </div>
+            {/* 发送/停止按钮 */}
+            {loading ? (
+              <button className="int-send-btn stop" onClick={handleStop} title="停止">
+                ■
+              </button>
+            ) : (
+              <button
+                className="int-send-btn"
+                onClick={handleSend}
+                disabled={selectedFiles.length === 0 && !inputValue.trim()}
+                title="发送"
+              >
+                ➤
+              </button>
+            )}
+          </div>
         </div>
       </div>
         </>

@@ -619,87 +619,61 @@ const ChatbotSetting: React.FC = () => {
     return integrationConfigValues[path] ?? defaultValue;
   };
 
-  // 生成预览URL：直接打开 /integration/preview 路由页面（临时对话，不保存数据库）
-  const generatePreviewUrl = (widgetType: 'sidebar' | 'iframe'): string => {
-    // 优先从 integrationConfigValues 获取最新配置值，确保保存后能重新渲染
+  // 生成预览URL：通过后端接口生成token，不暴露配置参数
+  const generatePreviewUrl = useCallback(async (widgetType: 'sidebar' | 'iframe'): Promise<string> => {
     const apiKey = integrationData?.integration?.api_key?.[0] || '';
     if (!apiKey) return '';
 
-    const colorTheme = getConfigValue('interface_config.common_config.color_theme', 'default_blue');
-    const themeMode = getConfigValue('interface_config.common_config.theme_mode', 'light');
-    const title = getConfigValue('interface_config.sidebar.title', '') || chatbot?.name || 'AI助手';
-    const position = getConfigValue('interface_config.sidebar.position', 'bottom-right');
-    const width = getConfigValue('interface_config.sidebar.width', 400);
-    const height = getConfigValue('interface_config.sidebar.height', 600);
+    try {
+      // 调用后端接口生成预览token
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || ''}/aicenter/api/v1/integration/preview`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          type: widgetType,
+          api_key: apiKey,
+        }),
+      });
 
-    const params = new URLSearchParams();
-    params.set('type', widgetType);
-    params.set('api_key', apiKey);
-    params.set('color_theme', colorTheme);
-    params.set('theme_mode', themeMode);
-    params.set('title', title);
-    params.set('position', position);
-    params.set('width', String(width));
-    params.set('height', String(height));
-    return '/integration/preview?' + params.toString();
-  };
-
-  // 生成嵌入代码：从配置参数中提取实际值并替换模板变量
-  const generateEmbedCode = (widgetType: 'sidebar' | 'iframe'): string => {
-    // 优先从 integrationConfigValues 获取最新配置值，确保保存后能重新渲染
-    const common = {
-      color_theme: getConfigValue('interface_config.common_config.color_theme', 'default_blue'),
-      theme_mode: getConfigValue('interface_config.common_config.theme_mode', 'light'),
-    };
-    const sidebar = {
-      title: getConfigValue('interface_config.sidebar.title', ''),
-      position: getConfigValue('interface_config.sidebar.position', 'bottom-right'),
-      width: getConfigValue('interface_config.sidebar.width', 400),
-      height: getConfigValue('interface_config.sidebar.height', 600),
-      resizable: getConfigValue('interface_config.sidebar.resizable', true),
-      maximizable: getConfigValue('interface_config.sidebar.maximizable', true),
-    };
-    const iframe = {
-      width: getConfigValue('interface_config.iframe.width', '100%'),
-      height: getConfigValue('interface_config.iframe.height', '100%'),
-    };
-
-    const apiKey = integrationData?.integration?.api_key?.[0] || '';
-    const code = integrationData?.configs?.html_code?.[widgetType] || '';
-    // 如果后端返回了已替换变量的代码，直接使用
-    if (code && !code.includes('{api_key}') && !code.includes('{base_url}')) return code;
-    // 后端返回了模板但未替换变量，前端替换
-    const cfg = integrationData?.configs;
-    if (code) {
-      const baseUrl = cfg?.api_config?.chat?.request_example?.curl?.match(/https?:\/\/[^\s'"\?]+/)?.[0] || window.location.origin;
-      return code
-        .replace(/\{api_key\}/g, apiKey)
-        .replace(/\{base_url\}/g, baseUrl)
-        .replace(/\{color_theme\}/g, common.color_theme || 'default_blue')
-        .replace(/\{theme_mode\}/g, common.theme_mode || 'light')
-        .replace(/\{position\}/g, sidebar.position || 'bottom-right')
-        .replace(/\{title\}/g, encodeURIComponent(sidebar.title || chatbot?.name || 'AI助手'))
-        .replace(/\{width\}/g, String(sidebar.width || 400))
-        .replace(/\{height\}/g, String(sidebar.height || 600))
-        .replace(/\{resizable\}/g, String(sidebar.resizable ?? true))
-        .replace(/\{maximizable\}/g, String(sidebar.maximizable ?? true))
-        .replace(/\{title_encoded\}/g, encodeURIComponent(sidebar.title || chatbot?.name || 'AI助手'))
-        .replace(/\{iframe_width\}/g, String(iframe.width || '100%'))
-        .replace(/\{iframe_height\}/g, String(iframe.height || '100%'));
+      const result = await response.json();
+      if (result.code === 200 && result.data?.preview_url) {
+        return result.data.preview_url;
+      }
+      return '';
+    } catch (error) {
+      console.error('生成预览URL失败:', error);
+      return '';
     }
-    // 后端未返回 html_code，前端直接生成
+  }, [integrationData]);
+
+  // 生成嵌入代码：只传递api_key，配置从后端接口获取
+  const generateEmbedCode = (widgetType: 'sidebar' | 'iframe'): string => {
+    const apiKey = integrationData?.integration?.api_key?.[0] || '';
+    if (!apiKey) return '';
+
     const baseUrl = window.location.origin;
-    const colorTheme = common.color_theme || 'default_blue';
-    const themeMode = common.theme_mode || 'light';
-    const title = encodeURIComponent(sidebar.title || chatbot?.name || 'AI助手');
-    const width = sidebar.width || 400;
-    const height = sidebar.height || 600;
-    const resizable = String(sidebar.resizable ?? true);
-    const maximizable = String(sidebar.maximizable ?? true);
+
     if (widgetType === 'sidebar') {
-      return '<!-- AI助手悬浮球侧边栏 -->\n<script>\n  (function() {\n    var config = {\n      apiKey: "' + apiKey + '",\n      baseUrl: "' + baseUrl + '",\n      colorTheme: "' + colorTheme + '",\n      themeMode: "' + themeMode + '",\n      position: "' + (sidebar.position || 'bottom-right') + '",\n      title: "' + decodeURIComponent(title) + '",\n      width: ' + width + ',\n      height: ' + height + ',\n      resizable: ' + resizable + ',\n      maximizable: ' + maximizable + '\n    };\n    var THEME_COLORS = {"default_blue":"#1677ff","emerald":"#10b981","violet":"#8b5cf6","orange":"#f97316","rose":"#f43f5e","cyan":"#06b6d4","pink":"#ec4899","amber":"#f59e0b","teal":"#14b8a6","indigo":"#6366f1"};\n    var themeColor = THEME_COLORS[config.colorTheme] || "#1677ff";\n    var ball = document.createElement("div");\n    ball.id = "ai-widget-ball";\n    ball.innerHTML = "💬";\n    ball.style.cssText = "position:fixed;width:52px;height:52px;border-radius:50%;background:"+themeColor+";color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;cursor:grab;box-shadow:0 6px 24px rgba(0,0,0,0.12);z-index:99999;user-select:none;touch-action:none;";\n    var pos = {"bottom-right":"bottom:48px;right:48px","bottom-left":"bottom:48px;left:48px","top-right":"top:48px;right:48px","top-left":"top:48px;left:48px"};\n    ball.style.cssText += (pos[config.position]||pos["bottom-right"]);\n    var panel = document.createElement("iframe");\n    var params = "api_key="+encodeURIComponent(config.apiKey)+"&color_theme="+config.colorTheme+"&theme_mode="+config.themeMode+"&title="+encodeURIComponent(config.title);\n    panel.src = config.baseUrl+"/integration/chat?"+params;\n    panel.style.cssText = "position:fixed;width:"+config.width+"px;height:"+config.height+"px;border:none;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,0.15);z-index:99998;display:none;";\n    panel.style.cssText += (pos[config.position]||pos["bottom-right"]).replace(/bottom:\s*48px/,"bottom:112px").replace(/top:\s*48px/,"top:112px");\n    var isOpen=false,hasMoved=false,dragStart=null;\n    ball.addEventListener("mousedown",function(e){hasMoved=false;var r=ball.getBoundingClientRect();dragStart={x:e.clientX,y:e.clientY,bx:r.left,by:r.top};});\n    document.addEventListener("mousemove",function(e){if(!dragStart)return;var dx=e.clientX-dragStart.x,dy=e.clientY-dragStart.y;if(Math.abs(dx)>3||Math.abs(dy)>3)hasMoved=true;ball.style.top=Math.max(0,Math.min(window.innerHeight-52,dragStart.by+dy))+"px";ball.style.left=Math.max(0,Math.min(window.innerWidth-52,dragStart.bx+dx))+"px";ball.style.bottom="auto";ball.style.right="auto";ball.style.cursor="grabbing";});\n    document.addEventListener("mouseup",function(){if(!dragStart)return;dragStart=null;ball.style.cursor="grab";if(hasMoved)return;isOpen=!isOpen;panel.style.display=isOpen?"block":"none";ball.innerHTML=isOpen?"✕":"💬";});\n    ball.addEventListener("touchstart",function(e){var t=e.touches[0];hasMoved=false;var r=ball.getBoundingClientRect();dragStart={x:t.clientX,y:t.clientY,bx:r.left,by:r.top};});\n    document.addEventListener("touchmove",function(e){if(!dragStart)return;var t=e.touches[0],dx=t.clientX-dragStart.x,dy=t.clientY-dragStart.y;if(Math.abs(dx)>3||Math.abs(dy)>3){hasMoved=true;e.preventDefault();}ball.style.top=Math.max(0,Math.min(window.innerHeight-52,dragStart.by+dy))+"px";ball.style.left=Math.max(0,Math.min(window.innerWidth-52,dragStart.bx+dx))+"px";ball.style.bottom="auto";ball.style.right="auto";},{passive:false});\n    document.addEventListener("touchend",function(){if(!dragStart)return;dragStart=null;if(!hasMoved){isOpen=!isOpen;panel.style.display=isOpen?"block":"none";ball.innerHTML=isOpen?"✕":"💬";}});\n    document.body.appendChild(panel);\n    document.body.appendChild(ball);\n  })();\n<\/script>';
+      // 悬浮球侧边栏：只传递api_key，初始化时从后端获取配置
+      return `<!-- AI助手悬浮球侧边栏 -->
+<script>
+  (function() {
+    var script = document.createElement('script');
+    script.src = '${baseUrl}/integration/sidebar.js?api_key=${apiKey}';
+    document.body.appendChild(script);
+  })();
+</script>
+<noscript>请启用JavaScript以使用AI助手</noscript>`;
     } else {
-      return '<!-- AI助手iframe嵌入 -->\n<iframe\n  src="' + baseUrl + '/integration/chat?api_key=' + apiKey + '&color_theme=' + colorTheme + '&theme_mode=' + themeMode + '&title=' + title + '"\n  style="width: ' + (iframe.width || '100%') + '; height: ' + (iframe.height || '100%') + '; border: 1px solid #e8e8e8; border-radius: 8px;"\n  allow="microphone"\n></iframe>';
+      // iframe嵌入：只传递api_key，配置从后端获取
+      return `<!-- AI助手iframe嵌入 -->
+<iframe
+  src="${baseUrl}/integration/chat?api_key=${apiKey}"
+  style="width: 100%; height: 600px; border: none; border-radius: 8px;"
+  allow="microphone"
+></iframe>`;
     }
   };
 
@@ -3119,8 +3093,8 @@ const ChatbotSetting: React.FC = () => {
                                         <Button
                                           type="primary"
                                           icon={<EyeOutlined />}
-                                          onClick={() => {
-                                            const url = generatePreviewUrl('sidebar');
+                                          onClick={async () => {
+                                            const url = await generatePreviewUrl('sidebar');
                                             if (!url) { message.warning('配置参数不完整，无法预览'); return; }
                                             window.open(url, '_blank');
                                           }}
@@ -3236,8 +3210,8 @@ const ChatbotSetting: React.FC = () => {
                                         <Button
                                           type="primary"
                                           icon={<EyeOutlined />}
-                                          onClick={() => {
-                                            const url = generatePreviewUrl('iframe');
+                                          onClick={async () => {
+                                            const url = await generatePreviewUrl('iframe');
                                             if (!url) { message.warning('配置参数不完整，无法预览'); return; }
                                             window.open(url, '_blank');
                                           }}

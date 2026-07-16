@@ -46,7 +46,7 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
     fetchChats();
   }, [apiKey, refreshTrigger]);
 
-  // 始终渲染，CSS transform 控制显隐动画（collapsed 时 translateX(-100%) 滑出视野）
+  // 始终渲染，CSS transform 控制显隐动画（collapsed 时 translateX(-260px) 滑出面板）
   return (
     <div className={`int-history-sidebar${collapsed ? ' collapsed' : ''}`} data-theme={themeMode} data-color-theme={colorTheme}>
       <div className="int-history-header">

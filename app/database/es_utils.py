@@ -579,9 +579,10 @@ class ESUtils:
             }
             if filter_conditions:
                 text_query["bool"]["filter"] = filter_conditions
-            search_params["query"] = text_query
+            #search_params["query"] = text_query
         elif filter_conditions:
-            search_params["query"] = {"bool": {"filter": filter_conditions}}
+            #search_params["query"] = {"bool": {"filter": filter_conditions}}
+            pass
 
         res = self._es_client.search(**search_params)
         hits = res.get('hits', {}).get('hits', [])
@@ -770,8 +771,8 @@ class ESUtils:
 
         if knn_query:
             search_params["knn"] = knn_query
-        if text_query:
-            search_params["query"] = text_query
+        # if text_query:
+        #     search_params["query"] = text_query
 
         logging.info(f"ES 查询参数: {json.dumps(search_params, ensure_ascii=False)}")
         res = self._es_client.search(**search_params)
@@ -877,6 +878,7 @@ class ESUtils:
                 "similarity": float(sim[i]),
                 "vector_similarity": float(vsim[i]),
                 "term_similarity": float(tsim[i]),
+                "metadatas": chunk.get("metadatas", {}),
             }
             if vector_field and vector_field in chunk:
                 d["vector"] = chunk[vector_field]

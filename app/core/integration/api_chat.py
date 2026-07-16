@@ -30,23 +30,43 @@ class IntegrationChatCoreService:
         query: List[QueryItem],
         chat_id: Optional[str],
         integration: ChatbotIntegration,
-        stream: bool = True
+        stream: bool = True,
+        temporary: bool = False,
+        deep_thinking: bool = False
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         流式聊天
-        
+
         复用现有的ChatCoreService.chat_stream，并在完成后同步到ChatbotChat表
-        
+
         Args:
             query: 查询数组
             chat_id: 对话ID（可选）
             integration: 集成配置对象
             stream: 是否流式输出
-            
+            temporary: 临时会话模式，不保存对话和消息到数据库
+            deep_thinking: 是否启用深度思考
+
         Yields:
             Dict: 流式响应数据
         """
         chatbot_id = integration.chatbot_id
+
+        # 临时会话模式：不保存到数据库，直接调用ChatCoreService
+        if temporary:
+            async for chunk in ChatCoreService.chat_stream(
+                user_id=f"integration_{integration.id}",
+                query=query,
+                model_id=None,
+                chatbot_id=chatbot_id,
+                chat_id=None,
+                config=None,
+                message_id=None,
+                system_prompt=None,
+                deep_thinking=deep_thinking
+            ):
+                yield chunk
+            return
         
         # 获取或创建ChatbotChat记录
         bot_chat = None
@@ -111,7 +131,8 @@ class IntegrationChatCoreService:
             chat_id=actual_chat_id if internal_chat else None,
             config=None,
             message_id=None,
-            system_prompt=None
+            system_prompt=None,
+            deep_thinking=deep_thinking
         ):
             # 确保返回的chat_id是ChatbotChat的id
             chunk['chat_id'] = actual_chat_id
@@ -158,16 +179,20 @@ class IntegrationChatCoreService:
     async def chat(
         query: List[QueryItem],
         chat_id: Optional[str],
-        integration: ChatbotIntegration
+        integration: ChatbotIntegration,
+        temporary: bool = False,
+        deep_thinking: bool = False
     ) -> Dict[str, Any]:
         """
         非流式聊天
-        
+
         Args:
             query: 查询数组
             chat_id: 对话ID（可选）
             integration: 集成配置对象
-            
+            temporary: 临时会话模式
+            deep_thinking: 是否启用深度思考
+
         Returns:
             Dict: 聊天结果
         """
@@ -176,7 +201,9 @@ class IntegrationChatCoreService:
             query=query,
             chat_id=chat_id,
             integration=integration,
-            stream=False
+            stream=False,
+            temporary=temporary,
+            deep_thinking=deep_thinking
         ):
             if chunk.get('status') == 'done':
                 result = chunk
@@ -185,7 +212,7 @@ class IntegrationChatCoreService:
             # 记录chat_id
             if chunk.get('chat_id'):
                 result['chat_id'] = chunk['chat_id']
-        
+
         return result
     
     @staticmethod

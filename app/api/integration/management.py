@@ -297,13 +297,33 @@ async def generate_preview_token(
     try:
         body = await request.json()
         preview_type = body.get("type", "sidebar")  # sidebar 或 iframe
+        api_key = body.get("api_key", "")
+        
+        if not api_key:
+            return ResponseUtil.error(message="缺少API密钥")
+        
+        # 根据 api_key 查询完整配置
+        integration = ChatbotIntegrationService.get_by_api_key(api_key)
+        if not integration:
+            return ResponseUtil.error(message="无效的API密钥")
+        
+        # 解析配置
+        configs = json.loads(integration.configs) if integration.configs else {}
+        
+        # 构建预览配置数据：直接返回 chat_config 和 interface_config
+        preview_data = {
+            "type": preview_type,
+            "api_key": api_key,
+            "chat_config": configs.get("chat_config", {}),
+            "interface_config": configs.get("interface_config", {}),
+        }
         
         # 生成唯一token
         token = str(uuid.uuid4())
         
         # 存储到Redis，有效期10分钟
         redis_key = f"integration:preview:{token}"
-        redis_utils.set(redis_key, json.dumps(body), exp=600)
+        redis_utils.set(redis_key, json.dumps(preview_data), exp=600)
         
         # 返回预览URL
         base_url = request.base_url.scheme + "://" + request.base_url.netloc
@@ -345,4 +365,44 @@ async def get_preview_config(
         return ResponseUtil.success(data=config)
     except Exception as e:
         logger.error(f"获取预览配置失败: {str(e)}", exc_info=True)
+        return ResponseUtil.error(message=f"操作失败: {str(e)}")
+
+
+@router.get("/config/{api_key}", summary="根据API密钥获取插件配置")
+async def get_config_by_api_key(
+    request: Request,
+    api_key: str
+):
+    """
+    根据API密钥获取插件的完整配置信息
+    
+    用于嵌入代码初始化时获取配置参数，避免在URL中暴露配置信息
+    
+    Args:
+        request: 请求对象
+        api_key: API密钥
+        
+    Returns:
+        ApiResponse: 插件配置信息
+    """
+    try:
+        # 根据api_key查询集成配置
+        integration = ChatbotIntegrationService.get_by_api_key(api_key)
+        
+        if not integration:
+            return ResponseUtil.error(message="无效的API密钥", code=404)
+        
+        # 解析配置
+        configs = json.loads(integration.configs) if integration.configs else {}
+        
+        # 直接返回 chat_config 和 interface_config
+        result = {
+            "chatbot_id": integration.chatbot_id,
+            "chat_config": configs.get("chat_config", {}),
+            "interface_config": configs.get("interface_config", {}),
+        }
+        
+        return ResponseUtil.success(data=result)
+    except Exception as e:
+        logger.error(f"获取插件配置失败: {str(e)}", exc_info=True)
         return ResponseUtil.error(message=f"操作失败: {str(e)}")
