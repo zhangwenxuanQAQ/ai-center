@@ -219,7 +219,7 @@ class RetrievalService:
         emb_model_id = embedding_model_id or kb_config.get("embedding_model_id")
         rnk_model_id = rerank_model_id or kb_config.get("rerank_model_id")
 
-        sim_threshold = vector_similarity_threshold if vector_similarity_threshold is not None else kb_retrieval_config.get("vector_similarity", 0.2)
+        sim_threshold = vector_similarity_threshold if vector_similarity_threshold is not None else kb_retrieval_config.get("vector_similarity", 0.0)
         kw_threshold = keyword_similarity_threshold if keyword_similarity_threshold is not None else kb_retrieval_config.get("keyword_similarity", 0.0)
         vsim_weight = vector_similarity_weight if vector_similarity_weight is not None else kb_retrieval_config.get("vector_similarity_weight", 0.7)
         sort = sort_by or kb_retrieval_config.get("sort_by", "sim")
