@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import MDEditor from '@uiw/react-md-editor';
 import { DownOutlined, RightOutlined, CodeOutlined } from '@ant-design/icons';
+import mermaid from 'mermaid';
+import { MarkdownUI } from '@markdown-ui/react';
 
 interface ChatMarkdownProps {
   source: string;
@@ -21,6 +23,170 @@ function extractText(children: React.ReactNode): string {
   }
   return '';
 }
+
+/**
+ * Mermaid 图表渲染组件
+ */
+const MermaidChart: React.FC<{ chart: string; theme: 'light' | 'dark' }> = React.memo(({ chart, theme }) => {
+  const [svg, setSvg] = useState<string>('');
+  const [error, setError] = useState<string>('');
+  const [isValid, setIsValid] = useState<boolean>(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const renderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastChartRef = useRef<string>('');
+
+  useEffect(() => {
+    // 如果图表内容没有变化，不重新渲染
+    if (lastChartRef.current === chart) {
+      return;
+    }
+
+    // 清除之前的定时器
+    if (renderTimeoutRef.current) {
+      clearTimeout(renderTimeoutRef.current);
+    }
+
+    // 检查 mermaid 代码是否完整（简单的完整性检查）
+    const isComplete = (code: string): boolean => {
+      // 检查是否有未闭合的括号或引号
+      const openBraces = (code.match(/\[/g) || []).length;
+      const closeBraces = (code.match(/\]/g) || []).length;
+      const openParens = (code.match(/\(/g) || []).length;
+      const closeParens = (code.match(/\)/g) || []).length;
+      const openCurlyBraces = (code.match(/\{/g) || []).length;
+      const closeCurlyBraces = (code.match(/\}/g) || []).length;
+
+      // 如果括号不匹配，说明代码不完整
+      if (openBraces !== closeBraces ||
+          openParens !== closeParens ||
+          openCurlyBraces !== closeCurlyBraces) {
+        return false;
+      }
+
+      // 检查是否有明显的中断标志（如末尾是逗号后换行）
+      const lines = code.trim().split('\n');
+      const lastLine = lines[lines.length - 1];
+      if (lastLine.trim().endsWith(',') || lastLine.trim().endsWith('[')) {
+        return false;
+      }
+
+      return true;
+    };
+
+    // 设置延迟渲染（防抖），等待流式传输完成
+    renderTimeoutRef.current = setTimeout(async () => {
+      try {
+        // 检查代码完整性
+        if (!isComplete(chart)) {
+          // 代码不完整，不渲染，等待下一次更新
+          setIsValid(false);
+          return;
+        }
+
+        setIsValid(true);
+        lastChartRef.current = chart;
+
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: theme === 'dark' ? 'dark' : 'default',
+          securityLevel: 'loose',
+        });
+        const { svg } = await mermaid.render(`mermaid-${Math.random().toString(36).slice(2)}`, chart);
+        setSvg(svg);
+        setError('');
+      } catch (err) {
+        console.error('Mermaid rendering error:', err);
+        // 只有在代码完整时才显示错误
+        if (isComplete(chart)) {
+          setError(`图表渲染失败: ${err instanceof Error ? err.message : '未知错误'}`);
+        }
+        setIsValid(false);
+      }
+    }, 500); // 500ms 延迟，等待流式传输稳定
+
+    return () => {
+      if (renderTimeoutRef.current) {
+        clearTimeout(renderTimeoutRef.current);
+      }
+    };
+  }, [chart, theme]);
+
+  // 代码不完整时，不显示任何内容
+  if (!isValid && !error) {
+    return (
+      <div className="mermaid-container" style={{ padding: '16px', color: '#999' }}>
+        图表渲染中...
+      </div>
+    );
+  }
+
+  if (error) {
+    return <div style={{ color: '#ff4d4f', padding: '12px' }}>{error}</div>;
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className="mermaid-container"
+      style={{
+        display: 'flex',
+        justifyContent: 'center',
+        padding: '16px',
+        overflow: 'auto'
+      }}
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
+  );
+});
+
+/**
+ * Markdown-UI 组件渲染器
+ */
+const MarkdownUIWidget: React.FC<{ code: string }> = React.memo(({ code }) => {
+  const [renderedContent, setRenderedContent] = useState<React.ReactNode>(null);
+  const [error, setError] = useState<string>('');
+  const lastCodeRef = useRef<string>('');
+
+  useEffect(() => {
+    // 如果代码内容没有变化，不重新渲染
+    if (lastCodeRef.current === code) {
+      return;
+    }
+
+    const renderWidget = async () => {
+      try {
+        // 提取 markdown-ui-widget 代码块中的内容
+        const codeMatch = code.match(/```markdown-ui-widget\n([\s\S]*?)\n```/);
+        if (!codeMatch || !codeMatch[1]) {
+          setError('无法解析组件代码');
+          return;
+        }
+
+        const widgetCode = codeMatch[1].trim();
+        lastCodeRef.current = code;
+
+        // 直接渲染 markdown-ui 代码
+        const widgetElement = (
+          <MarkdownUI>
+            {widgetCode}
+          </MarkdownUI>
+        );
+        setRenderedContent(widgetElement);
+        setError('');
+      } catch (err) {
+        console.error('Markdown-UI rendering error:', err);
+        setError(`组件渲染失败: ${err instanceof Error ? err.message : '未知错误'}`);
+      }
+    };
+    renderWidget();
+  }, [code]);
+
+  if (error) {
+    return <div style={{ color: '#ff4d4f', padding: '12px' }}>{error}</div>;
+  }
+
+  return <div className="markdown-ui-container">{renderedContent}</div>;
+});
 
 /**
  * Collapsible code block component with title header.
@@ -69,8 +235,11 @@ const CollapsibleCodeBlock: React.FC<{ title: string; content: React.ReactNode }
  * Chat Markdown renderer - wraps MDEditor.Markdown with custom code block rendering.
  * ALL fenced code blocks are rendered as collapsible blocks with the language tag
  * displayed as the title in the header.
+ *
+ * 使用 React.memo 优化：当 source 和 className 未变化时，避免因父组件状态更新
+ * （如输入框输入）导致的重新渲染，从而防止 MermaidChart 等子组件被重新挂载。
  */
-const ChatMarkdown: React.FC<ChatMarkdownProps> = ({ source, className }) => {
+const ChatMarkdown: React.FC<ChatMarkdownProps> = React.memo(({ source, className }) => {
   const componentId = useRef(`chat-md-${Math.random().toString(36).slice(2, 9)}`).current;
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
@@ -86,7 +255,9 @@ const ChatMarkdown: React.FC<ChatMarkdownProps> = ({ source, className }) => {
     return () => observer.disconnect();
   }, []);
 
-  const components = {
+  // 使用 useMemo 缓存 components 对象，避免每次渲染都创建新对象
+  // 这样 MDEditor.Markdown 不会因 components 引用变化而重新挂载子组件
+  const components = useMemo(() => ({
     pre: ({ children, ...props }: any) => {
       // children should be the rendered code element
       const childArray = React.Children.toArray(children);
@@ -97,7 +268,21 @@ const ChatMarkdown: React.FC<ChatMarkdownProps> = ({ source, className }) => {
         const match = /language-(\S+)/.exec(codeClassName);
         const lang = match ? match[1] : '';
 
-        // Use the language as the title, or default to "代码"
+        // 获取代码内容
+        const codeText = extractText(codeElement.props.children);
+
+        // 处理 mermaid 图表
+        if (lang === 'mermaid') {
+          return <MermaidChart chart={codeText} theme={theme} />;
+        }
+
+        // 处理 markdown-ui-widget 组件
+        if (lang === 'markdown-ui-widget') {
+          const fullCode = '```markdown-ui-widget\n' + codeText + '\n```';
+          return <MarkdownUIWidget code={fullCode} />;
+        }
+
+        // 其他代码块使用可折叠样式
         const title = lang || '代码';
         const codeChildren = codeElement.props.children;
 
@@ -112,7 +297,7 @@ const ChatMarkdown: React.FC<ChatMarkdownProps> = ({ source, className }) => {
       // Fallback for unexpected structure
       return <pre {...props}>{children}</pre>;
     }
-  };
+  }), [theme]);
 
   return (
     <div className={className} data-theme={theme} id={componentId}>
@@ -122,6 +307,6 @@ const ChatMarkdown: React.FC<ChatMarkdownProps> = ({ source, className }) => {
       />
     </div>
   );
-};
+});
 
 export default ChatMarkdown;

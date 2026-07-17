@@ -12,6 +12,8 @@
   "dependencies": {
     "@ant-design/charts": "^2.6.7",
     "@ant-design/icons": "^6.1.0",
+    "@markdown-ui/marked-ext": "^1.4.0",
+    "@markdown-ui/react": "^0.4.0",
     "@redux-devtools/extension": "^4.0.0",
     "@tiptap/extension-highlight": "^3.27.1",
     "@tiptap/extension-link": "^3.27.1",
@@ -31,6 +33,8 @@
     "antd": "^5.12.8",
     "immer": "^11.1.8",
     "lodash": "^4.18.1",
+    "marked": "^18.0.6",
+    "mermaid": "^11.16.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-file-icon": "^1.6.0",

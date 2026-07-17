@@ -98,6 +98,36 @@ def load_thinking_answer_rule_prompt() -> str:
     return _load_prompt_file('thinking_answer_rule.md')
 
 
+def load_mermaid_prompt() -> str:
+    """
+    加载ui_system_prompt.md文件内容（UI组件生成规则提示词）
+
+    Returns:
+        str: UI组件生成规则提示词内容
+    """
+    return _load_prompt_file('ui_system_prompt.md')
+
+
+def load_markdown_ui_grammar() -> str:
+    """
+    加载markdown_ui_grammar.md文件内容（Markdown-UI组件语法参考）
+
+    Returns:
+        str: Markdown-UI组件语法参考内容
+    """
+    return _load_prompt_file('markdown_ui_grammar.md')
+
+
+def load_mermaid_ui_grammar() -> str:
+    """
+    加载mermaid_ui_grammar.md文件内容（Mermaid图表语法参考）
+
+    Returns:
+        str: Mermaid图表语法参考内容
+    """
+    return _load_prompt_file('mermaid_ui_grammar.md')
+
+
 def build_system_prompt(original_prompt: Optional[str] = None, include_react_prompt: bool = True) -> str:
     """
     构建系统提示词
@@ -138,5 +168,17 @@ def build_system_prompt(original_prompt: Optional[str] = None, include_react_pro
     thinking_answer_rule = load_thinking_answer_rule_prompt()
     if thinking_answer_rule:
         parts.append(thinking_answer_rule)
+
+    ui_system_rule = load_mermaid_prompt()
+    if ui_system_rule:
+        # 替换 Mermaid 图表语法占位符
+        mermaid_ui_grammar = load_mermaid_ui_grammar()
+        if mermaid_ui_grammar:
+            ui_system_rule = ui_system_rule.replace('{{MERMAID_UI_GRAMMAR}}', mermaid_ui_grammar)
+        # 替换 Markdown-UI 组件语法占位符
+        markdown_ui_grammar = load_markdown_ui_grammar()
+        if markdown_ui_grammar:
+            ui_system_rule = ui_system_rule.replace('{{MARKDOWN_UI_GRAMMAR}}', markdown_ui_grammar)
+        parts.append(ui_system_rule)
 
     return "  \n".join(parts)

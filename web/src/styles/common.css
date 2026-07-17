@@ -1419,6 +1419,55 @@ body[data-theme="light"] .collapsible-code-pre span {
   color: #3c4a5a !important;
 }
 
+/* Mermaid 图表样式 */
+.mermaid-container {
+  margin: 16px 0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+body[data-theme="dark"] .mermaid-container {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+body[data-theme="light"] .mermaid-container {
+  background: #f6f8fa;
+  border: 1px solid #e8eaed;
+}
+
+/* Markdown-UI 组件样式 */
+.markdown-ui-container {
+  margin: 16px 0;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+body[data-theme="dark"] .markdown-ui-container {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+body[data-theme="light"] .markdown-ui-container {
+  background: #ffffff;
+  border: 1px solid #e8eaed;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* Markdown-UI 组件内部样式优化 */
+.markdown-ui-container .markdown-ui-button-group,
+.markdown-ui-container .markdown-ui-select,
+.markdown-ui-container .markdown-ui-input,
+.markdown-ui-container .markdown-ui-switch {
+  margin: 8px 0;
+}
+
+.markdown-ui-container .markdown-ui-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 body[data-theme="light"] .collapsible-code-block .collapsible-code-header-left .anticon {
   color: #6c757d !important;
 }

@@ -385,6 +385,117 @@
   border-bottom-left-radius: 4px;
 }
 
+/* Message footer (time + actions) */
+.int-msg-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  gap: 8px;
+}
+
+[data-theme="dark"] .int-msg-footer {
+  border-top-color: rgba(255, 255, 255, 0.05);
+}
+
+.int-msg-time {
+  font-size: 11px;
+  color: var(--int-text-tertiary);
+  opacity: 0.8;
+}
+
+.int-msg-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.int-message:hover .int-msg-actions {
+  opacity: 1;
+}
+
+.int-msg-action-btn {
+  background: transparent;
+  border: none;
+  color: var(--int-text-secondary);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 12px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.int-msg-action-btn:hover {
+  background: var(--int-bg-secondary);
+  color: var(--int-primary);
+}
+
+.int-msg-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Message edit */
+.int-msg-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.int-msg-edit textarea {
+  width: 100%;
+  min-height: 60px;
+  padding: 8px;
+  border: 1px solid var(--int-border);
+  border-radius: var(--int-radius);
+  font-size: 14px;
+  resize: vertical;
+  font-family: inherit;
+  background: var(--int-bg);
+  color: var(--int-text);
+}
+
+.int-msg-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.int-msg-edit-actions button {
+  padding: 4px 12px;
+  border-radius: var(--int-radius);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.int-msg-edit-actions button:first-child {
+  background: transparent;
+  border: 1px solid var(--int-border);
+  color: var(--int-text);
+}
+
+.int-msg-edit-actions button:first-child:hover {
+  background: var(--int-bg-secondary);
+}
+
+.int-msg-edit-actions button:last-child {
+  background: var(--int-primary);
+  border: none;
+  color: #fff;
+}
+
+.int-msg-edit-actions button:last-child:hover {
+  opacity: 0.9;
+}
+
 /* Markdown in bot messages */
 .int-msg-bubble .wmde-markdown {
   background: transparent !important;
@@ -887,4 +998,230 @@
 .int-messages::-webkit-scrollbar-thumb:hover,
 .int-history-list::-webkit-scrollbar-thumb:hover {
   background: var(--int-text-tertiary);
+}
+
+/* ========== 思考过程样式 ========== */
+.int-message-reasoning {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  background: rgba(102, 126, 234, 0.08);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+[data-theme="dark"] .int-message-reasoning {
+  background: rgba(102, 126, 234, 0.12);
+  border-color: rgba(102, 126, 234, 0.25);
+}
+
+.int-reasoning-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 0;
+  font-weight: 500;
+  color: #667eea;
+  cursor: pointer;
+  user-select: none;
+}
+
+.int-reasoning-header:hover {
+  opacity: 0.8;
+}
+
+.int-reasoning-duration {
+  font-size: 12px;
+  opacity: 0.6;
+  margin-left: 4px;
+}
+
+.int-reasoning-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  opacity: 0.85;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(102, 126, 234, 0.3);
+}
+
+.int-reasoning-text .wmde-markdown {
+  background: transparent !important;
+  font-size: 12px;
+}
+
+.int-reasoning-text .wmde-markdown p {
+  margin: 4px 0;
+  font-size: 12px;
+}
+
+/* ========== 工具调用样式 ========== */
+.int-tool-calls-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.int-tool-call-card {
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  border: 1px solid;
+  overflow: hidden;
+  transition: all 0.2s ease;
+  background: var(--int-bg);
+}
+
+.int-tool-call-card.int-tool-call-start {
+  border-color: rgba(102, 126, 234, 0.25);
+  background: rgba(102, 126, 234, 0.05);
+}
+
+.int-tool-call-card.int-tool-call-running {
+  border-color: rgba(102, 126, 234, 0.25);
+  background: rgba(102, 126, 234, 0.05);
+}
+
+.int-tool-call-card.int-tool-call-success {
+  border-color: rgba(82, 196, 26, 0.25);
+  background: rgba(82, 196, 26, 0.05);
+}
+
+.int-tool-call-card.int-tool-call-error {
+  border-color: rgba(255, 77, 79, 0.25);
+  background: rgba(255, 77, 79, 0.05);
+}
+
+.int-tool-call-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.int-tool-call-header:hover {
+  opacity: 0.85;
+}
+
+.int-tool-call-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+}
+
+.int-tool-call-header-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.int-tool-call-icon-start {
+  color: #667eea;
+  font-size: 14px;
+}
+
+.int-tool-call-icon-running {
+  color: #667eea;
+  font-size: 14px;
+}
+
+.int-tool-call-icon-success {
+  color: #52c41a;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.int-tool-call-icon-error {
+  color: #ff4d4f;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.int-tool-call-task-name {
+  font-size: 13px;
+  color: var(--int-text);
+}
+
+.int-tool-call-elapsed {
+  font-size: 12px;
+  opacity: 0.6;
+  margin-left: 4px;
+}
+
+.int-tool-call-content {
+  padding: 8px 12px;
+  border-top: 1px dashed rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .int-tool-call-content {
+  border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+.int-tool-call-message {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.int-tool-call-message .wmde-markdown {
+  background: transparent !important;
+  font-size: 12px;
+}
+
+.int-tool-call-divider {
+  height: 1px;
+  margin: 8px 0;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="dark"] .int-tool-call-divider {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.int-tool-call-result-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--int-text-secondary);
+}
+
+.int-tool-call-result-header:hover {
+  opacity: 0.8;
+}
+
+.int-tool-call-result-title {
+  font-size: 12px;
+}
+
+.int-tool-call-result {
+  margin-top: 4px;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+[data-theme="dark"] .int-tool-call-result {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.int-tool-call-result .wmde-markdown {
+  background: transparent !important;
+  font-size: 12px;
+}
+
+.int-tool-call-result pre {
+  margin: 0;
+  padding: 0;
+  background: transparent !important;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
