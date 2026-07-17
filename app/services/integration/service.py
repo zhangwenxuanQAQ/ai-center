@@ -449,7 +449,11 @@ class ChatbotIntegrationService:
         """
         integration = ChatbotIntegrationService.get_by_chatbot_id(chatbot_id)
         if not integration:
-            raise ResourceNotFoundError(message='集成配置不存在')
+            # 如果集成配置不存在，返回空数据而不是抛出异常
+            return {
+                "integration": None,
+                "configs": {}
+            }
         
         base_url = ChatbotIntegrationService._get_base_url()
         

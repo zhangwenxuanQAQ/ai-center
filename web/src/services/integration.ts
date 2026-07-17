@@ -111,8 +111,11 @@ export const integrationService = {
   /**
    * 获取集成配置参数定义（CONFIG_PARAMS）
    */
-  getConfigParams: async (): Promise<IntegrationConfigParam[]> => {
-    return http.get<IntegrationConfigParam[]>(`/aicenter/v1/integration/config_params`);
+  getConfigParams: async (chatbotId?: string): Promise<IntegrationConfigParam[]> => {
+    const url = chatbotId
+      ? `/aicenter/v1/integration/config_params?chatbot_id=${chatbotId}`
+      : `/aicenter/v1/integration/config_params`;
+    return http.get<IntegrationConfigParam[]>(url);
   },
 
   /**

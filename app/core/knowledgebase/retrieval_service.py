@@ -102,8 +102,8 @@ class RetrievalService:
 
     @staticmethod
     def retrieval(
-        kb_ids: List[str],
-        question: str,
+        kb_ids: List[str] = None,
+        question: str = None,
         doc_ids: List[str] = None,
         page: int = 1,
         page_size: int = 10,
@@ -122,7 +122,7 @@ class RetrievalService:
         参考ragflow的retrieval方法，整合向量编码、混合检索和重排序流程
 
         Args:
-            kb_ids: 知识库ID列表
+            kb_ids: 知识库ID列表（为空则查询所有可用知识库）
             question: 查询文本
             doc_ids: 文档ID列表（可选，用于限定检索范围）
             page: 页码（从1开始）
@@ -159,11 +159,61 @@ class RetrievalService:
             logger.error("ES不可用，无法进行检索")
             return {"total": 0, "chunks": []}
 
-        if not kb_ids:
-            logger.error("未指定知识库ID")
+        from app.database.models import Knowledgebase, KnowledgebaseDocument
+
+        # 1. 过滤知识库：如果传了kb_ids则过滤禁用的，没传则查询所有可用的
+        available_kb_ids = []
+        if kb_ids:
+            # 过滤掉禁用和已删除的知识库
+            for kb_id in kb_ids:
+                try:
+                    kb = Knowledgebase.get_by_id(kb_id)
+                    if not kb.deleted and kb.status:
+                        available_kb_ids.append(kb_id)
+                    else:
+                        logger.warning(f"知识库 {kb_id} 已禁用或已删除，已过滤")
+                except Knowledgebase.DoesNotExist:
+                    logger.warning(f"知识库 {kb_id} 不存在，已过滤")
+        else:
+            # 查询所有可用的知识库
+            available_kbs = Knowledgebase.select().where(
+                (Knowledgebase.deleted == False) & (Knowledgebase.status == True)
+            )
+            available_kb_ids = [str(kb.id) for kb in available_kbs]
+
+        if not available_kb_ids:
+            logger.error("没有可用的知识库")
             return {"total": 0, "chunks": []}
 
-        kb_config = RetrievalService._get_kb_config(kb_ids[0])
+        # 2. 过滤文档：如果传了doc_ids则过滤禁用的，没传则查询可用知识库中的可用文档
+        available_doc_ids = None
+        if doc_ids:
+            # 过滤掉禁用和已删除的文档
+            available_doc_ids = []
+            for doc_id in doc_ids:
+                try:
+                    doc = KnowledgebaseDocument.get_by_id(doc_id)
+                    # 文档必须属于可用知识库且自身可用
+                    if (not doc.deleted and doc.status and
+                        str(doc.kb_id) in available_kb_ids):
+                        available_doc_ids.append(doc_id)
+                    else:
+                        logger.warning(f"文档 {doc_id} 已禁用或已删除或不属于可用知识库，已过滤")
+                except KnowledgebaseDocument.DoesNotExist:
+                    logger.warning(f"文档 {doc_id} 不存在，已过滤")
+        else:
+            # 查询可用知识库中的可用文档
+            available_docs = KnowledgebaseDocument.select().where(
+                (KnowledgebaseDocument.kb_id.in_(available_kb_ids)) &
+                (KnowledgebaseDocument.deleted == False) &
+                (KnowledgebaseDocument.status == True)
+            )
+            available_doc_ids = [str(doc.id) for doc in available_docs]
+            # 如果没有可用文档，设置为None让ES查询不做文档过滤
+            if not available_doc_ids:
+                available_doc_ids = None
+
+        kb_config = RetrievalService._get_kb_config(available_kb_ids[0])
         kb_retrieval_config = kb_config.get("retrieval_config", {})
 
         emb_model_id = embedding_model_id or kb_config.get("embedding_model_id")
@@ -175,7 +225,7 @@ class RetrievalService:
         sort = sort_by or kb_retrieval_config.get("sort_by", "sim")
 
         if not emb_model_id:
-            logger.error(f"知识库 {kb_ids[0]} 未配置Embedding模型")
+            logger.error(f"知识库 {available_kb_ids[0]} 未配置Embedding模型")
             return {"total": 0, "chunks": []}
 
         embedding_model = RetrievalService._get_model_instance(emb_model_id, "embedding")
@@ -203,8 +253,8 @@ class RetrievalService:
                 index_name=None,
                 query_vector=query_vector,
                 question=question,
-                kb_ids=kb_ids,
-                doc_ids=doc_ids,
+                kb_ids=available_kb_ids,
+                doc_ids=available_doc_ids,
                 top_k=top_k,
                 page=page,
                 page_size=page_size,

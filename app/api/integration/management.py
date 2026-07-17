@@ -14,6 +14,7 @@ from typing import Optional
 
 from app.services.integration.service import ChatbotIntegrationService
 from app.services.integration.dto import IntegrationResponse
+from app.services.chatbot.service import ChatbotService
 from app.utils.response import ResponseUtil, ApiResponse
 from app.constants.integration_constants import INTEGRATION_CONFIG_PARAMS
 from app.database.redis_utils import redis_utils
@@ -200,14 +201,76 @@ async def get_integration_configs(
 
 
 @router.get("/config_params", summary="获取集成配置参数定义")
-async def get_config_params(request: Request):
+async def get_config_params(
+    request: Request,
+    chatbot_id: str = None
+):
     """
     获取集成界面配置参数定义，前端根据此定义渲染配置控件
     
+    如果提供了 chatbot_id，会将机器人头像添加到机器人头像列表的第一项
+    
+    Args:
+        request: 请求对象
+        chatbot_id: 机器人ID（可选）
+        
     Returns:
         ApiResponse: 配置参数定义列表
     """
-    return ResponseUtil.success(data=INTEGRATION_CONFIG_PARAMS)
+    try:
+        # 复制配置参数，避免修改原始数据
+        import copy
+        config_params = copy.deepcopy(INTEGRATION_CONFIG_PARAMS)
+        
+        # 获取机器人头像（如果提供了 chatbot_id）
+        chatbot_avatar_src = None
+        if chatbot_id:
+            chatbot = ChatbotService.get_chatbot(chatbot_id)
+            if chatbot and chatbot.get("avatar"):
+                chatbot_avatar_src = chatbot.get("avatar")
+        
+        # 遍历配置参数，为头像配置项添加默认头像列表
+        for param in config_params:
+            if param.get("key") == "interface_config":
+                for child in param.get("children", []):
+                    if child.get("key") == "common_config":
+                        for item in child.get("children", []):
+                            if item.get("type") == "upload":
+                                avatar_type = item.get("avatar_type")
+                                # 「禁止」选项，选中表示不使用自定义头像
+                                forbidden_option = {"key": "forbidden", "src": "", "label": "禁止"}
+                                # 默认头像路径（使用 integration/assets 目录）
+                                default_user_avatars = [
+                                    {"key": "user-1", "src": "/assets/integration/user-1.svg", "label": "用户1"},
+                                    {"key": "user-2", "src": "/assets/integration/user-2.svg", "label": "用户2"},
+                                    {"key": "user-3", "src": "/assets/integration/user-3.svg", "label": "用户3"},
+                                ]
+                                default_bot_avatars = [
+                                    {"key": "assistant-1", "src": "/assets/integration/assistant-1.svg", "label": "机器人1"},
+                                    {"key": "assistant-2", "src": "/assets/integration/assistant-2.svg", "label": "机器人2"},
+                                    {"key": "assistant-3", "src": "/assets/integration/assistant-3.svg", "label": "机器人3"},
+                                ]
+                                
+                                if avatar_type == "user":
+                                    # 用户头像列表：禁止 + 默认用户头像
+                                    item["default_avatars"] = [forbidden_option] + default_user_avatars
+                                elif avatar_type == "bot":
+                                    # 机器人头像列表：禁止 + 机器人头像（如果有） + 默认机器人头像
+                                    bot_avatars = [forbidden_option]
+                                    if chatbot_avatar_src:
+                                        bot_avatars.append({
+                                            "key": "chatbot_avatar",
+                                            "label": "机器人头像",
+                                            "src": chatbot_avatar_src
+                                        })
+                                    bot_avatars.extend(default_bot_avatars)
+                                    item["default_avatars"] = bot_avatars
+        
+        return ResponseUtil.success(data=config_params)
+    except Exception as e:
+        logger.error(f"获取配置参数失败: {str(e)}", exc_info=True)
+        # 如果出错，返回原始配置参数
+        return ResponseUtil.success(data=INTEGRATION_CONFIG_PARAMS)
 
 
 @router.post("/chatbot/{chatbot_id}/integration/reset", summary="重置集成配置到默认状态")
@@ -325,9 +388,9 @@ async def generate_preview_token(
         redis_key = f"integration:preview:{token}"
         redis_utils.set(redis_key, json.dumps(preview_data), exp=600)
         
-        # 返回预览URL
-        base_url = request.base_url.scheme + "://" + request.base_url.netloc
-        preview_url = f"{base_url}/integration/preview/{token}"
+        # 返回预览URL（相对路径，前端自己拼接域名）
+        # 注意：预览页面在前端应用中，不在后端API服务中
+        preview_url = f"/integration/preview/{token}"
         
         return ResponseUtil.success(data={
             "token": token,

@@ -99,18 +99,18 @@ INTEGRATION_CONFIG_PARAMS = [
                     # },
                     {
                         "key": "user_avatar",
-                        "label": "用户头像",
+                        "label": "自定义用户头像",
                         "type": "upload",
                         "default": "",
-                        "description": "聊天界面中用户头像图片",
+                        "description": "聊天界面中用户自定义头像图片",
                         "avatar_type": "user"
                     },
                     {
                         "key": "bot_avatar",
-                        "label": "机器人头像",
+                        "label": "自定义机器人头像",
                         "type": "upload",
                         "default": "",
-                        "description": "聊天界面中机器人头像图片",
+                        "description": "聊天界面中机器人自定义头像图片",
                         "avatar_type": "bot"
                     }
                 ]

@@ -358,9 +358,6 @@ def retrieval(
         if not kb_ids and kb_ids_str:
             kb_ids = [id.strip() for id in kb_ids_str.split(',') if id.strip()]
 
-        if not kb_ids:
-            return ResponseUtil.error(message="知识库ID不能为空")
-
         result = RetrievalService.retrieval(
             kb_ids=kb_ids,
             question=question.strip(),

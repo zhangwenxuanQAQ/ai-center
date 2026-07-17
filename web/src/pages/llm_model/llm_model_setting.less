@@ -1,7 +1,7 @@
-﻿.llm-model-setting-container {
+.llm-model-setting-container {
   display: flex;
   gap: 8px;
-  height: calc(100% - 60px);
+  height: calc(100% - 00px);
   overflow: hidden;
   padding: 8px;
 }
@@ -369,6 +369,41 @@
 .message-time {
   font-size: 12px;
   opacity: 0.5;
+}
+
+.message-usage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  opacity: 0.7;
+  margin-top: 4px;
+
+  &.dark {
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.65);
+  }
+
+  &.light {
+    background: rgba(0, 0, 0, 0.04);
+    color: rgba(0, 0, 0, 0.65);
+  }
+
+  .usage-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+
+    .usage-icon {
+      font-size: 14px;
+    }
+
+    .usage-value {
+      font-weight: 500;
+    }
+  }
 }
 
 .message-footer {

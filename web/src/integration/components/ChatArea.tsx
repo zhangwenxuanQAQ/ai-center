@@ -5,6 +5,7 @@ import ChatMarkdown from '../../components/ChatMarkdown';
 import { integrationChatService, IntegrationMessage, IntegrationQueryItem } from '../services/integrationChat';
 import { usePanelDrag } from './PanelDragContext';
 import { usePanelMinimize } from './PanelMinimizeContext';
+import { getDefaultAvatar } from '../../utils/avatar';
 
 interface ChatAreaProps {
   apiKey: string;
@@ -17,6 +18,8 @@ interface ChatAreaProps {
   inputPlaceholder?: string;
   maxInputLength?: number;
   welcomeMessages?: string[];
+  userAvatar?: string;  // 用户头像
+  botAvatar?: string;   // 机器人头像
   historyCollapsed: boolean;
   onToggleHistory: () => void;
   onChatIdChange: (chatId: string) => void;
@@ -51,6 +54,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   inputPlaceholder = '请输入您的问题...',
   maxInputLength = 4000,
   welcomeMessages = [],
+  userAvatar = '',
+  botAvatar = '',
   historyCollapsed,
   onToggleHistory,
   onChatIdChange,
@@ -282,6 +287,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             }
             return updated;
           });
+          setLoading(false);
+          abortControllerRef.current = null;
         },
         () => {
           setMessages((prev) => {
@@ -301,6 +308,19 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         deepThinking  // 传递深度思考参数
       );
     } catch (err) {
+      console.error('Send message error:', err);
+      setMessages((prev) => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last && last.role === 'assistant') {
+          updated[updated.length - 1] = {
+            ...last,
+            content: last.content || '抱歉，发生了错误，请重试。',
+            status: 'done',
+          };
+        }
+        return updated;
+      });
       setLoading(false);
       abortControllerRef.current = null;
     }
@@ -364,7 +384,19 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           messages.map((msg) => (
             <div key={msg.id} className={`int-message ${msg.role}`}>
               <div className={`int-msg-avatar ${msg.role}`}>
-                {msg.role === 'user' ? 'U' : 'AI'}
+                {msg.role === 'user' ? (
+                  userAvatar ? (
+                    <img src={userAvatar} alt="用户" />
+                  ) : (
+                    <span style={{ fontSize: '18px' }}>👤</span>
+                  )
+                ) : (
+                  botAvatar ? (
+                    <img src={botAvatar} alt="AI" />
+                  ) : (
+                    <img src={getDefaultAvatar()} alt="AI" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  )
+                )}
               </div>
               <div className="int-msg-bubble">
                 {msg.role === 'assistant' ? (

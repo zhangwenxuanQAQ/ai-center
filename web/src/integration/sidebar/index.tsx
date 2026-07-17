@@ -43,7 +43,7 @@ const IntegrationSidebarPage: React.FC = () => {
     const fetchConfig = async () => {
       try {
         const response = await fetch(
-          `${import.meta.env.VITE_API_BASE_URL || ''}/aicenter/api/v1/integration/config/${apiKey}`
+          `${import.meta.env.VITE_API_BASE_URL || ''}/aicenter/v1/integration/config/${apiKey}`
         );
         const result = await response.json();
 
@@ -69,6 +69,8 @@ const IntegrationSidebarPage: React.FC = () => {
             inputPlaceholder: chatConfig.input_placeholder || '请输入您的问题...',
             maxInputLength: chatConfig.max_input_length || 4000,
             welcomeMessages: chatConfig.welcome_messages || [],
+            userAvatar: commonConfig.user_avatar || '',
+            botAvatar: commonConfig.bot_avatar || '',
             showHistory: true,
             temporary,
           },

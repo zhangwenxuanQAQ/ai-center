@@ -24,6 +24,8 @@ const IntegrationPreviewPage: React.FC = () => {
     inputPlaceholder: string;
     maxInputLength: number;
     welcomeMessages: string[];
+    userAvatar: string;
+    botAvatar: string;
     position: string;
     width: number;
     height: number;
@@ -46,7 +48,7 @@ const IntegrationPreviewPage: React.FC = () => {
     const fetchConfig = async () => {
       try {
         const response = await fetch(
-          `${import.meta.env.VITE_API_BASE_URL || ''}/aicenter/api/v1/integration/preview/${token}`
+          `${import.meta.env.VITE_API_BASE_URL || ''}/aicenter/v1/integration/preview/${token}`
         );
         const result = await response.json();
 
@@ -71,6 +73,8 @@ const IntegrationPreviewPage: React.FC = () => {
           inputPlaceholder: chatConfig.input_placeholder || '请输入您的问题...',
           maxInputLength: chatConfig.max_input_length || 4000,
           welcomeMessages: chatConfig.welcome_messages || [],
+          userAvatar: commonConfig.user_avatar || '',
+          botAvatar: commonConfig.bot_avatar || '',
           position: sidebarConfig.position || 'bottom-right',
           width: sidebarConfig.width || 400,
           height: sidebarConfig.height || 600,
@@ -128,6 +132,8 @@ const IntegrationPreviewPage: React.FC = () => {
     inputPlaceholder: config.inputPlaceholder,
     maxInputLength: config.maxInputLength,
     welcomeMessages: config.welcomeMessages,
+    userAvatar: config.userAvatar,
+    botAvatar: config.botAvatar,
     showHistory: true,
     temporary: true,
   };

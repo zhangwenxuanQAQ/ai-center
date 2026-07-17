@@ -16,6 +16,8 @@ export interface ChatWidgetConfig {
   showHistory?: boolean;
   temporary?: boolean;
   gradientEndColor?: string;
+  userAvatar?: string;  // 用户头像
+  botAvatar?: string;   // 机器人头像
 }
 
 interface ChatWidgetProps {
@@ -74,6 +76,8 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ config, compact = false }) => {
         inputPlaceholder={config.inputPlaceholder}
         maxInputLength={config.maxInputLength}
         welcomeMessages={config.welcomeMessages}
+        userAvatar={config.userAvatar}
+        botAvatar={config.botAvatar}
         historyCollapsed={historyCollapsed}
         onToggleHistory={() => setHistoryCollapsed(!historyCollapsed)}
         onChatIdChange={handleChatIdChange}

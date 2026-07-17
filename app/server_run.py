@@ -1828,7 +1828,12 @@ async def general_exception_handler(request: Request, exc: Exception):
 app.add_exception_handler(ValueError, value_error_handler)
 app.add_exception_handler(Exception, general_exception_handler)
 
+# 注册主路由（前缀/aicenter/v1）
 app.include_router(router, prefix="/aicenter/v1")
+
+# 单独注册integration API路由（前缀/aicenter/api，用于OpenAI兼容的对外API）
+from app.api import integration_api_router
+app.include_router(integration_api_router, prefix="/aicenter/api", tags=["integration_api"])
 
 if __name__ == "__main__":
     # 此文件不再直接启动服务

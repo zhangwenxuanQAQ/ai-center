@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Form, Input, Select, TreeSelect, Button, Switch, message, Row, Col, Spin, Slider, InputNumber, Tooltip, Tag, Dropdown } from 'antd';
 const { TextArea } = Input;
-import { ArrowLeftOutlined, SaveOutlined, UndoOutlined, ApiTwoTone, SettingOutlined, ClearOutlined, SendOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, InfoCircleOutlined, BulbOutlined, CopyOutlined, ReloadOutlined, EditOutlined, DownOutlined, RightOutlined, PlusOutlined, PaperClipOutlined, UploadOutlined, CloseCircleOutlined as RemoveFileOutlined, InboxOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SaveOutlined, UndoOutlined, ApiTwoTone, SettingOutlined, ClearOutlined, SendOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, InfoCircleOutlined, BulbOutlined, CopyOutlined, ReloadOutlined, EditOutlined, DownOutlined, RightOutlined, PlusOutlined, PaperClipOutlined, UploadOutlined, CloseCircleOutlined as RemoveFileOutlined, InboxOutlined, StopOutlined } from '@ant-design/icons';
 import DataSourceFileSelector from '../datasource/datasource data_select';
 import { llmModelService, LLMModel, LLMCategory } from '../../services/llm_model';
 import { request, post } from '../../utils/request';
@@ -634,7 +634,7 @@ const LLMModelSetting: React.FC = () => {
                 if (parsed.error) {
                   setMessages(prev => prev.map(msg =>
                     msg.id === assistantMessageId
-                      ? { ...msg, content: '错误: ' + parsed.error }
+                      ? { ...msg, content: '错误: ' + parsed.error, isComplete: true }
                       : msg
                   ));
                   setThinkingMessageId(null);
@@ -671,14 +671,14 @@ const LLMModelSetting: React.FC = () => {
       if (error.name === 'AbortError') {
         setMessages(prev => prev.map(msg =>
           msg.id === assistantMessageId
-            ? { ...msg, content: msg.content + '\n[已停止生成]' }
+            ? { ...msg, content: msg.content + '\n[已停止生成]', isComplete: true }
             : msg
         ));
       } else {
         console.error('Chat error:', error);
         setMessages(prev => prev.map(msg =>
           msg.id === assistantMessageId
-            ? { ...msg, content: '抱歉，生成回复时出现错误: ' + error.message }
+            ? { ...msg, content: '抱歉，生成回复时出现错误: ' + error.message, isComplete: true }
             : msg
         ));
       }
@@ -1111,7 +1111,7 @@ const LLMModelSetting: React.FC = () => {
                 if (parsed.error) {
                   setMessages(prev => prev.map(msg =>
                     msg.id === assistantMessageId
-                      ? { ...msg, content: '错误: ' + parsed.error }
+                      ? { ...msg, content: '错误: ' + parsed.error, isComplete: true }
                       : msg
                   ));
                   setThinkingMessageId(null);
@@ -1148,14 +1148,14 @@ const LLMModelSetting: React.FC = () => {
       if (error.name === 'AbortError') {
         setMessages(prev => prev.map(msg =>
           msg.id === assistantMessageId
-            ? { ...msg, content: msg.content + '\n[已停止生成]' }
+            ? { ...msg, content: msg.content + '\n[已停止生成]', isComplete: true }
             : msg
         ));
       } else {
         console.error('Chat error:', error);
         setMessages(prev => prev.map(msg =>
           msg.id === assistantMessageId
-            ? { ...msg, content: '抱歉，生成回复时出现错误: ' + error.message }
+            ? { ...msg, content: '抱歉，生成回复时出现错误: ' + error.message, isComplete: true }
             : msg
         ));
       }
@@ -1593,6 +1593,11 @@ const LLMModelSetting: React.FC = () => {
                         <span className="message-time">
                           {msg.timestamp.toLocaleTimeString()}
                         </span>
+                        {msg.role === 'assistant' && msg.usage && msg.isComplete && (
+                          <span className="message-usage">
+                            Token: {msg.usage.total_tokens || 0} | 耗时: {thinkingDuration[msg.id] ? (thinkingDuration[msg.id] / 1000).toFixed(1) : '0.0'}s
+                          </span>
+                        )}
                         <div className="message-actions">
                           {msg.role === 'assistant' && (
                             <>
@@ -1903,11 +1908,10 @@ const LLMModelSetting: React.FC = () => {
                   <Button
                     type="primary"
                     danger
+                    icon={<StopOutlined />}
                     onClick={handleStopGeneration}
                     className="input-send-button"
-                  >
-                    停止
-                  </Button>
+                  />
                 ) : (
                   <Button
                     type="primary"

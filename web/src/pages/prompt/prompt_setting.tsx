@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Form, Input, Select, TreeSelect, Button, message, Row, Col, Switch, Modal, Spin, Drawer, Tag, Popover, Slider, InputNumber, Tooltip, Dropdown } from 'antd';
 const { TextArea } = Input;
 const { Option } = Select;
-import { ArrowLeftOutlined, SaveOutlined, FileTextOutlined, TagsOutlined, PlayCircleOutlined, SendOutlined, PlusOutlined, SettingOutlined, ClearOutlined, BulbOutlined, CopyOutlined, EditOutlined, DownOutlined, RightOutlined, LoadingOutlined, InfoCircleOutlined, ReloadOutlined, PaperClipOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SaveOutlined, FileTextOutlined, TagsOutlined, PlayCircleOutlined, SendOutlined, PlusOutlined, SettingOutlined, ClearOutlined, BulbOutlined, CopyOutlined, EditOutlined, DownOutlined, RightOutlined, LoadingOutlined, InfoCircleOutlined, ReloadOutlined, PaperClipOutlined, StopOutlined } from '@ant-design/icons';
 import MDEditor from '@uiw/react-md-editor';
 import ChatMarkdown from '../../components/ChatMarkdown';
 import { promptService, Prompt, PromptCategory } from '../../services/prompt';
@@ -478,11 +478,16 @@ const PromptSetting: React.FC = () => {
     } catch (error: any) {
       if (error.name === 'AbortError') {
         console.log('Request was aborted');
+        setTestMessages(prev => prev.map(msg =>
+          msg.id === assistantMessageId
+            ? { ...msg, stopped: true }
+            : msg
+        ));
       } else {
         console.error('Chat error:', error);
-        setTestMessages(prev => prev.map(msg => 
-          msg.id === assistantMessageId 
-            ? { ...msg, content: '抱歉，发生了错误：' + error.message }
+        setTestMessages(prev => prev.map(msg =>
+          msg.id === assistantMessageId
+            ? { ...msg, content: '抱歉，发生了错误：' + error.message, stopped: true }
             : msg
         ));
       }
@@ -719,11 +724,16 @@ const PromptSetting: React.FC = () => {
     } catch (error: any) {
       if (error.name === 'AbortError') {
         console.log('Request was aborted');
+        setTestMessages(prev => prev.map(msg =>
+          msg.id === assistantMessageId
+            ? { ...msg, stopped: true }
+            : msg
+        ));
       } else {
         console.error('Chat error:', error);
-        setTestMessages(prev => prev.map(msg => 
-          msg.id === assistantMessageId 
-            ? { ...msg, content: '抱歉，发生了错误：' + error.message }
+        setTestMessages(prev => prev.map(msg =>
+          msg.id === assistantMessageId
+            ? { ...msg, content: '抱歉，发生了错误：' + error.message, stopped: true }
             : msg
         ));
       }
@@ -1703,9 +1713,10 @@ const PromptSetting: React.FC = () => {
                 </div>
               </div>
               {isGenerating ? (
-                <Button 
-                  type="primary" 
+                <Button
+                  type="primary"
                   danger
+                  icon={<StopOutlined />}
                   onClick={() => {
                     if (abortControllerRef.current) {
                       abortControllerRef.current.abort();
@@ -1730,9 +1741,7 @@ const PromptSetting: React.FC = () => {
                   }}
                   className="input-send-button"
                   style={{ position: 'absolute', right: '8px', bottom: '8px', borderRadius: '8px' }}
-                >
-                  停止
-                </Button>
+                />
               ) : (
                 <Button 
                   type="primary" 

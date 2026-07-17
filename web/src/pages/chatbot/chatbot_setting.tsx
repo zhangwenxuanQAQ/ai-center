@@ -21,13 +21,14 @@ import '../../styles/common.css';
 import './chatbot_setting.less';
 import { getDefaultAvatar } from '../../utils/avatar';
 
-// 默认头像资源
-import userAvatar1 from '../../chat/user-1.svg';
-import userAvatar2 from '../../chat/user-2.svg';
-import userAvatar3 from '../../chat/user-3.svg';
-import assistantAvatar1 from '../../chat/assistant-1.svg';
-import assistantAvatar2 from '../../chat/assistant-2.svg';
-import assistantAvatar3 from '../../chat/assistant-3.svg';
+// 默认头像资源（从 integration/assets 目录导入）
+import userAvatar1 from '../../integration/assets/user-1.svg';
+import userAvatar2 from '../../integration/assets/user-2.svg';
+import userAvatar3 from '../../integration/assets/user-3.svg';
+import assistantAvatar1 from '../../integration/assets/assistant-1.svg';
+import assistantAvatar2 from '../../integration/assets/assistant-2.svg';
+import assistantAvatar3 from '../../integration/assets/assistant-3.svg';
+import forbiddenIcon from '../../integration/assets/forbidden.svg';
 
 const DEFAULT_USER_AVATARS = [
   { key: 'user-1', src: userAvatar1, label: '用户1' },
@@ -40,6 +41,17 @@ const DEFAULT_BOT_AVATARS = [
   { key: 'assistant-2', src: assistantAvatar2, label: '机器人2' },
   { key: 'assistant-3', src: assistantAvatar3, label: '机器人3' },
 ];
+
+// 图标 key 到导入模块的映射
+const AVATAR_KEY_TO_SRC: { [key: string]: string } = {
+  'forbidden': forbiddenIcon,
+  'user-1': userAvatar1,
+  'user-2': userAvatar2,
+  'user-3': userAvatar3,
+  'assistant-1': assistantAvatar1,
+  'assistant-2': assistantAvatar2,
+  'assistant-3': assistantAvatar3,
+};
 
 interface CodeBlockProps {
   node: any;
@@ -483,7 +495,8 @@ const ChatbotSetting: React.FC = () => {
 
   const fetchIntegrationConfigParams = async () => {
     try {
-      const params = await integrationService.getConfigParams();
+      // 传递 chatbot_id，后端会将机器人头像添加到机器人头像列表
+      const params = await integrationService.getConfigParams(id);
       setIntegrationConfigParams(params || []);
     } catch (error) {
       console.error('Failed to fetch integration config params:', error);
@@ -622,11 +635,21 @@ const ChatbotSetting: React.FC = () => {
   // 生成预览URL：通过后端接口生成token，不暴露配置参数
   const generatePreviewUrl = useCallback(async (widgetType: 'sidebar' | 'iframe'): Promise<string> => {
     const apiKey = integrationData?.integration?.api_key?.[0] || '';
-    if (!apiKey) return '';
+
+    console.log('[预览] integrationData:', integrationData);
+    console.log('[预览] apiKey:', apiKey);
+
+    if (!apiKey) {
+      console.error('[预览] 缺少API密钥');
+      message.error('缺少API密钥，请先保存配置');
+      return '';
+    }
 
     try {
-      // 调用后端接口生成预览token
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || ''}/aicenter/api/v1/integration/preview`, {
+      const url = `${import.meta.env.VITE_API_BASE_URL || ''}/aicenter/v1/integration/preview`;
+      console.log('[预览] 请求URL:', url);
+
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -638,12 +661,21 @@ const ChatbotSetting: React.FC = () => {
       });
 
       const result = await response.json();
+      console.log('[预览] 响应结果:', result);
+
       if (result.code === 200 && result.data?.preview_url) {
-        return result.data.preview_url;
+        // 后端返回相对路径，前端拼接完整 URL
+        const previewUrl = window.location.origin + result.data.preview_url;
+        console.log('[预览] 生成成功:', previewUrl);
+        return previewUrl;
+      } else {
+        console.error('[预览] 生成失败:', result.message);
+        message.error(result.message || '生成预览链接失败');
+        return '';
       }
-      return '';
     } catch (error) {
-      console.error('生成预览URL失败:', error);
+      console.error('[预览] 请求异常:', error);
+      message.error('网络请求失败，请检查网络连接');
       return '';
     }
   }, [integrationData]);
@@ -862,28 +894,56 @@ const ChatbotSetting: React.FC = () => {
           />
         );
       case 'upload': {
-        const defaultAvatars = param.avatar_type === 'user' ? DEFAULT_USER_AVATARS : DEFAULT_BOT_AVATARS;
+        // 如果后端返回了 default_avatars，直接使用（后端已经处理了禁止图标）
+        // 否则使用前端默认列表并添加禁止图标
+        let defaultAvatars: any[];
+        if (param.default_avatars && param.default_avatars.length > 0) {
+          defaultAvatars = param.default_avatars;
+        } else {
+          const baseAvatars = param.avatar_type === 'user' ? DEFAULT_USER_AVATARS : DEFAULT_BOT_AVATARS;
+          const forbiddenOption = { key: 'forbidden', src: '', label: '禁止' };
+          defaultAvatars = [forbiddenOption, ...baseAvatars];
+        }
+        
+        // 当前值是否选中「禁止」（空字符串）
+        const isForbiddenSelected = !value || value === '';
         return (
           <div style={{ gridColumn: 'span 2' }}>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-              {defaultAvatars.map(av => (
-                <div
-                  key={av.key}
-                  onClick={() => handleConfigValueChange(fullKey, av.src)}
-                  style={{
-                    width: 36, height: 36, borderRadius: '50%',
-                    overflow: 'hidden', cursor: 'pointer',
-                    border: value === av.src
-                      ? `2px solid var(--primary-color)`
-                      : theme === 'dark' ? '2px solid rgba(255,255,255,0.15)' : '2px solid #e8e8e8',
-                    transition: 'all 0.2s',
-                    boxShadow: value === av.src ? '0 0 0 2px rgba(90, 111, 214, 0.3)' : 'none'
-                  }}
-                  title={av.label}
-                >
-                  <img src={av.src} alt={av.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                </div>
-              ))}
+              {defaultAvatars.map(av => {
+                const isSelected = av.src === '' ? isForbiddenSelected : value === av.src;
+                const isForbiddenOption = av.src === '';
+                return (
+                  <div
+                    key={av.key}
+                    onClick={() => handleConfigValueChange(fullKey, av.src)}
+                    style={{
+                      width: 36, height: 36, borderRadius: '50%',
+                      overflow: 'hidden', cursor: 'pointer',
+                      border: isSelected
+                        ? `2px solid var(--primary-color)`
+                        : theme === 'dark' ? '2px solid rgba(255,255,255,0.15)' : '2px solid #e8e8e8',
+                      transition: 'all 0.2s',
+                      boxShadow: isSelected ? '0 0 0 2px rgba(90, 111, 214, 0.3)' : 'none',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: isForbiddenOption
+                        ? (theme === 'dark' ? 'rgba(255,255,255,0.08)' : '#f5f5f5')
+                        : undefined
+                    }}
+                    title={av.label}
+                  >
+                    {isForbiddenOption ? (
+                      <img src={forbiddenIcon} alt="禁止" style={{ width: '20px', height: '20px', opacity: 0.5 }} />
+                    ) : (
+                      <img 
+                        src={AVATAR_KEY_TO_SRC[av.key] || av.src} 
+                        alt={av.label} 
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                      />
+                    )}
+                  </div>
+                );
+              })}
               <Upload
                 beforeUpload={(file) => {
                   const reader = new FileReader();
@@ -2341,7 +2401,7 @@ const ChatbotSetting: React.FC = () => {
                     >
                       <Avatar 
                         size={24} 
-                        src={server.server_avatar} 
+                        src={server.server_avatar || undefined} 
                         icon={<ApiOutlined />}
                         style={{ backgroundColor: 'var(--primary-color)', flexShrink: 0 }}
                       />
