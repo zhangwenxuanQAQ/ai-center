@@ -1907,7 +1907,6 @@ const LLMModelSetting: React.FC = () => {
                 {isGenerating ? (
                   <Button
                     type="primary"
-                    danger
                     icon={<StopOutlined />}
                     onClick={handleStopGeneration}
                     className="input-send-button"

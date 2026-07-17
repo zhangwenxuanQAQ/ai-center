@@ -1715,7 +1715,6 @@ const PromptSetting: React.FC = () => {
               {isGenerating ? (
                 <Button
                   type="primary"
-                  danger
                   icon={<StopOutlined />}
                   onClick={() => {
                     if (abortControllerRef.current) {
