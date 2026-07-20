@@ -1454,18 +1454,347 @@ body[data-theme="light"] .markdown-ui-container {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
-/* Markdown-UI 组件内部样式优化 */
-.markdown-ui-container .markdown-ui-button-group,
-.markdown-ui-container .markdown-ui-select,
-.markdown-ui-container .markdown-ui-input,
-.markdown-ui-container .markdown-ui-switch {
-  margin: 8px 0;
+/* ===================== Markdown-UI 夜间主题覆盖样式 ===================== */
+
+/* 关键：让浏览器使用深色主题渲染原生表单控件（select、option、input 等） */
+body[data-theme="dark"] .markdown-ui-container,
+body[data-theme="dark"] .markdown-ui-container select,
+body[data-theme="dark"] .markdown-ui-container option,
+body[data-theme="dark"] .markdown-ui-container input,
+body[data-theme="dark"] .widget-form,
+body[data-theme="dark"] .widget-form select,
+body[data-theme="dark"] .widget-form option,
+body[data-theme="dark"] .widget-form input {
+  color-scheme: dark !important;
 }
 
-.markdown-ui-container .markdown-ui-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+/* 表单容器 - 夜间主题 */
+body[data-theme="dark"] .widget-form {
+  background-color: rgba(255, 255, 255, 0.03) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3) !important;
+}
+
+/* 按钮组 - 夜间主题 */
+body[data-theme="dark"] .widget-button-group label {
+  color: var(--dark-text-primary) !important;
+}
+
+body[data-theme="dark"] .widget-button-group button,
+body[data-theme="dark"] .widget-form .widget-button-group button {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: var(--dark-text-primary) !important;
+}
+
+body[data-theme="dark"] .widget-button-group button:hover,
+body[data-theme="dark"] .widget-form .widget-button-group button:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+body[data-theme="dark"] .widget-button-group button[aria-pressed="true"],
+body[data-theme="dark"] .widget-form .widget-button-group button[aria-pressed="true"] {
+  background-color: var(--primary-color) !important;
+  color: #ffffff !important;
+  border-color: var(--primary-color) !important;
+}
+
+/* 文本输入框 - 夜间主题 */
+body[data-theme="dark"] .widget-button label {
+  color: var(--dark-text-primary) !important;
+}
+
+body[data-theme="dark"] .widget-button input[type="text"] {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: var(--dark-text-primary) !important;
+}
+
+body[data-theme="dark"] .widget-button input[type="text"]::placeholder {
+  color: var(--dark-text-muted) !important;
+}
+
+/* 下拉选择框 - 夜间主题 */
+body[data-theme="dark"] .selector label,
+body[data-theme="dark"] .selector-multi-label {
+  color: var(--dark-text-primary) !important;
+}
+
+body[data-theme="dark"] .selector select {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: var(--dark-text-primary) !important;
+}
+
+/* 下拉选项 - 夜间主题（关键：option 元素需要特殊处理） */
+body[data-theme="dark"] .selector select option {
+  background-color: var(--dark-bg-card) !important;
+  color: var(--dark-text-primary) !important;
+}
+
+body[data-theme="dark"] .selector select option:checked {
+  background-color: var(--primary-color) !important;
+  color: #ffffff !important;
+}
+
+/* 多选复选框组 - 夜间主题 */
+body[data-theme="dark"] .checkbox-group {
+  background-color: rgba(255, 255, 255, 0.03) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+body[data-theme="dark"] .checkbox-item span {
+  color: var(--dark-text-primary) !important;
+}
+
+body[data-theme="dark"] .checkbox-item:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* 滑块 - 夜间主题 */
+body[data-theme="dark"] .widget-slider label {
+  color: var(--dark-text-primary) !important;
+}
+
+body[data-theme="dark"] .slider-values {
+  color: var(--dark-text-secondary) !important;
+}
+
+body[data-theme="dark"] .current-value {
+  color: #ffffff !important;
+  background: rgba(90, 111, 214, 0.25) !important;
+}
+
+body[data-theme="dark"] .widget-slider input[type="range"] {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* 表单提交按钮 - 夜间主题 */
+body[data-theme="dark"] .widget-form > button[type="button"]:last-child {
+  background-color: var(--primary-color) !important;
+  color: #ffffff !important;
+}
+
+body[data-theme="dark"] .widget-form > button[type="button"]:last-child:hover {
+  background-color: var(--primary-hover) !important;
+}
+
+/* 多选题 (MCQ) - 夜间主题 */
+body[data-theme="dark"] .widget-mcq {
+  background-color: rgba(255, 255, 255, 0.03) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+body[data-theme="dark"] .mcq-question {
+  color: var(--dark-text-primary) !important;
+}
+
+body[data-theme="dark"] .mcq-choice {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: var(--dark-text-primary) !important;
+}
+
+body[data-theme="dark"] .mcq-choice:hover:not(:disabled) {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+body[data-theme="dark"] .mcq-choice-selected {
+  border-color: var(--primary-color) !important;
+  background-color: rgba(90, 111, 214, 0.2) !important;
+}
+
+body[data-theme="dark"] .mcq-choice-correct {
+  border-color: #10b981 !important;
+  background-color: rgba(16, 185, 129, 0.15) !important;
+  color: #34d399 !important;
+}
+
+body[data-theme="dark"] .mcq-choice-incorrect {
+  border-color: #ef4444 !important;
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  color: #f87171 !important;
+}
+
+body[data-theme="dark"] .mcq-feedback.correct {
+  background-color: rgba(16, 185, 129, 0.15) !important;
+  color: #34d399 !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+}
+
+body[data-theme="dark"] .mcq-feedback.incorrect {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  color: #f87171 !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+/* 简答题 (SAQ) - 夜间主题 */
+body[data-theme="dark"] .widget-saq {
+  background-color: rgba(255, 255, 255, 0.03) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+body[data-theme="dark"] .saq-question {
+  color: var(--dark-text-primary) !important;
+}
+
+body[data-theme="dark"] .saq-input {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: var(--dark-text-primary) !important;
+}
+
+body[data-theme="dark"] .saq-input::placeholder {
+  color: var(--dark-text-muted) !important;
+}
+
+body[data-theme="dark"] .saq-input-correct {
+  border-color: #10b981 !important;
+  background-color: rgba(16, 185, 129, 0.15) !important;
+}
+
+body[data-theme="dark"] .saq-input-incorrect {
+  border-color: #ef4444 !important;
+  background-color: rgba(239, 68, 68, 0.15) !important;
+}
+
+body[data-theme="dark"] .saq-feedback.correct {
+  background-color: rgba(16, 185, 129, 0.15) !important;
+  color: #34d399 !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+}
+
+body[data-theme="dark"] .saq-feedback.incorrect {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  color: #f87171 !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+/* 测验 (Quiz) - 夜间主题 */
+body[data-theme="dark"] .widget-quiz {
+  background-color: var(--dark-bg-card) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+body[data-theme="dark"] .quiz-questions {
+  padding: 1.5rem !important;
+}
+
+body[data-theme="dark"] .quiz-question {
+  background-color: rgba(255, 255, 255, 0.03) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+body[data-theme="dark"] .quiz-question:hover {
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+body[data-theme="dark"] .quiz-question-text {
+  color: var(--dark-text-primary) !important;
+}
+
+body[data-theme="dark"] .quiz-choice {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: var(--dark-text-primary) !important;
+}
+
+body[data-theme="dark"] .quiz-choice:hover:not(:disabled) {
+  background-color: rgba(90, 111, 214, 0.15) !important;
+  border-color: var(--primary-color) !important;
+}
+
+body[data-theme="dark"] .quiz-choice-selected {
+  border-color: var(--primary-color) !important;
+  background-color: rgba(90, 111, 214, 0.2) !important;
+}
+
+body[data-theme="dark"] .quiz-choice-correct {
+  border-color: #10b981 !important;
+  background-color: rgba(16, 185, 129, 0.15) !important;
+  color: #34d399 !important;
+}
+
+body[data-theme="dark"] .quiz-choice-incorrect {
+  border-color: #ef4444 !important;
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  color: #f87171 !important;
+}
+
+body[data-theme="dark"] .quiz-input {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: var(--dark-text-primary) !important;
+}
+
+body[data-theme="dark"] .quiz-input::placeholder {
+  color: var(--dark-text-muted) !important;
+}
+
+body[data-theme="dark"] .quiz-input-correct {
+  border-color: #10b981 !important;
+  background-color: rgba(16, 185, 129, 0.15) !important;
+}
+
+body[data-theme="dark"] .quiz-input-incorrect {
+  border-color: #ef4444 !important;
+  background-color: rgba(239, 68, 68, 0.15) !important;
+}
+
+body[data-theme="dark"] .quiz-feedback.correct {
+  background-color: rgba(16, 185, 129, 0.15) !important;
+  color: #34d399 !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+}
+
+body[data-theme="dark"] .quiz-feedback.incorrect {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  color: #f87171 !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+body[data-theme="dark"] .quiz-summary {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+body[data-theme="dark"] .quiz-summary h3 {
+  color: var(--dark-text-primary) !important;
+}
+
+body[data-theme="dark"] .quiz-final-score {
+  color: var(--dark-text-secondary) !important;
+}
+
+body[data-theme="dark"] .quiz-result.passed {
+  background-color: rgba(16, 185, 129, 0.15) !important;
+  color: #34d399 !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+}
+
+body[data-theme="dark"] .quiz-result.failed {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  color: #f87171 !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+/* 错误提示 - 夜间主题 */
+body[data-theme="dark"] .widget span[style*="color:red"] {
+  color: #f87171 !important;
+  background-color: rgba(239, 68, 68, 0.1) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+/* Markdown-UI 组件内部样式优化 */
+.markdown-ui-container .widget {
+  margin: 0.5rem 0;
+}
+
+.markdown-ui-container .widget-form {
+  gap: 1rem;
 }
 
 body[data-theme="light"] .collapsible-code-block .collapsible-code-header-left .anticon {

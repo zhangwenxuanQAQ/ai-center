@@ -1,8 +1,11 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import MDEditor from '@uiw/react-md-editor';
 import { DownOutlined, RightOutlined, CodeOutlined } from '@ant-design/icons';
 import mermaid from 'mermaid';
 import { MarkdownUI } from '@markdown-ui/react';
+import '@markdown-ui/react/widgets.css';
+import { Marked } from 'marked';
+import { markedUiStreamingExtension } from '@markdown-ui/marked-ext';
 
 interface ChatMarkdownProps {
   source: string;
@@ -141,11 +144,13 @@ const MermaidChart: React.FC<{ chart: string; theme: 'light' | 'dark' }> = React
 
 /**
  * Markdown-UI 组件渲染器
+ * 使用 marked + markedUiExtension 解析 DSL 代码为 HTML，然后传递给 MarkdownUI 组件渲染
  */
 const MarkdownUIWidget: React.FC<{ code: string }> = React.memo(({ code }) => {
-  const [renderedContent, setRenderedContent] = useState<React.ReactNode>(null);
+  const [html, setHtml] = useState<string>('');
   const [error, setError] = useState<string>('');
   const lastCodeRef = useRef<string>('');
+  const renderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // 如果代码内容没有变化，不重新渲染
@@ -153,39 +158,60 @@ const MarkdownUIWidget: React.FC<{ code: string }> = React.memo(({ code }) => {
       return;
     }
 
-    const renderWidget = async () => {
-      try {
-        // 提取 markdown-ui-widget 代码块中的内容
-        const codeMatch = code.match(/```markdown-ui-widget\n([\s\S]*?)\n```/);
-        if (!codeMatch || !codeMatch[1]) {
-          setError('无法解析组件代码');
-          return;
-        }
+    // 清除之前的定时器
+    if (renderTimeoutRef.current) {
+      clearTimeout(renderTimeoutRef.current);
+    }
 
-        const widgetCode = codeMatch[1].trim();
+    // 设置延迟渲染（防抖），等待流式传输完成
+    renderTimeoutRef.current = setTimeout(() => {
+      try {
+        // 使用 marked + markedUiStreamingExtension 解析 markdown-ui-widget 代码
+        // markedUiStreamingExtension 是流式感知的扩展，能更好地处理不完整的输入
+        const marked = new Marked();
+        marked.use(markedUiStreamingExtension);
+
+        // 解析代码块，生成 HTML
+        const parsedHtml = marked.parse(code) as string;
         lastCodeRef.current = code;
 
-        // 直接渲染 markdown-ui 代码
-        const widgetElement = (
-          <MarkdownUI>
-            {widgetCode}
-          </MarkdownUI>
-        );
-        setRenderedContent(widgetElement);
+        setHtml(parsedHtml);
         setError('');
       } catch (err) {
         console.error('Markdown-UI rendering error:', err);
         setError(`组件渲染失败: ${err instanceof Error ? err.message : '未知错误'}`);
       }
+    }, 300); // 300ms 延迟，等待流式传输稳定
+
+    return () => {
+      if (renderTimeoutRef.current) {
+        clearTimeout(renderTimeoutRef.current);
+      }
     };
-    renderWidget();
   }, [code]);
+
+  // 处理组件交互事件
+  const handleWidgetEvent = useCallback((event: any) => {
+    console.log('Widget event:', event.detail);
+  }, []);
 
   if (error) {
     return <div style={{ color: '#ff4d4f', padding: '12px' }}>{error}</div>;
   }
 
-  return <div className="markdown-ui-container">{renderedContent}</div>;
+  if (!html) {
+    return (
+      <div className="markdown-ui-container" style={{ padding: '16px', color: '#999' }}>
+        组件渲染中...
+      </div>
+    );
+  }
+
+  return (
+    <div className="markdown-ui-container">
+      <MarkdownUI html={html} onWidgetEvent={handleWidgetEvent} />
+    </div>
+  );
 });
 
 /**

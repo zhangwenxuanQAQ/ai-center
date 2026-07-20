@@ -1447,3 +1447,35 @@ body[data-theme="dark"] .w-md-editor-toolbar button {
 body[data-theme="dark"] .w-md-editor-toolbar button:hover {
   background: rgba(255, 255, 255, 0.1) !important;
 }
+
+/* ==================== 思考内容区域 MDEditor 背景透明 ==================== */
+/* 必须放在文件末尾，确保优先级最高 */
+body[data-theme="dark"] .message-reasoning .w-md-editor,
+body[data-theme="dark"] .message-reasoning .md-editor,
+body[data-theme="dark"] .message-reasoning .md-editor-container,
+body[data-theme="dark"] .message-reasoning [class*="md-editor"],
+body[data-theme="dark"] .message-reasoning [class*="w-md-editor"],
+body[data-theme="dark"] .reasoning-text .w-md-editor,
+body[data-theme="dark"] .reasoning-text .md-editor,
+body[data-theme="dark"] .reasoning-text .md-editor-container,
+body[data-theme="dark"] .reasoning-text [class*="md-editor"],
+body[data-theme="dark"] .reasoning-text [class*="w-md-editor"],
+body[data-theme="dark"] .tool-call-reasoning-text .w-md-editor,
+body[data-theme="dark"] .tool-call-reasoning-text .md-editor,
+body[data-theme="dark"] .tool-call-reasoning-text .md-editor-container,
+body[data-theme="dark"] .tool-call-reasoning-text [class*="md-editor"],
+body[data-theme="dark"] .tool-call-reasoning-text [class*="w-md-editor"] {
+  background: transparent !important;
+}
+
+body[data-theme="dark"] .message-reasoning .wmde-markdown,
+body[data-theme="dark"] .reasoning-text .wmde-markdown,
+body[data-theme="dark"] .tool-call-reasoning-text .wmde-markdown {
+  background: transparent !important;
+}
+
+body[data-theme="dark"] .message-reasoning .w-md-editor-preview,
+body[data-theme="dark"] .reasoning-text .w-md-editor-preview,
+body[data-theme="dark"] .tool-call-reasoning-text .w-md-editor-preview {
+  background: transparent !important;
+}

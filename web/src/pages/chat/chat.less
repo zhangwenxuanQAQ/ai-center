@@ -1292,8 +1292,6 @@
   border-radius: 8px;
   font-size: 13px;
   line-height: 1.5;
-  background: rgba(102, 126, 234, 0.1);
-  border: 1px solid rgba(102, 126, 234, 0.2);
 }
 
 .reasoning-header {
@@ -1324,23 +1322,30 @@
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px dashed rgba(102, 126, 234, 0.3);
-  
+
   .w-md-editor {
-    background: transparent;
-    
+    background: transparent !important;
+
     .w-md-editor-preview {
-      background: transparent;
+      background: transparent !important;
       padding: 0;
-      
+
       .w-md-editor-preview-content {
         padding: 0;
       }
     }
   }
-  
+
   .md-editor-container {
+    background: transparent !important;
+
+    &.dark, &.light {
+      background: transparent !important;
+    }
+
     .wmde-markdown {
       font-size: 12px;
+      background: transparent !important;
     }
   }
   
@@ -1593,6 +1598,31 @@
   .tool-call-reasoning-text {
     font-size: 12px;
     line-height: 1.5;
+
+    .w-md-editor {
+      background: transparent !important;
+
+      .w-md-editor-preview {
+        background: transparent !important;
+        padding: 0;
+
+        .w-md-editor-preview-content {
+          padding: 0;
+        }
+      }
+    }
+
+    .md-editor-container {
+      background: transparent !important;
+
+      &.dark, &.light {
+        background: transparent !important;
+      }
+
+      .wmde-markdown {
+        background: transparent !important;
+      }
+    }
   }
 }
 

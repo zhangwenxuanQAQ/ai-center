@@ -1103,13 +1103,63 @@ const ChatbotSetting: React.FC = () => {
   };
 
   const handleCopyCode = (code: string) => {
-    navigator.clipboard.writeText(code).then(() => {
-      setIntegrationCopied(true);
-      message.success('代码已复制到剪贴板');
-      setTimeout(() => setIntegrationCopied(false), 2000);
-    }).catch(() => {
-      message.error('复制失败');
-    });
+    const text = String(code ?? '');
+    if (!text) {
+      message.warning('没有可复制的内容');
+      return;
+    }
+
+    const fallbackCopy = (textToCopy: string): boolean => {
+      const textarea = document.createElement('textarea');
+      textarea.value = textToCopy;
+      textarea.readOnly = true;
+      textarea.style.position = 'fixed';
+      textarea.style.top = '0';
+      textarea.style.left = '0';
+      textarea.style.width = '2em';
+      textarea.style.height = '2em';
+      textarea.style.padding = '0';
+      textarea.style.border = 'none';
+      textarea.style.outline = 'none';
+      textarea.style.boxShadow = 'none';
+      textarea.style.background = 'transparent';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      try {
+        textarea.focus();
+        textarea.select();
+        textarea.setSelectionRange(0, textToCopy.length);
+        return document.execCommand('copy');
+      } catch {
+        return false;
+      } finally {
+        document.body.removeChild(textarea);
+      }
+    };
+
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(() => {
+        setIntegrationCopied(true);
+        message.success('代码已复制到剪贴板');
+        setTimeout(() => setIntegrationCopied(false), 2000);
+      }).catch(() => {
+        if (fallbackCopy(text)) {
+          setIntegrationCopied(true);
+          message.success('代码已复制到剪贴板');
+          setTimeout(() => setIntegrationCopied(false), 2000);
+        } else {
+          message.error('复制失败，请手动复制');
+        }
+      });
+    } else {
+      if (fallbackCopy(text)) {
+        setIntegrationCopied(true);
+        message.success('代码已复制到剪贴板');
+        setTimeout(() => setIntegrationCopied(false), 2000);
+      } else {
+        message.error('复制失败，请手动复制');
+      }
+    }
   };
 
   const handleBeforeUnload = useCallback((e: BeforeUnloadEvent) => {
@@ -3171,11 +3221,11 @@ const ChatbotSetting: React.FC = () => {
                                           <EyeOutlined style={{ color: theme === 'dark' ? '#aaa' : '#999', fontSize: '12px' }} />
                                         </Tooltip>
                                       </div>
-                                      <div style={{ position: 'relative', marginBottom: '12px', overflow: 'hidden', width: '100%' }}>
+                                      <div style={{ position: 'relative', marginBottom: '12px', width: '100%' }}>
                                         <SyntaxHighlighter
                                           language="html"
                                           style={theme === 'dark' ? oneDark : oneLight}
-                                          customStyle={{ margin: 0, borderRadius: '4px', fontSize: '12px', overflowX: 'hidden', wordBreak: 'break-all', background: theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#f5f5f5' }}
+                                          customStyle={{ margin: 0, borderRadius: '4px', fontSize: '12px', overflowX: 'auto', wordBreak: 'break-word', background: theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#f5f5f5' }}
                                           wrapLongLines
                                         >
                                           {embedCode}
@@ -3183,7 +3233,7 @@ const ChatbotSetting: React.FC = () => {
                                         <Button
                                           icon={<CopyOutlined />}
                                           size="small"
-                                          style={{ position: 'absolute', top: '8px', right: '8px' }}
+                                          style={{ position: 'absolute', top: '8px', right: '8px', zIndex: 10 }}
                                           onClick={() => handleCopyCode(embedCode)}
                                         >
                                           复制代码
@@ -3288,11 +3338,11 @@ const ChatbotSetting: React.FC = () => {
                                           <EyeOutlined style={{ color: theme === 'dark' ? '#aaa' : '#999', fontSize: '12px' }} />
                                         </Tooltip>
                                       </div>
-                                      <div style={{ position: 'relative', marginBottom: '12px', overflow: 'hidden', width: '100%' }}>
+                                      <div style={{ position: 'relative', marginBottom: '12px', width: '100%' }}>
                                         <SyntaxHighlighter
                                           language="html"
                                           style={theme === 'dark' ? oneDark : oneLight}
-                                          customStyle={{ margin: 0, borderRadius: '4px', fontSize: '12px', overflowX: 'hidden', wordBreak: 'break-all', background: theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#f5f5f5' }}
+                                          customStyle={{ margin: 0, borderRadius: '4px', fontSize: '12px', overflowX: 'auto', wordBreak: 'break-word', background: theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#f5f5f5' }}
                                           wrapLongLines
                                         >
                                           {embedCode}
@@ -3300,7 +3350,7 @@ const ChatbotSetting: React.FC = () => {
                                         <Button
                                           icon={<CopyOutlined />}
                                           size="small"
-                                          style={{ position: 'absolute', top: '8px', right: '8px' }}
+                                          style={{ position: 'absolute', top: '8px', right: '8px', zIndex: 10 }}
                                           onClick={() => handleCopyCode(embedCode)}
                                         >
                                           复制代码
