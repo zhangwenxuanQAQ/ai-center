@@ -384,9 +384,9 @@ async def generate_preview_token(
         # 生成唯一token
         token = str(uuid.uuid4())
         
-        # 存储到Redis，有效期10分钟
+        # 存储到Redis，有效期1天
         redis_key = f"integration:preview:{token}"
-        redis_utils.set(redis_key, json.dumps(preview_data), exp=600)
+        redis_utils.set(redis_key, json.dumps(preview_data), exp=86400)
         
         # 返回预览URL（相对路径，前端自己拼接域名）
         # 注意：预览页面在前端应用中，不在后端API服务中

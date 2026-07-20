@@ -945,6 +945,7 @@ const ChatbotSetting: React.FC = () => {
                 );
               })}
               <Upload
+                className="avatar-upload-btn"
                 beforeUpload={(file) => {
                   const reader = new FileReader();
                   reader.onload = () => {

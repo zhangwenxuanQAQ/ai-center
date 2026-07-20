@@ -27,17 +27,17 @@ class IntegrationChatRequest(BaseModel):
     集成聊天请求体
 
     Attributes:
+        config: 对话配置JSON，包含deep_thinking等配置项
         query: 查询数组，每个元素包含type、content、mime_type
         chat_id: 对话ID（可选，不传则创建新对话）
         stream: 是否流式输出
         temporary: 临时会话模式，不保存对话和消息到数据库
-        deep_thinking: 是否启用深度思考
     """
+    config: Optional[dict] = Field(None, description="对话配置JSON，包含deep_thinking等配置项")
     query: List[QueryItem] = Field(..., description="查询数组")
     chat_id: Optional[str] = Field(None, max_length=40, description="对话ID")
     stream: bool = Field(True, description="是否流式输出")
     temporary: bool = Field(False, description="临时会话模式，不保存到数据库")
-    deep_thinking: bool = Field(False, description="是否启用深度思考")
 
 
 def get_api_key_from_header(authorization: Optional[str]) -> Optional[str]:
@@ -59,39 +59,39 @@ def get_api_key_from_header(authorization: Optional[str]) -> Optional[str]:
 
 @router.post("/v1/chat/completions", summary="聊天接口（OpenAI兼容）")
 async def chat_completions(
-    request: Request,
     chat_request: IntegrationChatRequest,
     authorization: Optional[str] = Header(None, description="Authorization: Bearer <api_key>")
 ):
     """
     聊天接口，支持流式和非流式输出
-    
+
     请求头需要包含Authorization字段，值为Bearer + 机器人API密钥
-    
+
     Args:
-        request: 请求对象
         chat_request: 聊天请求参数
+            - config: 对话配置JSON，包含deep_thinking等配置项
+            - query: 查询数组，每个元素包含type、content、mime_type
+            - chat_id: 对话ID（可选，不传则创建新对话）
+            - stream: 是否流式输出
+            - temporary: 临时会话模式，不保存对话和消息到数据库
         authorization: Authorization请求头
-        
+
     Returns:
         流式输出时返回StreamingResponse，否则返回ApiResponse
     """
-    # 提取API密钥
     api_key = get_api_key_from_header(authorization)
     if not api_key:
         return ResponseUtil.error(code=401, message="缺少Authorization请求头或格式不正确")
-    
-    # 根据API密钥查找集成配置
+
     integration = ChatbotIntegrationService.get_by_api_key(api_key)
     if not integration:
         return ResponseUtil.error(code=401, message="API密钥无效")
-    
-    # 验证query不为空
+
     if not chat_request.query:
         return ResponseUtil.error(message="query参数不能为空")
-    
+
     logger.info(f"集成聊天接口请求 - chatbot_id: {integration.chatbot_id}, chat_id: {chat_request.chat_id}, stream: {chat_request.stream}")
-    
+
     try:
         if chat_request.stream:
             async def generate():
@@ -102,7 +102,7 @@ async def chat_completions(
                         integration=integration,
                         stream=True,
                         temporary=chat_request.temporary,
-                        deep_thinking=chat_request.deep_thinking
+                        config=chat_request.config
                     ):
                         yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
                         await asyncio.sleep(0)
@@ -112,7 +112,7 @@ async def chat_completions(
                     error_chunk = {"error": str(e)}
                     yield f"data: {json.dumps(error_chunk, ensure_ascii=False)}\n\n"
                     yield "data: [DONE]\n\n"
-            
+
             return StreamingResponse(
                 generate(),
                 media_type="text/event-stream",
@@ -129,14 +129,14 @@ async def chat_completions(
                 chat_id=chat_request.chat_id,
                 integration=integration,
                 temporary=chat_request.temporary,
-                deep_thinking=chat_request.deep_thinking
+                config=chat_request.config
             )
-            
+
             if 'error' in result:
                 return ResponseUtil.error(message=result['error'])
-            
+
             return ResponseUtil.success(data=result)
-    
+
     except Exception as e:
         logger.error(f"集成聊天接口异常: {str(e)}", exc_info=True)
         return ResponseUtil.error(message=f"聊天失败: {str(e)}")

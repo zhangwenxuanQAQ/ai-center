@@ -32,7 +32,7 @@ class IntegrationChatCoreService:
         integration: ChatbotIntegration,
         stream: bool = True,
         temporary: bool = False,
-        deep_thinking: bool = False
+        config: Optional[dict] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         流式聊天
@@ -45,7 +45,7 @@ class IntegrationChatCoreService:
             integration: 集成配置对象
             stream: 是否流式输出
             temporary: 临时会话模式，不保存对话和消息到数据库
-            deep_thinking: 是否启用深度思考
+            config: 对话配置JSON，包含deep_thinking等配置项
 
         Yields:
             Dict: 流式响应数据
@@ -60,10 +60,9 @@ class IntegrationChatCoreService:
                 model_id=None,
                 chatbot_id=chatbot_id,
                 chat_id=None,
-                config=None,
+                config=config,
                 message_id=None,
-                system_prompt=None,
-                deep_thinking=deep_thinking
+                system_prompt=None
             ):
                 yield chunk
             return
@@ -129,10 +128,9 @@ class IntegrationChatCoreService:
             model_id=None,
             chatbot_id=chatbot_id,
             chat_id=actual_chat_id if internal_chat else None,
-            config=None,
+            config=config,
             message_id=None,
-            system_prompt=None,
-            deep_thinking=deep_thinking
+            system_prompt=None
         ):
             # 确保返回的chat_id是ChatbotChat的id
             chunk['chat_id'] = actual_chat_id
@@ -181,7 +179,7 @@ class IntegrationChatCoreService:
         chat_id: Optional[str],
         integration: ChatbotIntegration,
         temporary: bool = False,
-        deep_thinking: bool = False
+        config: Optional[dict] = None
     ) -> Dict[str, Any]:
         """
         非流式聊天
@@ -191,7 +189,7 @@ class IntegrationChatCoreService:
             chat_id: 对话ID（可选）
             integration: 集成配置对象
             temporary: 临时会话模式
-            deep_thinking: 是否启用深度思考
+            config: 对话配置JSON，包含deep_thinking等配置项
 
         Returns:
             Dict: 聊天结果
@@ -203,7 +201,7 @@ class IntegrationChatCoreService:
             integration=integration,
             stream=False,
             temporary=temporary,
-            deep_thinking=deep_thinking
+            config=config
         ):
             if chunk.get('status') == 'done':
                 result = chunk

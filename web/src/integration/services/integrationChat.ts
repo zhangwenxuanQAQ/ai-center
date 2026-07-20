@@ -90,7 +90,9 @@ export const integrationChatService = {
     };
     if (chatId) body.chat_id = chatId;
     if (temporary) body.temporary = true;
-    if (deepThinking) body.deep_thinking = true;
+    if (deepThinking) {
+      body.config = { deep_thinking: true };
+    }
 
     try {
       const res = await fetch(`${API_BASE_URL}/aicenter/api/v1/chat/completions`, {

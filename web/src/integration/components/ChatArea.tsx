@@ -96,6 +96,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editTextareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Scroll to bottom
@@ -385,10 +386,22 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     });
   };
 
+  // 自动调整编辑输入框高度
+  const autoResizeEditTextarea = useCallback(() => {
+    if (editTextareaRef.current) {
+      editTextareaRef.current.style.height = 'auto';
+      editTextareaRef.current.style.height = `${Math.min(editTextareaRef.current.scrollHeight, 200)}px`;
+    }
+  }, []);
+
   // 编辑消息
   const handleEditMessage = (messageId: string, content: string) => {
     setEditingMessageId(messageId);
     setEditingContent(content);
+    setTimeout(() => {
+      autoResizeEditTextarea();
+      editTextareaRef.current?.focus();
+    }, 0);
   };
 
   // 取消编辑
@@ -527,7 +540,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                   userAvatar ? (
                     <img src={userAvatar} alt="用户" />
                   ) : (
-                    <span style={{ fontSize: '18px' }}>👤</span>
+                    <span style={{ fontSize: '20px' }}>👤</span>
                   )
                 ) : (
                   botAvatar ? (
@@ -537,14 +550,17 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                   )
                 )}
               </div>
-              <div className="int-msg-bubble">
+              <div className="int-msg-content">
                 {editingMessageId === msg.id ? (
                   // 编辑模式
                   <div className="int-msg-edit">
                     <textarea
+                      ref={editTextareaRef}
                       value={editingContent}
-                      onChange={(e) => setEditingContent(e.target.value)}
-                      rows={3}
+                      onChange={(e) => {
+                        setEditingContent(e.target.value);
+                        autoResizeEditTextarea();
+                      }}
                     />
                     <div className="int-msg-edit-actions">
                       <button onClick={handleCancelEdit}>取消</button>
@@ -553,6 +569,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                   </div>
                 ) : (
                   <>
+                    <div className="int-msg-text">
                     {msg.role === 'assistant' ? (
                       <>
                         {/* 思考过程 - 流式中显示 */}
@@ -676,6 +693,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                     ) : (
                       <span>{msg.content}</span>
                     )}
+                    </div>
                     {/* 消息底部：时间 + 操作按钮 */}
                     <div className="int-msg-footer">
                       <span className="int-msg-time">

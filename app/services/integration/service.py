@@ -7,9 +7,13 @@ import uuid
 import logging
 import io
 import zipfile
+import base64
+import os
+import mimetypes
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from urllib.parse import quote
+from pathlib import Path
 
 from app.database.models import ChatbotIntegration, Chatbot, ChatbotChat, ChatbotChatMessage
 from app.database.db_utils import handle_transaction
@@ -18,6 +22,9 @@ from app.constants.integration_constants import get_integration_default_configs
 from app.configs.config import config
 
 logger = logging.getLogger(__name__)
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+INTEGRATION_ASSETS_DIR = PROJECT_ROOT / 'web' / 'src' / 'integration' / 'assets'
 
 
 class ChatbotIntegrationService:
@@ -52,6 +59,88 @@ class ChatbotIntegrationService:
         host = config.get('server', {}).get('host', 'localhost')
         port = config.get('server', {}).get('http_port', '0.0.0.0')
         return f'http://{host}:{port}'
+
+    @staticmethod
+    def _convert_avatar_to_base64(avatar_value: str) -> str:
+        """
+        将头像值转换为base64字符串
+
+        处理以下几种情况：
+        1. 空字符串：直接返回
+        2. 已经是base64格式（以data:开头）：直接返回
+        3. 本地相对路径（如/assets/integration/...）：从本地文件读取并转base64
+        4. HTTP/HTTPS URL：通过请求获取并转base64
+
+        Args:
+            avatar_value: 头像值（可能是路径、URL或base64）
+
+        Returns:
+            str: base64格式的头像字符串，或原始值（如果转换失败）
+        """
+        if not avatar_value:
+            return avatar_value
+
+        if avatar_value.startswith('data:'):
+            return avatar_value
+
+        try:
+            file_data = None
+            mime_type = None
+
+            if avatar_value.startswith('http://') or avatar_value.startswith('https://'):
+                import urllib.request
+                req = urllib.request.Request(avatar_value)
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    file_data = response.read()
+                    content_type = response.headers.get('Content-Type', '')
+                    if content_type:
+                        mime_type = content_type.split(';')[0].strip()
+            elif avatar_value.startswith('/'):
+                if avatar_value.startswith('/assets/integration/'):
+                    filename = avatar_value.replace('/assets/integration/', '')
+                    file_path = INTEGRATION_ASSETS_DIR / filename
+                else:
+                    filename = avatar_value.lstrip('/')
+                    file_path = PROJECT_ROOT / 'web' / 'src' / filename
+
+                if file_path.exists():
+                    file_data = file_path.read_bytes()
+                    mime_type, _ = mimetypes.guess_type(str(file_path))
+
+            if file_data:
+                if not mime_type:
+                    mime_type = 'image/png'
+                b64_str = base64.b64encode(file_data).decode('utf-8')
+                return f'data:{mime_type};base64,{b64_str}'
+        except Exception as e:
+            logger.warning(f'头像转base64失败: {avatar_value}, 错误: {e}')
+
+        return avatar_value
+
+    @staticmethod
+    def _convert_avatars_in_configs(configs: dict) -> dict:
+        """
+        遍历配置，将用户头像和机器人头像转为base64
+
+        Args:
+            configs: 配置字典
+
+        Returns:
+            dict: 转换后的配置字典
+        """
+        if not configs:
+            return configs
+
+        try:
+            common_cfg = configs.get('interface_config', {}).get('common_config', {})
+            if 'user_avatar' in common_cfg:
+                common_cfg['user_avatar'] = ChatbotIntegrationService._convert_avatar_to_base64(common_cfg['user_avatar'])
+            if 'bot_avatar' in common_cfg:
+                common_cfg['bot_avatar'] = ChatbotIntegrationService._convert_avatar_to_base64(common_cfg['bot_avatar'])
+        except Exception as e:
+            logger.warning(f'转换配置中的头像失败: {e}')
+
+        return configs
 
     @staticmethod
     @handle_transaction
@@ -106,6 +195,8 @@ class ChatbotIntegrationService:
                     chat_cfg = full_configs.get('chat_config', {})
                     if not chat_cfg.get('welcome_messages') and chatbot.greeting:
                         chat_cfg['welcome_messages'] = [chatbot.greeting]
+                    # 将用户头像和机器人头像转为base64
+                    full_configs = ChatbotIntegrationService._convert_avatars_in_configs(full_configs)
                     # 重新生成html_code
                     full_configs['html_code'] = ChatbotIntegrationService._render_html_codes(full_configs, api_key, base_url)
                     integration.configs = json.dumps(full_configs)
@@ -136,6 +227,9 @@ class ChatbotIntegrationService:
         chat_cfg = default_configs.get('chat_config', {})
         if not chat_cfg.get('welcome_messages') and chatbot.greeting:
             chat_cfg['welcome_messages'] = [chatbot.greeting]
+        
+        # 将用户头像和机器人头像转为base64
+        default_configs = ChatbotIntegrationService._convert_avatars_in_configs(default_configs)
         
         # 生成html_code
         default_configs['html_code'] = ChatbotIntegrationService._render_html_codes(default_configs, api_key, base_url)
@@ -230,6 +324,9 @@ class ChatbotIntegrationService:
                 new_configs['chat_config'] = old_configs['chat_config']
         except (json.JSONDecodeError, TypeError):
             pass
+        
+        # 将用户头像和机器人头像转为base64
+        new_configs = ChatbotIntegrationService._convert_avatars_in_configs(new_configs)
         
         # 重新生成html_code
         new_configs['html_code'] = ChatbotIntegrationService._render_html_codes(new_configs, new_api_key, base_url)
@@ -378,6 +475,9 @@ class ChatbotIntegrationService:
         chat_cfg = default_configs.get('chat_config', {})
         if not chat_cfg.get('welcome_messages') and chatbot and chatbot.greeting:
             chat_cfg['welcome_messages'] = [chatbot.greeting]
+
+        # 将用户头像和机器人头像转为base64
+        default_configs = ChatbotIntegrationService._convert_avatars_in_configs(default_configs)
 
         # 重置 openai_base_url 为当前服务地址
         integration.openai_base_url = f"{base_url}/aicenter/api/v1"

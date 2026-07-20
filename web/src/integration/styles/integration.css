@@ -2,8 +2,8 @@
 /* 不依赖主应用主题系统，支持 light/dark 主题 */
 
 :root {
-  --int-primary: #1677ff;
-  --int-primary-hover: #4096ff;
+  --int-primary: #667eea;
+  --int-primary-hover: #7c8fe8;
   --int-bg: #ffffff;
   --int-bg-secondary: #f5f5f5;
   --int-bg-tertiary: #fafafa;
@@ -12,7 +12,7 @@
   --int-text-tertiary: #999999;
   --int-border: #e8e8e8;
   --int-border-light: #f0f0f0;
-  --int-msg-user-bg: #1677ff;
+  --int-msg-user-bg: #667eea;
   --int-msg-user-text: #ffffff;
   --int-msg-bot-bg: #f5f5f5;
   --int-msg-bot-text: #1f1f1f;
@@ -22,9 +22,11 @@
   --int-radius-lg: 12px;
 }
 
-/* Dark theme - 全局 */
-[data-theme="dark"] {
-  --int-bg: #141414;
+/* Dark theme - 仅作用于插件页面 */
+.integration-page[data-theme="dark"] {
+  --int-primary: #1a1a2e;
+  --int-primary-hover: #16213e;
+  --int-bg: #1a1a2e;
   --int-bg-secondary: #1f1f1f;
   --int-bg-tertiary: #262626;
   --int-text: #e0e0e0;
@@ -32,7 +34,7 @@
   --int-text-tertiary: #666666;
   --int-border: #303030;
   --int-border-light: #262626;
-  --int-msg-bot-bg: #1f1f1f;
+  --int-msg-bot-bg: rgba(255, 255, 255, 0.1);
   --int-msg-bot-text: #e0e0e0;
   --int-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   --int-shadow-lg: 0 6px 24px rgba(0, 0, 0, 0.4);
@@ -41,55 +43,55 @@
 /* ========== 颜色主题 (Color Themes) ========== */
 /* 经典蓝 (default) - 已在 :root 中定义 */
 
-[data-color-theme="emerald"] {
+.integration-page[data-color-theme="emerald"] {
   --int-primary: #10b981;
   --int-primary-hover: #34d399;
   --int-msg-user-bg: #10b981;
 }
 
-[data-color-theme="violet"] {
+.integration-page[data-color-theme="violet"] {
   --int-primary: #8b5cf6;
   --int-primary-hover: #a78bfa;
   --int-msg-user-bg: #8b5cf6;
 }
 
-[data-color-theme="orange"] {
+.integration-page[data-color-theme="orange"] {
   --int-primary: #f97316;
   --int-primary-hover: #fb923c;
   --int-msg-user-bg: #f97316;
 }
 
-[data-color-theme="rose"] {
+.integration-page[data-color-theme="rose"] {
   --int-primary: #f43f5e;
   --int-primary-hover: #fb7185;
   --int-msg-user-bg: #f43f5e;
 }
 
-[data-color-theme="cyan"] {
+.integration-page[data-color-theme="cyan"] {
   --int-primary: #06b6d4;
   --int-primary-hover: #22d3ee;
   --int-msg-user-bg: #06b6d4;
 }
 
-[data-color-theme="pink"] {
+.integration-page[data-color-theme="pink"] {
   --int-primary: #ec4899;
   --int-primary-hover: #f472b6;
   --int-msg-user-bg: #ec4899;
 }
 
-[data-color-theme="amber"] {
+.integration-page[data-color-theme="amber"] {
   --int-primary: #f59e0b;
   --int-primary-hover: #fbbf24;
   --int-msg-user-bg: #f59e0b;
 }
 
-[data-color-theme="teal"] {
+.integration-page[data-color-theme="teal"] {
   --int-primary: #14b8a6;
   --int-primary-hover: #2dd4bf;
   --int-msg-user-bg: #14b8a6;
 }
 
-[data-color-theme="indigo"] {
+.integration-page[data-color-theme="indigo"] {
   --int-primary: #6366f1;
   --int-primary-hover: #818cf8;
   --int-msg-user-bg: #6366f1;
@@ -98,7 +100,9 @@
 /* Dark theme - 聊天区域组件级别 */
 .int-chat-area[data-theme="dark"],
 .int-history-sidebar[data-theme="dark"] {
-  --int-bg: #141414;
+  --int-primary: #1a1a2e;
+  --int-primary-hover: #16213e;
+  --int-bg: #1a1a2e;
   --int-bg-secondary: #1f1f1f;
   --int-bg-tertiary: #262626;
   --int-text: #e0e0e0;
@@ -106,7 +110,7 @@
   --int-text-tertiary: #666666;
   --int-border: #303030;
   --int-border-light: #262626;
-  --int-msg-bot-bg: #1f1f1f;
+  --int-msg-bot-bg: rgba(255, 255, 255, 0.1);
   --int-msg-bot-text: #e0e0e0;
   --int-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   --int-shadow-lg: 0 6px 24px rgba(0, 0, 0, 0.4);
@@ -314,34 +318,33 @@
 
 .int-message {
   display: flex;
-  gap: 10px;
-  max-width: 85%;
+  gap: 12px;
+  margin-bottom: 16px;
   animation: int-fadeIn 0.3s ease;
 }
 
 @keyframes int-fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 .int-message.user {
-  align-self: flex-end;
   flex-direction: row-reverse;
 }
 
-.int-message.assistant {
-  align-self: flex-start;
+.int-message.user .int-msg-content {
+  align-items: flex-end;
 }
 
 .int-msg-avatar {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 20px;
   font-weight: 600;
   overflow: hidden;
 }
@@ -354,35 +357,43 @@
 }
 
 .int-msg-avatar.user {
-  background: var(--int-primary);
-  color: #fff;
+  background: transparent;
 }
 
 .int-msg-avatar.assistant {
-  background: var(--int-bg-secondary);
-  color: var(--int-text);
-  border: 1px solid var(--int-border);
+  background: #e8e8e8;
 }
 
-.int-msg-bubble {
-  padding: 10px 14px;
-  border-radius: var(--int-radius-lg);
+.integration-page[data-theme="dark"] .int-msg-avatar.assistant {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.int-msg-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 70%;
+}
+
+.int-msg-text {
+  padding: 12px 16px;
+  font-size: 13px;
   line-height: 1.6;
-  font-size: 14px;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
-.int-message.user .int-msg-bubble {
-  background: var(--int-msg-user-bg);
-  color: var(--int-msg-user-text);
-  border-bottom-right-radius: 4px;
+.int-message.user .int-msg-text {
+  color: var(--int-text);
+  border-radius: 16px 16px 4px 16px;
 }
 
-.int-message.assistant .int-msg-bubble {
-  background: var(--int-msg-bot-bg);
-  color: var(--int-msg-bot-text);
-  border-bottom-left-radius: 4px;
+.int-message.assistant .int-msg-text {
+  color: var(--int-text);
+  border-radius: 16px 16px 16px 4px;
+}
+
+.integration-page[data-theme="dark"] .int-message.assistant .int-msg-text {
+  color: #fff;
 }
 
 /* Message footer (time + actions) */
@@ -390,31 +401,18 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
-  gap: 8px;
-}
-
-[data-theme="dark"] .int-msg-footer {
-  border-top-color: rgba(255, 255, 255, 0.05);
+  gap: 12px;
 }
 
 .int-msg-time {
-  font-size: 11px;
-  color: var(--int-text-tertiary);
-  opacity: 0.8;
+  font-size: 12px;
+  opacity: 0.5;
 }
 
 .int-msg-actions {
   display: flex;
   align-items: center;
   gap: 4px;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.int-message:hover .int-msg-actions {
   opacity: 1;
 }
 
@@ -425,7 +423,7 @@
   cursor: pointer;
   padding: 2px 4px;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 13px;
   transition: all 0.2s;
   display: flex;
   align-items: center;
@@ -433,7 +431,6 @@
 }
 
 .int-msg-action-btn:hover {
-  background: var(--int-bg-secondary);
   color: var(--int-primary);
 }
 
@@ -447,19 +444,30 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: calc(100% + 200px);
 }
 
 .int-msg-edit textarea {
   width: 100%;
-  min-height: 60px;
-  padding: 8px;
+  min-height: 66px;
+  max-height: 200px;
+  padding: 4px 11px;
   border: 1px solid var(--int-border);
-  border-radius: var(--int-radius);
+  border-radius: 6px;
   font-size: 14px;
-  resize: vertical;
+  resize: none;
   font-family: inherit;
   background: var(--int-bg);
   color: var(--int-text);
+  line-height: 1.5715;
+  overflow-y: auto;
+  outline: none;
+  transition: all 0.3s;
+}
+
+.int-msg-edit textarea:focus {
+  border-color: var(--int-primary);
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
 }
 
 .int-msg-edit-actions {
@@ -497,13 +505,14 @@
 }
 
 /* Markdown in bot messages */
-.int-msg-bubble .wmde-markdown {
+.int-msg-text .wmde-markdown {
   background: transparent !important;
   color: inherit !important;
-  font-size: 14px;
+  font-size: 13px;
+  text-align: left;
 }
 
-.int-msg-bubble .wmde-markdown pre {
+.int-msg-text .wmde-markdown pre {
   background: var(--int-bg-tertiary) !important;
   border-radius: 6px;
   padding: 12px;
@@ -511,16 +520,16 @@
   overflow-x: auto;
 }
 
-.int-msg-bubble .wmde-markdown code {
+.int-msg-text .wmde-markdown code {
   font-size: 13px;
   font-family: 'Fira Code', 'Consolas', monospace;
 }
 
-.int-msg-bubble .wmde-markdown p {
+.int-msg-text .wmde-markdown p {
   margin: 4px 0;
 }
 
-.int-msg-bubble .wmde-markdown ul, .int-msg-bubble .wmde-markdown ol {
+.int-msg-text .wmde-markdown ul, .int-msg-text .wmde-markdown ol {
   padding-left: 20px;
 }
 
@@ -1011,7 +1020,7 @@
   border: 1px solid rgba(102, 126, 234, 0.2);
 }
 
-[data-theme="dark"] .int-message-reasoning {
+.integration-page[data-theme="dark"] .int-message-reasoning {
   background: rgba(102, 126, 234, 0.12);
   border-color: rgba(102, 126, 234, 0.25);
 }
@@ -1048,12 +1057,13 @@
 
 .int-reasoning-text .wmde-markdown {
   background: transparent !important;
-  font-size: 12px;
+  font-size: 13px;
+  text-align: left;
 }
 
 .int-reasoning-text .wmde-markdown p {
   margin: 4px 0;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 /* ========== 工具调用样式 ========== */
@@ -1158,7 +1168,7 @@
   border-top: 1px dashed rgba(0, 0, 0, 0.1);
 }
 
-[data-theme="dark"] .int-tool-call-content {
+.integration-page[data-theme="dark"] .int-tool-call-content {
   border-top-color: rgba(255, 255, 255, 0.1);
 }
 
@@ -1170,6 +1180,7 @@
 .int-tool-call-message .wmde-markdown {
   background: transparent !important;
   font-size: 12px;
+  text-align: left;
 }
 
 .int-tool-call-divider {
@@ -1178,7 +1189,7 @@
   background: rgba(0, 0, 0, 0.08);
 }
 
-[data-theme="dark"] .int-tool-call-divider {
+.integration-page[data-theme="dark"] .int-tool-call-divider {
   background: rgba(255, 255, 255, 0.08);
 }
 
@@ -1208,13 +1219,14 @@
   font-size: 12px;
 }
 
-[data-theme="dark"] .int-tool-call-result {
+.integration-page[data-theme="dark"] .int-tool-call-result {
   background: rgba(255, 255, 255, 0.04);
 }
 
 .int-tool-call-result .wmde-markdown {
   background: transparent !important;
   font-size: 12px;
+  text-align: left;
 }
 
 .int-tool-call-result pre {
