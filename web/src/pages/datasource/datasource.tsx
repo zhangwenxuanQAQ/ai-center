@@ -1,4 +1,4 @@
-﻿﻿﻿﻿import React, { useState, useEffect, useRef } from 'react';
+﻿﻿﻿﻿﻿﻿﻿﻿import React, { useState, useEffect, useRef } from 'react';
 import { Layout, Tree, Card, Row, Col, Avatar, Tag, Empty, Spin, Button, Modal, Form, Input, Select, TreeSelect, Popconfirm, Pagination, Switch, message, Tabs, Table, Badge, InputNumber, Dropdown } from 'antd';
 const { TextArea, Password } = Input;
 import { CloudServerOutlined, PlusOutlined, MoreOutlined, EditOutlined, DeleteOutlined, SearchOutlined, CheckCircleOutlined, CloseCircleOutlined, DatabaseOutlined, LinkOutlined, LoadingOutlined, ChevronRightOutlined, ChevronDownOutlined, FolderOutlined, FolderOpenOutlined } from '@ant-design/icons';
@@ -9,6 +9,7 @@ import PageHeader from '../../components/page-header';
 import '../../styles/common.css';
 import './datasource.less';
 import { getDatasourceIcon, getDefaultDatasourceIcon } from '../../utils/avatar';
+import CategorySidebar from '../../components/CategorySidebar';
 
 const { Sider: LeftSider, Content } = Layout;
 const { Option } = Select;
@@ -789,38 +790,19 @@ const DatasourceManagement: React.FC = () => {
           width={260}
           className={`category-sider ${theme === 'dark' ? 'dark' : 'light'}`}
         >
-          <div className={`sider-header ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>数据源分类</span>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={handleAddCategory}
-              // size="small"
-            >
-              添加分类
-            </Button>
-          </div>
-          <div className={`sidebar-search ${theme === 'dark' ? 'dark' : 'light'}`}>
-            <Input
-              placeholder="请输入"
-              prefix={<SearchOutlined />}
-              style={{
-                background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5',
-                border: 'none',
-                borderRadius: '8px',
-                height: '32px',
-                color: theme === 'dark' ? '#ffffff' : '#000000'
-              }}
-            />
-          </div>
-          <Tree
-            showIcon={false}
+          <CategorySidebar
+            title="数据源分类"
+            addButtonText="添加分类"
+            onAdd={handleAddCategory}
+            showSearch={true}
+            searchPlaceholder="请输入"
             selectedKeys={selectedKeys}
             expandedKeys={expandedKeys}
             onSelect={handleTreeSelect}
             onExpand={handleTreeExpand}
             treeData={buildTreeData()}
-            className={`category-tree ${theme === 'dark' ? 'dark' : 'light'}`}
+            showIcon={false}
+            theme={theme}
           />
         </LeftSider>
 

@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layout, Tree, Empty, Spin, Button, Modal, Form, Input, Select, Tag, message, Popconfirm, Table, Pagination, Switch, Space, TreeSelect, Checkbox, Tooltip, Drawer, Descriptions, Row, Col } from 'antd';
 const { TextArea } = Input;
@@ -12,6 +12,7 @@ import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/pris
 import { promptService, Prompt, PromptCategory, PromptListResponse } from '../../services/prompt';
 import '../../styles/common.css';
 import './prompt.less';
+import CategorySidebar from '../../components/CategorySidebar';
 
 const { Sider: LeftSider, Content } = Layout;
 const { Option } = Select;
@@ -623,35 +624,26 @@ const PromptManagement: React.FC = () => {
 
       <Layout className="prompt-layout">
         <LeftSider width={260} className={`category-sider ${theme === 'dark' ? 'dark' : 'light'}`}>
-          <div className={`sider-header ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>分类</span>
-            <Button 
-              type="primary" 
-              icon={<PlusOutlined />} 
-              onClick={() => {
-                setEditingCategory(null);
-                categoryForm.resetFields();
-                const allCategories = flattenAllCategories(categories);
-                const maxSortOrder = allCategories.length > 0 
-                  ? Math.max(...allCategories.map(c => c.sort_order || 0)) 
-                  : 0;
-                categoryForm.setFieldsValue({ sort_order: maxSortOrder + 1 });
-                setIsCategoryModalVisible(true);
-              }} 
-              // size="small" 
-              // style={{ background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)', border: 'none'}}
-            >
-              新增分类
-            </Button>
-          </div>
-          <Tree
-            showIcon
+          <CategorySidebar
+            title="分类"
+            addButtonText="新增分类"
+            onAdd={() => {
+              setEditingCategory(null);
+              categoryForm.resetFields();
+              const allCategories = flattenAllCategories(categories);
+              const maxSortOrder = allCategories.length > 0 
+                ? Math.max(...allCategories.map(c => c.sort_order || 0)) 
+                : 0;
+              categoryForm.setFieldsValue({ sort_order: maxSortOrder + 1 });
+              setIsCategoryModalVisible(true);
+            }}
             selectedKeys={selectedKeys}
             expandedKeys={expandedKeys}
             onSelect={handleCategorySelect}
             onExpand={handleTreeExpand}
             treeData={buildTreeData()}
-            className={`category-tree ${theme === 'dark' ? 'dark' : 'light'}`}
+            showIcon={true}
+            theme={theme}
           />
         </LeftSider>
 

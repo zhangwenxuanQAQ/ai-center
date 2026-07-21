@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layout, Tree, Card, Row, Col, Avatar, Empty, Spin, Button, Modal, Form, Input, message, Popconfirm, TreeSelect, Upload, Pagination, Select, Switch, Tag } from 'antd';
 import { ApartmentOutlined, PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UpOutlined, DownOutlined, CheckCircleOutlined, CloseCircleOutlined, UploadOutlined } from '@ant-design/icons';
@@ -6,6 +6,7 @@ import type { TreeDataNode, TreeProps, UploadProps } from 'antd';
 import { agentService, AgentCategory, AgentInstance } from '../../services/agent';
 import '../../styles/common.css';
 import './agent.less';
+import CategorySidebar from '../../components/CategorySidebar';
 
 const { Sider: LeftSider, Content } = Layout;
 const { TextArea } = Input;
@@ -684,33 +685,26 @@ const AgentManagement: React.FC = () => {
           width={260}
           className={`category-sider ${theme === 'dark' ? 'dark' : 'light'}`}
         >
-          <div className={`sider-header ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>分类</span>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={handleAddCategory}
-              size="small"
-              style={{
-                background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)',
-                border: 'none',
-                borderRadius: '12px',
-                padding: '0 12px',
-                height: '28px',
-                fontSize: '12px'
-              }}
-            >
-              新增分类
-            </Button>
-          </div>
-          <Tree
-            showIcon
+          <CategorySidebar
+            title="分类"
+            addButtonText="新增分类"
+            onAdd={handleAddCategory}
+            addButtonSize="small"
+            addButtonStyle={{
+              background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)',
+              border: 'none',
+              borderRadius: '12px',
+              padding: '0 12px',
+              height: '28px',
+              fontSize: '12px'
+            }}
             selectedKeys={selectedKeys}
             expandedKeys={expandedKeys}
             onSelect={handleTreeSelect}
             onExpand={handleTreeExpand}
             treeData={buildTreeData()}
-            className={`category-tree ${theme === 'dark' ? 'dark' : 'light'}`}
+            showIcon={true}
+            theme={theme}
           />
         </LeftSider>
 

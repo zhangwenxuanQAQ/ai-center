@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Layout, Tree, Card, Row, Col, Empty, Spin, Button, Modal, Form, Input, Select, TreeSelect, message, Popconfirm, Pagination, Upload, Tooltip } from 'antd';
 import type { UploadProps } from 'antd';
 const { TextArea } = Input;
@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { mcpService, MCPServer, MCPCategory, MCPConnectionTest } from '../../services/mcp';
 import '../../styles/common.css';
 import './mcp.less';
+import CategorySidebar from '../../components/CategorySidebar';
 
 const { Sider: LeftSider, Content } = Layout;
 const { Option } = Select;
@@ -617,13 +618,20 @@ const MCPManagement: React.FC = () => {
     <div className={`page-container ${theme === 'dark' ? 'dark' : 'light'}`}>
       <Layout className="mcp-layout">
         <LeftSider width={260} className={`category-sider ${theme === 'dark' ? 'dark' : 'light'}`}>
-          <div className={`sider-header ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>分类</span>
-            <Button type="primary" icon={<PlusOutlined />} onClick={handleAddCategory} size="small" style={{ background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)', border: 'none', borderRadius: '12px', padding: '0 12px', height: '28px', fontSize: '12px' }}>
-              新增分类
-            </Button>
-          </div>
-          <Tree showIcon selectedKeys={selectedKeys} expandedKeys={expandedKeys} onSelect={handleTreeSelect} onExpand={handleTreeExpand} treeData={buildTreeData()} className={`category-tree ${theme === 'dark' ? 'dark' : 'light'}`} />
+          <CategorySidebar
+            title="分类"
+            addButtonText="新增分类"
+            onAdd={handleAddCategory}
+            addButtonSize="small"
+            addButtonStyle={{ background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)', border: 'none', borderRadius: '12px', padding: '0 12px', height: '28px', fontSize: '12px' }}
+            selectedKeys={selectedKeys}
+            expandedKeys={expandedKeys}
+            onSelect={handleTreeSelect}
+            onExpand={handleTreeExpand}
+            treeData={buildTreeData()}
+            showIcon={true}
+            theme={theme}
+          />
         </LeftSider>
 
         <Content className={`mcp-content ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '16px', boxSizing: 'border-box' }}>

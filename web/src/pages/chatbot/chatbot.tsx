@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+﻿﻿import React, { useState, useEffect, useRef } from 'react';
 import { Layout, Tree, Card, Row, Col, Avatar, Tag, Empty, Spin, Button, Modal, Form, Input, Select, TreeSelect, Upload, message, Dropdown, Popconfirm, Pagination } from 'antd';
 const { TextArea } = Input;
 import { RobotOutlined, HomeOutlined, PlusOutlined, UploadOutlined, MoreOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UpOutlined, DownOutlined, FolderOutlined, FolderOpenOutlined } from '@ant-design/icons';
@@ -7,6 +7,7 @@ import type { TreeDataNode, TreeProps, UploadProps } from 'antd';
 import { chatbotService, Chatbot, ChatbotCategory } from '../../services/chatbot';
 import '../../styles/common.css';
 import './chatbot.less';
+import CategorySidebar from '../../components/CategorySidebar';
 
 import WorkWeixinIcon from '../../assets/svg/企业微信.svg';
 import LocalBotIcon from '../../assets/svg/本地机器人.svg';
@@ -847,27 +848,18 @@ const ChatbotManagement: React.FC = () => {
           width={260}
           className={`chatbot-sider ${theme === 'dark' ? 'dark' : 'light'}`}
         >
-          <div className={`sider-header ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>分类</span>
-            {/* 新增分类 */}
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={handleAddCategory}
-              size="small"
-            
-            >
-              新增分类
-            </Button>
-          </div>
-          <Tree
-            showIcon
+          <CategorySidebar
+            title="分类"
+            addButtonText="新增分类"
+            onAdd={handleAddCategory}
+            addButtonSize="small"
             selectedKeys={selectedKeys}
             expandedKeys={expandedKeys}
             onSelect={handleTreeSelect}
             onExpand={handleTreeExpand}
             treeData={buildTreeData()}
-            // className={`category-tree ${theme === 'dark' ? 'dark' : 'light'}`}
+            showIcon={true}
+            theme={theme}
           />
         </LeftSider>
 

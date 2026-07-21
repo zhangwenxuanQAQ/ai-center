@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Tabs } from 'antd';
 import { Layout, Tree, Table, Input, Select, Button, Tag, Spin, Pagination, Empty, Row, Col, Tooltip, Switch, message, Modal, Popconfirm, Form, TreeSelect, Popover, Descriptions, Dropdown } from 'antd';
@@ -15,6 +15,7 @@ import MetadataModal from './knowledgebase_document_metadata';
 import KnowledgebaseDocumentSetting from './knowledgebase_document_setting';
 import '../../styles/common.css';
 import './knowledgebase.less';
+import CategorySidebar from '../../components/CategorySidebar';
 
 const { Sider: LeftSider, Content } = Layout;
 const { Option } = Select;
@@ -1070,51 +1071,35 @@ const KnowledgebaseDocumentPage: React.FC<KnowledgebaseDocumentProps> = ({ knowl
           className={`category-sider ${theme === 'dark' ? 'dark' : 'light'}`}
           style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
         >
-          <div className={`sider-header ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>知识目录</span>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              size="small"
-              onClick={() => {
-                setEditingCategory(null); // 重置编辑状态
-                setIsFolderModalVisible(true);
-              }}
-              style={{
-                background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)',
-                border: 'none',
-                borderRadius: '12px',
-                padding: '0 12px',
-                height: '28px',
-                fontSize: '12px'
-              }}
-            >
-              新增
-            </Button>
-          </div>
-          {/* 搜索框 */}
-          <Input
-            placeholder="搜索目录名称"
-            value={categorySearchValue}
-            onChange={(e) => setCategorySearchValue(e.target.value)}
-            prefix={<SearchOutlined />}
-            style={{
-              marginBottom: '12px',
-              borderRadius: '8px',
-              flexShrink: 0,
+          <CategorySidebar
+            title="知识目录"
+            addButtonText="新增"
+            onAdd={() => {
+              setEditingCategory(null);
+              setIsFolderModalVisible(true);
             }}
+            addButtonSize="small"
+            addButtonStyle={{
+              background: 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)',
+              border: 'none',
+              borderRadius: '12px',
+              padding: '0 12px',
+              height: '28px',
+              fontSize: '12px'
+            }}
+            showSearch={true}
+            searchValue={categorySearchValue}
+            onSearchChange={setCategorySearchValue}
+            searchPlaceholder="搜索目录名称"
+            selectedKeys={selectedKeys}
+            expandedKeys={expandedKeys}
+            onSelect={handleTreeSelect}
+            onExpand={handleTreeExpand}
+            treeData={buildTreeData()}
+            showIcon={true}
+            theme={theme}
+            treeContainerStyle={{ height: '80%', overflowY: 'auto', overflowX: 'hidden' }}
           />
-          <div style={{ height: '80%', overflowY: 'auto', overflowX: 'hidden' }} className="category-tree-container">
-            <Tree
-              showIcon
-              selectedKeys={selectedKeys}
-              expandedKeys={expandedKeys}
-              onSelect={handleTreeSelect}
-              onExpand={handleTreeExpand}
-              treeData={buildTreeData()}
-              className={`category-tree ${theme === 'dark' ? 'dark' : 'light'}`}
-            />
-          </div>
         </LeftSider>
       )}
 
