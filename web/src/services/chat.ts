@@ -511,6 +511,24 @@ export const chatService = {
   },
 
   /**
+   * 更新消息的extra_content
+   * @param chatId - 对话ID
+   * @param messageId - 消息ID
+   * @param extraContent - 额外内容JSON
+   */
+  updateMessageExtraContent: async (
+    chatId: string,
+    messageId: string,
+    extraContent: any
+  ): Promise<any> => {
+    return http.post(`/aicenter/v1/chat/update_message_extra_content`, {
+      chat_id: chatId,
+      message_id: messageId,
+      extra_content: extraContent
+    });
+  },
+
+  /**
    * 更新对话名称
    * @param conversationId - 对话ID
    * @param title - 新的对话标题

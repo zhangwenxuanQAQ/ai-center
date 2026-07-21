@@ -13,7 +13,8 @@ from pydantic import BaseModel, Field
 
 from app.services.chat.dto import (
     ChatCreate, ChatUpdate, Chat as ChatDTO,
-    ChatRequest, ChatListResponse, ChatMessageListResponse
+    ChatRequest, ChatListResponse, ChatMessageListResponse,
+    ChatMessageExtraContentUpdate
 )
 from app.services.chat.service import ChatService, ChatMessageService
 from app.core.chat.chat_service import ChatCoreService, ChatStopManager
@@ -486,6 +487,46 @@ async def stop_chat(
     ChatStopManager().request_stop(stop_request.chat_id)
     
     return ResponseUtil.success(data={"updated_count": updated_count}, message="已停止回答")
+
+
+class ChatStopRequest(BaseModel):
+    chat_id: str = Field(..., description="对话ID")
+
+
+@router.post("/update_message_extra_content", summary="更新消息extra_content")
+async def update_message_extra_content(
+    request: Request,
+    update_request: ChatMessageExtraContentUpdate
+):
+    """
+    更新指定消息的extra_content字段
+
+    - **chat_id**: 对话ID
+    - **message_id**: 消息ID
+    - **extra_content**: 额外内容JSON
+    """
+    user_id = get_user_id(request)
+    try:
+        chat = Chat.get(
+            (Chat.id == update_request.chat_id) &
+            (Chat.user_id == user_id) &
+            (Chat.deleted == False)
+        )
+    except Chat.DoesNotExist:
+        return ResponseUtil.not_found(message="对话不存在")
+
+    try:
+        updated_message = ChatMessageService.update_message_extra_content(
+            chat_id=update_request.chat_id,
+            message_id=update_request.message_id,
+            extra_content=update_request.extra_content
+        )
+        return ResponseUtil.success(data={
+            "message_id": updated_message.message_id,
+            "extra_content": updated_message.extra_content
+        }, message="更新成功")
+    except ResourceNotFoundError as e:
+        return ResponseUtil.not_found(message=e.message)
 
 
 @router.get("/streaming_status/{chat_id}", summary="查询流式状态")

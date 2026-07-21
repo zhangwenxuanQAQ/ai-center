@@ -6,6 +6,7 @@ import { MarkdownUI } from '@markdown-ui/react';
 import '@markdown-ui/react/widgets.css';
 import { Marked } from 'marked';
 import { markedUiStreamingExtension } from '@markdown-ui/marked-ext';
+import { parseDSL, Widget } from '@markdown-ui/mdui-lang';
 
 interface WidgetEvent {
   type: string;
@@ -17,6 +18,7 @@ interface ChatMarkdownProps {
   source: string;
   className?: string;
   onWidgetEvent?: (event: WidgetEvent) => void;
+  widgetValues?: Record<string, any>;
 }
 
 /**
@@ -150,18 +152,153 @@ const MermaidChart: React.FC<{ chart: string; theme: 'light' | 'dark' }> = React
 });
 
 /**
+ * 将值格式化为 DSL 字符串
+ */
+function formatDslValue(value: any): string {
+  if (value === null || value === undefined) return '""';
+  if (typeof value === 'string') return `"${value.replace(/"/g, '\\"')}"`;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) {
+    const items = value.map(v => formatDslValue(v)).join(' ');
+    return `[${items}]`;
+  }
+  if (typeof value === 'object') return `"${JSON.stringify(value).replace(/"/g, '\\"')}"`;
+  return String(value);
+}
+
+/**
+ * 单字段 Widget 转 DSL（不含换行，用于 form 内部字段）
+ */
+function singleWidgetToDsl(widget: Widget): string {
+  const type = widget.type;
+  const id = widget.id || '';
+
+  switch (type) {
+    case 'text-input': {
+      const w = widget as any;
+      const parts: string[] = [type, id];
+      if (w.label !== undefined) parts.push(formatDslValue(w.label));
+      if (w.placeholder !== undefined) parts.push(formatDslValue(w.placeholder));
+      if (w.default !== undefined) parts.push(formatDslValue(w.default));
+      return parts.join(' ');
+    }
+    case 'button-group':
+    case 'select': {
+      const w = widget as any;
+      const parts: string[] = [type, id];
+      if (w.label !== undefined) parts.push(formatDslValue(w.label));
+      if (w.choices) parts.push(formatDslValue(w.choices));
+      if (w.default !== undefined) parts.push(formatDslValue(w.default));
+      return parts.join(' ');
+    }
+    case 'select-multi': {
+      const w = widget as any;
+      const parts: string[] = [type, id];
+      if (w.label !== undefined) parts.push(formatDslValue(w.label));
+      if (w.choices) parts.push(formatDslValue(w.choices));
+      if (w.default !== undefined) parts.push(formatDslValue(w.default));
+      return parts.join(' ');
+    }
+    case 'slider': {
+      const w = widget as any;
+      const parts: string[] = [type, id];
+      if (w.label !== undefined) parts.push(formatDslValue(w.label));
+      if (w.min !== undefined) parts.push(String(w.min));
+      if (w.max !== undefined) parts.push(String(w.max));
+      if (w.step !== undefined) parts.push(String(w.step));
+      if (w.default !== undefined) parts.push(String(w.default));
+      return parts.join(' ');
+    }
+    default:
+      return '';
+  }
+}
+
+/**
+ * 将 Widget JSON 对象转换回 DSL 字符串（支持 form 嵌套字段）
+ */
+function widgetToDsl(widget: Widget): string {
+  if (widget.type === 'form') {
+    const w = widget as any;
+    const lines: string[] = [];
+    const header: string[] = ['form', w.id || ''];
+    if (w.submitLabel !== undefined) header.push(formatDslValue(w.submitLabel));
+    lines.push(header.join(' '));
+    if (w.fields && Array.isArray(w.fields)) {
+      for (const field of w.fields) {
+        const fieldDsl = singleWidgetToDsl(field);
+        if (fieldDsl) {
+          lines.push(`  ${fieldDsl}`);
+        }
+      }
+    }
+    return lines.join('\n');
+  }
+  return singleWidgetToDsl(widget);
+}
+
+/**
+ * 递归更新 widget 及其子字段的默认值
+ * form 组件的 widgetValues 是嵌套结构：{ formId: { fieldId: value, ... } }
+ */
+function updateWidgetDefaults(widget: Widget, widgetValues: Record<string, any>): Widget {
+  const w = widget as any;
+
+  if (w.id && widgetValues[w.id] !== undefined) {
+    if (w.type === 'form') {
+      const formValues = widgetValues[w.id];
+      if (w.fields && Array.isArray(w.fields) && typeof formValues === 'object' && formValues !== null) {
+        w.fields = w.fields.map((field: Widget) => updateWidgetDefaults(field, formValues));
+      }
+    } else if (['text-input', 'select', 'select-multi', 'button-group', 'slider'].includes(w.type)) {
+      w.default = widgetValues[w.id];
+    }
+  }
+
+  return w;
+}
+
+/**
+ * 预处理 Markdown-UI DSL 代码，根据 widgetValues 覆盖组件的默认值
+ * 使用官方 @markdown-ui/mdui-lang 解析 DSL 保证准确性
+ * 按整个 markdown-ui-widget 代码块处理，而非逐行
+ */
+function applyWidgetValuesToDsl(code: string, widgetValues: Record<string, any>): string {
+  if (!widgetValues || Object.keys(widgetValues).length === 0) return code;
+
+  const dslRegex = /```markdown-ui-widget\n([\s\S]*?)\n```/g;
+  let match;
+  let result = code;
+
+  while ((match = dslRegex.exec(code)) !== null) {
+    const originalDSL = match[1];
+    const parseResult = parseDSL(originalDSL);
+    if (parseResult.success && parseResult.widget) {
+      const updatedWidget = updateWidgetDefaults(parseResult.widget, widgetValues);
+      const newDSL = widgetToDsl(updatedWidget);
+      if (newDSL) {
+        result = result.replace(originalDSL, newDSL);
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
  * Markdown-UI 组件渲染器
  * 使用 marked + markedUiExtension 解析 DSL 代码为 HTML，然后传递给 MarkdownUI 组件渲染
  */
-const MarkdownUIWidget: React.FC<{ code: string; onWidgetEvent?: (event: WidgetEvent) => void }> = React.memo(({ code, onWidgetEvent }) => {
+const MarkdownUIWidget: React.FC<{ code: string; onWidgetEvent?: (event: WidgetEvent) => void; widgetValues?: Record<string, any> }> = React.memo(({ code, onWidgetEvent, widgetValues }) => {
   const [html, setHtml] = useState<string>('');
   const [error, setError] = useState<string>('');
   const lastCodeRef = useRef<string>('');
   const renderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    // 如果代码内容没有变化，不重新渲染
-    if (lastCodeRef.current === code) {
+    const processedCode = applyWidgetValuesToDsl(code, widgetValues || {});
+    // 如果代码内容和值都没有变化，不重新渲染
+    if (lastCodeRef.current === processedCode) {
       return;
     }
 
@@ -179,8 +316,8 @@ const MarkdownUIWidget: React.FC<{ code: string; onWidgetEvent?: (event: WidgetE
         marked.use(markedUiStreamingExtension);
 
         // 解析代码块，生成 HTML
-        const parsedHtml = marked.parse(code) as string;
-        lastCodeRef.current = code;
+        const parsedHtml = marked.parse(processedCode) as string;
+        lastCodeRef.current = processedCode;
 
         setHtml(parsedHtml);
         setError('');
@@ -195,7 +332,7 @@ const MarkdownUIWidget: React.FC<{ code: string; onWidgetEvent?: (event: WidgetE
         clearTimeout(renderTimeoutRef.current);
       }
     };
-  }, [code]);
+  }, [code, widgetValues]);
 
   // 处理组件交互事件
   const handleWidgetEvent = useCallback((event: any) => {
@@ -279,7 +416,7 @@ const CollapsibleCodeBlock: React.FC<{ title: string; content: React.ReactNode }
  * 使用 React.memo 优化：当 source 和 className 未变化时，避免因父组件状态更新
  * （如输入框输入）导致的重新渲染，从而防止 MermaidChart 等子组件被重新挂载。
  */
-const ChatMarkdown: React.FC<ChatMarkdownProps> = React.memo(({ source, className, onWidgetEvent }) => {
+const ChatMarkdown: React.FC<ChatMarkdownProps> = React.memo(({ source, className, onWidgetEvent, widgetValues }) => {
   const componentId = useRef(`chat-md-${Math.random().toString(36).slice(2, 9)}`).current;
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
@@ -319,7 +456,7 @@ const ChatMarkdown: React.FC<ChatMarkdownProps> = React.memo(({ source, classNam
         // 处理 markdown-ui-widget 组件
         if (lang === 'markdown-ui-widget') {
           const fullCode = '```markdown-ui-widget\n' + codeText + '\n```';
-          return <MarkdownUIWidget code={fullCode} onWidgetEvent={onWidgetEvent} />;
+          return <MarkdownUIWidget code={fullCode} onWidgetEvent={onWidgetEvent} widgetValues={widgetValues} />;
         }
 
         // 其他代码块使用可折叠样式
@@ -337,7 +474,7 @@ const ChatMarkdown: React.FC<ChatMarkdownProps> = React.memo(({ source, classNam
       // Fallback for unexpected structure
       return <pre {...props}>{children}</pre>;
     }
-  }), [theme]);
+  }), [theme, onWidgetEvent, widgetValues]);
 
   return (
     <div className={className} data-theme={theme} id={componentId}>

@@ -200,6 +200,20 @@ class ChatMessageCreate(BaseModel):
     chatbot_id: Optional[str] = Field(None, max_length=40, description="机器人ID")
 
 
+class ChatMessageExtraContentUpdate(BaseModel):
+    """
+    消息extra_content更新DTO
+    
+    Attributes:
+        chat_id: 对话ID
+        message_id: 消息ID
+        extra_content: 额外内容JSON
+    """
+    chat_id: str = Field(..., max_length=40, description="对话ID")
+    message_id: str = Field(..., max_length=40, description="消息ID")
+    extra_content: Optional[Any] = Field(None, description="额外内容JSON")
+
+
 class ChatMessage(ChatMessageBase, BaseDTO):
     """
     对话消息响应DTO

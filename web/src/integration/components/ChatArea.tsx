@@ -407,10 +407,38 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   };
 
   /**
+   * 将 widget 交互值保存到对应助手消息的 extra_content 中
+   * 用于重新进入对话时恢复组件的选中状态
+   */
+  const saveWidgetValueToMessage = useCallback((widgetId: string, widgetValue: any) => {
+    setMessages(prev => prev.map(msg => {
+      if (msg.role === 'assistant' && msg.content && msg.content.includes(widgetId)) {
+        const existingWidgetValues = (msg.extra_content as any)?.widgetValues || {};
+        return {
+          ...msg,
+          extra_content: {
+            ...msg.extra_content,
+            widgetValues: {
+              ...existingWidgetValues,
+              [widgetId]: widgetValue
+            }
+          }
+        };
+      }
+      return msg;
+    }));
+  }, []);
+
+  /**
    * 处理 Markdown-UI 组件交互事件
    * 将组件事件数据作为新的用户消息发送给后端
    */
   const handleWidgetEvent = (event: any) => {
+    // 先保存交互值到对应助手消息的 extra_content 中
+    if (event.widgetId !== undefined) {
+      saveWidgetValueToMessage(event.widgetId, event.widgetValue);
+    }
+
     const eventData = {
       type: event.type || 'widget_event',
       widgetId: event.widgetId,
@@ -744,7 +772,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                             const displaySource = widgetEvent
                               ? formatWidgetValueForDisplay(widgetEvent.widgetId, widgetEvent.widgetValue)
                               : msg.content;
-                            return <ChatMarkdown source={displaySource} onWidgetEvent={handleWidgetEvent} />;
+                            return <ChatMarkdown source={displaySource} onWidgetEvent={handleWidgetEvent} widgetValues={(msg.extra_content as any)?.widgetValues} />;
                           })()
                         ) : msg.status === 'start' ? (
                           <div className="int-loading">

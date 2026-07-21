@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Input, Button, Switch, Modal, Slider, message, Popconfirm, Tooltip, Dropdown, Empty, Spin, Popover, InputNumber, Select, Steps, Upload, List } from 'antd';
 import { SendOutlined, ClearOutlined, SettingOutlined, RobotOutlined, BulbOutlined, LoadingOutlined, DownOutlined, RightOutlined, CopyOutlined, ReloadOutlined, EditOutlined, InfoCircleOutlined, StopOutlined, PaperClipOutlined, FolderOpenOutlined, FileTextOutlined, UploadOutlined, CloseCircleOutlined, InboxOutlined, FilePdfOutlined, FileWordOutlined, FileImageOutlined, SoundOutlined, DownloadOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import DataSourceFileSelector from '../datasource/datasource data_select';
@@ -586,6 +586,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         };
       });
       setMessages(mappedMessages);
+      streamingMessagesRef.current[conversationId] = mappedMessages;
 
       const durations: Record<string, number> = {};
       mappedMessages.forEach((msg: Message) => {
@@ -598,6 +599,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     } catch (error) {
       console.error('Failed to fetch messages:', error);
       setMessages([]);
+      streamingMessagesRef.current[conversationId] = [];
       return [];
     } finally {
       setLoading(false);
@@ -848,10 +850,77 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
   };
 
   /**
+   * 将 widget 交互值保存到对应助手消息的 extra_content 中
+   * 用于重新进入对话时恢复组件的选中状态
+   */
+  const saveWidgetValueToMessage = useCallback((widgetId: string, widgetValue: any) => {
+    const chatId = conversation?.id;
+
+    const currentMessages = chatId
+      ? (streamingMessagesRef.current[chatId] || [])
+      : messages;
+
+    let targetMessageId: string | null = null;
+    let targetExtraContent: any = null;
+
+    const targetMsg = currentMessages.find(
+      (msg: Message) =>
+        msg.role === 'assistant' &&
+        msg.content &&
+        msg.content.includes(widgetId)
+    );
+
+    if (targetMsg) {
+      const existingWidgetValues = (targetMsg.extra_content as any)?.widgetValues || {};
+      targetExtraContent = {
+        ...targetMsg.extra_content,
+        widgetValues: {
+          ...existingWidgetValues,
+          [widgetId]: widgetValue
+        }
+      };
+      targetMessageId = targetMsg.message_id || targetMsg.id;
+    }
+
+    const updater = (prev: Message[]) => prev.map(msg => {
+      if (msg.role === 'assistant' && msg.content && msg.content.includes(widgetId)) {
+        const existingWidgetValues = (msg.extra_content as any)?.widgetValues || {};
+        return {
+          ...msg,
+          extra_content: {
+            ...msg.extra_content,
+            widgetValues: {
+              ...existingWidgetValues,
+              [widgetId]: widgetValue
+            }
+          }
+        };
+      }
+      return msg;
+    });
+
+    if (chatId) {
+      updateStreamingMessages(chatId, updater);
+    } else {
+      setMessages(updater);
+    }
+
+    if (chatId && targetMessageId && targetExtraContent) {
+      chatService.updateMessageExtraContent(chatId, targetMessageId, targetExtraContent)
+        .catch((err: any) => console.error('保存widget值到后端失败:', err));
+    }
+  }, [conversation?.id, messages]);
+
+  /**
    * 处理 Markdown-UI 组件交互事件
    * 将组件事件数据作为新的用户消息发送给后端
    */
   const handleWidgetEvent = (event: any) => {
+    // 先保存交互值到对应助手消息的 extra_content 中
+    if (event.widgetId !== undefined) {
+      saveWidgetValueToMessage(event.widgetId, event.widgetValue);
+    }
+
     const eventData = {
       type: event.type || 'widget_event',
       widgetId: event.widgetId,
@@ -989,10 +1058,6 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       created_at: new Date().toISOString(),
     };
 
-    const newMessages = [...messages, userMessage];
-    setMessages(newMessages);
-    setLoading(true);
-
     const assistantMessageId = (Date.now() + 1).toString();
     const assistantMessage: Message = {
       id: assistantMessageId,
@@ -1002,7 +1067,19 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       created_at: new Date().toISOString(),
       avatar: selectedChatbot?.avatar || (selectedModel?.provider ? getProviderAvatar(selectedModel.provider) : undefined)
     };
-    setMessages(prev => [...prev, assistantMessage]);
+
+    // 初始化流式消息ref，用于切换对话后恢复完整消息状态
+    const streamingChatId = currentConversation?.id;
+
+    // 使用函数式更新，确保基于最新的消息状态
+    setMessages(prev => {
+      const newMessages = [...prev, userMessage, assistantMessage];
+      if (streamingChatId) {
+        streamingMessagesRef.current[streamingChatId] = newMessages;
+      }
+      return newMessages;
+    });
+    setLoading(true);
     setThinkingMessageId(assistantMessageId);
     if (deepThinking) {
       thinkingStartTimeRef.current[assistantMessageId] = Date.now();
@@ -1011,12 +1088,6 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     setTimeout(() => {
       scrollToBottomInstant();
     }, 50);
-
-    // 初始化流式消息ref，用于切换对话后恢复完整消息状态
-    const streamingChatId = currentConversation?.id;
-    if (streamingChatId) {
-      streamingMessagesRef.current[streamingChatId] = [...newMessages, assistantMessage];
-    }
 
     try {
       // 发送消息到后端
@@ -2692,6 +2763,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 <ChatMarkdown
                   source={msg.content}
                   onWidgetEvent={handleWidgetEvent}
+                  widgetValues={(msg.extra_content as any)?.widgetValues}
                   className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                 />
               </div>
@@ -2911,6 +2983,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 <ChatMarkdown
                   source={msg.content}
                   onWidgetEvent={handleWidgetEvent}
+                  widgetValues={(msg.extra_content as any)?.widgetValues}
                   className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                 />
               </div>
@@ -3076,6 +3149,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                         <ChatMarkdown
                           source={msg.content}
                           onWidgetEvent={handleWidgetEvent}
+                          widgetValues={(msg.extra_content as any)?.widgetValues}
                           className={`md-editor small-text ${theme === 'dark' ? 'dark' : 'light'}`}
                         />
                       </div>

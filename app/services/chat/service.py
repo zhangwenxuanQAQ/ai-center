@@ -1068,6 +1068,75 @@ class ChatMessageService:
 
     @staticmethod
     @handle_transaction
+    def update_message_extra_content(chat_id: str, message_id: str, extra_content: Any) -> ChatMessage:
+        """
+        更新消息的extra_content字段（合并方式，不覆盖已有字段，不更新updated_at）
+
+        Args:
+            chat_id: 对话ID
+            message_id: 消息ID
+            extra_content: 要合并的extra_content值
+
+        Returns:
+            ChatMessage: 更新后的消息对象
+
+        Raises:
+            ResourceNotFoundError: 消息不存在
+        """
+        import json
+        from app.database.database import db
+        try:
+            db_message = ChatMessage.get(
+                (ChatMessage.chat_id == chat_id) &
+                (ChatMessage.message_id == message_id) &
+                (ChatMessage.deleted == False)
+            )
+        except ChatMessage.DoesNotExist:
+            raise ResourceNotFoundError(message=f"消息 {message_id} 不存在")
+
+        merged_extra_content = db_message.extra_content
+        if extra_content is not None:
+            existing_data = {}
+            if db_message.extra_content:
+                try:
+                    existing_data = json.loads(db_message.extra_content)
+                    if not isinstance(existing_data, dict):
+                        existing_data = {}
+                except (json.JSONDecodeError, TypeError):
+                    existing_data = {}
+
+            if isinstance(extra_content, dict):
+                merged_data = dict(existing_data)
+                for key, value in extra_content.items():
+                    if key == 'widgetValues' and isinstance(value, dict) and isinstance(merged_data.get('widgetValues'), dict):
+                        merged_data['widgetValues'] = {**merged_data['widgetValues'], **value}
+                    else:
+                        merged_data[key] = value
+                merged_extra_content = json.dumps(merged_data, ensure_ascii=False)
+            else:
+                merged_extra_content = json.dumps(extra_content, ensure_ascii=False)
+        else:
+            merged_extra_content = None
+
+        # 使用原生SQL更新，避免BaseModel.save()自动更新updated_at，
+        # 同时显式设置updated_at为原值，覆盖MySQL的ON UPDATE CURRENT_TIMESTAMP
+        if merged_extra_content is not None:
+            db.execute_sql(
+                "UPDATE chat_message SET extra_content = %s, updated_at = updated_at WHERE id = %s",
+                (merged_extra_content, db_message.id)
+            )
+        else:
+            db.execute_sql(
+                "UPDATE chat_message SET extra_content = NULL, updated_at = updated_at WHERE id = %s",
+                (db_message.id,)
+            )
+
+        # 重新读取消息对象返回
+        updated_message = ChatMessage.get_by_id(db_message.id)
+        return updated_message
+
+    @staticmethod
+    @handle_transaction
     def create_user_and_assistant_messages(
         chat_id: str,
         user_content: str,
