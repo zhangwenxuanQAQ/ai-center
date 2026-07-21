@@ -181,6 +181,33 @@
 
 ### Markdown-UI 最佳实践
 
+#### Form 组件使用规则
+
+`form` 组件专门用于**收集和提交用户输入的数据**，适合将多个输入类组件组合在一起。
+
+**推荐放在 `form` 中的组件**（需要用户输入/选择的组件）：
+- `text-input`：单行文本输入
+- `text-area`：多行文本输入
+- `select`：单选下拉框
+- `select-multi`：多选下拉框
+- `slider`：滑块组件
+
+**不适合放在 `form` 中的组件**（有独立交互逻辑的组件）：
+- `button-group`：按钮组（独立操作）
+- `chart-line`：折线图（纯展示）
+- `chart-pie`：饼图（纯展示）
+- `quiz`：问答组件（独立交互）
+
+**重要规则：多选框（`select-multi`）必须配合表单使用。** 用户在多选框中完成所有选择后，通过点击表单的提交按钮，一次性提交所有数据。不要让 select-multi 独立存在。
+
+**select-multi 正确使用示例：**
+
+```markdown-ui-widget
+form filterForm "应用筛选"
+  select-multi tools ["Docker" "Redis" "PostgreSQL"] ["Docker"]
+  select-multi regions ["美国" "欧洲" "亚太"] ["美国"]
+```
+
 #### 组合使用规则
 可以将多个组件组合在一起创建复杂界面：
 
@@ -283,6 +310,9 @@ form projectConfig "创建项目"
 - [ ] 是否遵循了 Markdown-UI 语法规范
 - [ ] 组件是否能正确渲染（无语法错误）
 - [ ] 是否提供了详细的文字说明
+- [ ] 输入类组件（text-input、select、select-multi、slider、text-area）是否放在 form 中
+- [ ] select-multi 是否配合 form 使用，没有独立存在
+- [ ] 不适合放在 form 中的组件（button-group、chart-line、chart-pie、quiz）是否单独使用
 
 ## 6. 核心原则
 

@@ -556,16 +556,16 @@ body[data-theme="dark"] button.ant-btn-dashed:hover {
 body[data-theme="dark"] .ant-upload,
 body[data-theme="dark"] span.ant-upload,
 body[data-theme="dark"] div.ant-upload {
-  background: transparent !important;
-  border: none !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px dashed rgba(255, 255, 255, 0.2) !important;
   border-radius: 8px !important;
 }
 
 body[data-theme="dark"] .ant-upload:hover,
 body[data-theme="dark"] span.ant-upload:hover,
 body[data-theme="dark"] div.ant-upload:hover {
-  background: rgba(255, 255, 255, 0.05) !important;
-  border: none !important;
+  border-color: var(--primary-color) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
 }
 
 body[data-theme="dark"] .ant-upload-text,

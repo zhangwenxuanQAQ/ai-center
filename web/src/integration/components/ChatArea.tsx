@@ -201,11 +201,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     // 有文件或有文本时都可以发送
     if ((selectedFiles.length === 0 && !text) || loading) return;
 
-    setInputValue('');
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-    }
-
     // Build query items
     const query: IntegrationQueryItem[] = [];
 
@@ -225,9 +220,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       query.push({ type: 'text', content: text });
     }
 
-    // Clear selected files
     const filesForDisplay = [...selectedFiles];
-    setSelectedFiles([]);
 
     // Build display content
     let displayContent = text;
@@ -235,6 +228,25 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       const fileNames = filesForDisplay.map(f => f.file_name).join(', ');
       displayContent = text ? `${text}\n\n[文件: ${fileNames}]` : `[文件: ${fileNames}]`;
     }
+
+    // 清空输入框和文件（只有普通发送时清空）
+    setInputValue('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
+    setSelectedFiles([]);
+
+    sendMessageInternal(query, displayContent, filesForDisplay);
+  };
+
+  /**
+   * 内部发送消息方法
+   */
+  const sendMessageInternal = async (
+    query: IntegrationQueryItem[],
+    displayContent: string,
+    filesForDisplay: any[]
+  ) => {
 
     // Add user message
     const userMsg: DisplayMessage = {
@@ -365,6 +377,52 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       }
       return updated;
     });
+  };
+
+  /**
+   * 尝试解析内容是否为 widget_event JSON
+   */
+  const tryParseWidgetEvent = (content: string): { type: string; widgetId: string; widgetValue: any } | null => {
+    try {
+      const parsed = JSON.parse(content);
+      if (parsed && parsed.type === 'widget_event' && parsed.widgetId !== undefined) {
+        return parsed;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
+  /**
+   * 格式化 widget_value 为用户友好的显示文本
+   */
+  const formatWidgetValueForDisplay = (widgetId: string, widgetValue: any): string => {
+    if (widgetValue == null) return '';
+    if (typeof widgetValue === 'string') return widgetValue;
+    if (typeof widgetValue === 'number' || typeof widgetValue === 'boolean') return String(widgetValue);
+    if (Array.isArray(widgetValue)) return widgetValue.join(', ');
+    if (typeof widgetValue === 'object') return JSON.stringify(widgetValue, null, 2);
+    return String(widgetValue);
+  };
+
+  /**
+   * 处理 Markdown-UI 组件交互事件
+   * 将组件事件数据作为新的用户消息发送给后端
+   */
+  const handleWidgetEvent = (event: any) => {
+    const eventData = {
+      type: event.type || 'widget_event',
+      widgetId: event.widgetId,
+      widgetValue: event.widgetValue
+    };
+    const jsonContent = JSON.stringify(eventData, null, 2);
+    const displayContent = formatWidgetValueForDisplay(event.widgetId, event.widgetValue);
+    sendMessageInternal(
+      [{ type: 'text', content: jsonContent }],
+      displayContent,
+      []
+    );
   };
 
   // Handle keyboard
@@ -681,7 +739,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
                         {/* 消息内容 */}
                         {msg.content ? (
-                          <ChatMarkdown source={msg.content} />
+                          (() => {
+                            const widgetEvent = msg.role === 'user' ? tryParseWidgetEvent(msg.content) : null;
+                            const displaySource = widgetEvent
+                              ? formatWidgetValueForDisplay(widgetEvent.widgetId, widgetEvent.widgetValue)
+                              : msg.content;
+                            return <ChatMarkdown source={displaySource} onWidgetEvent={handleWidgetEvent} />;
+                          })()
                         ) : msg.status === 'start' ? (
                           <div className="int-loading">
                             <div className="int-loading-dot" />

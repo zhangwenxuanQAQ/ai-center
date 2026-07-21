@@ -819,14 +819,60 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     setThinkingMessageId(null);
   };
 
+  /**
+   * 尝试解析内容是否为 widget_event JSON
+   * 返回解析后的值或 null
+   */
+  const tryParseWidgetEvent = (content: string): { type: string; widgetId: string; widgetValue: any } | null => {
+    try {
+      const parsed = JSON.parse(content);
+      if (parsed && parsed.type === 'widget_event' && parsed.widgetId !== undefined) {
+        return parsed;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
+  /**
+   * 格式化 widget_value 为用户友好的显示文本
+   */
+  const formatWidgetValueForDisplay = (widgetId: string, widgetValue: any): string => {
+    if (widgetValue == null) return '';
+    if (typeof widgetValue === 'string') return widgetValue;
+    if (typeof widgetValue === 'number' || typeof widgetValue === 'boolean') return String(widgetValue);
+    if (Array.isArray(widgetValue)) return widgetValue.join(', ');
+    if (typeof widgetValue === 'object') return JSON.stringify(widgetValue, null, 2);
+    return String(widgetValue);
+  };
+
+  /**
+   * 处理 Markdown-UI 组件交互事件
+   * 将组件事件数据作为新的用户消息发送给后端
+   */
+  const handleWidgetEvent = (event: any) => {
+    const eventData = {
+      type: event.type || 'widget_event',
+      widgetId: event.widgetId,
+      widgetValue: event.widgetValue
+    };
+    const jsonContent = JSON.stringify(eventData, null, 2);
+    const displayContent = formatWidgetValueForDisplay(event.widgetId, event.widgetValue);
+    sendMessageInternal(
+      [{ type: 'text', content: jsonContent }],
+      displayContent,
+      [],
+      true
+    );
+  };
+
   const handleSend = async () => {
     if (!inputValue.trim() && selectedFiles.length === 0) return;
 
-    let currentConversation = conversation;
-
     // 构建查询数组
     const query: QueryItem[] = [];
-    
+
     // 添加文本内容
     if (inputValue.trim()) {
       query.push({
@@ -834,21 +880,72 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         content: inputValue.trim()
       });
     }
-    
+
     // 添加文件内容
     selectedFiles.forEach(file => {
       query.push(file);
     });
 
+    // 构建用户消息显示内容
+    const displayContent = inputValue.trim() || (selectedFiles.length > 0 ? `${selectedFiles.length} 个文件` : '');
+
+    // 转换selectedFiles为FileInfo格式
+    const filesForDisplay = selectedFiles.map((file) => {
+      if (file.type === 'file_base64') {
+        return {
+          type: 'local',
+          file_name: file.file_name,
+          file_size: file.file_size,
+          base64_content: file.content,
+          datasource_id: undefined,
+          bucket: undefined,
+          location: undefined
+        };
+      } else if (file.type === 'document') {
+        const content = file.content as Record<string, any>;
+        return {
+          type: 'datasource',
+          file_name: content?.file_name,
+          file_size: content?.file_size,
+          base64_content: undefined,
+          datasource_id: content?.datasource_id,
+          bucket: content?.bucket,
+          location: content?.location
+        };
+      }
+      return file;
+    });
+
+    // 对话标题（创建新对话时使用）
+    const title = inputValue.trim()
+      ? inputValue.trim().substring(0, 20)
+      : selectedFiles.length > 0
+        ? selectedFiles[0].file_name?.substring(0, 20) || '新对话'
+        : '新对话';
+
+    sendMessageInternal(query, displayContent, filesForDisplay, title);
+
+    // 清空输入框和文件（只有普通发送时清空）
+    setInputValue('');
+    setSelectedFiles([]);
+  };
+
+  /**
+   * 内部发送消息方法
+   * 处理消息发送的核心逻辑，包括创建对话、添加消息、发送到后端
+   */
+  const sendMessageInternal = async (
+    query: QueryItem[],
+    displayContent: string,
+    filesForDisplay: any[],
+    conversationTitle?: string
+  ) => {
+    let currentConversation = conversation;
+
     // 如果没有选中的对话，先创建一个新对话
     if (!currentConversation) {
       try {
-        // 标题为用户问题的前20个字符或文件名
-        const title = inputValue.trim() 
-          ? inputValue.trim().substring(0, 20)
-          : selectedFiles.length > 0 
-            ? selectedFiles[0].file_name?.substring(0, 20) || '新对话'
-            : '新对话';
+        const title = conversationTitle || displayContent?.substring(0, 20) || '新对话';
         
         // 标记正在创建新对话，防止 useEffect 清空消息
         isCreatingNewConversation.current = true;
@@ -884,36 +981,6 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       }
     }
 
-    // 构建用户消息显示内容
-    const displayContent = inputValue.trim() || (selectedFiles.length > 0 ? `${selectedFiles.length} 个文件` : '');
-    
-    // 转换selectedFiles为FileInfo格式
-    const filesForDisplay = selectedFiles.map((file) => {
-      if (file.type === 'file_base64') {
-        return {
-          type: 'local',
-          file_name: file.file_name,
-          file_size: file.file_size,
-          base64_content: file.content,
-          datasource_id: undefined,
-          bucket: undefined,
-          location: undefined
-        };
-      } else if (file.type === 'document') {
-        const content = file.content as Record<string, any>;
-        return {
-          type: 'datasource',
-          file_name: content?.file_name,
-          file_size: content?.file_size,
-          base64_content: undefined,
-          datasource_id: content?.datasource_id,
-          bucket: content?.bucket,
-          location: content?.location
-        };
-      }
-      return file;
-    });
-    
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
@@ -924,8 +991,6 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
 
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
-    setInputValue('');
-    setSelectedFiles([]);
     setLoading(true);
 
     const assistantMessageId = (Date.now() + 1).toString();
@@ -2626,6 +2691,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
                 <ChatMarkdown
                   source={msg.content}
+                  onWidgetEvent={handleWidgetEvent}
                   className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                 />
               </div>
@@ -2802,6 +2868,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
             <ChatMarkdown
               source={msg.content}
+              onWidgetEvent={handleWidgetEvent}
               className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
             />
           </div>
@@ -2843,6 +2910,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
                 <ChatMarkdown
                   source={msg.content}
+                  onWidgetEvent={handleWidgetEvent}
                   className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                 />
               </div>
@@ -3007,6 +3075,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                       <div className={`tool-call-message ${theme === 'dark' ? 'dark' : 'light'}`}>
                         <ChatMarkdown
                           source={msg.content}
+                          onWidgetEvent={handleWidgetEvent}
                           className={`md-editor small-text ${theme === 'dark' ? 'dark' : 'light'}`}
                         />
                       </div>
@@ -3366,6 +3435,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                     <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
                       <ChatMarkdown
                         source={msg.content}
+                        onWidgetEvent={handleWidgetEvent}
                         className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                       />
                     </div>
@@ -3442,6 +3512,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
                   <ChatMarkdown
                     source={msg.content}
+                    onWidgetEvent={handleWidgetEvent}
                     className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                   />
                 </div>
@@ -3483,6 +3554,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                     <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
                       <ChatMarkdown
                         source={msg.content}
+                        onWidgetEvent={handleWidgetEvent}
                         className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
                       />
                     </div>
@@ -3661,10 +3733,19 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               )}
               {/* 显示用户消息内容 */}
               <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                <ChatMarkdown
-                  source={msg.content}
-                  className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
-                />
+                {(() => {
+                  const widgetEvent = isUser ? tryParseWidgetEvent(msg.content) : null;
+                  const displaySource = widgetEvent
+                    ? formatWidgetValueForDisplay(widgetEvent.widgetId, widgetEvent.widgetValue)
+                    : msg.content;
+                  return (
+                    <ChatMarkdown
+                      source={displaySource}
+                      onWidgetEvent={handleWidgetEvent}
+                      className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                    />
+                  );
+                })()}
               </div>
             </>
           ) : null}

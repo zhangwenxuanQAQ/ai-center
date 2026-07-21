@@ -7,9 +7,16 @@ import '@markdown-ui/react/widgets.css';
 import { Marked } from 'marked';
 import { markedUiStreamingExtension } from '@markdown-ui/marked-ext';
 
+interface WidgetEvent {
+  type: string;
+  widgetId: string;
+  widgetValue: any;
+}
+
 interface ChatMarkdownProps {
   source: string;
   className?: string;
+  onWidgetEvent?: (event: WidgetEvent) => void;
 }
 
 /**
@@ -146,7 +153,7 @@ const MermaidChart: React.FC<{ chart: string; theme: 'light' | 'dark' }> = React
  * Markdown-UI 组件渲染器
  * 使用 marked + markedUiExtension 解析 DSL 代码为 HTML，然后传递给 MarkdownUI 组件渲染
  */
-const MarkdownUIWidget: React.FC<{ code: string }> = React.memo(({ code }) => {
+const MarkdownUIWidget: React.FC<{ code: string; onWidgetEvent?: (event: WidgetEvent) => void }> = React.memo(({ code, onWidgetEvent }) => {
   const [html, setHtml] = useState<string>('');
   const [error, setError] = useState<string>('');
   const lastCodeRef = useRef<string>('');
@@ -193,7 +200,14 @@ const MarkdownUIWidget: React.FC<{ code: string }> = React.memo(({ code }) => {
   // 处理组件交互事件
   const handleWidgetEvent = useCallback((event: any) => {
     console.log('Widget event:', event.detail);
-  }, []);
+    if (onWidgetEvent) {
+      onWidgetEvent({
+        type: 'widget_event',
+        widgetId: event.detail?.widgetId || event.detail?.id || '',
+        widgetValue: event.detail?.widgetValue ?? event.detail?.value ?? event.detail
+      });
+    }
+  }, [onWidgetEvent]);
 
   if (error) {
     return <div style={{ color: '#ff4d4f', padding: '12px' }}>{error}</div>;
@@ -265,7 +279,7 @@ const CollapsibleCodeBlock: React.FC<{ title: string; content: React.ReactNode }
  * 使用 React.memo 优化：当 source 和 className 未变化时，避免因父组件状态更新
  * （如输入框输入）导致的重新渲染，从而防止 MermaidChart 等子组件被重新挂载。
  */
-const ChatMarkdown: React.FC<ChatMarkdownProps> = React.memo(({ source, className }) => {
+const ChatMarkdown: React.FC<ChatMarkdownProps> = React.memo(({ source, className, onWidgetEvent }) => {
   const componentId = useRef(`chat-md-${Math.random().toString(36).slice(2, 9)}`).current;
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
@@ -305,7 +319,7 @@ const ChatMarkdown: React.FC<ChatMarkdownProps> = React.memo(({ source, classNam
         // 处理 markdown-ui-widget 组件
         if (lang === 'markdown-ui-widget') {
           const fullCode = '```markdown-ui-widget\n' + codeText + '\n```';
-          return <MarkdownUIWidget code={fullCode} />;
+          return <MarkdownUIWidget code={fullCode} onWidgetEvent={onWidgetEvent} />;
         }
 
         // 其他代码块使用可折叠样式
