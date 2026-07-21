@@ -319,6 +319,10 @@ def chunk(filename, binary=None, from_page=0, to_page=10000000000, lang="Chinese
         "float": "_flt", "datetime": "_dt", "bool": "_kwd"
     }
     
+    total_rows = sum(len(df) for df in dfs)
+    processed_rows = 0
+    callback(0.3, f"开始处理数据，共 {total_rows} 行")
+    
     for page_num, df in enumerate(dfs):
         # 移除ID列
         for n in ["id", "_id", "index", "idx"]:
@@ -390,6 +394,11 @@ def chunk(filename, binary=None, from_page=0, to_page=10000000000, lang="Chinese
             formatted_text = "\n".join([f"- {field}: {value}" for field, value in row_fields])
             tokenize_doc(d, formatted_text, eng)
             res.append(d)
+            
+            processed_rows += 1
+            progress_step = max(1, total_rows // 100)
+            if processed_rows % progress_step == 0 or processed_rows == total_rows:
+                callback(0.3 + 0.6 * (processed_rows / total_rows), f"处理进度: {processed_rows}/{total_rows}")
     
     if tbls:
         doc = {"docnm_kwd": filename, "title_tks": rag_tokenizer.tokenize(re.sub(r"\.[a-zA-Z]+$", "", filename))}
