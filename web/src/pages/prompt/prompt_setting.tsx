@@ -49,6 +49,7 @@ const PromptSetting: React.FC = () => {
   const testDrawerRef = useRef<HTMLDivElement>(null);
   const [testDrawerVisible, setTestDrawerVisible] = useState(false);
   const [testMessages, setTestMessages] = useState<{ id: string; role: 'user' | 'assistant'; content: string; reasoning_content?: string; timestamp: Date; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }; stopped?: boolean }[]>([]);
+  const [testWidgetValues, setTestWidgetValues] = useState<Record<string, any>>({});
   const [testInput, setTestInput] = useState('');
   const [models, setModels] = useState<LLMModel[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('');
@@ -331,6 +332,35 @@ const PromptSetting: React.FC = () => {
     setTestMessages([]);
   };
 
+  const formatWidgetValueForDisplay = (widgetId: string, widgetValue: any): string => {
+    if (widgetValue == null) return '';
+    if (typeof widgetValue === 'string') return widgetValue;
+    if (typeof widgetValue === 'number' || typeof widgetValue === 'boolean') return String(widgetValue);
+    if (Array.isArray(widgetValue)) return widgetValue.join(', ');
+    if (typeof widgetValue === 'object') return JSON.stringify(widgetValue, null, 2);
+    return String(widgetValue);
+  };
+
+  const handleWidgetEvent = (event: any) => {
+    if (event.widgetId === undefined) return;
+
+    // 先更新widgetValues状态，用于组件回填
+    setTestWidgetValues(prev => ({
+      ...prev,
+      [event.widgetId]: event.widgetValue
+    }));
+
+    const eventData = {
+      type: event.type || 'widget_event',
+      widgetId: event.widgetId,
+      widgetValue: event.widgetValue
+    };
+    const jsonContent = JSON.stringify(eventData, null, 2);
+    const displayContent = formatWidgetValueForDisplay(event.widgetId, event.widgetValue);
+    // 发送消息：content是发送到后端的JSON，displayContent是界面显示的内容
+    handleSendMessageWithMessages(testMessages, jsonContent, displayContent);
+  };
+
   const handleSendTestMessage = async () => {
     // 允许没有文本但有文件时发送
     if ((!testInput.trim() && selectedFiles.length === 0) || !selectedModel || isGenerating) return;
@@ -589,11 +619,11 @@ const PromptSetting: React.FC = () => {
     }, 100);
   };
 
-  const handleSendMessageWithMessages = async (previousMessages: { id: string; role: 'user' | 'assistant'; content: string; reasoning_content?: string; timestamp: Date; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }[], content: string) => {
+  const handleSendMessageWithMessages = async (previousMessages: { id: string; role: 'user' | 'assistant'; content: string; reasoning_content?: string; timestamp: Date; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }[], content: string, displayContent?: string) => {
     if (!selectedModel || isGenerating) return;
     
     const userMessageId = Date.now().toString();
-    const userMessage = { id: userMessageId, role: 'user' as const, content: content.trim(), timestamp: new Date() };
+    const userMessage = { id: userMessageId, role: 'user' as const, content: displayContent || content.trim(), timestamp: new Date() };
     const newMessages = [...previousMessages, userMessage];
     setTestMessages(newMessages);
     setTestInput('');
@@ -1323,7 +1353,7 @@ const PromptSetting: React.FC = () => {
                         {expandedReasoning.has(msg.id) && msg.reasoning_content && (
                           <div className="reasoning-text">
                             <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                              <ChatMarkdown source={msg.reasoning_content} className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`} />
+                              <ChatMarkdown source={msg.reasoning_content} className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`} onWidgetEvent={handleWidgetEvent} widgetValues={testWidgetValues} />
                             </div>
                           </div>
                         )}
@@ -1347,7 +1377,7 @@ const PromptSetting: React.FC = () => {
                         {expandedReasoning.has(msg.id) && (
                           <div className="reasoning-text">
                             <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                              <ChatMarkdown source={msg.reasoning_content} className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`} />
+                              <ChatMarkdown source={msg.reasoning_content} className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`} onWidgetEvent={handleWidgetEvent} widgetValues={testWidgetValues} />
                             </div>
                           </div>
                         )}
@@ -1370,7 +1400,7 @@ const PromptSetting: React.FC = () => {
                       <>
                         {msg.content && (
                           <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                            <ChatMarkdown source={msg.content} className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`} />
+                            <ChatMarkdown source={msg.content} className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`} onWidgetEvent={handleWidgetEvent} widgetValues={testWidgetValues} />
                           </div>
                         )}
                         {msg.stopped && (

@@ -69,6 +69,7 @@ const LLMModelSetting: React.FC = () => {
   const tagInputRef = useRef<HTMLInputElement>(null);
   
   const [messages, setMessages] = useState<Message[]>([]);
+  const [widgetValues, setWidgetValues] = useState<Record<string, any>>({});
   const [inputMessage, setInputMessage] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [deepThinking, setDeepThinking] = useState(true);
@@ -471,7 +472,7 @@ const LLMModelSetting: React.FC = () => {
     }, 100);
   };
 
-  const handleSendMessageWithMessages = async (previousMessages: Message[], content: string, files?: any[]) => {
+  const handleSendMessageWithMessages = async (previousMessages: Message[], content: string, files?: any[], displayContent?: string) => {
     if (!model || isGenerating) return;
 
     // 使用传入的文件参数或当前选中的文件
@@ -481,7 +482,7 @@ const LLMModelSetting: React.FC = () => {
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: content.trim(),
+      content: displayContent || content.trim(), // 显示内容优先使用displayContent
       timestamp: new Date(),
       files: currentFiles.length > 0 ? [...currentFiles] : undefined // 存储本次上传的文件
     };
@@ -942,6 +943,35 @@ const LLMModelSetting: React.FC = () => {
       default:
         return null;
     }
+  };
+
+  const formatWidgetValueForDisplay = (widgetId: string, widgetValue: any): string => {
+    if (widgetValue == null) return '';
+    if (typeof widgetValue === 'string') return widgetValue;
+    if (typeof widgetValue === 'number' || typeof widgetValue === 'boolean') return String(widgetValue);
+    if (Array.isArray(widgetValue)) return widgetValue.join(', ');
+    if (typeof widgetValue === 'object') return JSON.stringify(widgetValue, null, 2);
+    return String(widgetValue);
+  };
+
+  const handleWidgetEvent = (event: any) => {
+    if (event.widgetId === undefined) return;
+
+    // 先更新widgetValues状态，用于组件回填
+    setWidgetValues(prev => ({
+      ...prev,
+      [event.widgetId]: event.widgetValue
+    }));
+
+    const eventData = {
+      type: event.type || 'widget_event',
+      widgetId: event.widgetId,
+      widgetValue: event.widgetValue
+    };
+    const jsonContent = JSON.stringify(eventData, null, 2);
+    const displayContent = formatWidgetValueForDisplay(event.widgetId, event.widgetValue);
+    // 发送消息：content是发送到后端的JSON，displayContent是界面显示的内容
+    handleSendMessageWithMessages(messages, jsonContent, [], displayContent);
   };
 
   const handleSendMessage = async () => {
@@ -1456,7 +1486,7 @@ const LLMModelSetting: React.FC = () => {
                           {expandedReasoning.has(msg.id) && msg.reasoning_content && (
                             <div className="reasoning-text">
                               <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                                <ChatMarkdown source={msg.reasoning_content} className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`} />
+                                <ChatMarkdown source={msg.reasoning_content} className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`} onWidgetEvent={handleWidgetEvent} widgetValues={widgetValues} />
                               </div>
                             </div>
                           )}
@@ -1480,7 +1510,7 @@ const LLMModelSetting: React.FC = () => {
                           {expandedReasoning.has(msg.id) && (
                             <div className="reasoning-text">
                               <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                                <ChatMarkdown source={msg.reasoning_content} className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`} />
+                                <ChatMarkdown source={msg.reasoning_content} className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`} onWidgetEvent={handleWidgetEvent} widgetValues={widgetValues} />
                               </div>
                             </div>
                           )}
@@ -1585,7 +1615,7 @@ const LLMModelSetting: React.FC = () => {
                             </div>
                           )}
                           <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                            <ChatMarkdown source={msg.content || ''} className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`} />
+                            <ChatMarkdown source={msg.content || ''} className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`} onWidgetEvent={handleWidgetEvent} widgetValues={widgetValues} />
                           </div>
                         </>
                       )}

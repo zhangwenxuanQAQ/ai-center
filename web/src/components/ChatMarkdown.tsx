@@ -325,7 +325,7 @@ const MarkdownUIWidget: React.FC<{ code: string; onWidgetEvent?: (event: WidgetE
         console.error('Markdown-UI rendering error:', err);
         setError(`组件渲染失败: ${err instanceof Error ? err.message : '未知错误'}`);
       }
-    }, 300); // 300ms 延迟，等待流式传输稳定
+    }, 100); // 缩短延迟时间，提高响应速度
 
     return () => {
       if (renderTimeoutRef.current) {
@@ -350,7 +350,9 @@ const MarkdownUIWidget: React.FC<{ code: string; onWidgetEvent?: (event: WidgetE
     return <div style={{ color: '#ff4d4f', padding: '12px' }}>{error}</div>;
   }
 
-  if (!html) {
+  // 只有当从未渲染过（html为空且lastCodeRef也为空）时才显示加载状态
+  // 这样可以避免在重新解析时闪烁"组件渲染中"
+  if (!html && !lastCodeRef.current) {
     return (
       <div className="markdown-ui-container" style={{ padding: '16px', color: '#999' }}>
         组件渲染中...
@@ -420,6 +422,20 @@ const ChatMarkdown: React.FC<ChatMarkdownProps> = React.memo(({ source, classNam
   const componentId = useRef(`chat-md-${Math.random().toString(36).slice(2, 9)}`).current;
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
+  // 使用 ref 存储 onWidgetEvent 和 widgetValues，避免它们变化时重新创建 components
+  // 这样可以防止 MarkdownUIWidget 组件因 props 变化而被重新挂载
+  const onWidgetEventRef = useRef(onWidgetEvent);
+  const widgetValuesRef = useRef(widgetValues);
+
+  // 同步更新 ref
+  useEffect(() => {
+    onWidgetEventRef.current = onWidgetEvent;
+  }, [onWidgetEvent]);
+
+  useEffect(() => {
+    widgetValuesRef.current = widgetValues;
+  }, [widgetValues]);
+
   useEffect(() => {
     const currentTheme = document.body.getAttribute('data-theme') || 'dark';
     setTheme(currentTheme as 'light' | 'dark');
@@ -432,8 +448,8 @@ const ChatMarkdown: React.FC<ChatMarkdownProps> = React.memo(({ source, classNam
     return () => observer.disconnect();
   }, []);
 
-  // 使用 useMemo 缓存 components 对象，避免每次渲染都创建新对象
-  // 这样 MDEditor.Markdown 不会因 components 引用变化而重新挂载子组件
+  // 使用 useMemo 缓存 components 对象，只依赖 theme
+  // onWidgetEvent 和 widgetValues 通过 ref 传递，避免重新创建 components
   const components = useMemo(() => ({
     pre: ({ children, ...props }: any) => {
       // children should be the rendered code element
@@ -456,7 +472,14 @@ const ChatMarkdown: React.FC<ChatMarkdownProps> = React.memo(({ source, classNam
         // 处理 markdown-ui-widget 组件
         if (lang === 'markdown-ui-widget') {
           const fullCode = '```markdown-ui-widget\n' + codeText + '\n```';
-          return <MarkdownUIWidget code={fullCode} onWidgetEvent={onWidgetEvent} widgetValues={widgetValues} />;
+          // 通过 ref 传递值，避免 props 变化导致组件重新挂载
+          return (
+            <MarkdownUIWidget
+              code={fullCode}
+              onWidgetEvent={(event) => onWidgetEventRef.current?.(event)}
+              widgetValues={widgetValuesRef.current}
+            />
+          );
         }
 
         // 其他代码块使用可折叠样式
@@ -474,7 +497,7 @@ const ChatMarkdown: React.FC<ChatMarkdownProps> = React.memo(({ source, classNam
       // Fallback for unexpected structure
       return <pre {...props}>{children}</pre>;
     }
-  }), [theme, onWidgetEvent, widgetValues]);
+  }), [theme]); // 只依赖 theme，移除 onWidgetEvent 和 widgetValues
 
   return (
     <div className={className} data-theme={theme} id={componentId}>
