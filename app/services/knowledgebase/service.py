@@ -1534,7 +1534,8 @@ class KnowledgebaseDocumentService:
         doc_id: str,
         content: str,
         keywords: List[str] = None,
-        available: int = 1
+        available: int = 1,
+        metadatas: Dict[str, Any] = None
     ) -> Dict[str, Any]:
         """
         新增切片
@@ -1545,6 +1546,7 @@ class KnowledgebaseDocumentService:
             content: 切片内容
             keywords: 关键词列表
             available: 是否可用
+            metadatas: 切片元数据（可选，优先使用传入的元数据）
             
         Returns:
             Dict: 包含chunk_id的字典
@@ -1594,8 +1596,10 @@ class KnowledgebaseDocumentService:
         fields["doc_id"] = doc_id
         fields["kb_id"] = kb_id
         
-        # 添加文档元数据
-        if doc.metadatas:
+        # 优先使用传入的元数据，如果没有则使用文档元数据
+        if metadatas is not None and isinstance(metadatas, dict):
+            fields["metadatas"] = metadatas
+        elif doc.metadatas:
             try:
                 import json
                 metadatas_dict = json.loads(doc.metadatas) if isinstance(doc.metadatas, str) else doc.metadatas
@@ -1629,7 +1633,8 @@ class KnowledgebaseDocumentService:
         chunk_id: str,
         content: str = None,
         keywords: List[str] = None,
-        available: int = None
+        available: int = None,
+        metadatas: Dict[str, Any] = None
     ) -> Optional[Dict[str, Any]]:
         """
         更新切片
@@ -1640,6 +1645,7 @@ class KnowledgebaseDocumentService:
             content: 切片内容
             keywords: 关键词列表
             available: 是否可用
+            metadatas: 切片元数据（可选，优先使用传入的元数据）
             
         Returns:
             Optional[Dict]: 更新后的切片数据，失败返回None
@@ -1656,6 +1662,16 @@ class KnowledgebaseDocumentService:
             return None
         
         update_fields = {}
+        
+        # 处理元数据：优先使用传入的元数据
+        if metadatas is not None and isinstance(metadatas, dict):
+            # 保留已有元数据中的 _schema，合并传入的字段值
+            existing_metadatas = existing_chunk.get("metadatas", {}) or {}
+            schema = existing_metadatas.get("_schema", {})
+            merged_metadatas = dict(metadatas)
+            if schema:
+                merged_metadatas["_schema"] = schema
+            update_fields["metadatas"] = merged_metadatas
         
         if content is not None:
             doc_id = existing_chunk.get("doc_id", "")
@@ -1689,8 +1705,8 @@ class KnowledgebaseDocumentService:
             )
             fields.update(embedding_fields)
             
-            # 添加文档元数据
-            if doc and doc.metadatas:
+            # 如果没有传入元数据，才使用文档元数据
+            if metadatas is None and doc and doc.metadatas:
                 try:
                     import json
                     metadatas_dict = json.loads(doc.metadatas) if isinstance(doc.metadatas, str) else doc.metadatas
@@ -1709,35 +1725,45 @@ class KnowledgebaseDocumentService:
             if available is not None:
                 update_fields["available_int"] = available
             
-            # 添加文档元数据
-            doc_id = existing_chunk.get("doc_id", "")
-            if doc_id:
-                doc = KnowledgebaseDocument.get_by_id(doc_id)
-                if doc and doc.metadatas:
-                    try:
-                        import json
-                        metadatas_dict = json.loads(doc.metadatas) if isinstance(doc.metadatas, str) else doc.metadatas
-                        if metadatas_dict and isinstance(metadatas_dict, dict):
-                            update_fields["metadatas"] = metadatas_dict
-                    except Exception as e:
-                        logger.warning(f"解析文档元数据失败: {e}")
+            # 如果没有传入元数据，才使用文档元数据
+            if metadatas is None:
+                doc_id = existing_chunk.get("doc_id", "")
+                if doc_id:
+                    doc = KnowledgebaseDocument.get_by_id(doc_id)
+                    if doc and doc.metadatas:
+                        try:
+                            import json
+                            metadatas_dict = json.loads(doc.metadatas) if isinstance(doc.metadatas, str) else doc.metadatas
+                            if metadatas_dict and isinstance(metadatas_dict, dict):
+                                update_fields["metadatas"] = metadatas_dict
+                        except Exception as e:
+                            logger.warning(f"解析文档元数据失败: {e}")
         
         # 如果没有更新字段，检查是否需要更新元数据
         if not update_fields:
-            doc_id = existing_chunk.get("doc_id", "")
-            if doc_id:
-                doc = KnowledgebaseDocument.get_by_id(doc_id)
-                if doc and doc.metadatas:
-                    try:
-                        import json
-                        metadatas_dict = json.loads(doc.metadatas) if isinstance(doc.metadatas, str) else doc.metadatas
-                        if metadatas_dict and isinstance(metadatas_dict, dict):
-                            # 检查元数据是否有变化
-                            existing_metadatas = existing_chunk.get("metadatas", {})
-                            if metadatas_dict != existing_metadatas:
-                                update_fields["metadatas"] = metadatas_dict
-                    except Exception as e:
-                        logger.warning(f"解析文档元数据失败: {e}")
+            if metadatas is not None and isinstance(metadatas, dict):
+                # 传入了元数据，直接使用
+                existing_metadatas = existing_chunk.get("metadatas", {}) or {}
+                schema = existing_metadatas.get("_schema", {})
+                merged_metadatas = dict(metadatas)
+                if schema:
+                    merged_metadatas["_schema"] = schema
+                update_fields["metadatas"] = merged_metadatas
+            else:
+                doc_id = existing_chunk.get("doc_id", "")
+                if doc_id:
+                    doc = KnowledgebaseDocument.get_by_id(doc_id)
+                    if doc and doc.metadatas:
+                        try:
+                            import json
+                            metadatas_dict = json.loads(doc.metadatas) if isinstance(doc.metadatas, str) else doc.metadatas
+                            if metadatas_dict and isinstance(metadatas_dict, dict):
+                                # 检查元数据是否有变化
+                                existing_metadatas = existing_chunk.get("metadatas", {})
+                                if metadatas_dict != existing_metadatas:
+                                    update_fields["metadatas"] = metadatas_dict
+                        except Exception as e:
+                            logger.warning(f"解析文档元数据失败: {e}")
         
         if not update_fields:
             return existing_chunk

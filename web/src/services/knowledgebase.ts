@@ -662,16 +662,21 @@ export const knowledgebaseService = {
     docId: string,
     content: string,
     keywords?: string[],
-    available_int: number = 1
+    available_int: number = 1,
+    metadatas?: Record<string, any>
   ): Promise<any> => {
+    const data: any = {
+      doc_id: docId,
+      content,
+      keywords,
+      available_int,
+    };
+    if (metadatas !== undefined) {
+      data.metadatas = metadatas;
+    }
     return http.post(
       `/aicenter/v1/knowledgebase/${kbId}/chunk`,
-      {
-        doc_id: docId,
-        content,
-        keywords,
-        available_int,
-      }
+      data
     );
   },
 
@@ -680,12 +685,14 @@ export const knowledgebaseService = {
     chunkId: string,
     content?: string,
     keywords?: string[],
-    available_int?: number
+    available_int?: number,
+    metadatas?: Record<string, any>
   ): Promise<any> => {
     const data: any = {};
     if (content !== undefined) data.content = content;
     if (keywords !== undefined) data.keywords = keywords;
     if (available_int !== undefined) data.available_int = available_int;
+    if (metadatas !== undefined) data.metadatas = metadatas;
     
     return http.post(
       `/aicenter/v1/knowledgebase/${kbId}/chunk/${chunkId}/update`,

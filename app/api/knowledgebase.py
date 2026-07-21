@@ -1465,6 +1465,7 @@ def create_chunk(
     content: str = Body(..., description="切片内容"),
     keywords: List[str] = Body(None, description="关键词数组"),
     available_int: int = Body(1, description="是否可用，0=停用，1=启用"),
+    metadatas: dict = Body(None, description="元数据，格式为{字段名: 字段值}"),
 ):
     """
     新增切片
@@ -1475,6 +1476,7 @@ def create_chunk(
         content: 切片内容
         keywords: 关键词数组（可选）
         available_int: 是否可用
+        metadatas: 元数据（可选）
         
     Returns:
         ApiResponse: 包含新增切片完整数据
@@ -1491,7 +1493,8 @@ def create_chunk(
             doc_id=doc_id,
             content=content,
             keywords=keywords,
-            available=available_int
+            available=available_int,
+            metadatas=metadatas
         )
         return ResponseUtil.success(data=result, message="切片创建成功")
     except Exception as e:
@@ -1506,6 +1509,7 @@ def update_chunk(
     content: str = Body(None, description="切片内容"),
     keywords: List[str] = Body(None, description="关键词数组"),
     available_int: int = Body(None, description="是否可用，0=停用，1=启用"),
+    metadatas: dict = Body(None, description="元数据，格式为{字段名: 字段值}"),
 ):
     """
     更新切片
@@ -1516,6 +1520,7 @@ def update_chunk(
         content: 切片内容（可选）
         keywords: 关键词数组（可选）
         available_int: 是否可用（可选）
+        metadatas: 元数据（可选）
         
     Returns:
         ApiResponse: 更新后的切片数据
@@ -1532,7 +1537,8 @@ def update_chunk(
             chunk_id=chunk_id,
             content=content,
             keywords=keywords,
-            available=available_int
+            available=available_int,
+            metadatas=metadatas
         )
         if result:
             return ResponseUtil.success(data=result, message="切片更新成功")
