@@ -375,24 +375,33 @@
   width: 70%;
 }
 
-.int-msg-text {
-  padding: 12px 16px;
+.int-step-container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 8px 0;
+}
+
+.int-md-editor-container {
+  padding: 6px 0;
+  border-radius: 16px 16px 16px 4px;
   font-size: 13px;
   line-height: 1.6;
   word-break: break-word;
 }
 
-.int-message.user .int-msg-text {
+.int-message.user .int-md-editor-container {
   color: var(--int-text);
   border-radius: 16px 16px 4px 16px;
 }
 
-.int-message.assistant .int-msg-text {
+.int-message.assistant .int-md-editor-container {
   color: var(--int-text);
   border-radius: 16px 16px 16px 4px;
 }
 
-.integration-page[data-theme="dark"] .int-message.assistant .int-msg-text {
+.integration-page[data-theme="dark"] .int-message.assistant .int-md-editor-container {
   color: #fff;
 }
 
@@ -413,6 +422,11 @@
   display: flex;
   align-items: center;
   gap: 4px;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.int-message:hover .int-msg-actions {
   opacity: 1;
 }
 
@@ -423,7 +437,7 @@
   cursor: pointer;
   padding: 2px 4px;
   border-radius: 4px;
-  font-size: 13px;
+  font-size: 14px;
   transition: all 0.2s;
   display: flex;
   align-items: center;
@@ -432,6 +446,7 @@
 
 .int-msg-action-btn:hover {
   color: var(--int-primary);
+  background: rgba(102, 126, 234, 0.08);
 }
 
 .int-msg-action-btn:disabled {
@@ -445,6 +460,7 @@
   flex-direction: column;
   gap: 8px;
   min-width: calc(100% + 200px);
+  margin-left: 20px;
 }
 
 .int-msg-edit textarea {
@@ -474,6 +490,7 @@
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+  opacity: 1;
 }
 
 .int-msg-edit-actions button {
@@ -490,29 +507,21 @@
   color: var(--int-text);
 }
 
-.int-msg-edit-actions button:first-child:hover {
-  background: var(--int-bg-secondary);
-}
-
 .int-msg-edit-actions button:last-child {
   background: var(--int-primary);
   border: none;
   color: #fff;
 }
 
-.int-msg-edit-actions button:last-child:hover {
-  opacity: 0.9;
-}
-
 /* Markdown in bot messages */
-.int-msg-text .wmde-markdown {
+.int-md-editor-container .wmde-markdown {
   background: transparent !important;
   color: inherit !important;
   font-size: 13px;
   text-align: left;
 }
 
-.int-msg-text .wmde-markdown pre {
+.int-md-editor-container .wmde-markdown pre {
   background: var(--int-bg-tertiary) !important;
   border-radius: 6px;
   padding: 12px;
@@ -520,16 +529,16 @@
   overflow-x: auto;
 }
 
-.int-msg-text .wmde-markdown code {
+.int-md-editor-container .wmde-markdown code {
   font-size: 13px;
   font-family: 'Fira Code', 'Consolas', monospace;
 }
 
-.int-msg-text .wmde-markdown p {
+.int-md-editor-container .wmde-markdown p {
   margin: 4px 0;
 }
 
-.int-msg-text .wmde-markdown ul, .int-msg-text .wmde-markdown ol {
+.int-md-editor-container .wmde-markdown ul, .int-md-editor-container .wmde-markdown ol {
   padding-left: 20px;
 }
 

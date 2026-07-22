@@ -94,10 +94,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   const [expandedToolCalls, setExpandedToolCalls] = useState<Set<string>>(new Set());
   const [expandedToolCallResults, setExpandedToolCallResults] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [messagesPadding, setMessagesPadding] = useState<number>(16);
+  const [messagesPaddingTop, setMessagesPaddingTop] = useState<number>(24);
 
   // Scroll to bottom
   const scrollToBottom = useCallback(() => {
@@ -115,6 +118,36 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       setRandomWelcome('你好，有什么可以帮助您的吗？');
     }
   }, [welcomeMessages]);
+
+  // 动态计算消息区域左右padding
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const calculatePadding = () => {
+      const width = container.clientWidth;
+      const contentMaxWidth = 800;
+      const horizontalPadding = Math.max(16, Math.floor((width - contentMaxWidth) / 2));
+      const padding = Math.floor(horizontalPadding * 2 / 3);
+      const paddingTop = Math.max(24, Math.floor(width * 0.03));
+      setMessagesPadding(padding);
+      setMessagesPaddingTop(paddingTop);
+    };
+
+    calculatePadding();
+
+    const resizeObserver = new ResizeObserver(() => {
+      calculatePadding();
+    });
+
+    resizeObserver.observe(container);
+    window.addEventListener('resize', calculatePadding);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', calculatePadding);
+    };
+  }, []);
 
   // Load messages when chatId changes
   useEffect(() => {
@@ -247,6 +280,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     displayContent: string,
     filesForDisplay: any[]
   ) => {
+    const idTracker = { assistant: '', user: '' };
 
     // Add user message
     const userMsg: DisplayMessage = {
@@ -256,6 +290,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       status: 'done',
       created_at: new Date().toISOString(),
     };
+    idTracker.user = userMsg.id;
 
     // Add placeholder for assistant
     const assistantMsg: DisplayMessage = {
@@ -264,7 +299,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       content: '',
       status: 'start',
       created_at: new Date().toISOString(),
+      reasoning_content: '',
+      reasoning_end: false,
+      tool_calls: [],
     };
+    idTracker.assistant = assistantMsg.id;
 
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
     scrollToBottom();
@@ -273,9 +312,87 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
-    let accContent = '';
-    let accReasoning = '';
     let newChatId = currentChatId;
+
+    const processSSEMessageUpdate = (msg: DisplayMessage, data: any): DisplayMessage => {
+      if (msg.role === 'user') {
+        if (data.user_message_id && (msg.id === idTracker.user || msg.message_id === idTracker.user)) {
+          idTracker.user = data.user_message_id;
+          return { ...msg, id: data.user_message_id, message_id: data.user_message_id };
+        }
+        return msg;
+      }
+
+      if (msg.role === 'assistant') {
+        const dataStepId = data.step_id;
+        const msgStepId = msg.step_id;
+
+        const dataHasStepId = dataStepId !== undefined && dataStepId !== null && dataStepId !== '';
+        const msgHasStepId = msgStepId !== undefined && msgStepId !== null && msgStepId !== '';
+
+        if (dataHasStepId) {
+          if (!msgHasStepId || dataStepId !== msgStepId) {
+            return msg;
+          }
+        } else {
+          if (msgHasStepId) {
+            return msg;
+          }
+        }
+
+        const updates: any = { ...msg };
+
+        if (data.assistant_message_id) {
+          updates.message_id = data.assistant_message_id;
+        }
+
+        const status = data.status || 'running';
+        updates.status = status;
+
+        if (data.step) {
+          updates.step = data.step;
+        }
+
+        if (data.step_id) {
+          updates.step_id = data.step_id;
+        }
+
+        if (!msg.reasoning_end) {
+          if (data.reasoning_content) {
+            updates.reasoning_content = (msg.reasoning_content || '') + data.reasoning_content;
+          }
+        }
+
+        if (data.text) {
+          updates.content = (msg.content || '') + data.text;
+        }
+
+        if (data.reasoning_end) {
+          updates.reasoning_end = true;
+        }
+
+        if (data.tool_call) {
+          const tc = data.tool_call;
+          const existingCalls = updates.tool_calls || [];
+          const existingIndex = existingCalls.findIndex((c: any) => c.tool_call_id === tc.tool_call_id);
+          if (existingIndex >= 0) {
+            existingCalls[existingIndex] = { ...existingCalls[existingIndex], ...tc };
+          } else {
+            existingCalls.push(tc);
+          }
+          updates.tool_calls = [...existingCalls];
+        }
+
+        if (data.reasoning_time != null) {
+          updates.reasoning_time = data.reasoning_time;
+        }
+
+        updates.created_at = new Date().toISOString();
+        return updates;
+      }
+
+      return msg;
+    };
 
     try {
       await integrationChatService.sendMessageStream(
@@ -283,83 +400,153 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         query,
         currentChatId,
         (data: any) => {
-          // Track chat_id from response
           if (data.chat_id && !newChatId) {
             newChatId = data.chat_id;
             setCurrentChatId(newChatId);
             onChatIdChange(newChatId);
           }
 
-          if (data.content) {
-            accContent += data.content;
-          }
-          if (data.reasoning_content) {
-            accReasoning += data.reasoning_content;
+          const status = data.status || 'running';
+          const stepId = data.step_id;
+
+          if (status === 'error') {
+            setMessages(prev => {
+              let updated = [...prev];
+              if (data.user_message_id) {
+                updated = prev.map(msg => {
+                  if (msg.role === 'user' && (msg.id === idTracker.user || msg.message_id === idTracker.user)) {
+                    idTracker.user = data.user_message_id;
+                    return { ...msg, id: data.user_message_id, message_id: data.user_message_id };
+                  }
+                  return msg;
+                });
+              }
+              const existingMsg = updated.find(msg =>
+                msg.role === 'assistant' &&
+                (msg.step_id === stepId || msg.message_id === data.assistant_message_id || msg.id === idTracker.assistant)
+              );
+              if (existingMsg) {
+                return updated.map(msg => {
+                  if (msg.role === 'assistant' && (msg.step_id === stepId || msg.message_id === data.assistant_message_id || msg.id === idTracker.assistant)) {
+                    return { ...msg, content: data.text || '抱歉，处理您的请求时出现错误。', status: 'error' as any, reasoning_content: undefined, reasoning_end: undefined };
+                  }
+                  return msg;
+                });
+              } else {
+                const errorMsg: DisplayMessage = {
+                  id: stepId || idTracker.assistant,
+                  message_id: data.assistant_message_id,
+                  role: 'assistant',
+                  content: data.text || '抱歉，处理您的请求时出现错误。',
+                  created_at: new Date().toISOString(),
+                  status: 'error' as any,
+                  step: data.step,
+                  step_id: stepId,
+                };
+                return [...updated, errorMsg];
+              }
+            });
+            return;
           }
 
-          setMessages((prev) => {
-            const updated = [...prev];
-            const last = updated[updated.length - 1];
-            if (last && last.role === 'assistant') {
-              updated[updated.length - 1] = {
-                ...last,
-                content: accContent,
-                reasoning_content: accReasoning,
-                status: data.status === 'done' ? 'done' : 'streaming',
+          if (status === 'start' && stepId && data.step) {
+            setMessages(prev => {
+              let updated = [...prev];
+              if (data.user_message_id) {
+                updated = prev.map(msg => {
+                  if (msg.role === 'user' && (msg.id === idTracker.user || msg.message_id === idTracker.user)) {
+                    idTracker.user = data.user_message_id;
+                    return { ...msg, id: data.user_message_id, message_id: data.user_message_id };
+                  }
+                  return msg;
+                });
+              }
+              const existingStepMsg = updated.find(msg => msg.step_id === stepId && msg.role === 'assistant');
+              if (existingStepMsg) {
+                return updated.map(msg => {
+                  if (msg.role === 'user') return processSSEMessageUpdate(msg, data);
+                  if (msg.step_id === stepId) return processSSEMessageUpdate(msg, data);
+                  return msg;
+                });
+              }
+              const initialMsgIndex = updated.findIndex(msg => msg.role === 'assistant' && !msg.step_id && msg.status === 'start');
+              if (initialMsgIndex >= 0) {
+                return updated.map((msg, idx) => {
+                  if (idx === initialMsgIndex) {
+                    return {
+                      ...msg,
+                      // 不更新 id，保持原来的临时 id
+                      message_id: data.assistant_message_id,
+                      status: 'start',
+                      step: data.step,
+                      step_id: stepId,
+                      tool_calls: data.tool_call ? [data.tool_call] : [],
+                    };
+                  }
+                  return msg;
+                });
+              }
+              const newStepMsg: DisplayMessage = {
+                id: stepId,
+                message_id: data.assistant_message_id,
+                role: 'assistant',
+                content: '',
+                created_at: new Date().toISOString(),
+                status: 'start',
+                step: data.step,
+                step_id: stepId,
+                reasoning_content: '',
+                reasoning_end: false,
+                tool_calls: data.tool_call ? [data.tool_call] : [],
               };
-            }
-            return updated;
-          });
+              return [...updated, newStepMsg];
+            });
+          } else {
+            setMessages(prev => prev.map(msg => {
+              if (msg.role === 'user') return processSSEMessageUpdate(msg, data);
+              if (!stepId) return processSSEMessageUpdate(msg, data);
+              if (msg.step_id === stepId) return processSSEMessageUpdate(msg, data);
+              return msg;
+            }));
+          }
           scrollToBottom();
         },
         (err: any) => {
           console.error('Stream error:', err);
-          setMessages((prev) => {
-            const updated = [...prev];
-            const last = updated[updated.length - 1];
-            if (last && last.role === 'assistant') {
-              updated[updated.length - 1] = {
-                ...last,
-                content: last.content || '抱歉，发生了错误，请重试。',
-                status: 'done',
-              };
+          const errorMessage = typeof err === 'string' ? err : err?.message || err?.error || '发生了未知错误';
+          setMessages((prev) => prev.map(msg => {
+            if (msg.role === 'assistant' && msg.status && msg.status !== 'done' && msg.status !== 'stop') {
+              return { ...msg, content: msg.content || errorMessage, status: 'done' };
             }
-            return updated;
-          });
+            return msg;
+          }));
           setLoading(false);
           abortControllerRef.current = null;
         },
         () => {
-          setMessages((prev) => {
-            const updated = [...prev];
-            const last = updated[updated.length - 1];
-            if (last && last.role === 'assistant') {
-              updated[updated.length - 1] = { ...last, status: 'done' };
+          setMessages((prev) => prev.map(msg => {
+            if (msg.role === 'assistant' && msg.status && msg.status !== 'done' && msg.status !== 'stop') {
+              return { ...msg, status: 'done' };
             }
-            return updated;
-          });
+            return msg;
+          }));
           setLoading(false);
           abortControllerRef.current = null;
           onMessageSent();
         },
         controller.signal,
         temporary,
-        deepThinking  // 传递深度思考参数
+        deepThinking
       );
-    } catch (err) {
+    } catch (err: any) {
       console.error('Send message error:', err);
-      setMessages((prev) => {
-        const updated = [...prev];
-        const last = updated[updated.length - 1];
-        if (last && last.role === 'assistant') {
-          updated[updated.length - 1] = {
-            ...last,
-            content: last.content || '抱歉，发生了错误，请重试。',
-            status: 'done',
-          };
+      const errorMessage = typeof err === 'string' ? err : err?.message || err?.error || '发生了未知错误';
+      setMessages((prev) => prev.map(msg => {
+        if (msg.role === 'assistant' && msg.status && msg.status !== 'done') {
+          return { ...msg, content: msg.content || errorMessage, status: 'done' };
         }
-        return updated;
-      });
+        return msg;
+      }));
       setLoading(false);
       abortControllerRef.current = null;
     }
@@ -463,13 +650,43 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
   // 复制到剪贴板
   const copyToClipboard = (text: string, type: string, messageId: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      message.success(`${type}已复制`);
-      setCopiedMessageId(messageId);
-      setTimeout(() => setCopiedMessageId(null), 2000);
-    }).catch(() => {
-      message.error('复制失败');
-    });
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(() => {
+        message.success(`${type}已复制`);
+        setCopiedMessageId(messageId);
+        setTimeout(() => setCopiedMessageId(null), 2000);
+      }).catch(() => {
+        fallbackCopyTextToClipboard(text, type, messageId);
+      });
+    } else {
+      fallbackCopyTextToClipboard(text, type, messageId);
+    }
+  };
+
+  const fallbackCopyTextToClipboard = (text: string, type: string, messageId: string) => {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-999999px';
+    textArea.style.top = '-999999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+
+    try {
+      const successful = document.execCommand('copy');
+      if (successful) {
+        message.success(`${type}已复制`);
+        setCopiedMessageId(messageId);
+        setTimeout(() => setCopiedMessageId(null), 2000);
+      } else {
+        message.error('复制失败，请手动复制');
+      }
+    } catch (err) {
+      message.error('复制失败，请手动复制');
+    } finally {
+      document.body.removeChild(textArea);
+    }
   };
 
   // 自动调整编辑输入框高度
@@ -496,7 +713,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     setEditingContent('');
   };
 
-  // 保存编辑
+  // 保存编辑并发送
   const handleSaveEdit = async (messageId: string) => {
     if (!editingContent.trim()) return;
 
@@ -512,12 +729,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     setEditingMessageId(null);
     setEditingContent('');
 
-    // 重新发送这条消息
-    setInputValue(editingContent);
-    // 延迟执行发送，确保状态更新
-    setTimeout(() => {
-      handleSend();
-    }, 100);
+    // 构建query，直接发送消息
+    const query: IntegrationQueryItem[] = [{ type: 'text', content: editingContent }];
+    sendMessageInternal(query, editingContent, []);
   };
 
   // 重新回答
@@ -525,7 +739,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     if (loading) return;
 
     // 找到对应的用户消息（在机器人消息之前）
-    let userMessageIndex = messageIndex;
+    let userMessageIndex = -1;
     for (let i = messageIndex - 1; i >= 0; i--) {
       if (messages[i].role === 'user') {
         userMessageIndex = i;
@@ -533,18 +747,17 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       }
     }
 
+    if (userMessageIndex === -1) return;
+
+    const userMessage = messages[userMessageIndex];
+
     // 删除用户消息及其后面的所有消息
     const newMessages = messages.slice(0, userMessageIndex);
     setMessages(newMessages);
 
-    // 获取用户消息内容
-    const userMessage = messages[userMessageIndex];
-
-    // 重新发送
-    setInputValue(userMessage.content);
-    setTimeout(() => {
-      handleSend();
-    }, 100);
+    // 构建query，重新发送用户消息
+    const query: IntegrationQueryItem[] = [{ type: 'text', content: userMessage.content }];
+    sendMessageInternal(query, userMessage.content, []);
   };
 
   // 切换思考过程展开/收起
@@ -611,7 +824,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       {!minimized && (
         <>
       {/* Messages or Welcome */}
-      <div className="int-messages">
+      <div
+        className="int-messages"
+        ref={messagesContainerRef}
+        style={{ paddingLeft: messagesPadding, paddingRight: messagesPadding, paddingTop: messagesPaddingTop }}
+      >
         {showWelcome ? (
           <div className="int-welcome-area">
             <div className="int-welcome-icon">💬</div>
@@ -620,7 +837,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           </div>
         ) : (
           messages.map((msg, index) => (
-            <div key={msg.id} className={`int-message ${msg.role}`}>
+            <div key={index} className={`int-message ${msg.role}`}>
               <div className={`int-msg-avatar ${msg.role}`}>
                 {msg.role === 'user' ? (
                   userAvatar ? (
@@ -648,27 +865,37 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                         autoResizeEditTextarea();
                       }}
                     />
-                    <div className="int-msg-edit-actions">
-                      <button onClick={handleCancelEdit}>取消</button>
-                      <button onClick={() => handleSaveEdit(msg.id)}>保存</button>
-                    </div>
                   </div>
                 ) : (
                   <>
-                    <div className="int-msg-text">
                     {msg.role === 'assistant' ? (
+                      <div className="int-step-container">
+                        <div className="int-md-editor-container">
                       <>
-                        {/* 思考过程 - 流式中显示 */}
-                        {msg.status === 'streaming' && msg.reasoning_content && !msg.reasoning_end && (
+                        {/* 思考中... - 发送消息后或思考/正文都为空时显示 */}
+                        {(msg.status === 'start' || (!msg.reasoning_content && !msg.content && msg.status !== 'done' && msg.status !== 'stop')) && (
                           <div className="int-message-reasoning">
                             <div className="int-reasoning-header">
                               <LoadingOutlined spin />
                               <BulbOutlined />
-                              <span>分析问题中...</span>
+                              <span>思考中...</span>
                             </div>
-                            <div className="int-reasoning-text">
-                              <ChatMarkdown source={msg.reasoning_content} />
+                          </div>
+                        )}
+
+                        {/* 正在思考中 - 流式中且有思考内容时显示 */}
+                        {msg.status !== 'start' && msg.status !== 'done' && msg.status !== 'stop' && !msg.reasoning_end && msg.reasoning_content && (
+                          <div className="int-message-reasoning">
+                            <div className="int-reasoning-header">
+                              <LoadingOutlined spin />
+                              <BulbOutlined />
+                              <span>正在思考中...</span>
                             </div>
+                            {msg.reasoning_content && (
+                              <div className="int-reasoning-text">
+                                <ChatMarkdown source={msg.reasoning_content} />
+                              </div>
+                            )}
                           </div>
                         )}
 
@@ -766,7 +993,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                         )}
 
                         {/* 消息内容 */}
-                        {msg.content ? (
+                        {msg.content && (
                           (() => {
                             const widgetEvent = msg.role === 'user' ? tryParseWidgetEvent(msg.content) : null;
                             const displaySource = widgetEvent
@@ -774,20 +1001,19 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                               : msg.content;
                             return <ChatMarkdown source={displaySource} onWidgetEvent={handleWidgetEvent} widgetValues={(msg.extra_content as any)?.widgetValues} />;
                           })()
-                        ) : msg.status === 'start' ? (
-                          <div className="int-loading">
-                            <div className="int-loading-dot" />
-                            <div className="int-loading-dot" />
-                            <div className="int-loading-dot" />
-                          </div>
-                        ) : null}
+                        )}
                       </>
+                        </div>
+                      </div>
                     ) : (
-                      <span>{msg.content}</span>
+                      <div className="int-md-editor-container">
+                        <ChatMarkdown source={msg.content} />
+                      </div>
                     )}
-                    </div>
-                    {/* 消息底部：时间 + 操作按钮 */}
-                    <div className="int-msg-footer">
+                  </>
+                )}
+                {/* 消息底部：时间 + 操作按钮 */}
+                <div className="int-msg-footer">
                       <span className="int-msg-time">
                         {msg.created_at ? new Date(msg.created_at).toLocaleString('zh-CN', {
                           year: 'numeric',
@@ -800,51 +1026,59 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                         }) : ''}
                       </span>
                       <div className="int-msg-actions">
-                        {msg.role === 'user' && !editingMessageId && (
+                        {/* 编辑模式下的操作按钮 */}
+                        {editingMessageId === msg.id ? (
+                          <div className="int-msg-edit-actions">
+                            <button onClick={handleCancelEdit}>取消</button>
+                            <button onClick={() => handleSaveEdit(msg.id)}>发送</button>
+                          </div>
+                        ) : (
                           <>
-                            <Tooltip title="编辑问题">
-                              <button
-                                className="int-msg-action-btn"
-                                onClick={() => handleEditMessage(msg.id, msg.content)}
-                              >
-                                <EditOutlined />
-                              </button>
-                            </Tooltip>
-                            <Tooltip title="复制问题">
-                              <button
-                                className="int-msg-action-btn"
-                                onClick={() => copyToClipboard(msg.content, '问题', msg.id)}
-                              >
-                                {copiedMessageId === msg.id ? <CheckOutlined /> : <CopyOutlined />}
-                              </button>
-                            </Tooltip>
-                          </>
-                        )}
-                        {msg.role === 'assistant' && msg.content && (
-                          <>
-                            <Tooltip title="重新回答">
-                              <button
-                                className="int-msg-action-btn"
-                                onClick={() => handleRegenerate(index)}
-                                disabled={loading}
-                              >
-                                <ReloadOutlined />
-                              </button>
-                            </Tooltip>
-                            <Tooltip title="复制回答">
-                              <button
-                                className="int-msg-action-btn"
-                                onClick={() => copyToClipboard(msg.content, '回答', msg.id)}
-                              >
-                                {copiedMessageId === msg.id ? <CheckOutlined /> : <CopyOutlined />}
-                              </button>
-                            </Tooltip>
+                            {msg.role === 'user' && (
+                              <>
+                                <Tooltip title="编辑问题">
+                                  <button
+                                    className="int-msg-action-btn"
+                                    onClick={() => handleEditMessage(msg.id, msg.content)}
+                                  >
+                                    <EditOutlined />
+                                  </button>
+                                </Tooltip>
+                                <Tooltip title="复制问题">
+                                  <button
+                                    className="int-msg-action-btn"
+                                    onClick={() => copyToClipboard(msg.content, '问题', msg.id)}
+                                  >
+                                    {copiedMessageId === msg.id ? <CheckOutlined /> : <CopyOutlined />}
+                                  </button>
+                                </Tooltip>
+                              </>
+                            )}
+                            {msg.role === 'assistant' && msg.content && (
+                              <>
+                                <Tooltip title="重新回答">
+                                  <button
+                                    className="int-msg-action-btn"
+                                    onClick={() => handleRegenerate(index)}
+                                    disabled={loading}
+                                  >
+                                    <ReloadOutlined />
+                                  </button>
+                                </Tooltip>
+                                <Tooltip title="复制回答">
+                                  <button
+                                    className="int-msg-action-btn"
+                                    onClick={() => copyToClipboard(msg.content, '回答', msg.id)}
+                                  >
+                                    {copiedMessageId === msg.id ? <CheckOutlined /> : <CopyOutlined />}
+                                  </button>
+                                </Tooltip>
+                              </>
+                            )}
                           </>
                         )}
                       </div>
                     </div>
-                  </>
-                )}
               </div>
             </div>
           ))

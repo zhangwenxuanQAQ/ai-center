@@ -738,8 +738,21 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                   newStepMsg.tool_calls = [data.tool_call];
                 }
                 if (initialMsgIndex >= 0) {
-                  const newMessages = updatedMessages.filter((_, idx) => idx !== initialMsgIndex);
-                  return [...newMessages, newStepMsg];
+                  return updatedMessages.map((msg, idx) => {
+                    if (idx === initialMsgIndex) {
+                      return {
+                        ...msg,
+                        // 不更新 id，保持原来的临时 id
+                        message_id: data.assistant_message_id,
+                        status: 'start',
+                        step: data.step,
+                        step_id: stepId,
+                        avatar: data.avatar,
+                        tool_calls: data.tool_call ? [data.tool_call] : [],
+                      };
+                    }
+                    return msg;
+                  });
                 }
                 return [...updatedMessages, newStepMsg];
               });
@@ -1217,10 +1230,23 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 newStepMsg.tool_calls = [data.tool_call];
               }
 
-              // 如果有初始"思考中"消息，移除它并新增具体步骤消息
+              // 如果有初始"思考中"消息，更新它
               if (initialMsgIndex >= 0) {
-                const newMessages = updatedMessages.filter((_, idx) => idx !== initialMsgIndex);
-                return [...newMessages, newStepMsg];
+                return updatedMessages.map((msg, idx) => {
+                  if (idx === initialMsgIndex) {
+                    return {
+                      ...msg,
+                      // 不更新 id，保持原来的临时 id
+                      message_id: data.assistant_message_id,
+                      status: 'start',
+                      step: data.step,
+                      step_id: stepId,
+                      avatar: data.avatar,
+                      tool_calls: data.tool_call ? [data.tool_call] : [],
+                    };
+                  }
+                  return msg;
+                });
               }
 
               return [...updatedMessages, newStepMsg];
@@ -1818,10 +1844,23 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                     idTracker.assistant = data.assistant_message_id;
                   }
 
-                  // 如果有初始"思考中"消息，移除它并新增具体步骤消息
+                  // 如果有初始"思考中"消息，更新它
                   if (initialMsgIndex >= 0) {
-                    const newMessages = prev.filter((_, idx) => idx !== initialMsgIndex);
-                    return [...newMessages, newStepMsg];
+                    return prev.map((msg, idx) => {
+                      if (idx === initialMsgIndex) {
+                        return {
+                          ...msg,
+                          // 不更新 id，保持原来的临时 id
+                          message_id: data.assistant_message_id,
+                          status: 'start',
+                          step: data.step,
+                          step_id: stepId,
+                          avatar: data.avatar,
+                          tool_calls: data.tool_call ? [data.tool_call] : [],
+                        };
+                      }
+                      return msg;
+                    });
                   }
 
                   return [...prev, newStepMsg];
@@ -2009,10 +2048,23 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                   idTracker.assistant = data.assistant_message_id;
                 }
 
-                // 如果有初始"思考中"消息，移除它并新增具体步骤消息
+                // 如果有初始"思考中"消息，更新它
                 if (initialMsgIndex >= 0) {
-                  const newMessages = updatedMessages.filter((_, idx) => idx !== initialMsgIndex);
-                  return [...newMessages, newStepMsg];
+                  return updatedMessages.map((msg, idx) => {
+                    if (idx === initialMsgIndex) {
+                      return {
+                        ...msg,
+                        // 不更新 id，保持原来的临时 id
+                        message_id: data.assistant_message_id,
+                        status: 'start',
+                        step: data.step,
+                        step_id: stepId,
+                        avatar: data.avatar,
+                        tool_calls: [],
+                      };
+                    }
+                    return msg;
+                  });
                 }
 
                 return [...updatedMessages, newStepMsg];
@@ -3176,7 +3228,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     if (msg.role === 'tool') {
       return (
         <div 
-          key={msg.id} 
+          key={index} 
           id={msg.step_id || undefined}
           className={`message tool`}
         >
@@ -3204,7 +3256,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     
     return (
       <div 
-        key={msg.id} 
+        key={index} 
         id={msg.step_id || undefined}
         className={`message ${msg.role}`}
       >

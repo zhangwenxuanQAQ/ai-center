@@ -785,7 +785,7 @@ class IntegrationChatCoreService:
                     chat_id=chat_id,
                     user_message_id=user_message_id,
                     assistant_message_id=assistant_message_id,
-                    reasoning_content=chunk.get('reasoning_content'),
+                    reasoning_content=chunk.get('reasoning_content',''),
                     reasoning_end=reasoning_end,
                     finish_reason=chunk.get('finish_reason'),
                     usage=chunk.get('usage'),
@@ -1138,6 +1138,13 @@ class IntegrationChatCoreService:
                 ChatStopManager().request_stop(temp_chat_id)
             except Exception as e:
                 logger.error(f"集成临时会话流式输出异常: {e}", exc_info=True)
+                yield ChatStreamResponse.error_response(
+                    error=str(e),
+                    chat_id=temp_chat_id,
+                    user_message_id=user_message_id,
+                    assistant_message_id=assistant_message_id,
+                    text=f"抱歉，发送消息时出现错误：{str(e)}"
+                ).to_dict()
             return
 
         # ============ 正式会话模式 ============
@@ -1278,6 +1285,13 @@ class IntegrationChatCoreService:
             ChatStopManager().request_stop(actual_chat_id)
         except Exception as e:
             logger.error(f"集成聊天流式输出异常: {e}", exc_info=True)
+            yield ChatStreamResponse.error_response(
+                error=str(e),
+                chat_id=actual_chat_id,
+                user_message_id=user_message_id,
+                assistant_message_id=assistant_message_id,
+                text=f"抱歉，发送消息时出现错误：{str(e)}"
+            ).to_dict()
         finally:
             # 更新 ChatbotChat 的 messages 摘要
             IntegrationChatCoreService._update_chat_messages_summary(bot_chat, actual_chat_id)

@@ -148,7 +148,7 @@ class IntegrationChatCoreService:
                         message_id=chunk.get('message_id', uuid.uuid4().hex),
                         role='assistant',
                         content=chunk['content'],
-                        reasoning_content=chunk.get('reasoning_content'),
+                        reasoning_content=chunk.get('reasoning_content',''),
                         reasoning_time=chunk.get('reasoning_time'),
                         model_id=chunk.get('model_id')
                     ).save(force_insert=True)

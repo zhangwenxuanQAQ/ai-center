@@ -1247,7 +1247,7 @@ const PromptSetting: React.FC = () => {
             ) : (
               testMessages.map((msg, index) => (
                 <div
-                  key={msg.id}
+                  key={index}
                   className={`message ${msg.role}`}
                 >
                   <div className="message-avatar">

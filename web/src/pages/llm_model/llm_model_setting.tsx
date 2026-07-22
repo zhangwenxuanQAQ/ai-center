@@ -1466,7 +1466,7 @@ const LLMModelSetting: React.FC = () => {
                 </div>
               ) : (
                 messages.map((msg, index) => (
-                  <div key={msg.id} className={`message ${msg.role}`}>
+                  <div key={index} className={`message ${msg.role}`}>
                     <div className="message-avatar">
                       {msg.role === 'user' ? '👤' : (
                         <img 
