@@ -380,7 +380,7 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  margin: 8px 0;
+  margin: 0;
 }
 
 .int-md-editor-container {
@@ -455,12 +455,20 @@
 }
 
 /* Message edit */
+.int-message.user .int-msg-edit {
+  margin-left: 0;
+  margin-right: 0;
+  min-width: auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .int-msg-edit {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  min-width: calc(100% + 200px);
   margin-left: 20px;
+  box-sizing: border-box;
 }
 
 .int-msg-edit textarea {
@@ -479,6 +487,7 @@
   overflow-y: auto;
   outline: none;
   transition: all 0.3s;
+  box-sizing: border-box;
 }
 
 .int-msg-edit textarea:focus {
@@ -683,14 +692,15 @@
   align-items: center;
   gap: 4px;
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 4px 12px;
+  border-radius: 16px;
+  background: var(--int-bg-secondary);
   transition: background 0.2s;
   user-select: none;
 }
 
 .int-deep-thinking:hover {
-  background: var(--int-bg-secondary);
+  background: var(--int-bg-tertiary);
 }
 
 .int-deep-thinking-icon {
@@ -1090,27 +1100,27 @@
   border: 1px solid;
   overflow: hidden;
   transition: all 0.2s ease;
-  background: var(--int-bg);
+  background: none;
 }
 
 .int-tool-call-card.int-tool-call-start {
   border-color: rgba(102, 126, 234, 0.25);
-  background: rgba(102, 126, 234, 0.05);
+  background: none;
 }
 
 .int-tool-call-card.int-tool-call-running {
   border-color: rgba(102, 126, 234, 0.25);
-  background: rgba(102, 126, 234, 0.05);
+  background: none;
 }
 
 .int-tool-call-card.int-tool-call-success {
   border-color: rgba(82, 196, 26, 0.25);
-  background: rgba(82, 196, 26, 0.05);
+  background: none;
 }
 
 .int-tool-call-card.int-tool-call-error {
   border-color: rgba(255, 77, 79, 0.25);
-  background: rgba(255, 77, 79, 0.05);
+  background: none;
 }
 
 .int-tool-call-header {

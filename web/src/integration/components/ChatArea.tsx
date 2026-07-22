@@ -102,11 +102,22 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   const [messagesPadding, setMessagesPadding] = useState<number>(16);
   const [messagesPaddingTop, setMessagesPaddingTop] = useState<number>(24);
 
-  // Scroll to bottom
+  // 检测是否在底部
+  const isAtBottom = useCallback(() => {
+    if (!messagesContainerRef.current) return true;
+    const container = messagesContainerRef.current;
+    const threshold = 100;
+    return container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
+  }, []);
+
   const scrollToBottom = useCallback(() => {
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 50);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
+
+  const scrollToBottomInstant = useCallback(() => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
   }, []);
 
   // 随机选择欢迎语
@@ -157,6 +168,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     }
   }, [chatId]);
 
+  // 只有在底部时才自动滚动
+  useEffect(() => {
+    if (isAtBottom()) {
+      scrollToBottom();
+    }
+  }, [messages, isAtBottom, scrollToBottom]);
+
   const loadMessages = async (id: string) => {
     try {
       const result = await integrationChatService.getMessages(apiKey, id);
@@ -168,7 +186,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         status: 'done',
       }));
       setMessages(displayMsgs);
-      scrollToBottom();
+      setTimeout(() => {
+        scrollToBottomInstant();
+      }, 100);
     } catch (err) {
       console.error('Failed to load messages:', err);
     }
@@ -509,7 +529,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({
               return msg;
             }));
           }
-          scrollToBottom();
         },
         (err: any) => {
           console.error('Stream error:', err);
@@ -649,21 +668,19 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   };
 
   // 复制到剪贴板
-  const copyToClipboard = (text: string, type: string, messageId: string) => {
+  const copyToClipboard = (text: string, type: string) => {
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(text).then(() => {
         message.success(`${type}已复制`);
-        setCopiedMessageId(messageId);
-        setTimeout(() => setCopiedMessageId(null), 2000);
       }).catch(() => {
-        fallbackCopyTextToClipboard(text, type, messageId);
+        fallbackCopyTextToClipboard(text, type);
       });
     } else {
-      fallbackCopyTextToClipboard(text, type, messageId);
+      fallbackCopyTextToClipboard(text, type);
     }
   };
 
-  const fallbackCopyTextToClipboard = (text: string, type: string, messageId: string) => {
+  const fallbackCopyTextToClipboard = (text: string, type: string) => {
     const textArea = document.createElement('textarea');
     textArea.value = text;
     textArea.style.position = 'fixed';
@@ -677,8 +694,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       const successful = document.execCommand('copy');
       if (successful) {
         message.success(`${type}已复制`);
-        setCopiedMessageId(messageId);
-        setTimeout(() => setCopiedMessageId(null), 2000);
       } else {
         message.error('复制失败，请手动复制');
       }
@@ -735,27 +750,29 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   };
 
   // 重新回答
-  const handleRegenerate = async (messageIndex: number) => {
+  const handleRegenerate = async (groupIndex: number) => {
     if (loading) return;
 
-    // 找到对应的用户消息（在机器人消息之前）
-    let userMessageIndex = -1;
-    for (let i = messageIndex - 1; i >= 0; i--) {
-      if (messages[i].role === 'user') {
-        userMessageIndex = i;
+    const groups = groupMessagesByAssistantId();
+    if (groupIndex >= groups.length) return;
+
+    let userMessage: DisplayMessage | null = null;
+    let userMsgIndexInMessages = -1;
+
+    for (let i = groupIndex - 1; i >= 0; i--) {
+      const group = groups[i];
+      if (!group.assistantId && group.messages.length > 0) {
+        userMessage = group.messages[0];
+        userMsgIndexInMessages = messages.findIndex(m => m.id === userMessage!.id);
         break;
       }
     }
 
-    if (userMessageIndex === -1) return;
+    if (!userMessage || userMsgIndexInMessages === -1) return;
 
-    const userMessage = messages[userMessageIndex];
-
-    // 删除用户消息及其后面的所有消息
-    const newMessages = messages.slice(0, userMessageIndex);
+    const newMessages = messages.slice(0, userMsgIndexInMessages);
     setMessages(newMessages);
 
-    // 构建query，重新发送用户消息
     const query: IntegrationQueryItem[] = [{ type: 'text', content: userMessage.content }];
     sendMessageInternal(query, userMessage.content, []);
   };
@@ -799,6 +816,330 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     });
   };
 
+  const groupMessagesByAssistantId = () => {
+    const groups: { assistantId: string; stableId: string; messages: DisplayMessage[] }[] = [];
+    let currentGroup: { assistantId: string; stableId: string; messages: DisplayMessage[] } | null = null;
+    let groupCounter = 0;
+
+    messages.forEach((msg) => {
+      if (msg.role === 'user') {
+        if (currentGroup) {
+          groups.push(currentGroup);
+          currentGroup = null;
+        }
+        groupCounter++;
+        groups.push({ assistantId: '', stableId: `user-${groupCounter}`, messages: [msg] });
+      } else if (msg.role === 'assistant') {
+        const assistantId = msg.message_id || msg.id;
+        if (currentGroup && currentGroup.assistantId === assistantId) {
+          currentGroup.messages.push(msg);
+        } else {
+          if (currentGroup) {
+            groups.push(currentGroup);
+          }
+          groupCounter++;
+          currentGroup = { assistantId, stableId: `assistant-${groupCounter}`, messages: [msg] };
+        }
+      }
+    });
+
+    if (currentGroup) {
+      groups.push(currentGroup);
+    }
+
+    return groups;
+  };
+
+  const renderAssistantMessageContent = (msg: DisplayMessage) => {
+    return (
+      <div className="int-step-container">
+        <div className="int-md-editor-container">
+          <>
+            {(msg.status === 'start' || (!msg.reasoning_content && !msg.content && msg.status !== 'done' && msg.status !== 'stop')) && (
+              <div className="int-message-reasoning">
+                <div className="int-reasoning-header">
+                  <LoadingOutlined spin />
+                  <BulbOutlined />
+                  <span>思考中...</span>
+                </div>
+              </div>
+            )}
+
+            {msg.status !== 'start' && msg.status !== 'done' && msg.status !== 'stop' && !msg.reasoning_end && msg.reasoning_content && (
+              <div className="int-message-reasoning">
+                <div className="int-reasoning-header">
+                  <LoadingOutlined spin />
+                  <BulbOutlined />
+                  <span>正在思考中...</span>
+                </div>
+                {msg.reasoning_content && (
+                  <div className="int-reasoning-text">
+                    <ChatMarkdown source={msg.reasoning_content} />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {(msg.status === 'done' || msg.status === 'stop' || !msg.status) && msg.reasoning_content && msg.reasoning_end && (
+              <div className="int-message-reasoning">
+                <div className="int-reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
+                  {expandedReasoning.has(msg.step_id || msg.id) ? (
+                    <DownOutlined />
+                  ) : (
+                    <RightOutlined />
+                  )}
+                  <BulbOutlined />
+                  <span>思考过程</span>
+                  {msg.reasoning_time != null && (
+                    <span className="int-reasoning-duration">
+                      ({(msg.reasoning_time / 1000).toFixed(1)}s)
+                    </span>
+                  )}
+                </div>
+                {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
+                  <div className="int-reasoning-text">
+                    <ChatMarkdown source={msg.reasoning_content} />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {msg.tool_calls && msg.tool_calls.length > 0 && (
+              <div className="int-tool-calls-container">
+                {msg.tool_calls.map((tc, tcIndex) => (
+                  <div key={tc.tool_call_id || `tc-${tcIndex}`} className={`int-tool-call-card int-tool-call-${tc.status}`}>
+                    <div className="int-tool-call-header" onClick={() => toggleToolCall(tc.tool_call_id || `tc-${tcIndex}`)}>
+                      <div className="int-tool-call-header-left">
+                        {tc.status === 'start' && <LoadingOutlined spin className="int-tool-call-icon-start" />}
+                        {tc.status === 'running' && <LoadingOutlined spin className="int-tool-call-icon-running" />}
+                        {tc.status === 'success' && <span className="int-tool-call-icon-success">✓</span>}
+                        {tc.status === 'error' && <span className="int-tool-call-icon-error">✗</span>}
+                        {expandedToolCalls.has(tc.tool_call_id || `tc-${tcIndex}`) ? (
+                          <DownOutlined style={{ fontSize: 10 }} />
+                        ) : (
+                          <RightOutlined style={{ fontSize: 10 }} />
+                        )}
+                        {tc.task_name && <span className="int-tool-call-task-name">{tc.task_name}</span>}
+                      </div>
+                      <div className="int-tool-call-header-right">
+                        {tc.elapsed_ms != null && tc.elapsed_ms > 0 && (
+                          <span className="int-tool-call-elapsed">
+                            {(tc.elapsed_ms / 1000).toFixed(1)}s
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {expandedToolCalls.has(tc.tool_call_id || `tc-${tcIndex}`) && (
+                      <div className="int-tool-call-content">
+                        {tc.message && (
+                          <div className="int-tool-call-message">
+                            <ChatMarkdown source={tc.message} />
+                          </div>
+                        )}
+                        {tc.result && (
+                          <>
+                            {tc.message && <div className="int-tool-call-divider" />}
+                            <div
+                              className="int-tool-call-result-header"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleToolCallResult(tc.tool_call_id || `tc-${tcIndex}`);
+                              }}
+                            >
+                              {expandedToolCallResults.has(tc.tool_call_id || `tc-${tcIndex}`) ? (
+                                <DownOutlined style={{ fontSize: 10 }} />
+                              ) : (
+                                <RightOutlined style={{ fontSize: 10 }} />
+                              )}
+                              <span className="int-tool-call-result-title">工具结果</span>
+                            </div>
+                            {expandedToolCallResults.has(tc.tool_call_id || `tc-${tcIndex}`) && (
+                              <div className="int-tool-call-result">
+                                <ChatMarkdown
+                                  source={typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result, null, 2)}
+                                />
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {msg.content && (
+              (() => {
+                const widgetEvent = msg.role === 'user' ? tryParseWidgetEvent(msg.content) : null;
+                const displaySource = widgetEvent
+                  ? formatWidgetValueForDisplay(widgetEvent.widgetId, widgetEvent.widgetValue)
+                  : msg.content;
+                return <ChatMarkdown source={displaySource} onWidgetEvent={handleWidgetEvent} widgetValues={(msg.extra_content as any)?.widgetValues} />;
+              })()
+            )}
+          </>
+        </div>
+      </div>
+    );
+  };
+
+  const renderGroupedMessages = () => {
+    const groups = groupMessagesByAssistantId();
+    return groups.map((group, groupIndex) => {
+      if (!group.assistantId) {
+        const msg = group.messages[0];
+        return renderUserMessage(msg, groupIndex);
+      }
+
+      const firstMsg = group.messages[0];
+      const isRunning = group.messages.some(m => m.status && m.status !== 'done' && m.status !== 'stop');
+      const hasContent = group.messages.some(m => m.content);
+
+      return (
+        <div key={group.stableId} className={`int-message assistant`}>
+          <div className={`int-msg-avatar assistant`}>
+            {botAvatar ? (
+              <img src={botAvatar} alt="AI" />
+            ) : (
+              <img src={getDefaultAvatar()} alt="AI" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            )}
+          </div>
+          <div className="int-msg-content">
+            {group.messages.map((msg, msgIndex) => (
+              <div
+                key={msgIndex}
+                id={msg.step_id || undefined}
+                className="int-step-wrapper"
+              >
+                {renderAssistantMessageContent(msg)}
+              </div>
+            ))}
+            <div className="int-msg-footer">
+              <span className="int-msg-time">
+                {firstMsg.created_at ? new Date(firstMsg.created_at).toLocaleString('zh-CN', {
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit',
+                  hour12: false
+                }) : ''}
+              </span>
+              <div className="int-msg-actions">
+                {isRunning ? (
+                  <Tooltip title="正在生成中">
+                    <button className="int-msg-action-btn" disabled>
+                      <LoadingOutlined spin />
+                    </button>
+                  </Tooltip>
+                ) : (
+                  hasContent && (
+                    <>
+                      <Tooltip title="重新回答">
+                        <button
+                          className="int-msg-action-btn"
+                          onClick={() => handleRegenerate(groupIndex)}
+                          disabled={loading}
+                        >
+                          <ReloadOutlined />
+                        </button>
+                      </Tooltip>
+                      <Tooltip title="复制回答">
+                        <button
+                          className="int-msg-action-btn"
+                          onClick={() => {
+                            const content = group.messages.map(m => m.content).filter(Boolean).join('\n');
+                            copyToClipboard(content, '回答');
+                          }}
+                        >
+                          <CopyOutlined />
+                        </button>
+                      </Tooltip>
+                    </>
+                  )
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    });
+  };
+
+  const renderUserMessage = (msg: DisplayMessage, index: number) => {
+    return (
+      <div key={`user-${index}`} className={`int-message user`}>
+        <div className={`int-msg-avatar user`}>
+          {userAvatar ? (
+            <img src={userAvatar} alt="用户" />
+          ) : (
+            <span style={{ fontSize: '20px' }}>👤</span>
+          )}
+        </div>
+        <div className="int-msg-content">
+          {editingMessageId === msg.id ? (
+            <div className="int-msg-edit">
+              <textarea
+                ref={editTextareaRef}
+                value={editingContent}
+                onChange={(e) => {
+                  setEditingContent(e.target.value);
+                  autoResizeEditTextarea();
+                }}
+              />
+            </div>
+          ) : (
+            <div className="int-md-editor-container">
+              <ChatMarkdown source={msg.content} />
+            </div>
+          )}
+          <div className="int-msg-footer">
+            <span className="int-msg-time">
+              {msg.created_at ? new Date(msg.created_at).toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+              }) : ''}
+            </span>
+            <div className="int-msg-actions">
+              {editingMessageId === msg.id ? (
+                <div className="int-msg-edit-actions">
+                  <button onClick={handleCancelEdit}>取消</button>
+                  <button onClick={() => handleSaveEdit(msg.id)}>发送</button>
+                </div>
+              ) : (
+                <>
+                  <Tooltip title="编辑问题">
+                    <button
+                      className="int-msg-action-btn"
+                      onClick={() => handleEditMessage(msg.id, msg.content)}
+                    >
+                      <EditOutlined />
+                    </button>
+                  </Tooltip>
+                  <Tooltip title="复制问题">
+                    <button
+                      className="int-msg-action-btn"
+                      onClick={() => copyToClipboard(msg.content, '问题')}
+                    >
+                      <CopyOutlined />
+                    </button>
+                  </Tooltip>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const showWelcome = messages.length === 0 && !loading;
 
   // 面板拖拽处理（从 FloatingBall 通过 Context 传入）
@@ -836,252 +1177,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             <div className="int-welcome-hint">输入消息开始对话</div>
           </div>
         ) : (
-          messages.map((msg, index) => (
-            <div key={index} className={`int-message ${msg.role}`}>
-              <div className={`int-msg-avatar ${msg.role}`}>
-                {msg.role === 'user' ? (
-                  userAvatar ? (
-                    <img src={userAvatar} alt="用户" />
-                  ) : (
-                    <span style={{ fontSize: '20px' }}>👤</span>
-                  )
-                ) : (
-                  botAvatar ? (
-                    <img src={botAvatar} alt="AI" />
-                  ) : (
-                    <img src={getDefaultAvatar()} alt="AI" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  )
-                )}
-              </div>
-              <div className="int-msg-content">
-                {editingMessageId === msg.id ? (
-                  // 编辑模式
-                  <div className="int-msg-edit">
-                    <textarea
-                      ref={editTextareaRef}
-                      value={editingContent}
-                      onChange={(e) => {
-                        setEditingContent(e.target.value);
-                        autoResizeEditTextarea();
-                      }}
-                    />
-                  </div>
-                ) : (
-                  <>
-                    {msg.role === 'assistant' ? (
-                      <div className="int-step-container">
-                        <div className="int-md-editor-container">
-                      <>
-                        {/* 思考中... - 发送消息后或思考/正文都为空时显示 */}
-                        {(msg.status === 'start' || (!msg.reasoning_content && !msg.content && msg.status !== 'done' && msg.status !== 'stop')) && (
-                          <div className="int-message-reasoning">
-                            <div className="int-reasoning-header">
-                              <LoadingOutlined spin />
-                              <BulbOutlined />
-                              <span>思考中...</span>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* 正在思考中 - 流式中且有思考内容时显示 */}
-                        {msg.status !== 'start' && msg.status !== 'done' && msg.status !== 'stop' && !msg.reasoning_end && msg.reasoning_content && (
-                          <div className="int-message-reasoning">
-                            <div className="int-reasoning-header">
-                              <LoadingOutlined spin />
-                              <BulbOutlined />
-                              <span>正在思考中...</span>
-                            </div>
-                            {msg.reasoning_content && (
-                              <div className="int-reasoning-text">
-                                <ChatMarkdown source={msg.reasoning_content} />
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* 思考过程 - 完成后折叠显示 */}
-                        {(msg.status === 'done' || msg.status === 'stop' || !msg.status) && msg.reasoning_content && msg.reasoning_end && (
-                          <div className="int-message-reasoning">
-                            <div className="int-reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
-                              {expandedReasoning.has(msg.step_id || msg.id) ? (
-                                <DownOutlined />
-                              ) : (
-                                <RightOutlined />
-                              )}
-                              <BulbOutlined />
-                              <span>思考过程</span>
-                              {msg.reasoning_time != null && (
-                                <span className="int-reasoning-duration">
-                                  ({(msg.reasoning_time / 1000).toFixed(1)}s)
-                                </span>
-                              )}
-                            </div>
-                            {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
-                              <div className="int-reasoning-text">
-                                <ChatMarkdown source={msg.reasoning_content} />
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* 工具调用 */}
-                        {msg.tool_calls && msg.tool_calls.length > 0 && (
-                          <div className="int-tool-calls-container">
-                            {msg.tool_calls.map((tc, tcIndex) => (
-                              <div key={tc.tool_call_id || `tc-${tcIndex}`} className={`int-tool-call-card int-tool-call-${tc.status}`}>
-                                <div className="int-tool-call-header" onClick={() => toggleToolCall(tc.tool_call_id || `tc-${tcIndex}`)}>
-                                  <div className="int-tool-call-header-left">
-                                    {tc.status === 'start' && <LoadingOutlined spin className="int-tool-call-icon-start" />}
-                                    {tc.status === 'running' && <LoadingOutlined spin className="int-tool-call-icon-running" />}
-                                    {tc.status === 'success' && <span className="int-tool-call-icon-success">✓</span>}
-                                    {tc.status === 'error' && <span className="int-tool-call-icon-error">✗</span>}
-                                    {expandedToolCalls.has(tc.tool_call_id || `tc-${tcIndex}`) ? (
-                                      <DownOutlined style={{ fontSize: 10 }} />
-                                    ) : (
-                                      <RightOutlined style={{ fontSize: 10 }} />
-                                    )}
-                                    {tc.task_name && <span className="int-tool-call-task-name">{tc.task_name}</span>}
-                                  </div>
-                                  <div className="int-tool-call-header-right">
-                                    {tc.elapsed_ms != null && tc.elapsed_ms > 0 && (
-                                      <span className="int-tool-call-elapsed">
-                                        {(tc.elapsed_ms / 1000).toFixed(1)}s
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                                {expandedToolCalls.has(tc.tool_call_id || `tc-${tcIndex}`) && (
-                                  <div className="int-tool-call-content">
-                                    {/* 工具调用消息 */}
-                                    {tc.message && (
-                                      <div className="int-tool-call-message">
-                                        <ChatMarkdown source={tc.message} />
-                                      </div>
-                                    )}
-                                    {/* 工具调用结果 */}
-                                    {tc.result && (
-                                      <>
-                                        {tc.message && <div className="int-tool-call-divider" />}
-                                        <div
-                                          className="int-tool-call-result-header"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            toggleToolCallResult(tc.tool_call_id || `tc-${tcIndex}`);
-                                          }}
-                                        >
-                                          {expandedToolCallResults.has(tc.tool_call_id || `tc-${tcIndex}`) ? (
-                                            <DownOutlined style={{ fontSize: 10 }} />
-                                          ) : (
-                                            <RightOutlined style={{ fontSize: 10 }} />
-                                          )}
-                                          <span className="int-tool-call-result-title">工具结果</span>
-                                        </div>
-                                        {expandedToolCallResults.has(tc.tool_call_id || `tc-${tcIndex}`) && (
-                                          <div className="int-tool-call-result">
-                                            <ChatMarkdown
-                                              source={typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result, null, 2)}
-                                            />
-                                          </div>
-                                        )}
-                                      </>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* 消息内容 */}
-                        {msg.content && (
-                          (() => {
-                            const widgetEvent = msg.role === 'user' ? tryParseWidgetEvent(msg.content) : null;
-                            const displaySource = widgetEvent
-                              ? formatWidgetValueForDisplay(widgetEvent.widgetId, widgetEvent.widgetValue)
-                              : msg.content;
-                            return <ChatMarkdown source={displaySource} onWidgetEvent={handleWidgetEvent} widgetValues={(msg.extra_content as any)?.widgetValues} />;
-                          })()
-                        )}
-                      </>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="int-md-editor-container">
-                        <ChatMarkdown source={msg.content} />
-                      </div>
-                    )}
-                  </>
-                )}
-                {/* 消息底部：时间 + 操作按钮 */}
-                <div className="int-msg-footer">
-                      <span className="int-msg-time">
-                        {msg.created_at ? new Date(msg.created_at).toLocaleString('zh-CN', {
-                          year: 'numeric',
-                          month: '2-digit',
-                          day: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          second: '2-digit',
-                          hour12: false
-                        }) : ''}
-                      </span>
-                      <div className="int-msg-actions">
-                        {/* 编辑模式下的操作按钮 */}
-                        {editingMessageId === msg.id ? (
-                          <div className="int-msg-edit-actions">
-                            <button onClick={handleCancelEdit}>取消</button>
-                            <button onClick={() => handleSaveEdit(msg.id)}>发送</button>
-                          </div>
-                        ) : (
-                          <>
-                            {msg.role === 'user' && (
-                              <>
-                                <Tooltip title="编辑问题">
-                                  <button
-                                    className="int-msg-action-btn"
-                                    onClick={() => handleEditMessage(msg.id, msg.content)}
-                                  >
-                                    <EditOutlined />
-                                  </button>
-                                </Tooltip>
-                                <Tooltip title="复制问题">
-                                  <button
-                                    className="int-msg-action-btn"
-                                    onClick={() => copyToClipboard(msg.content, '问题', msg.id)}
-                                  >
-                                    {copiedMessageId === msg.id ? <CheckOutlined /> : <CopyOutlined />}
-                                  </button>
-                                </Tooltip>
-                              </>
-                            )}
-                            {msg.role === 'assistant' && msg.content && (
-                              <>
-                                <Tooltip title="重新回答">
-                                  <button
-                                    className="int-msg-action-btn"
-                                    onClick={() => handleRegenerate(index)}
-                                    disabled={loading}
-                                  >
-                                    <ReloadOutlined />
-                                  </button>
-                                </Tooltip>
-                                <Tooltip title="复制回答">
-                                  <button
-                                    className="int-msg-action-btn"
-                                    onClick={() => copyToClipboard(msg.content, '回答', msg.id)}
-                                  >
-                                    {copiedMessageId === msg.id ? <CheckOutlined /> : <CopyOutlined />}
-                                  </button>
-                                </Tooltip>
-                              </>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </div>
-              </div>
-            </div>
-          ))
+          renderGroupedMessages()
         )}
         <div ref={messagesEndRef} />
       </div>
