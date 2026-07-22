@@ -1675,6 +1675,30 @@ app.add_middleware(
 )
 
 @app.middleware("http")
+async def database_connection_middleware(request: Request, call_next):
+    """
+    数据库连接管理中间件
+    
+    在每次HTTP请求开始时获取数据库连接，在请求结束时（无论成功或异常）
+    将连接归还到连接池，避免连接泄露导致"Exceeded maximum connections"错误。
+    
+    Args:
+        request: 请求对象
+        call_next: 下一个中间件或路由处理函数
+        
+    Returns:
+        Response: 响应对象
+    """
+    from app.database.database import get_db_connection, close_db_connection
+    
+    try:
+        get_db_connection()
+        response = await call_next(request)
+        return response
+    finally:
+        close_db_connection()
+
+@app.middleware("http")
 async def performance_monitoring_middleware(request: Request, call_next):
     """
     请求性能监控中间件

@@ -1,5 +1,6 @@
 from peewee import MySQLDatabase, InterfaceError as PeeweeInterfaceError, OperationalError as PeeweeOperationalError
 from playhouse.pool import PooledMySQLDatabase
+from contextlib import contextmanager
 import yaml
 import os
 import logging
@@ -92,13 +93,34 @@ def get_db_connection():
 
 def close_db_connection():
     """
-    关闭数据库连接
+    关闭数据库连接，将连接归还到连接池
     """
     try:
         if not db.is_closed():
             db.close()
     except Exception as e:
         logger.error(f"关闭数据库连接失败: {e}")
+
+
+@contextmanager
+def db_connection_scope():
+    """
+    数据库连接上下文管理器
+    
+    在进入上下文时获取数据库连接，在退出上下文时（无论成功或异常）
+    将连接归还到连接池，避免连接泄露。
+    
+    使用示例:
+        with db_connection_scope():
+            # 执行数据库操作
+            users = User.select()
+            # 退出上下文时自动释放连接
+    """
+    try:
+        get_db_connection()
+        yield
+    finally:
+        close_db_connection()
 
 def get_pool_status():
     """
