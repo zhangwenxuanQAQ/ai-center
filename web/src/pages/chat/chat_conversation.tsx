@@ -2469,8 +2469,9 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
   const hasModelsOrChatbots = models.length > 0 || chatbots.length > 0;
 
   const groupMessagesByAssistantId = () => {
-    const groups: { assistantId: string; messages: Message[] }[] = [];
-    let currentGroup: { assistantId: string; messages: Message[] } | null = null;
+    const groups: { assistantId: string; stableId: string; messages: Message[] }[] = [];
+    let currentGroup: { assistantId: string; stableId: string; messages: Message[] } | null = null;
+    let groupCounter = 0;
     
     messages.forEach((msg) => {
       if (msg.role === 'user') {
@@ -2478,7 +2479,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           groups.push(currentGroup);
           currentGroup = null;
         }
-        groups.push({ assistantId: '', messages: [msg] });
+        groupCounter++;
+        groups.push({ assistantId: '', stableId: `user-${groupCounter}`, messages: [msg] });
       } else if (msg.role === 'assistant') {
         const assistantId = msg.message_id || msg.id;
         if (currentGroup && currentGroup.assistantId === assistantId) {
@@ -2487,13 +2489,15 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           if (currentGroup) {
             groups.push(currentGroup);
           }
-          currentGroup = { assistantId, messages: [msg] };
+          groupCounter++;
+          currentGroup = { assistantId, stableId: `assistant-${groupCounter}`, messages: [msg] };
         }
       } else if (msg.role === 'tool') {
         if (currentGroup) {
           currentGroup.messages.push(msg);
         } else {
-          groups.push({ assistantId: '', messages: [msg] });
+          groupCounter++;
+          groups.push({ assistantId: '', stableId: `tool-${groupCounter}`, messages: [msg] });
         }
       }
     });
@@ -3057,7 +3061,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       
       // 助手消息组
       return (
-        <div key={group.assistantId} className="message assistant">
+        <div key={group.stableId} className="message assistant">
           <div className={`message-avatar ${theme === 'dark' ? 'dark' : 'light'}`}>
             <img 
               src={resolveAvatarPath(group.messages[0]?.avatar) || currentSelection?.avatar || getDefaultAvatar()} 
@@ -3071,7 +3075,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           <div className="message-content">
             {group.messages.map((msg, msgIndex) => (
               <div 
-                key={msg.step_id || msg.id || msgIndex}
+                key={msgIndex}
                 id={msg.step_id || undefined}
                 className="step-container"
               >
