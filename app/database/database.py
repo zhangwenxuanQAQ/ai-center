@@ -14,6 +14,10 @@ config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__fil
 with open(config_path, 'r', encoding='utf-8') as f:
     config = yaml.safe_load(f)
 
+# 线程本地存储，用于跟踪每个线程是否获取了连接
+# 这样可以确保每个线程独立管理自己的连接生命周期
+_thread_local = threading.local()
+
 
 class RetryPooledMySQLDatabase(PooledMySQLDatabase):
     """
@@ -74,32 +78,64 @@ db = RetryPooledMySQLDatabase(
 def get_db_connection():
     """
     获取数据库连接，如果连接已断开则重新连接
-
+    
+    注意：调用此函数后，必须在操作完成后调用 close_db_connection() 释放连接
+    对于HTTP请求，中间件会自动处理；对于后台线程，需要手动管理或使用 db_connection_scope()
+    
     Returns:
         MySQLDatabase: 数据库连接对象
     """
     try:
         if db.is_closed():
             db.connect(reuse_if_open=True)
+            # 标记当前线程已获取连接
+            _thread_local.connection_acquired = True
+            logger.debug(f"线程 {threading.current_thread().name} 获取数据库连接")
     except Exception as e:
         logger.error(f"数据库连接失败: {e}")
         try:
             db.close()
             db.connect(reuse_if_open=True)
+            _thread_local.connection_acquired = True
         except Exception as retry_error:
             logger.error(f"数据库重连失败: {retry_error}")
             raise
     return db
 
+
 def close_db_connection():
     """
     关闭数据库连接，将连接归还到连接池
+    
+    对于HTTP请求，中间件会自动调用此函数；
+    对于后台线程，需要手动调用或使用 db_connection_scope()
     """
     try:
         if not db.is_closed():
             db.close()
+            # 清除当前线程的连接标记
+            if hasattr(_thread_local, 'connection_acquired'):
+                delattr(_thread_local, 'connection_acquired')
+            logger.debug(f"线程 {threading.current_thread().name} 释放数据库连接")
     except Exception as e:
         logger.error(f"关闭数据库连接失败: {e}")
+
+
+def close_stale_thread_connections(max_age=300):
+    """
+    关闭长时间未释放的连接（用于清理后台线程中可能泄漏的连接）
+    
+    Args:
+        max_age: 连接最大存活时间（秒），超过此时间的连接将被强制关闭
+    """
+    try:
+        # 调用Peewee连接池的close_stale方法
+        if hasattr(db, 'close_stale'):
+            closed_count = db.close_stale(age=max_age)
+            if closed_count > 0:
+                logger.warning(f"强制关闭了 {closed_count} 个长时间未释放的数据库连接")
+    except Exception as e:
+        logger.error(f"清理过期连接失败: {e}")
 
 
 @contextmanager

@@ -36,6 +36,7 @@ from app.database.redis_utils import redis_utils
 from app.database.es_utils import es_utils
 from app.database.models import KnowledgebaseDocument, Knowledgebase, LLMModel
 from app.database.storage.rustfs_utils import rustfs_utils
+from app.database.database import db_connection_scope
 from app.core.llm_model.factory import LLMFactory
 from app.constants.knowledgebase_document_constants import RunningStatus
 
@@ -214,95 +215,97 @@ class TaskExecutor:
         """服务重启时恢复未完成的任务"""
         logger.info("开始恢复未完成的任务...")
         try:
-            pending_docs = KnowledgebaseDocument.select().where(
-                (KnowledgebaseDocument.running_status == RunningStatus.RUNNING) |
-                (KnowledgebaseDocument.running_status == RunningStatus.WAITING)
-            )
-            
-            pending_count = pending_docs.count()
-            if pending_count == 0:
-                logger.info("没有需要恢复的任务")
-                return
+            # 使用数据库连接上下文，确保后台线程中的数据库连接在操作完成后被正确释放
+            with db_connection_scope():
+                pending_docs = KnowledgebaseDocument.select().where(
+                    (KnowledgebaseDocument.running_status == RunningStatus.RUNNING) |
+                    (KnowledgebaseDocument.running_status == RunningStatus.WAITING)
+                )
+                
+                pending_count = pending_docs.count()
+                if pending_count == 0:
+                    logger.info("没有需要恢复的任务")
+                    return
 
-            logger.info(f"发现 {pending_count} 个未完成的任务，正在重新提交...")
-            
-            recovered_count = 0
-            failed_count = 0
-            
-            # 批量获取知识库信息，减少数据库查询
-            kb_ids = set()
-            kb_cache = {}
-            
-            for doc in pending_docs:
-                kb_ids.add(doc.kb_id)
-            
-            # 一次性查询所有知识库的模型信息
-            for kb in Knowledgebase.select().where(Knowledgebase.id << kb_ids):
-                kb_cache[kb.id] = {
-                    'embedding_model_id': kb.embedding_model_id,
-                    'text_model_id': kb.text_model_id
-                }
-            
-            for doc in pending_docs:
-                try:
-                    logger.info(f"恢复任务: doc_id={doc.id}, filename={doc.file_name}")
-                    
-                    old_token_num = doc.token_num or 0
-                    old_chunk_num = doc.chunk_num or 0
-                    if old_token_num > 0 or old_chunk_num > 0:
-                        self._update_kb_stats(doc.kb_id, -old_token_num, -old_chunk_num)
-
-                    doc.running_status = RunningStatus.WAITING
-                    doc.task_progress = 0
-                    doc.task_progress_message = "任务恢复中..."
-                    doc.task_begin_at = None
-                    doc.task_end_at = None
-                    doc.task_duration = 0
-                    doc.token_num = 0
-                    doc.chunk_num = 0
-                    doc.save()
-                    
-                    self._publish_doc_event(doc.kb_id, {
-                        "doc_id": doc.id,
-                        "running_status": doc.running_status,
-                        "task_progress": 0,
-                        "task_progress_message": "任务恢复中...",
-                        "chunk_num": 0,
-                        "token_num": 0,
-                    })
-
-                    metadatas = {}
-                    if doc.metadatas:
-                        try:
-                            metadatas = json.loads(doc.metadatas) if isinstance(doc.metadatas, str) else doc.metadatas
-                        except (json.JSONDecodeError, TypeError):
-                            pass
-
-                    # 从缓存获取知识库模型信息
-                    kb_info = kb_cache.get(doc.kb_id, {})
-                    
-                    task = self.submit_task(
-                        doc=doc,
-                        lang="Chinese",
-                        parser_config=self._get_doc_parser_config(doc),
-                        embedding_model_id=kb_info.get('embedding_model_id'),
-                        text_model_id=kb_info.get('text_model_id'),
-                        metadatas=metadatas,
-                    )
-                    
-                    if task:
-                        recovered_count += 1
-                        logger.info(f"任务恢复成功: {doc.id}")
-                    else:
-                        failed_count += 1
-                        logger.error(f"任务恢复失败: {doc.id}")
+                logger.info(f"发现 {pending_count} 个未完成的任务，正在重新提交...")
+                
+                recovered_count = 0
+                failed_count = 0
+                
+                # 批量获取知识库信息，减少数据库查询
+                kb_ids = set()
+                kb_cache = {}
+                
+                for doc in pending_docs:
+                    kb_ids.add(doc.kb_id)
+                
+                # 一次性查询所有知识库的模型信息
+                for kb in Knowledgebase.select().where(Knowledgebase.id << kb_ids):
+                    kb_cache[kb.id] = {
+                        'embedding_model_id': kb.embedding_model_id,
+                        'text_model_id': kb.text_model_id
+                    }
+                
+                for doc in pending_docs:
+                    try:
+                        logger.info(f"恢复任务: doc_id={doc.id}, filename={doc.file_name}")
                         
-                except Exception as e:
-                    failed_count += 1
-                    logger.error(f"恢复任务 {doc.id} 时发生异常: {e}")
-            
-            logger.info(f"任务恢复完成: 成功 {recovered_count} 个, 失败 {failed_count} 个")
-            
+                        old_token_num = doc.token_num or 0
+                        old_chunk_num = doc.chunk_num or 0
+                        if old_token_num > 0 or old_chunk_num > 0:
+                            self._update_kb_stats(doc.kb_id, -old_token_num, -old_chunk_num)
+
+                        doc.running_status = RunningStatus.WAITING
+                        doc.task_progress = 0
+                        doc.task_progress_message = "任务恢复中..."
+                        doc.task_begin_at = None
+                        doc.task_end_at = None
+                        doc.task_duration = 0
+                        doc.token_num = 0
+                        doc.chunk_num = 0
+                        doc.save()
+                        
+                        self._publish_doc_event(doc.kb_id, {
+                            "doc_id": doc.id,
+                            "running_status": doc.running_status,
+                            "task_progress": 0,
+                            "task_progress_message": "任务恢复中...",
+                            "chunk_num": 0,
+                            "token_num": 0,
+                        })
+
+                        metadatas = {}
+                        if doc.metadatas:
+                            try:
+                                metadatas = json.loads(doc.metadatas) if isinstance(doc.metadatas, str) else doc.metadatas
+                            except (json.JSONDecodeError, TypeError):
+                                pass
+
+                        # 从缓存获取知识库模型信息
+                        kb_info = kb_cache.get(doc.kb_id, {})
+                        
+                        task = self.submit_task(
+                            doc=doc,
+                            lang="Chinese",
+                            parser_config=self._get_doc_parser_config(doc),
+                            embedding_model_id=kb_info.get('embedding_model_id'),
+                            text_model_id=kb_info.get('text_model_id'),
+                            metadatas=metadatas,
+                        )
+                        
+                        if task:
+                            recovered_count += 1
+                            logger.info(f"任务恢复成功: {doc.id}")
+                        else:
+                            failed_count += 1
+                            logger.error(f"任务恢复失败: {doc.id}")
+                            
+                    except Exception as e:
+                        failed_count += 1
+                        logger.error(f"恢复任务 {doc.id} 时发生异常: {e}")
+                
+                logger.info(f"任务恢复完成: 成功 {recovered_count} 个, 失败 {failed_count} 个")
+                
         except Exception as e:
             logger.error(f"任务恢复过程发生异常: {e}")
 
@@ -1368,95 +1371,97 @@ class TaskExecutor:
         """处理单个消息"""
         task_id = None
         try:
-            message = msg.get_message()
-            task_id = message.get("task_id")
+            # 使用数据库连接上下文，确保后台线程中的数据库连接在操作完成后被正确释放
+            with db_connection_scope():
+                message = msg.get_message()
+                task_id = message.get("task_id")
 
-            logger.info(f"收到任务: {task_id}")
+                logger.info(f"收到任务: {task_id}")
 
-            # 先检查任务是否已被取消
-            if self._has_canceled(task_id):
-                logger.info(f"任务已被取消，直接跳过: {task_id}")
-                msg.ack()
-                return
+                # 先检查任务是否已被取消
+                if self._has_canceled(task_id):
+                    logger.info(f"任务已被取消，直接跳过: {task_id}")
+                    msg.ack()
+                    return
 
-            task = self._get_task(task_id)
-            if not task:
-                logger.warning(f"任务不存在: {task_id}")
-                msg.ack()
-                return
+                task = self._get_task(task_id)
+                if not task:
+                    logger.warning(f"任务不存在: {task_id}")
+                    msg.ack()
+                    return
 
-            # 检查任务是否正在被其他线程处理
-            with self._active_tasks_lock:
-                is_active = task_id in self._active_tasks
-            if is_active:
-                logger.warning(f"任务正在被其他线程处理，跳过: {task_id}")
-                msg.ack()
-                return
+                # 检查任务是否正在被其他线程处理
+                with self._active_tasks_lock:
+                    is_active = task_id in self._active_tasks
+                if is_active:
+                    logger.warning(f"任务正在被其他线程处理，跳过: {task_id}")
+                    msg.ack()
+                    return
 
-            # 检查任务状态，如果已经是终止状态，直接ack
-            if task.status in (RunningStatus.DONE, RunningStatus.FAIL, RunningStatus.CANCEL):
-                logger.warning(f"任务已处于终止状态，跳过执行: task_id={task_id}, status={task.status}")
-                msg.ack()
-                return
+                # 检查任务状态，如果已经是终止状态，直接ack
+                if task.status in (RunningStatus.DONE, RunningStatus.FAIL, RunningStatus.CANCEL):
+                    logger.warning(f"任务已处于终止状态，跳过执行: task_id={task_id}, status={task.status}")
+                    msg.ack()
+                    return
 
-            # 再次检查取消标记
-            if self._has_canceled(task.task_id):
-                logger.info(f"任务已被取消: {task_id}")
-                task.status = RunningStatus.CANCEL
-                task.completed_at = datetime.now()
-                self._update_document_status(task)
-                msg.ack()
-                return
+                # 再次检查取消标记
+                if self._has_canceled(task.task_id):
+                    logger.info(f"任务已被取消: {task_id}")
+                    task.status = RunningStatus.CANCEL
+                    task.completed_at = datetime.now()
+                    self._update_document_status(task)
+                    msg.ack()
+                    return
 
-            self._add_active_task(task_id)
-
-            try:
-                task.status = RunningStatus.RUNNING
-                task.started_at = datetime.now()
-                task.progress = 0.0
-                task.progress_message = ""
-                self._set_progress(task, 0.0, "开始处理...", append=False)
+                self._add_active_task(task_id)
 
                 try:
-                    self._execute_chunk(task)
+                    task.status = RunningStatus.RUNNING
+                    task.started_at = datetime.now()
+                    task.progress = 0.0
+                    task.progress_message = ""
+                    self._set_progress(task, 0.0, "开始处理...", append=False)
+
+                    try:
+                        self._execute_chunk(task)
+                    except TaskCanceledException:
+                        # 任务被取消，直接设置状态，不调用_set_progress避免再次抛出异常
+                        task.status = RunningStatus.CANCEL
+                        task.progress = 1.0
+                        timestamp = datetime.now().strftime("%H:%M:%S")
+                        task.progress_message = f"{task.progress_message}\n[{timestamp}] 任务已取消" if task.progress_message else f"[{timestamp}] 任务已取消"
+                        task.completed_at = datetime.now()
+                    except Exception as e:
+                        logger.exception(f"任务执行异常 {task_id}: {e}")
+                        # 任务失败，直接设置状态，不调用_set_progress避免再次抛出异常
+                        task.status = RunningStatus.FAIL
+                        task.error = str(e)
+                        task.progress = -1
+                        timestamp = datetime.now().strftime("%H:%M:%S")
+                        error_msg = f"任务失败: {str(e)[:200]}"
+                        task.progress_message = f"{task.progress_message}\n[{timestamp}] [ERROR]{error_msg}" if task.progress_message else f"[{timestamp}] [ERROR]{error_msg}"
+                        task.completed_at = datetime.now()
+
+                    msg.ack()
+                    self._update_document_status(task)
+
+                    logger.info(f"任务处理完成: {task_id}, 状态: {task.status}")
+
                 except TaskCanceledException:
-                    # 任务被取消，直接设置状态，不调用_set_progress避免再次抛出异常
+                    # 任务在开始处理时被取消（_set_progress抛出异常）
+                    logger.info(f"任务在开始时被取消: {task_id}")
                     task.status = RunningStatus.CANCEL
                     task.progress = 1.0
                     timestamp = datetime.now().strftime("%H:%M:%S")
                     task.progress_message = f"{task.progress_message}\n[{timestamp}] 任务已取消" if task.progress_message else f"[{timestamp}] 任务已取消"
                     task.completed_at = datetime.now()
-                except Exception as e:
-                    logger.exception(f"任务执行异常 {task_id}: {e}")
-                    # 任务失败，直接设置状态，不调用_set_progress避免再次抛出异常
-                    task.status = RunningStatus.FAIL
-                    task.error = str(e)
-                    task.progress = -1
-                    timestamp = datetime.now().strftime("%H:%M:%S")
-                    error_msg = f"任务失败: {str(e)[:200]}"
-                    task.progress_message = f"{task.progress_message}\n[{timestamp}] [ERROR]{error_msg}" if task.progress_message else f"[{timestamp}] [ERROR]{error_msg}"
-                    task.completed_at = datetime.now()
+                    msg.ack()
+                    self._update_document_status(task)
 
-                msg.ack()
-                self._update_document_status(task)
-
-                logger.info(f"任务处理完成: {task_id}, 状态: {task.status}")
-
-            except TaskCanceledException:
-                # 任务在开始处理时被取消（_set_progress抛出异常）
-                logger.info(f"任务在开始时被取消: {task_id}")
-                task.status = RunningStatus.CANCEL
-                task.progress = 1.0
-                timestamp = datetime.now().strftime("%H:%M:%S")
-                task.progress_message = f"{task.progress_message}\n[{timestamp}] 任务已取消" if task.progress_message else f"[{timestamp}] 任务已取消"
-                task.completed_at = datetime.now()
-                msg.ack()
-                self._update_document_status(task)
-
-            finally:
-                self._remove_active_task(task_id)
-                redis_utils.delete(f"{self.CANCEL_KEY_PREFIX}{task_id}")
-                self._tasks.pop(task_id, None)
+                finally:
+                    self._remove_active_task(task_id)
+                    redis_utils.delete(f"{self.CANCEL_KEY_PREFIX}{task_id}")
+                    self._tasks.pop(task_id, None)
 
         except Exception as e:
             logger.exception(f"处理消息异常: {e}")
