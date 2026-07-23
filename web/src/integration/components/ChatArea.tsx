@@ -26,6 +26,7 @@ interface ChatAreaProps {
   onChatIdChange: (chatId: string) => void;
   onMessageSent: () => void;
   temporary?: boolean;
+  newChatTrigger?: number;
 }
 
 interface ToolCallStep {
@@ -79,6 +80,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   onChatIdChange,
   onMessageSent,
   temporary = false,
+  newChatTrigger = 0,
 }) => {
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -121,7 +123,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   }, []);
 
   // 随机选择欢迎语
-  useEffect(() => {
+  const selectRandomWelcome = useCallback(() => {
     if (welcomeMessages && welcomeMessages.length > 0) {
       const randomIndex = Math.floor(Math.random() * welcomeMessages.length);
       setRandomWelcome(welcomeMessages[randomIndex]);
@@ -129,6 +131,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       setRandomWelcome('你好，有什么可以帮助您的吗？');
     }
   }, [welcomeMessages]);
+
+  useEffect(() => {
+    selectRandomWelcome();
+  }, [selectRandomWelcome]);
 
   // 动态计算消息区域左右padding
   useEffect(() => {
@@ -163,10 +169,72 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   // Load messages when chatId changes
   useEffect(() => {
     if (chatId && chatId !== currentChatId) {
-      setCurrentChatId(chatId);
-      loadMessages(chatId);
+      // 切换到已有对话
+      // 先检查是否有流式缓存（正在进行的流式输出）
+      const streamingCache = integrationChatService.getStreamingCache(chatId);
+      if (streamingCache && streamingCache.isStreaming) {
+        // 有正在进行的流式输出，恢复状态
+        setCurrentChatId(chatId);
+        setLoading(true);
+        // 加载历史消息并合并流式缓存
+        loadMessages(chatId).then(() => {
+          // 如果缓存中有消息内容，更新最后一条助手消息
+          if (streamingCache.currentContent || streamingCache.currentReasoningContent) {
+            setMessages(prev => {
+              const lastAssistantIndex = prev.map((m, i) => ({ ...m, index: i })).reverse().find(m => m.role === 'assistant');
+              if (lastAssistantIndex) {
+                return prev.map((msg, idx) => {
+                  if (idx === lastAssistantIndex.index) {
+                    return {
+                      ...msg,
+                      content: streamingCache.currentContent || msg.content,
+                      reasoning_content: streamingCache.currentReasoningContent || msg.reasoning_content,
+                      status: 'running',
+                    };
+                  }
+                  return msg;
+                });
+              }
+              return prev;
+            });
+          }
+        });
+      } else {
+        // 没有流式输出，正常加载历史消息
+        setCurrentChatId(chatId);
+        loadMessages(chatId);
+      }
+    } else if (!chatId && currentChatId) {
+      // 切换到新对话，清空消息和状态
+      setCurrentChatId(undefined);
+      setMessages([]);
+      setInputValue('');
+      setSelectedFiles([]);
+      setEditingMessageId(null);
+      setEditingContent('');
+      setExpandedReasoning(new Set());
+      setExpandedToolCalls(new Set());
+      setExpandedToolCallResults(new Set());
+      // 重新随机选择欢迎语
+      selectRandomWelcome();
     }
-  }, [chatId]);
+  }, [chatId, currentChatId, selectRandomWelcome]);
+
+  // 监听新对话触发器，清空消息并重新选择欢迎语
+  useEffect(() => {
+    if (newChatTrigger > 0) {
+      setMessages([]);
+      setInputValue('');
+      setSelectedFiles([]);
+      setEditingMessageId(null);
+      setEditingContent('');
+      setExpandedReasoning(new Set());
+      setExpandedToolCalls(new Set());
+      setExpandedToolCallResults(new Set());
+      setCurrentChatId(undefined);
+      selectRandomWelcome();
+    }
+  }, [newChatTrigger, selectRandomWelcome]);
 
   // 只有在底部时才自动滚动
   useEffect(() => {
@@ -180,10 +248,15 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       const result = await integrationChatService.getMessages(apiKey, id);
       const displayMsgs: DisplayMessage[] = (result.items || []).map((m: IntegrationMessage) => ({
         id: m.id,
+        message_id: m.message_id || m.id,
         role: m.role as 'user' | 'assistant',
         content: m.content,
         reasoning_content: m.reasoning_content,
+        reasoning_time: m.reasoning_time,
+        reasoning_end: !!m.reasoning_content,
         status: 'done',
+        created_at: m.created_at,
+        extra_content: m.extra_content,
       }));
       setMessages(displayMsgs);
       setTimeout(() => {
@@ -298,19 +371,27 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   const sendMessageInternal = async (
     query: IntegrationQueryItem[],
     displayContent: string,
-    filesForDisplay: any[]
+    filesForDisplay: any[],
+    editMessageId?: string
   ) => {
     const idTracker = { assistant: '', user: '' };
 
-    // Add user message
-    const userMsg: DisplayMessage = {
-      id: `user-${Date.now()}`,
-      role: 'user',
-      content: displayContent,
-      status: 'done',
-      created_at: new Date().toISOString(),
-    };
-    idTracker.user = userMsg.id;
+    // 只有非编辑模式才添加用户消息
+    // 编辑模式下，用户消息已经在前端存在，不需要重复添加
+    if (!editMessageId) {
+      // Add user message
+      const userMsg: DisplayMessage = {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        content: displayContent,
+        status: 'done',
+        created_at: new Date().toISOString(),
+      };
+      idTracker.user = userMsg.id;
+
+      setMessages((prev) => [...prev, userMsg]);
+      scrollToBottom();
+    }
 
     // Add placeholder for assistant
     const assistantMsg: DisplayMessage = {
@@ -325,12 +406,20 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     };
     idTracker.assistant = assistantMsg.id;
 
-    setMessages((prev) => [...prev, userMsg, assistantMsg]);
-    scrollToBottom();
+    setMessages((prev) => [...prev, assistantMsg]);
     setLoading(true);
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
+
+    // 设置流式缓存（用于切换对话后恢复）
+    const cacheChatId = currentChatId || `temp-${Date.now()}`;
+    integrationChatService.setStreamingCache(cacheChatId, {
+      isStreaming: true,
+      messages: [],
+      assistantMessageId: assistantMsg.id,
+      abortController: controller,
+    });
 
     let newChatId = currentChatId;
 
@@ -424,6 +513,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             newChatId = data.chat_id;
             setCurrentChatId(newChatId);
             onChatIdChange(newChatId);
+            // 如果是新对话（之前没有chatId），立即触发历史列表刷新
+            if (!currentChatId) {
+              onMessageSent();
+            }
           }
 
           const status = data.status || 'running';
@@ -541,10 +634,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           }));
           setLoading(false);
           abortControllerRef.current = null;
+          // 清理流式缓存
+          integrationChatService.clearStreamingCache(cacheChatId);
         },
         () => {
           setMessages((prev) => prev.map(msg => {
-            if (msg.role === 'assistant' && msg.status && msg.status !== 'done' && msg.status !== 'stop') {
+            if (msg.role === 'assistant' && msg.status !== 'done' && msg.status !== 'stop') {
               return { ...msg, status: 'done' };
             }
             return msg;
@@ -552,10 +647,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           setLoading(false);
           abortControllerRef.current = null;
           onMessageSent();
+          // 清理流式缓存
+          integrationChatService.clearStreamingCache(cacheChatId);
         },
         controller.signal,
         temporary,
-        deepThinking
+        deepThinking,
+        editMessageId
       );
     } catch (err: any) {
       console.error('Send message error:', err);
@@ -661,9 +759,18 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
   // Handle keyboard
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Ctrl+Enter 或 Shift+Enter 换行（不发送）
+    if (e.key === 'Enter' && (e.shiftKey || e.ctrlKey)) {
+      // 默认行为就是换行，不需要处理
+      return;
+    }
+    // 仅 Enter 发送（如果正在回答则不发送）
     if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) {
       e.preventDefault();
-      handleSend();
+      // 正在回答时不能发送，但可以输入
+      if (!loading) {
+        handleSend();
+      }
     }
   };
 
@@ -732,11 +839,16 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   const handleSaveEdit = async (messageId: string) => {
     if (!editingContent.trim()) return;
 
-    // 找到这条消息的索引
-    const messageIndex = messages.findIndex(m => m.id === messageId);
-    if (messageIndex === -1) return;
+    // 找到这条消息
+    const message = messages.find(m => m.id === messageId || m.message_id === messageId);
+    if (!message) return;
 
-    // 删除这条消息及其后面的所有消息
+    // 获取原始消息ID（用于后端删除）
+    const originalMessageId = message.message_id || message.id;
+
+    // 前端删除这条消息及其后面的所有消息
+    const messageIndex = messages.findIndex(m => m.id === messageId || m.message_id === messageId);
+    if (messageIndex === -1) return;
     const newMessages = messages.slice(0, messageIndex);
     setMessages(newMessages);
 
@@ -744,9 +856,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     setEditingMessageId(null);
     setEditingContent('');
 
-    // 构建query，直接发送消息
+    // 构建query，发送消息（传递 editMessageId）
     const query: IntegrationQueryItem[] = [{ type: 'text', content: editingContent }];
-    sendMessageInternal(query, editingContent, []);
+    sendMessageInternal(query, editingContent, [], originalMessageId);
   };
 
   // 重新回答
@@ -756,6 +868,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     const groups = groupMessagesByAssistantId();
     if (groupIndex >= groups.length) return;
 
+    // 找到该助手消息组对应的用户消息
     let userMessage: DisplayMessage | null = null;
     let userMsgIndexInMessages = -1;
 
@@ -763,18 +876,29 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       const group = groups[i];
       if (!group.assistantId && group.messages.length > 0) {
         userMessage = group.messages[0];
-        userMsgIndexInMessages = messages.findIndex(m => m.id === userMessage!.id);
+        userMsgIndexInMessages = messages.findIndex(m => m.id === userMessage!.id || m.message_id === userMessage!.id);
         break;
       }
     }
 
     if (!userMessage || userMsgIndexInMessages === -1) return;
 
-    const newMessages = messages.slice(0, userMsgIndexInMessages);
+    // 找到用户消息后面第一条助手消息的ID（用于后端删除）
+    let firstAssistantMsgId: string | undefined = undefined;
+    for (let i = userMsgIndexInMessages + 1; i < messages.length; i++) {
+      if (messages[i].role === 'assistant') {
+        firstAssistantMsgId = messages[i].message_id || messages[i].id;
+        break;
+      }
+    }
+
+    // 前端删除用户消息后面的所有消息（保留用户消息）
+    const newMessages = messages.slice(0, userMsgIndexInMessages + 1);
     setMessages(newMessages);
 
+    // 构建query，重新发送用户消息（如果有助手消息ID则传递给后端删除）
     const query: IntegrationQueryItem[] = [{ type: 'text', content: userMessage.content }];
-    sendMessageInternal(query, userMessage.content, []);
+    sendMessageInternal(query, userMessage.content, [], firstAssistantMsgId);
   };
 
   // 切换思考过程展开/收起
@@ -986,6 +1110,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
   const renderGroupedMessages = () => {
     const groups = groupMessagesByAssistantId();
+    const lastAssistantGroupIndex = [...groups].reverse().findIndex(g => g.assistantId !== '');
+    const lastAssistantGroupIdx = lastAssistantGroupIndex >= 0 ? groups.length - 1 - lastAssistantGroupIndex : -1;
+
     return groups.map((group, groupIndex) => {
       if (!group.assistantId) {
         const msg = group.messages[0];
@@ -993,7 +1120,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       }
 
       const firstMsg = group.messages[0];
-      const isRunning = group.messages.some(m => m.status && m.status !== 'done' && m.status !== 'stop');
+      const isRunning = loading && groupIndex === lastAssistantGroupIdx;
       const hasContent = group.messages.some(m => m.content);
 
       return (
@@ -1212,9 +1339,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             value={inputValue}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            placeholder={inputPlaceholder}
+            placeholder={`${inputPlaceholder}（Ctrl/Shift+Enter换行，Enter发送）`}
             rows={1}
-            disabled={loading}
           />
           {/* 输入框底部工具栏 */}
           <div className="int-input-toolbar">

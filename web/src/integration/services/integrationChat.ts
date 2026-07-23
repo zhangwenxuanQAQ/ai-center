@@ -5,10 +5,17 @@
 
 export interface IntegrationMessage {
   id: string;
+  chatbot_id?: string;
+  chat_id?: string;
+  message_id?: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
+  extra_content?: any;
   reasoning_content?: string;
+  reasoning_time?: number;
+  model_id?: string;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface IntegrationChat {
@@ -16,6 +23,7 @@ export interface IntegrationChat {
   title: string;
   created_at: string;
   updated_at: string;
+  temporary?: boolean;
 }
 
 export interface IntegrationQueryItem {
@@ -41,12 +49,29 @@ const getApiBaseUrl = (): string => {
 
 const API_BASE_URL = getApiBaseUrl();
 
+// 流式消息缓存类型
+interface StreamingCache {
+  isStreaming: boolean;
+  messages: any[];
+  assistantMessageId?: string;
+  currentContent?: string;
+  currentReasoningContent?: string;
+  abortController?: AbortController;
+}
+
+// 流式消息缓存 Map（按 chatId 存储）
+const streamingMessagesMap = new Map<string, StreamingCache>();
+
 export const integrationChatService = {
   /**
    * 获取对话列表
    */
-  getChats: async (apiKey: string): Promise<{ items: IntegrationChat[]; total: number }> => {
-    const res = await fetch(`${API_BASE_URL}/aicenter/api/v1/chats`, {
+  getChats: async (apiKey: string, keyword?: string): Promise<{ items: IntegrationChat[]; total: number }> => {
+    let url = `${API_BASE_URL}/aicenter/api/v1/chats`;
+    if (keyword && keyword.trim()) {
+      url += `?keyword=${encodeURIComponent(keyword.trim())}`;
+    }
+    const res = await fetch(url, {
       headers: {
         'Authorization': `Bearer ${apiKey}`,
       },
@@ -82,7 +107,8 @@ export const integrationChatService = {
     onComplete?: () => void,
     abortSignal?: AbortSignal,
     temporary?: boolean,
-    deepThinking?: boolean
+    deepThinking?: boolean,
+    editMessageId?: string
   ): Promise<void> => {
     const body: Record<string, any> = {
       query,
@@ -93,6 +119,7 @@ export const integrationChatService = {
     if (deepThinking) {
       body.config = { deep_thinking: true };
     }
+    if (editMessageId) body.edit_message_id = editMessageId;
 
     try {
       const res = await fetch(`${API_BASE_URL}/aicenter/api/v1/chat/completions`, {
@@ -156,5 +183,100 @@ export const integrationChatService = {
    */
   createAbortController: (): AbortController => {
     return new AbortController();
+  },
+
+  /**
+   * 设置流式消息缓存
+   */
+  setStreamingCache: (
+    chatId: string,
+    cache: Partial<StreamingCache>
+  ) => {
+    const existing = streamingMessagesMap.get(chatId) || {
+      isStreaming: false,
+      messages: [],
+    };
+    streamingMessagesMap.set(chatId, { ...existing, ...cache });
+  },
+
+  /**
+   * 获取对话的流式消息缓存
+   */
+  getStreamingCache: (chatId: string) => {
+    return streamingMessagesMap.get(chatId);
+  },
+
+  /**
+   * 清理对话的流式消息缓存
+   */
+  clearStreamingCache: (chatId: string) => {
+    streamingMessagesMap.delete(chatId);
+  },
+
+  /**
+   * 检查对话是否有正在进行的流式输出
+   */
+  isStreaming: (chatId: string) => {
+    const cache = streamingMessagesMap.get(chatId);
+    return cache?.isStreaming ?? false;
+  },
+
+  /**
+   * 添加流式消息到缓存
+   */
+  addStreamingMessage: (chatId: string, data: any) => {
+    const cache = streamingMessagesMap.get(chatId);
+    if (cache) {
+      cache.messages.push(data);
+      // 更新当前内容
+      if (data.type === 'content' && data.text) {
+        cache.currentContent = (cache.currentContent || '') + data.text;
+      }
+      if (data.type === 'reasoning_content' && data.text) {
+        cache.currentReasoningContent = (cache.currentReasoningContent || '') + data.text;
+      }
+    }
+  },
+
+  /**
+   * 中断指定对话的流式输出
+   */
+  abortChat: (chatId: string) => {
+    const cache = streamingMessagesMap.get(chatId);
+    if (cache?.abortController) {
+      cache.abortController.abort();
+    }
+  },
+
+  /**
+   * 修改对话名称
+   */
+  updateChatTitle: async (apiKey: string, chatId: string, title: string): Promise<IntegrationChat> => {
+    const res = await fetch(`${API_BASE_URL}/aicenter/api/v1/chat/${chatId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({ title }),
+    });
+    const data = await res.json();
+    if (data.code !== 200) throw new Error(data.message || '修改对话名称失败');
+    return data.data;
+  },
+
+  /**
+   * 删除对话
+   */
+  deleteChat: async (apiKey: string, chatId: string): Promise<boolean> => {
+    const res = await fetch(`${API_BASE_URL}/aicenter/api/v1/chat/${chatId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
+    });
+    const data = await res.json();
+    if (data.code !== 200) throw new Error(data.message || '删除对话失败');
+    return true;
   },
 };

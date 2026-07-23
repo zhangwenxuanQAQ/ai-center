@@ -8,10 +8,11 @@
 import json
 import logging
 import asyncio
-from fastapi import APIRouter, Request, Header
+from fastapi import APIRouter, Request, Header, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from typing import Optional, List
 from pydantic import BaseModel, Field
+from fastapi import Query
 
 from app.services.chat.dto import QueryItem
 from app.services.integration.service import ChatbotIntegrationService
@@ -32,12 +33,14 @@ class IntegrationChatRequest(BaseModel):
         chat_id: 对话ID（可选，不传则创建新对话）
         stream: 是否流式输出
         temporary: 临时会话模式，不保存对话和消息到数据库
+        edit_message_id: 编辑消息ID，表示编辑的是哪条用户消息，会删除该消息及其后续所有消息
     """
     config: Optional[dict] = Field(None, description="对话配置JSON，包含deep_thinking等配置项")
     query: List[QueryItem] = Field(..., description="查询数组")
     chat_id: Optional[str] = Field(None, max_length=40, description="对话ID")
     stream: bool = Field(True, description="是否流式输出")
     temporary: bool = Field(False, description="临时会话模式，不保存到数据库")
+    edit_message_id: Optional[str] = Field(None, description="编辑消息ID，删除该消息及其后续消息")
 
 
 def get_api_key_from_header(authorization: Optional[str]) -> Optional[str]:
@@ -57,10 +60,43 @@ def get_api_key_from_header(authorization: Optional[str]) -> Optional[str]:
     return authorization
 
 
+async def verify_api_key(authorization: Optional[str] = Header(None, description="Authorization: Bearer <api_key>")):
+    """
+    通用API密钥鉴权依赖项
+    
+    从Authorization请求头中提取并验证API密钥，验证通过返回集成配置对象。
+    验证失败抛出HTTPException，错误信息包含正确格式说明。
+    
+    Args:
+        authorization: Authorization请求头
+        
+    Returns:
+        ChatbotIntegration: 集成配置对象
+        
+    Raises:
+        HTTPException: 401 未授权
+    """
+    api_key = get_api_key_from_header(authorization)
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="缺少API KEY请求头或格式不正确，正确格式为：Authorization: Bearer <your_api_key>"
+        )
+
+    integration = ChatbotIntegrationService.get_by_api_key(api_key)
+    if not integration:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="API密钥无效"
+        )
+
+    return integration
+
+
 @router.post("/v1/chat/completions", summary="聊天接口（OpenAI兼容）")
 async def chat_completions(
     chat_request: IntegrationChatRequest,
-    authorization: Optional[str] = Header(None, description="Authorization: Bearer <api_key>")
+    integration = Depends(verify_api_key)
 ):
     """
     聊天接口，支持流式和非流式输出
@@ -74,19 +110,11 @@ async def chat_completions(
             - chat_id: 对话ID（可选，不传则创建新对话）
             - stream: 是否流式输出
             - temporary: 临时会话模式，不保存对话和消息到数据库
-        authorization: Authorization请求头
+        integration: 集成配置对象（由verify_api_key依赖项注入）
 
     Returns:
         流式输出时返回StreamingResponse，否则返回ApiResponse
     """
-    api_key = get_api_key_from_header(authorization)
-    if not api_key:
-        return ResponseUtil.error(code=401, message="缺少Authorization请求头或格式不正确")
-
-    integration = ChatbotIntegrationService.get_by_api_key(api_key)
-    if not integration:
-        return ResponseUtil.error(code=401, message="API密钥无效")
-
     if not chat_request.query:
         return ResponseUtil.error(message="query参数不能为空")
 
@@ -102,7 +130,8 @@ async def chat_completions(
                         integration=integration,
                         stream=True,
                         temporary=chat_request.temporary,
-                        config=chat_request.config
+                        config=chat_request.config,
+                        edit_message_id=chat_request.edit_message_id
                     ):
                         yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
                         await asyncio.sleep(0)
@@ -129,7 +158,8 @@ async def chat_completions(
                 chat_id=chat_request.chat_id,
                 integration=integration,
                 temporary=chat_request.temporary,
-                config=chat_request.config
+                config=chat_request.config,
+                edit_message_id=chat_request.edit_message_id
             )
 
             if 'error' in result:
@@ -144,9 +174,8 @@ async def chat_completions(
 
 @router.get("/v1/chat/{chat_id}/messages", summary="获取聊天记录")
 async def get_chat_messages(
-    request: Request,
     chat_id: str,
-    authorization: Optional[str] = Header(None, description="Authorization: Bearer <api_key>")
+    integration = Depends(verify_api_key)
 ):
     """
     获取聊天记录
@@ -154,23 +183,12 @@ async def get_chat_messages(
     请求头需要包含Authorization字段，值为Bearer + 机器人API密钥
     
     Args:
-        request: 请求对象
         chat_id: 对话ID
-        authorization: Authorization请求头
+        integration: 集成配置对象（由verify_api_key依赖项注入）
         
     Returns:
         ApiResponse: 消息列表
     """
-    # 提取API密钥
-    api_key = get_api_key_from_header(authorization)
-    if not api_key:
-        return ResponseUtil.error(code=401, message="缺少Authorization请求头或格式不正确")
-    
-    # 根据API密钥查找集成配置
-    integration = ChatbotIntegrationService.get_by_api_key(api_key)
-    if not integration:
-        return ResponseUtil.error(code=401, message="API密钥无效")
-    
     try:
         result = IntegrationChatCoreService.get_chat_messages(chat_id, integration)
         return ResponseUtil.success(data=result)
@@ -181,26 +199,74 @@ async def get_chat_messages(
 
 @router.get("/v1/chats", summary="获取对话列表")
 async def list_chats(
-    request: Request,
-    authorization: Optional[str] = Header(None, description="Authorization: Bearer <api_key>")
+    keyword: Optional[str] = Query(None, description="搜索关键词"),
+    integration = Depends(verify_api_key)
 ):
     """
     获取当前集成下的所有对话列表
     
     Args:
-        request: 请求对象
-        authorization: Authorization请求头
+        keyword: 搜索关键词（可选）
+        integration: 集成配置对象（由verify_api_key依赖项注入）
         
     Returns:
         ApiResponse: 对话列表
     """
-    api_key = get_api_key_from_header(authorization)
-    if not api_key:
-        return ResponseUtil.error(code=401, message="缺少Authorization请求头或格式不正确")
-    
     try:
-        chats = ChatbotIntegrationService.list_chats(api_key)
+        chats = ChatbotIntegrationService.list_chats(integration, keyword=keyword)
         return ResponseUtil.success(data={"items": chats, "total": len(chats)})
     except Exception as e:
         logger.error(f"获取对话列表失败: {str(e)}", exc_info=True)
         return ResponseUtil.error(message=f"获取对话列表失败: {str(e)}")
+
+
+class UpdateChatTitleRequest(BaseModel):
+    title: str = Field(..., max_length=200, description="新的对话名称")
+
+
+@router.patch("/v1/chat/{chat_id}", summary="修改对话名称")
+async def update_chat_title(
+    chat_id: str,
+    request: UpdateChatTitleRequest,
+    integration = Depends(verify_api_key)
+):
+    """
+    修改对话名称
+    
+    Args:
+        chat_id: 对话ID
+        request: 请求体，包含新的对话名称
+        integration: 集成配置对象（由verify_api_key依赖项注入）
+        
+    Returns:
+        ApiResponse: 更新后的对话信息
+    """
+    try:
+        chat = ChatbotIntegrationService.update_chat_title(integration, chat_id, request.title)
+        return ResponseUtil.success(data=chat)
+    except Exception as e:
+        logger.error(f"修改对话名称失败: {str(e)}", exc_info=True)
+        return ResponseUtil.error(message=f"修改对话名称失败: {str(e)}")
+
+
+@router.delete("/v1/chat/{chat_id}", summary="删除对话")
+async def delete_chat(
+    chat_id: str,
+    integration = Depends(verify_api_key)
+):
+    """
+    删除对话及其所有消息
+    
+    Args:
+        chat_id: 对话ID
+        integration: 集成配置对象（由verify_api_key依赖项注入）
+        
+    Returns:
+        ApiResponse: 删除结果
+    """
+    try:
+        ChatbotIntegrationService.delete_chat(integration, chat_id)
+        return ResponseUtil.success(data=True)
+    except Exception as e:
+        logger.error(f"删除对话失败: {str(e)}", exc_info=True)
+        return ResponseUtil.error(message=f"删除对话失败: {str(e)}")

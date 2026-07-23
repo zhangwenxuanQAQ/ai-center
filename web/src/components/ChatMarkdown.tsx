@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import MDEditor from '@uiw/react-md-editor';
-import { DownOutlined, RightOutlined, CodeOutlined } from '@ant-design/icons';
+import { DownOutlined, RightOutlined, CodeOutlined, CopyOutlined, CheckOutlined } from '@ant-design/icons';
 import mermaid from 'mermaid';
 import { MarkdownUI } from '@markdown-ui/react';
 import '@markdown-ui/react/widgets.css';
@@ -375,6 +375,8 @@ const MarkdownUIWidget: React.FC<{ code: string; onWidgetEvent?: (event: WidgetE
 const CollapsibleCodeBlock: React.FC<{ title: string; content: React.ReactNode }> = ({ title, content }) => {
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [collapsed, setCollapsed] = useState(true);
+  const [copied, setCopied] = useState(false);
+  const codeTextRef = useRef('');
 
   useEffect(() => {
     const currentTheme = document.body.getAttribute('data-theme') || 'dark';
@@ -388,6 +390,44 @@ const CollapsibleCodeBlock: React.FC<{ title: string; content: React.ReactNode }
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    codeTextRef.current = extractText(content);
+  }, [content]);
+
+  const handleCopy = useCallback(() => {
+    const text = codeTextRef.current;
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }).catch(() => {
+        fallbackCopy(text);
+      });
+    } else {
+      fallbackCopy(text);
+    }
+  }, []);
+
+  const fallbackCopy = (text: string) => {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-99999px';
+    textArea.style.top = '-99999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+      document.execCommand('copy');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('复制失败:', err);
+    } finally {
+      document.body.removeChild(textArea);
+    }
+  };
+
   return (
     <div className={`collapsible-code-block ${theme === 'dark' ? 'dark' : 'light'} ${collapsed ? 'collapsed' : 'expanded'}`}>
       <div
@@ -399,7 +439,19 @@ const CollapsibleCodeBlock: React.FC<{ title: string; content: React.ReactNode }
           <CodeOutlined style={{ fontSize: 12 }} />
           <span className="collapsible-code-title">{title}</span>
         </div>
-        <span className="collapsible-code-toggle">{collapsed ? '展开' : '收起'}</span>
+        <div className="collapsible-code-header-right">
+          <button
+            className="code-copy-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleCopy();
+            }}
+            title="复制代码"
+          >
+            {copied ? <CheckOutlined /> : <CopyOutlined />}
+          </button>
+          <span className="collapsible-code-toggle">{collapsed ? '展开' : '收起'}</span>
+        </div>
       </div>
       {!collapsed && (
         <div className="collapsible-code-content">

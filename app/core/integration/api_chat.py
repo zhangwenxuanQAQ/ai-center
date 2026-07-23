@@ -11,6 +11,7 @@ import json
 import uuid
 import time
 import logging
+from datetime import datetime
 from typing import List, Dict, Any, Optional, AsyncGenerator, Union, Tuple
 
 from app.database.models import (
@@ -24,6 +25,7 @@ from app.core.chat.dto import (
 from app.core.llm_model.factory import LLMFactory
 from app.core.llm_model.utils.tool_util import process_tool_calls
 from app.core.exceptions import ResourceNotFoundError
+from app.core.integration.temp_chat_store import TempChatStore
 
 logger = logging.getLogger(__name__)
 
@@ -501,6 +503,43 @@ class IntegrationChatCoreService:
                 updated_count += 1
 
         return updated_count
+
+    @staticmethod
+    def _delete_messages_after(chat_id: str, message_id: str) -> int:
+        """
+        删除指定消息及其后续所有消息
+
+        用于编辑用户消息时清理历史记录。
+
+        Args:
+            chat_id: 对话ID
+            message_id: 起始消息ID（该消息也会被删除）
+
+        Returns:
+            int: 删除的消息数量
+        """
+        try:
+            # 找到指定消息
+            target_message = ChatbotChatMessage.get(
+                (ChatbotChatMessage.chat_id == chat_id) &
+                (ChatbotChatMessage.message_id == message_id)
+            )
+            target_created_at = target_message.created_at
+
+            # 删除该消息及其后续所有消息
+            deleted_count = ChatbotChatMessage.delete().where(
+                (ChatbotChatMessage.chat_id == chat_id) &
+                (ChatbotChatMessage.created_at >= target_created_at)
+            ).execute()
+
+            logger.info(f"删除消息 {message_id} 及其后续消息，共 {deleted_count} 条")
+            return deleted_count
+        except ChatbotChatMessage.DoesNotExist:
+            logger.warning(f"未找到消息 {message_id}")
+            return 0
+        except Exception as e:
+            logger.error(f"删除消息失败: {e}")
+            return 0
 
     @staticmethod
     def _load_history_messages(chat_id: str) -> List[Dict[str, Any]]:
@@ -1001,7 +1040,8 @@ class IntegrationChatCoreService:
         integration: ChatbotIntegration,
         stream: bool = True,
         temporary: bool = False,
-        config: Optional[dict] = None
+        config: Optional[dict] = None,
+        edit_message_id: Optional[str] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         流式聊天
@@ -1016,6 +1056,7 @@ class IntegrationChatCoreService:
             stream: 是否流式输出
             temporary: 临时会话模式，不保存对话和消息到数据库
             config: 对话配置JSON，包含 deep_thinking 等配置项
+            edit_message_id: 编辑消息ID，删除该消息及其后续消息
 
         Yields:
             Dict: 流式响应数据
@@ -1087,13 +1128,53 @@ class IntegrationChatCoreService:
             model_params['tools'] = tools
 
         # ============ 临时会话模式 ============
-        # 不创建 ChatbotChat 记录，不保存任何消息，直接流式输出
+        # 不创建 ChatbotChat 记录，将聊天记录和消息保存到 Redis
         if temporary:
             temp_chat_id = chat_id or f"temp_{uuid.uuid4().hex[:12]}"
+            integration_id = integration.id
 
-            # 构建消息列表（无历史消息）
+            # 如果是新对话，在 Redis 中创建临时聊天记录
+            if not chat_id or not TempChatStore.get_chat(integration_id, temp_chat_id):
+                TempChatStore.create_chat(
+                    integration_id=integration_id,
+                    chat_id=temp_chat_id,
+                    chatbot_id=chatbot_id,
+                    title=user_text[:30] if user_text else "临时对话"
+                )
+
+            # 处理编辑消息：删除该消息及其后续所有消息
+            if edit_message_id:
+                temp_messages = TempChatStore.get_messages(integration_id, temp_chat_id)
+                for i, msg in enumerate(temp_messages):
+                    if msg.get('id') == edit_message_id or msg.get('message_id') == edit_message_id:
+                        TempChatStore.clear_messages_after(integration_id, temp_chat_id, i)
+                        break
+
+            # 保存用户消息到 Redis
+            user_msg_data = {
+                "id": user_message_id,
+                "message_id": user_message_id,
+                "chat_id": temp_chat_id,
+                "chatbot_id": chatbot_id,
+                "role": "user",
+                "content": user_text,
+                "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            TempChatStore.add_message(integration_id, temp_chat_id, user_msg_data)
+
+            # 加载历史消息
+            temp_history = TempChatStore.get_messages(integration_id, temp_chat_id)
+            history_messages = []
+            for msg in temp_history[:-1]:
+                history_messages.append({
+                    "role": msg.get("role", ""),
+                    "content": msg.get("content", "")
+                })
+
+            # 构建消息列表
             messages = ChatCoreService.build_messages(
-                system_prompt, [], user_message, user_prompt_messages
+                system_prompt, history_messages, user_message, user_prompt_messages
             )
 
             start_time = time.time()
@@ -1128,11 +1209,15 @@ class IntegrationChatCoreService:
                         if result.get('status') == MessageStatus.STOP:
                             ChatStopManager().clear_stop(temp_chat_id)
                             return
-                        # 确保返回的 chat_id 是临时ID
+                        if result.get('text'):
+                            full_response += result['text']
+                        if result.get('reasoning_content'):
+                            reasoning_content += result['reasoning_content']
+                        if result.get('reasoning_end') and reasoning_end_time is None:
+                            reasoning_end_time = time.time()
                         result['chat_id'] = temp_chat_id
                         yield result
                     elif isinstance(result, tuple) and len(result) == 3:
-                        # 最终返回值 (None, messages, planning_messages_history)
                         _, messages, planning_messages_history = result
             except GeneratorExit:
                 ChatStopManager().request_stop(temp_chat_id)
@@ -1145,12 +1230,35 @@ class IntegrationChatCoreService:
                     assistant_message_id=assistant_message_id,
                     text=f"抱歉，发送消息时出现错误：{str(e)}"
                 ).to_dict()
+
+            # 保存助手最终消息到 Redis
+            if full_response or reasoning_content:
+                assistant_msg_data = {
+                    "id": assistant_message_id,
+                    "message_id": assistant_message_id,
+                    "chat_id": temp_chat_id,
+                    "chatbot_id": chatbot_id,
+                    "role": "assistant",
+                    "content": full_response,
+                    "reasoning_content": reasoning_content,
+                    "reasoning_time": int((reasoning_end_time - start_time) * 1000) if reasoning_end_time else None,
+                    "model_id": model_id,
+                    "extra_content": None,
+                    "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                }
+                TempChatStore.add_message(integration_id, temp_chat_id, assistant_msg_data)
+
             return
 
         # ============ 正式会话模式 ============
         # 获取或创建 ChatbotChat
         bot_chat = IntegrationChatCoreService._get_or_create_bot_chat(integration, chatbot_id, chat_id)
         actual_chat_id = bot_chat.id
+
+        # 处理编辑消息：删除该消息及其后续所有消息
+        if edit_message_id:
+            IntegrationChatCoreService._delete_messages_after(actual_chat_id, edit_message_id)
 
         # 加载历史消息
         history_messages = IntegrationChatCoreService._load_history_messages(actual_chat_id)
@@ -1302,7 +1410,8 @@ class IntegrationChatCoreService:
         chat_id: Optional[str],
         integration: ChatbotIntegration,
         temporary: bool = False,
-        config: Optional[dict] = None
+        config: Optional[dict] = None,
+        edit_message_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         非流式聊天
@@ -1313,6 +1422,7 @@ class IntegrationChatCoreService:
             integration: 集成配置对象
             temporary: 临时会话模式
             config: 对话配置JSON，包含 deep_thinking 等配置项
+            edit_message_id: 编辑消息ID，删除该消息及其后续消息
 
         Returns:
             Dict: 聊天结果
@@ -1324,7 +1434,8 @@ class IntegrationChatCoreService:
             integration=integration,
             stream=False,
             temporary=temporary,
-            config=config
+            config=config,
+            edit_message_id=edit_message_id
         ):
             if chunk.get('status') == 'done':
                 result = chunk
@@ -1351,6 +1462,31 @@ class IntegrationChatCoreService:
         Raises:
             ResourceNotFoundError: 对话不存在
         """
+        is_temporary = chat_id.startswith('temp_')
+
+        if is_temporary:
+            messages = TempChatStore.get_messages(integration.id, chat_id)
+            items = []
+            for msg in messages:
+                items.append({
+                    "id": msg.get("id", ""),
+                    "chatbot_id": msg.get("chatbot_id", ""),
+                    "chat_id": msg.get("chat_id", chat_id),
+                    "message_id": msg.get("message_id", ""),
+                    "role": msg.get("role", ""),
+                    "content": msg.get("content", ""),
+                    "extra_content": msg.get("extra_content", None),
+                    "reasoning_content": msg.get("reasoning_content", None),
+                    "reasoning_time": msg.get("reasoning_time", None),
+                    "model_id": msg.get("model_id", None),
+                    "created_at": msg.get("created_at", None),
+                    "updated_at": msg.get("updated_at", None),
+                })
+            return {
+                "items": items,
+                "total": len(items)
+            }
+
         # 验证 chat 属于当前 integration
         try:
             bot_chat = ChatbotChat.get(

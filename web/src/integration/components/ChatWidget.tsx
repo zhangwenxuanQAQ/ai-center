@@ -29,6 +29,7 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ config, compact = false }) => {
   const [activeChatId, setActiveChatId] = useState<string | undefined>();
   const [historyCollapsed, setHistoryCollapsed] = useState(compact);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [newChatTrigger, setNewChatTrigger] = useState(0);
 
   const handleSelectChat = useCallback((chat: IntegrationChat) => {
     setActiveChatId(chat.id);
@@ -36,6 +37,7 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ config, compact = false }) => {
 
   const handleNewChat = useCallback(() => {
     setActiveChatId(undefined);
+    setNewChatTrigger(prev => prev + 1);
   }, []);
 
   const handleChatIdChange = useCallback((newChatId: string) => {
@@ -83,6 +85,7 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ config, compact = false }) => {
         onChatIdChange={handleChatIdChange}
         onMessageSent={handleMessageSent}
         temporary={config.temporary}
+        newChatTrigger={newChatTrigger}
       />
     </div>
   );

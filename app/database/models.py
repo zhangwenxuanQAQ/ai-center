@@ -568,6 +568,7 @@ class ChatbotChat(BaseModel):
     """
     integration_id = CharField(max_length=40, index=True, verbose_name="插件集成ID")
     chatbot_id = CharField(max_length=40, index=True, verbose_name="机器人ID")
+    title = CharField(max_length=200, null=True, verbose_name="对话标题")
     messages = TextField(null=True, verbose_name="聊天记录JSON数组")
     
     class Meta:

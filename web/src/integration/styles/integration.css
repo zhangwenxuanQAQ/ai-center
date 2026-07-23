@@ -181,6 +181,103 @@
   border-right: none;
 }
 
+/* 收起后的新增按钮容器 - 在header下方 */
+.int-collapsed-new-chat-wrapper {
+  position: absolute;
+  left: 0;
+  top: 44px; /* header高度 */
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+/* 收起后的新增按钮 - 正方形圆角 */
+.int-collapsed-new-chat {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: var(--int-primary);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.int-collapsed-new-chat:hover {
+  background: var(--int-primary-hover);
+}
+
+.int-collapsed-new-chat svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* 历史标题搜索按钮 */
+.int-history-search-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  padding: 0;
+}
+
+.int-history-search-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.int-history-search-btn svg {
+  width: 16px;
+  height: 16px;
+  color: #fff;
+}
+
+/* 搜索框容器 */
+.int-history-search-wrapper {
+  padding: 8px 12px;
+  background: var(--int-bg);
+  border-bottom: 1px solid var(--int-border);
+}
+
+.int-history-search-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 8px;
+  border: 1px solid var(--int-border);
+  border-radius: 8px;
+  background: var(--int-bg);
+}
+
+.int-history-search-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--int-text-tertiary);
+  flex-shrink: 0;
+}
+
+.int-history-search-input {
+  flex: 1;
+  height: 100%;
+  border: none;
+  font-size: 13px;
+  background: transparent;
+  color: var(--int-text);
+  outline: none;
+}
+
 .int-history-header {
   padding: 0 16px;
   height: 44px;
@@ -213,11 +310,12 @@
   cursor: pointer;
   margin-bottom: 4px;
   transition: background 0.2s;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-size: 13px;
   color: var(--int-text);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .int-history-item:hover {
@@ -229,16 +327,77 @@
   font-weight: 500;
 }
 
+.int-history-item-content {
+  flex: 1;
+  overflow: hidden;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
 .int-history-item-title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  width: 100%;
+  text-align: left;
 }
 
 .int-history-item-time {
   font-size: 11px;
   color: var(--int-text-tertiary);
   margin-top: 2px;
+  text-align: left;
+}
+
+.int-history-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  flex-shrink: 0;
+}
+
+.int-history-item:hover .int-history-item-actions {
+  opacity: 1;
+}
+
+.int-history-action-btn {
+  background: transparent;
+  border: none;
+  color: var(--int-text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  font-size: 12px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.int-history-action-btn:hover {
+  color: var(--int-primary);
+  background: rgba(102, 126, 234, 0.08);
+}
+
+.int-history-action-btn.delete:hover {
+  color: #ff4d4f;
+  background: rgba(255, 77, 79, 0.08);
+}
+
+.int-history-group {
+  margin-bottom: 8px;
+}
+
+.int-history-group-title {
+  font-size: 12px;
+  color: var(--int-text-secondary);
+  padding: 8px 12px 4px;
+  font-weight: 500;
+  text-align: left;
 }
 
 .int-new-chat-btn {

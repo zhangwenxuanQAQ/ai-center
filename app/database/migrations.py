@@ -1530,8 +1530,8 @@ def _migrate_chatbot_integration(db):
 
 
 def _migrate_chatbot_chat(db):
-    """创建chatbot_chat表"""
-    logger.info("\n[MIGRATION] 创建 chatbot_chat 表...")
+    """创建/更新chatbot_chat表"""
+    logger.info("\n[MIGRATION] 创建/更新 chatbot_chat 表...")
     try:
         table_names = _get_table_names(db)
         
@@ -1539,24 +1539,47 @@ def _migrate_chatbot_chat(db):
             db.execute_sql("""
                 CREATE TABLE chatbot_chat (
                     id CHAR(36) NOT NULL PRIMARY KEY,
+                    integration_id VARCHAR(40) NOT NULL,
                     chatbot_id VARCHAR(40) NOT NULL,
-                    chat_id VARCHAR(40) NOT NULL,
+                    title VARCHAR(200) DEFAULT NULL,
+                    messages LONGTEXT DEFAULT NULL,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    INDEX idx_chatbot_id (chatbot_id),
-                    INDEX idx_chat_id (chat_id)
+                    INDEX idx_integration_id (integration_id),
+                    INDEX idx_chatbot_id (chatbot_id)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
             """)
             logger.info("[MIGRATION]   成功创建 chatbot_chat 表")
         else:
-            logger.info("[MIGRATION]   chatbot_chat 表已存在，跳过")
+            logger.info("[MIGRATION]   chatbot_chat 表已存在，检查字段...")
+            cursor = db.execute_sql("DESCRIBE chatbot_chat;")
+            columns = [column[0] for column in cursor.fetchall()]
+            
+            if 'integration_id' not in columns:
+                db.execute_sql("ALTER TABLE chatbot_chat ADD COLUMN integration_id VARCHAR(40) NOT NULL AFTER id")
+                db.execute_sql("ALTER TABLE chatbot_chat ADD INDEX idx_integration_id (integration_id)")
+                logger.info("[MIGRATION]   成功添加 integration_id 字段")
+            else:
+                logger.info("[MIGRATION]   integration_id 字段已存在，跳过")
+            
+            if 'title' not in columns:
+                db.execute_sql("ALTER TABLE chatbot_chat ADD COLUMN title VARCHAR(200) DEFAULT NULL AFTER chatbot_id")
+                logger.info("[MIGRATION]   成功添加 title 字段")
+            else:
+                logger.info("[MIGRATION]   title 字段已存在，跳过")
+            
+            if 'messages' not in columns:
+                db.execute_sql("ALTER TABLE chatbot_chat ADD COLUMN messages LONGTEXT DEFAULT NULL AFTER title")
+                logger.info("[MIGRATION]   成功添加 messages 字段")
+            else:
+                logger.info("[MIGRATION]   messages 字段已存在，跳过")
     except Exception as e:
-        logger.error(f"[MIGRATION]   创建 chatbot_chat 表失败: {e}")
+        logger.error(f"[MIGRATION]   创建/更新 chatbot_chat 表失败: {e}")
 
 
 def _migrate_chatbot_chat_message(db):
-    """创建chatbot_chat_message表"""
-    logger.info("\n[MIGRATION] 创建 chatbot_chat_message 表...")
+    """创建/更新chatbot_chat_message表"""
+    logger.info("\n[MIGRATION] 创建/更新 chatbot_chat_message 表...")
     try:
         table_names = _get_table_names(db)
         
@@ -1565,15 +1588,67 @@ def _migrate_chatbot_chat_message(db):
                 CREATE TABLE chatbot_chat_message (
                     id CHAR(36) NOT NULL PRIMARY KEY,
                     chatbot_id VARCHAR(40) NOT NULL,
-                    chat_message_id VARCHAR(40) NOT NULL,
+                    chat_id VARCHAR(40) NOT NULL,
+                    message_id VARCHAR(40) NOT NULL,
+                    role VARCHAR(20) NOT NULL,
+                    content LONGTEXT NOT NULL,
+                    extra_content LONGTEXT DEFAULT NULL,
+                    reasoning_content LONGTEXT DEFAULT NULL,
+                    reasoning_time INT DEFAULT NULL,
+                    model_id VARCHAR(40) DEFAULT NULL,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                     INDEX idx_chatbot_id (chatbot_id),
-                    INDEX idx_chat_message_id (chat_message_id)
+                    INDEX idx_chat_id (chat_id),
+                    INDEX idx_message_id (message_id),
+                    INDEX idx_model_id (model_id),
+                    INDEX idx_chat_created (chat_id, created_at)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
             """)
             logger.info("[MIGRATION]   成功创建 chatbot_chat_message 表")
         else:
-            logger.info("[MIGRATION]   chatbot_chat_message 表已存在，跳过")
+            logger.info("[MIGRATION]   chatbot_chat_message 表已存在，检查字段...")
+            cursor = db.execute_sql("DESCRIBE chatbot_chat_message;")
+            columns = [column[0] for column in cursor.fetchall()]
+            
+            if 'chatbot_id' not in columns:
+                db.execute_sql("ALTER TABLE chatbot_chat_message ADD COLUMN chatbot_id VARCHAR(40) NOT NULL")
+                db.execute_sql("ALTER TABLE chatbot_chat_message ADD INDEX idx_chatbot_id (chatbot_id)")
+                logger.info("[MIGRATION]   成功添加 chatbot_id 字段")
+            
+            if 'chat_id' not in columns:
+                db.execute_sql("ALTER TABLE chatbot_chat_message ADD COLUMN chat_id VARCHAR(40) NOT NULL")
+                db.execute_sql("ALTER TABLE chatbot_chat_message ADD INDEX idx_chat_id (chat_id)")
+                logger.info("[MIGRATION]   成功添加 chat_id 字段")
+            
+            if 'message_id' not in columns:
+                db.execute_sql("ALTER TABLE chatbot_chat_message ADD COLUMN message_id VARCHAR(40) NOT NULL")
+                db.execute_sql("ALTER TABLE chatbot_chat_message ADD INDEX idx_message_id (message_id)")
+                logger.info("[MIGRATION]   成功添加 message_id 字段")
+            
+            if 'role' not in columns:
+                db.execute_sql("ALTER TABLE chatbot_chat_message ADD COLUMN role VARCHAR(20) NOT NULL")
+                logger.info("[MIGRATION]   成功添加 role 字段")
+            
+            if 'content' not in columns:
+                db.execute_sql("ALTER TABLE chatbot_chat_message ADD COLUMN content LONGTEXT NOT NULL")
+                logger.info("[MIGRATION]   成功添加 content 字段")
+            
+            if 'extra_content' not in columns:
+                db.execute_sql("ALTER TABLE chatbot_chat_message ADD COLUMN extra_content LONGTEXT DEFAULT NULL")
+                logger.info("[MIGRATION]   成功添加 extra_content 字段")
+            
+            if 'reasoning_content' not in columns:
+                db.execute_sql("ALTER TABLE chatbot_chat_message ADD COLUMN reasoning_content LONGTEXT DEFAULT NULL")
+                logger.info("[MIGRATION]   成功添加 reasoning_content 字段")
+            
+            if 'reasoning_time' not in columns:
+                db.execute_sql("ALTER TABLE chatbot_chat_message ADD COLUMN reasoning_time INT DEFAULT NULL")
+                logger.info("[MIGRATION]   成功添加 reasoning_time 字段")
+            
+            if 'model_id' not in columns:
+                db.execute_sql("ALTER TABLE chatbot_chat_message ADD COLUMN model_id VARCHAR(40) DEFAULT NULL")
+                db.execute_sql("ALTER TABLE chatbot_chat_message ADD INDEX idx_model_id (model_id)")
+                logger.info("[MIGRATION]   成功添加 model_id 字段")
     except Exception as e:
-        logger.error(f"[MIGRATION]   创建 chatbot_chat_message 表失败: {e}")
+        logger.error(f"[MIGRATION]   创建/更新 chatbot_chat_message 表失败: {e}")

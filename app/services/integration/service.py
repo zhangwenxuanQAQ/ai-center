@@ -20,6 +20,7 @@ from app.database.db_utils import handle_transaction
 from app.core.exceptions import ResourceNotFoundError, DuplicateResourceError
 from app.constants.integration_constants import get_integration_default_configs
 from app.configs.config import config
+from app.core.integration.temp_chat_store import TempChatStore
 
 logger = logging.getLogger(__name__)
 
@@ -489,28 +490,39 @@ class ChatbotIntegrationService:
         return integration
 
     @staticmethod
-    def list_chats(api_key: str) -> List[Dict[str, Any]]:
+    def list_chats(api_key_or_integration, keyword: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         获取该API密钥下的所有对话列表
 
+        包括正式会话（数据库存储）和临时会话（Redis存储）。
+
         Args:
-            api_key: API密钥
+            api_key_or_integration: API密钥字符串 或 ChatbotIntegration 对象
+            keyword: 搜索关键词（可选）
             
         Returns:
             List[Dict]: 对话列表
         """
-        integration = ChatbotIntegrationService.get_by_api_key(api_key)
-        if not integration:
-            raise ResourceNotFoundError(message='API密钥无效')
+        if isinstance(api_key_or_integration, str):
+            integration = ChatbotIntegrationService.get_by_api_key(api_key_or_integration)
+            if not integration:
+                raise ResourceNotFoundError(message='API密钥无效')
+        else:
+            integration = api_key_or_integration
 
-        chats = ChatbotChat.select().where(
+        query = ChatbotChat.select().where(
             ChatbotChat.integration_id == integration.id
-        ).order_by(ChatbotChat.created_at.desc())
+        )
+
+        if keyword and keyword.strip():
+            keyword = keyword.strip()
+            query = query.where(ChatbotChat.title.contains(keyword))
+
+        chats = query.order_by(ChatbotChat.created_at.desc())
 
         result = []
         for chat in chats:
             title = chat.title or '新对话'
-            # 获取最新消息的摘要
             msgs = []
             try:
                 messages_data = chat.messages
@@ -534,7 +546,88 @@ class ChatbotIntegrationService:
                 'updated_at': chat.updated_at.strftime('%Y-%m-%d %H:%M:%S') if hasattr(chat, 'updated_at') and chat.updated_at else '',
             })
 
+        temp_chats = TempChatStore.list_chats(integration.id)
+        for temp_chat in temp_chats:
+            temp_title = temp_chat.get('title', '临时对话')
+            if keyword and keyword.strip() and keyword.strip() not in temp_title:
+                continue
+            result.append({
+                'id': temp_chat.get('id', ''),
+                'title': temp_title,
+                'created_at': temp_chat.get('created_at', ''),
+                'updated_at': temp_chat.get('updated_at', ''),
+                'temporary': True,
+            })
+
         return result
+
+    @staticmethod
+    def update_chat_title(api_key_or_integration, chat_id: str, title: str) -> Dict[str, Any]:
+        """
+        修改对话名称
+
+        Args:
+            api_key_or_integration: API密钥字符串 或 ChatbotIntegration 对象
+            chat_id: 对话ID
+            title: 新的对话名称
+            
+        Returns:
+            Dict: 更新后的对话信息
+        """
+        if isinstance(api_key_or_integration, str):
+            integration = ChatbotIntegrationService.get_by_api_key(api_key_or_integration)
+            if not integration:
+                raise ResourceNotFoundError(message='API密钥无效')
+        else:
+            integration = api_key_or_integration
+
+        try:
+            chat = ChatbotChat.get(
+                (ChatbotChat.id == chat_id) &
+                (ChatbotChat.integration_id == integration.id)
+            )
+            chat.title = title
+            chat.save()
+            return {
+                'id': chat.id,
+                'title': chat.title or '新对话',
+                'created_at': chat.created_at.strftime('%Y-%m-%d %H:%M:%S') if chat.created_at else '',
+                'updated_at': chat.updated_at.strftime('%Y-%m-%d %H:%M:%S') if hasattr(chat, 'updated_at') and chat.updated_at else '',
+            }
+        except ChatbotChat.DoesNotExist:
+            raise ResourceNotFoundError(message='对话不存在')
+
+    @staticmethod
+    def delete_chat(api_key_or_integration, chat_id: str) -> bool:
+        """
+        删除对话
+
+        Args:
+            api_key_or_integration: API密钥字符串 或 ChatbotIntegration 对象
+            chat_id: 对话ID
+            
+        Returns:
+            bool: 是否删除成功
+        """
+        if isinstance(api_key_or_integration, str):
+            integration = ChatbotIntegrationService.get_by_api_key(api_key_or_integration)
+            if not integration:
+                raise ResourceNotFoundError(message='API密钥无效')
+        else:
+            integration = api_key_or_integration
+
+        try:
+            chat = ChatbotChat.get(
+                (ChatbotChat.id == chat_id) &
+                (ChatbotChat.integration_id == integration.id)
+            )
+            ChatbotChatMessage.delete().where(
+                ChatbotChatMessage.chat_id == chat_id
+            ).execute()
+            chat.delete_instance()
+            return True
+        except ChatbotChat.DoesNotExist:
+            raise ResourceNotFoundError(message='对话不存在')
 
     @staticmethod
     def get_configs_with_examples(chatbot_id: str) -> dict:
