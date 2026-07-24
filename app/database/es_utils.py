@@ -606,7 +606,7 @@ class ESUtils:
         top_k: int = 1024,
         page: int = 1,
         page_size: int = 10,
-        vector_similarity_threshold: float = 0.2,
+        vector_similarity_threshold: float = 0.0,
         keyword_similarity_threshold: float = 0.0,
         vector_similarity_weight: float = 0.7,
         vector_field: str = None,

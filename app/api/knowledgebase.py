@@ -301,7 +301,7 @@ def retrieval(
     page: int = Body(1, ge=1, description="页码，从1开始"),
     page_size: int = Body(10, ge=1, le=100, description="每页数量"),
     top_k: int = Body(1024, ge=1, description="召回数量，从ES中检索的候选数量"),
-    vector_similarity_threshold: float = Body(None, ge=0, le=1, description="文本相似度阈值，为空则使用知识库配置或默认0.2"),
+    vector_similarity_threshold: float = Body(None, ge=0, le=1, description="文本相似度阈值，为空则使用知识库配置或默认0.0"),
     keyword_similarity_threshold: float = Body(None, ge=0, le=1, description="关键词相似度阈值，为空则使用知识库配置或默认0.0"),
     vector_similarity_weight: float = Body(None, ge=0, le=1, description="向量相似度权重(0~1)，为空则使用知识库配置或默认0.7"),
     sort_by: str = Body(None, description="排序方式：sim=混合相似度，vsim=向量相似度，tsim=关键词相似度"),

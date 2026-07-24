@@ -128,7 +128,7 @@ class RetrievalService:
             page: 页码（从1开始）
             page_size: 每页数量
             top_k: 召回数量
-            vector_similarity_threshold: 文本相似度阈值（为空则使用知识库配置或默认0.2）
+            vector_similarity_threshold: 文本相似度阈值（为空则使用知识库配置或默认0.0）
             keyword_similarity_threshold: 关键词相似度阈值（为空则使用知识库配置或默认0.0）
             vector_similarity_weight: 向量相似度权重（为空则使用知识库配置或默认0.7）
             sort_by: 排序方式（sim/vsim/tsim，为空则使用知识库配置或默认sim）
