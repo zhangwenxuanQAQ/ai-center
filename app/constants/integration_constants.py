@@ -65,8 +65,8 @@ INTEGRATION_CONFIG_PARAMS = [
                     {
                         "key": "color_theme",
                         "label": "颜色主题",
-                        "type": "select",
-                        "default": "default_blue",
+                        "type": "select",   
+                        "default": "emerald",
                         "description": "聊天界面的配色主题，影响悬浮球、标题栏、按钮和用户消息气泡的颜色",
                         "options": [
                             {"label": "经典蓝", "value": "default_blue"},

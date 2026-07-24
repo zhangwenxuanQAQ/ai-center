@@ -564,7 +564,7 @@ class ChatbotIntegrationService:
         return result
 
     @staticmethod
-    def update_chat_title(api_key_or_integration, chat_id: str, title: str) -> Dict[str, Any]:
+    def update_chat_title(api_key_or_integration, chat_id: str, title: str, preview_token: Optional[str] = None) -> Dict[str, Any]:
         """
         修改对话名称
 
@@ -572,6 +572,7 @@ class ChatbotIntegrationService:
             api_key_or_integration: API密钥字符串 或 ChatbotIntegration 对象
             chat_id: 对话ID
             title: 新的对话名称
+            preview_token: 预览token（可选），用于临时会话数据隔离
             
         Returns:
             Dict: 更新后的对话信息
@@ -583,6 +584,24 @@ class ChatbotIntegrationService:
         else:
             integration = api_key_or_integration
 
+        # 临时会话：从 TempChatStore 更新
+        is_temporary = chat_id.startswith('temp_')
+        if is_temporary:
+            scope_id = f"{integration.id}:preview:{preview_token}" if preview_token else None
+            updated = TempChatStore.update_chat(integration.id, chat_id, scope_id=scope_id, title=title)
+            if updated:
+                chat = TempChatStore.get_chat(integration.id, chat_id, scope_id=scope_id)
+                if chat:
+                    return {
+                        'id': chat.get('id', chat_id),
+                        'title': chat.get('title', title),
+                        'created_at': chat.get('created_at', ''),
+                        'updated_at': chat.get('updated_at', ''),
+                        'temporary': True,
+                    }
+            raise ResourceNotFoundError(message='对话不存在')
+
+        # 正常会话：从 ChatbotChat 表更新
         try:
             chat = ChatbotChat.get(
                 (ChatbotChat.id == chat_id) &

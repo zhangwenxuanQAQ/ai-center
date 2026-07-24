@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Modal, Input, message, Tooltip } from 'antd';
-import { EditOutlined, DeleteOutlined, MoreOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, MoreOutlined, PlusOutlined } from '@ant-design/icons';
 import { integrationChatService, IntegrationChat } from '../services/integrationChat';
 
 interface ChatHistoryProps {
@@ -95,7 +95,7 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
     }
 
     try {
-      const updatedChat = await integrationChatService.updateChatTitle(apiKey, renamingChat.id, newTitle.trim());
+      const updatedChat = await integrationChatService.updateChatTitle(apiKey, renamingChat.id, newTitle.trim(), previewToken);
       const updatedChats = chats.map(c =>
         c.id === renamingChat.id ? updatedChat : c
       );
@@ -117,7 +117,6 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
       content: '确定要删除这个对话吗？删除后无法恢复。',
       okText: '确认',
       cancelText: '取消',
-      okButtonProps: { danger: true },
       onOk: async () => {
         try {
           await integrationChatService.deleteChat(apiKey, chat.id, previewToken);
@@ -212,9 +211,7 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
       {collapsed && (
         <div className="int-collapsed-new-chat-wrapper">
           <button className="int-collapsed-new-chat" onClick={onNewChat} title="新对话">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
+            <PlusOutlined style={{ fontSize: 16 }} />
           </button>
         </div>
       )}
@@ -322,12 +319,16 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
         okText="确认"
         cancelText="取消"
       >
-        <Input
-          value={newTitle}
-          onChange={e => setNewTitle(e.target.value)}
-          placeholder="请输入新的对话名称"
-          autoFocus
-        />
+        <div>
+          <Input
+            value={newTitle}
+            onChange={e => setNewTitle(e.target.value.slice(0, 100))}
+            placeholder="请输入新的对话名称"
+            maxLength={100}
+            showCount
+            autoFocus
+          />
+        </div>
       </Modal>
     </div>
   );

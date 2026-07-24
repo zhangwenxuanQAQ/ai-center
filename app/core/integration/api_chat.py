@@ -88,7 +88,8 @@ class IntegrationChatCoreService:
     def _get_or_create_bot_chat(
         integration: ChatbotIntegration,
         chatbot_id: str,
-        chat_id: Optional[str]
+        chat_id: Optional[str],
+        title: Optional[str] = None
     ) -> ChatbotChat:
         """
         获取或创建 ChatbotChat 记录
@@ -97,6 +98,7 @@ class IntegrationChatCoreService:
             integration: 集成配置对象
             chatbot_id: 机器人ID
             chat_id: 对话ID（可选）
+            title: 对话标题（可选，用于创建新对话时设置标题）
 
         Returns:
             ChatbotChat: 聊天记录对象
@@ -116,6 +118,7 @@ class IntegrationChatCoreService:
             bot_chat = ChatbotChat(
                 integration_id=integration.id,
                 chatbot_id=chatbot_id,
+                title=title or "新对话",
                 messages="[]"
             )
             bot_chat.save(force_insert=True)
@@ -1257,7 +1260,8 @@ class IntegrationChatCoreService:
 
         # ============ 正式会话模式 ============
         # 获取或创建 ChatbotChat
-        bot_chat = IntegrationChatCoreService._get_or_create_bot_chat(integration, chatbot_id, chat_id)
+        chat_title = user_text[:20] if len(user_text) > 20 else user_text
+        bot_chat = IntegrationChatCoreService._get_or_create_bot_chat(integration, chatbot_id, chat_id, title=chat_title)
         actual_chat_id = bot_chat.id
 
         # 处理编辑消息：删除该消息及其后续所有消息

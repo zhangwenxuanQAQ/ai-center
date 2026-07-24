@@ -64,6 +64,23 @@ const streamingMessagesMap = new Map<string, StreamingCache>();
 
 export const integrationChatService = {
   /**
+   * 创建新对话
+   */
+  createChat: async (apiKey: string, temporary?: boolean, previewToken?: string, title?: string): Promise<{ id: string; temporary: boolean }> => {
+    const res = await fetch(`${API_BASE_URL}/aicenter/api/v1/chats`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({ temporary: !!temporary, preview_token: previewToken, title }),
+    });
+    const data = await res.json();
+    if (data.code !== 200) throw new Error(data.message || '创建对话失败');
+    return data.data;
+  },
+
+  /**
    * 获取对话列表
    */
   getChats: async (apiKey: string, keyword?: string, previewToken?: string): Promise<{ items: IntegrationChat[]; total: number }> => {
@@ -257,8 +274,11 @@ export const integrationChatService = {
   /**
    * 修改对话名称
    */
-  updateChatTitle: async (apiKey: string, chatId: string, title: string): Promise<IntegrationChat> => {
-    const res = await fetch(`${API_BASE_URL}/aicenter/api/v1/chat/${chatId}`, {
+  updateChatTitle: async (apiKey: string, chatId: string, title: string, previewToken?: string): Promise<IntegrationChat> => {
+    const params = new URLSearchParams();
+    if (previewToken) params.set('preview_token', previewToken);
+    const qs = params.toString();
+    const res = await fetch(`${API_BASE_URL}/aicenter/api/v1/chat/${chatId}${qs ? `?${qs}` : ''}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',

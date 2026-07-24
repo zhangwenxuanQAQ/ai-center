@@ -8,6 +8,7 @@
 import json
 import logging
 import asyncio
+import uuid
 from fastapi import APIRouter, Request, Header, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from typing import Optional, List
@@ -17,8 +18,10 @@ from fastapi import Query
 from app.services.chat.dto import QueryItem
 from app.services.integration.service import ChatbotIntegrationService
 from app.core.integration.api_chat import IntegrationChatCoreService
+from app.core.integration.temp_chat_store import TempChatStore
 from app.core.chat.stream_manager import ChatStreamManager
 from app.database.redis_utils import redis_utils
+from app.database.models import ChatbotChat
 from app.utils.response import ResponseUtil, ApiResponse
 
 router = APIRouter()
@@ -247,6 +250,47 @@ async def get_chat_messages(
         return ResponseUtil.error(message=f"获取聊天记录失败: {str(e)}")
 
 
+class CreateChatRequest(BaseModel):
+    temporary: bool = Field(False, description="临时会话模式")
+    preview_token: Optional[str] = Field(None, description="预览token，用于临时会话数据隔离")
+    title: Optional[str] = Field(None, max_length=200, description="对话标题")
+
+
+@router.post("/v1/chats", summary="创建新对话")
+async def create_chat(
+    request: CreateChatRequest,
+    integration=Depends(verify_api_key)
+):
+    """
+    创建新对话，返回对话ID。
+    前端在发送第一条消息前应先调用此接口创建对话，确保对话已在列表中显示。
+    """
+    try:
+        chat_title = request.title or "新对话"
+        if request.temporary and TempChatStore.is_available():
+            chat_id = f"temp_{uuid.uuid4().hex[:12]}"
+            scope_id = f"{integration.id}:preview:{request.preview_token}" if request.preview_token else None
+            TempChatStore.create_chat(
+                integration_id=integration.id,
+                chat_id=chat_id,
+                chatbot_id=integration.chatbot_id,
+                title=chat_title,
+                scope_id=scope_id
+            )
+        else:
+            chat = ChatbotChat.create(
+                integration_id=integration.id,
+                chatbot_id=integration.chatbot_id,
+                title=chat_title
+            )
+            chat_id = chat.id
+
+        return ResponseUtil.success(data={"id": chat_id, "temporary": request.temporary})
+    except Exception as e:
+        logger.error(f"创建对话失败: {str(e)}", exc_info=True)
+        return ResponseUtil.error(message=f"创建对话失败: {str(e)}")
+
+
 @router.get("/v1/chats", summary="获取对话列表")
 async def list_chats(
     keyword: Optional[str] = Query(None, description="搜索关键词"),
@@ -279,6 +323,7 @@ class UpdateChatTitleRequest(BaseModel):
 async def update_chat_title(
     chat_id: str,
     request: UpdateChatTitleRequest,
+    preview_token: Optional[str] = Query(None, description="预览token，用于临时会话数据隔离"),
     integration = Depends(verify_api_key)
 ):
     """
@@ -287,13 +332,14 @@ async def update_chat_title(
     Args:
         chat_id: 对话ID
         request: 请求体，包含新的对话名称
+        preview_token: 预览token（可选）
         integration: 集成配置对象（由verify_api_key依赖项注入）
         
     Returns:
         ApiResponse: 更新后的对话信息
     """
     try:
-        chat = ChatbotIntegrationService.update_chat_title(integration, chat_id, request.title)
+        chat = ChatbotIntegrationService.update_chat_title(integration, chat_id, request.title, preview_token=preview_token)
         return ResponseUtil.success(data=chat)
     except Exception as e:
         logger.error(f"修改对话名称失败: {str(e)}", exc_info=True)

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { PaperClipOutlined, CopyOutlined, EditOutlined, ReloadOutlined, CheckOutlined, BulbOutlined, DownOutlined, RightOutlined, LoadingOutlined } from '@ant-design/icons';
+import { PaperClipOutlined, CopyOutlined, EditOutlined, ReloadOutlined, CheckOutlined, BulbOutlined, DownOutlined, RightOutlined, LoadingOutlined, FilePdfOutlined, FileWordOutlined, FileImageOutlined, FileTextOutlined, SoundOutlined } from '@ant-design/icons';
 import { Tooltip, message } from 'antd';
 import MDEditor from '@uiw/react-md-editor';
 import ChatMarkdown from '../../components/ChatMarkdown';
@@ -53,6 +53,8 @@ interface DisplayMessage {
   status?: 'start' | 'streaming' | 'done';
   step?: 'pre_process' | 'task_planning' | 'task_list' | 'model_answer' | 'task_execution' | 'result_summary';
   step_id?: string;
+  extra_content?: any;
+  files?: Array<{ file_name?: string; file_size?: number; mime_type?: string; type?: string }>;
 }
 
 interface SelectedFile {
@@ -306,6 +308,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         status: 'done',
         created_at: m.created_at,
         extra_content: m.extra_content,
+        files: (m as any).extra_content?.files || undefined,
       }));
       setMessages(displayMsgs);
       // 同步到ref，用于后续切换对话时恢复
@@ -349,6 +352,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         status: 'done' as const,
         created_at: m.created_at,
         extra_content: m.extra_content,
+        files: (m as any).extra_content?.files || undefined,
       }));
       setMessages(displayMsgs);
       streamingMessagesRef.current[reconnectChatId] = displayMsgs;
@@ -582,6 +586,44 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
+  // 根据文件名获取图标
+  const getFileIcon = (fileName: string) => {
+    if (!fileName) return <FileTextOutlined style={{ color: '#8c8c8c' }} />;
+    const ext = fileName.split('.').pop()?.toLowerCase() || '';
+    switch (ext) {
+      case 'pdf':
+        return <FilePdfOutlined style={{ color: '#ff4d4f' }} />;
+      case 'doc':
+      case 'docx':
+        return <FileWordOutlined style={{ color: '#1890ff' }} />;
+      case 'txt':
+      case 'md':
+      case 'json':
+      case 'yaml':
+      case 'yml':
+      case 'xml':
+      case 'csv':
+        return <FileTextOutlined style={{ color: '#52c41a' }} />;
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+      case 'webp':
+        return <FileImageOutlined style={{ color: '#722ed1' }} />;
+      case 'mp3':
+      case 'wav':
+      case 'ogg':
+      case 'flac':
+      case 'aac':
+      case 'aiff':
+      case 'ape':
+      case 'wma':
+        return <SoundOutlined style={{ color: '#fa8c16' }} />;
+      default:
+        return <FileTextOutlined style={{ color: '#8c8c8c' }} />;
+    }
+  };
+
   // 格式化文件大小
   const formatFileSize = (bytes?: number): string => {
     if (!bytes) return '';
@@ -617,12 +659,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
     const filesForDisplay = [...selectedFiles];
 
-    // Build display content
-    let displayContent = text;
-    if (filesForDisplay.length > 0) {
-      const fileNames = filesForDisplay.map(f => f.file_name).join(', ');
-      displayContent = text ? `${text}\n\n[文件: ${fileNames}]` : `[文件: ${fileNames}]`;
-    }
+    // Build display content: 只用文本，文件单独显示
+    const displayContent = text || (filesForDisplay.length > 0 ? `${filesForDisplay.length} 个文件` : '');
 
     // 清空输入框和文件（只有普通发送时清空）
     setInputValue('');
@@ -641,16 +679,35 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     query: IntegrationQueryItem[],
     displayContent: string,
     filesForDisplay: any[],
-    editMessageId?: string
+    editMessageId?: string,
+    skipUserMessage?: boolean
   ) => {
     const idTracker = { assistant: '', user: '' };
     // 捕获当前消息，用于初始化ref
     const currentMessages = messages;
     const newMessages: DisplayMessage[] = [];
 
-    // 只有非编辑模式才添加用户消息
-    // 编辑模式下，用户消息已经在前端存在，不需要重复添加
-    if (!editMessageId) {
+    // 新对话：先创建对话，确保对话列表已更新，再发送消息
+    let activeChatId = currentChatId;
+    if (!activeChatId) {
+      try {
+        // 用用户首条消息文本作为对话标题
+        const title = displayContent?.substring(0, 20) || '新对话';
+        const created = await integrationChatService.createChat(apiKey, temporary, previewToken, title);
+        activeChatId = created.id;
+        setCurrentChatId(activeChatId);
+        onChatIdChange(activeChatId);
+        // 对话创建成功后立即刷新历史列表
+        onMessageSent();
+      } catch (err) {
+        console.error('创建对话失败:', err);
+        // 创建失败则回退到旧逻辑，流式响应中获取chat_id
+      }
+    }
+
+    // skipUserMessage=true：编辑模式，前端已移除旧用户消息，不需要重新添加
+    // skipUserMessage=false或未设置：普通发送和重新回答，需要添加用户消息
+    if (!skipUserMessage) {
       // Add user message
       const userMsg: DisplayMessage = {
         id: `user-${Date.now()}`,
@@ -658,6 +715,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         content: displayContent,
         status: 'done',
         created_at: new Date().toISOString(),
+        files: filesForDisplay.map(f => ({ file_name: f.file_name, file_size: f.file_size, mime_type: f.mime_type, type: f.type })),
       };
       idTracker.user = userMsg.id;
       newMessages.push(userMsg);
@@ -687,7 +745,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     abortControllerRef.current = controller;
 
     // 设置流式缓存（用于切换对话后恢复）
-    const cacheChatId = currentChatId || `temp-${Date.now()}`;
+    const cacheChatId = activeChatId || `temp-${Date.now()}`;
     // 用于跟踪流式过程中的实际chatId（新对话时可能变化）
     let streamingChatId = cacheChatId;
     integrationChatService.setStreamingCache(cacheChatId, {
@@ -698,10 +756,19 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     });
 
     // 初始化流式消息ref，包含当前消息 + 新添加的用户/助手消息
-    streamingMessagesRef.current[streamingChatId] = [...currentMessages, ...newMessages];
+    // 编辑/重新回答模式下，currentMessages可能仍包含已被前端删除的消息
+    // （setMessages异步未生效），需从editMessageId处截断以避免重复
+    let baseMessages = currentMessages;
+    if (editMessageId) {
+      const editIdx = currentMessages.findIndex(m => m.id === editMessageId || m.message_id === editMessageId);
+      if (editIdx >= 0) {
+        baseMessages = currentMessages.slice(0, editIdx);
+      }
+    }
+    streamingMessagesRef.current[streamingChatId] = [...baseMessages, ...newMessages];
     currentChatIdRef.current = streamingChatId;
 
-    let newChatId = currentChatId;
+    let newChatId = activeChatId;
 
     const processSSEMessageUpdate = (msg: DisplayMessage, data: any): DisplayMessage => {
       if (msg.role === 'user') {
@@ -787,7 +854,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       await integrationChatService.sendMessageStream(
         apiKey,
         query,
-        currentChatId,
+        activeChatId,
         (data: any) => {
           if (data.chat_id && !newChatId) {
             newChatId = data.chat_id;
@@ -799,10 +866,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({
               delete streamingMessagesRef.current[streamingChatId];
               streamingChatId = newChatId;
               currentChatIdRef.current = newChatId;
-            }
-            // 如果是新对话（之前没有chatId），立即触发历史列表刷新
-            if (!currentChatId) {
-              onMessageSent();
             }
           }
 
@@ -1183,22 +1246,18 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
     if (!userMessage || userMsgIndexInMessages === -1) return;
 
-    // 找到用户消息后面第一条助手消息的ID（用于后端删除）
-    let firstAssistantMsgId: string | undefined = undefined;
-    for (let i = userMsgIndexInMessages + 1; i < messages.length; i++) {
-      if (messages[i].role === 'assistant') {
-        firstAssistantMsgId = messages[i].message_id || messages[i].id;
-        break;
-      }
-    }
-
-    // 前端删除用户消息后面的所有消息（保留用户消息）
-    const newMessages = messages.slice(0, userMsgIndexInMessages + 1);
+    // 前端删除从用户消息起的所有后续消息（包含用户消息和助手回复）。
+    // sendMessageInternal 会重新添加用户消息和助手占位消息。
+    const newMessages = messages.slice(0, userMsgIndexInMessages);
     setMessages(newMessages);
 
-    // 构建query，重新发送用户消息（如果有助手消息ID则传递给后端删除）
+    // 将用户消息 ID 作为 editMessageId 传给后端，
+    // 后端从该消息起删除后续所有消息，再重新保存用户消息+新回复
+    const userMsgId = userMessage.message_id || userMessage.id;
     const query: IntegrationQueryItem[] = [{ type: 'text', content: userMessage.content }];
-    sendMessageInternal(query, userMessage.content, [], firstAssistantMsgId);
+    // 保留原始用户消息的文件信息用于显示
+    const originalFiles = (userMessage.files || []).map(f => ({ file_name: f.file_name, file_size: f.file_size, mime_type: f.mime_type, type: f.type }));
+    sendMessageInternal(query, userMessage.content, originalFiles, userMsgId);
   };
 
   // 切换思考过程展开/收起
@@ -1518,9 +1577,33 @@ const ChatArea: React.FC<ChatAreaProps> = ({
               />
             </div>
           ) : (
-            <div className="int-md-editor-container">
-              <ChatMarkdown source={msg.content} />
-            </div>
+            <>
+              {/* 显示文件列表 */}
+              {msg.files && msg.files.length > 0 && (
+                <div className="int-msg-files">
+                  {msg.files.map((file, fileIndex) => {
+                    const fileName = file.file_name || '';
+                    const extension = fileName.split('.').pop()?.toUpperCase() || '';
+                    const fileSize = formatFileSize(file.file_size);
+                    return (
+                      <div key={fileName || `file-${fileIndex}`} className="int-msg-file-card">
+                        <span className="int-msg-file-icon">{getFileIcon(fileName)}</span>
+                        <div className="int-msg-file-info">
+                          <span className="int-msg-file-name">{fileName}</span>
+                          <span className="int-msg-file-meta">{extension}{fileSize ? ` · ${fileSize}` : ''}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {/* 显示用户消息文本 */}
+              {msg.content && (
+                <div className="int-md-editor-container">
+                  <ChatMarkdown source={msg.content} />
+                </div>
+              )}
+            </>
           )}
           <div className="int-msg-footer">
             <span className="int-msg-time">
@@ -1616,7 +1699,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           <div className="int-selected-files">
             {selectedFiles.map((file, index) => (
               <div key={index} className="int-selected-file">
-                <span className="int-file-icon">📄</span>
+                <span className="int-file-icon">{getFileIcon(file.file_name)}</span>
                 <div className="int-file-info">
                   <span className="int-file-name">{file.file_name}</span>
                   <span className="int-file-size">{formatFileSize(file.file_size)}</span>
