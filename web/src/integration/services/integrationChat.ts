@@ -66,11 +66,12 @@ export const integrationChatService = {
   /**
    * 获取对话列表
    */
-  getChats: async (apiKey: string, keyword?: string): Promise<{ items: IntegrationChat[]; total: number }> => {
-    let url = `${API_BASE_URL}/aicenter/api/v1/chats`;
-    if (keyword && keyword.trim()) {
-      url += `?keyword=${encodeURIComponent(keyword.trim())}`;
-    }
+  getChats: async (apiKey: string, keyword?: string, previewToken?: string): Promise<{ items: IntegrationChat[]; total: number }> => {
+    const params = new URLSearchParams();
+    if (keyword && keyword.trim()) params.set('keyword', keyword.trim());
+    if (previewToken) params.set('preview_token', previewToken);
+    const qs = params.toString();
+    const url = `${API_BASE_URL}/aicenter/api/v1/chats${qs ? `?${qs}` : ''}`;
     const res = await fetch(url, {
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -84,8 +85,11 @@ export const integrationChatService = {
   /**
    * 获取对话消息
    */
-  getMessages: async (apiKey: string, chatId: string): Promise<{ items: IntegrationMessage[]; total: number }> => {
-    const res = await fetch(`${API_BASE_URL}/aicenter/api/v1/chat/${chatId}/messages`, {
+  getMessages: async (apiKey: string, chatId: string, previewToken?: string): Promise<{ items: IntegrationMessage[]; total: number }> => {
+    const params = new URLSearchParams();
+    if (previewToken) params.set('preview_token', previewToken);
+    const qs = params.toString();
+    const res = await fetch(`${API_BASE_URL}/aicenter/api/v1/chat/${chatId}/messages${qs ? `?${qs}` : ''}`, {
       headers: {
         'Authorization': `Bearer ${apiKey}`,
       },
@@ -108,7 +112,8 @@ export const integrationChatService = {
     abortSignal?: AbortSignal,
     temporary?: boolean,
     deepThinking?: boolean,
-    editMessageId?: string
+    editMessageId?: string,
+    previewToken?: string
   ): Promise<void> => {
     const body: Record<string, any> = {
       query,
@@ -120,6 +125,7 @@ export const integrationChatService = {
       body.config = { deep_thinking: true };
     }
     if (editMessageId) body.edit_message_id = editMessageId;
+    if (previewToken) body.preview_token = previewToken;
 
     try {
       const res = await fetch(`${API_BASE_URL}/aicenter/api/v1/chat/completions`, {
@@ -268,8 +274,11 @@ export const integrationChatService = {
   /**
    * 删除对话
    */
-  deleteChat: async (apiKey: string, chatId: string): Promise<boolean> => {
-    const res = await fetch(`${API_BASE_URL}/aicenter/api/v1/chat/${chatId}`, {
+  deleteChat: async (apiKey: string, chatId: string, previewToken?: string): Promise<boolean> => {
+    const params = new URLSearchParams();
+    if (previewToken) params.set('preview_token', previewToken);
+    const qs = params.toString();
+    const res = await fetch(`${API_BASE_URL}/aicenter/api/v1/chat/${chatId}${qs ? `?${qs}` : ''}`, {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -278,5 +287,90 @@ export const integrationChatService = {
     const data = await res.json();
     if (data.code !== 200) throw new Error(data.message || '删除对话失败');
     return true;
+  },
+
+  /**
+   * 查询指定对话的流式状态
+   * 用于F5刷新后检测是否有正在进行的流式任务
+   */
+  getStreamingStatus: async (apiKey: string, chatId: string): Promise<{ is_streaming: boolean; status: string; chunks_count: number }> => {
+    const res = await fetch(`${API_BASE_URL}/aicenter/api/v1/chat/streaming_status/${chatId}`, {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
+    });
+    const data = await res.json();
+    if (data.code !== 200) throw new Error(data.message || '查询流式状态失败');
+    return data.data;
+  },
+
+  /**
+   * 重连流式输出
+   * F5刷新后，通过此方法重新获取流式数据（包含历史chunks + 新chunks）
+   */
+  reconnectStream: async (
+    apiKey: string,
+    chatId: string,
+    onMessage?: (data: any) => void,
+    onError?: (error: any) => void,
+    onComplete?: () => void,
+    abortSignal?: AbortSignal
+  ): Promise<void> => {
+    const res = await fetch(`${API_BASE_URL}/aicenter/api/v1/chat/reconnect_stream/${chatId}`, {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      signal: abortSignal,
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      onError?.(new Error(errData.message || `HTTP ${res.status}`));
+      return;
+    }
+
+    const reader = res.body?.getReader();
+    if (!reader) {
+      onError?.(new Error('无法读取响应流'));
+      return;
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data: ')) continue;
+          const data = trimmed.slice(6);
+          if (data === '[DONE]') {
+            onComplete?.();
+            return;
+          }
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.error) {
+              onError?.(parsed.error);
+            } else {
+              onMessage?.(parsed);
+            }
+          } catch {
+            // skip invalid JSON
+          }
+        }
+      }
+      onComplete?.();
+    } catch (err: any) {
+      if (err.name === 'AbortError') return;
+      onError?.(err);
+    }
   },
 };

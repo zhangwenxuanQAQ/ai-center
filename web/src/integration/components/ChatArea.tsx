@@ -27,6 +27,7 @@ interface ChatAreaProps {
   onMessageSent: () => void;
   temporary?: boolean;
   newChatTrigger?: number;
+  previewToken?: string; // 预览token，用于不同预览token之间的数据隔离
 }
 
 interface ToolCallStep {
@@ -81,6 +82,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   onMessageSent,
   temporary = false,
   newChatTrigger = 0,
+  previewToken,
 }) => {
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -103,6 +105,24 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [messagesPadding, setMessagesPadding] = useState<number>(16);
   const [messagesPaddingTop, setMessagesPaddingTop] = useState<number>(24);
+
+  // 流式消息断点续传：按 chatId 存储流式过程中的完整消息数组
+  const streamingMessagesRef = useRef<Record<string, DisplayMessage[]>>({});
+  // 追踪当前显示的对话ID，用于隔离不同对话的流式消息更新
+  const currentChatIdRef = useRef<string>('');
+
+  // 更新流式消息：同时更新ref和state（仅当当前对话匹配时更新state）
+  // 这样切换对话后流式消息仍会在ref中更新，切回来时可以恢复
+  const updateStreamingMessages = useCallback((chatId: string, updater: (prev: DisplayMessage[]) => DisplayMessage[]) => {
+    if (!chatId) return;
+    const prev = streamingMessagesRef.current[chatId] || [];
+    const newMsgs = updater(prev);
+    streamingMessagesRef.current[chatId] = newMsgs;
+    // 仅当当前显示的对话是流式对话时才更新state，避免污染其他对话的显示
+    if (currentChatIdRef.current === chatId) {
+      setMessages(newMsgs);
+    }
+  }, []);
 
   // 检测是否在底部
   const isAtBottom = useCallback(() => {
@@ -169,16 +189,33 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   // Load messages when chatId changes
   useEffect(() => {
     if (chatId && chatId !== currentChatId) {
-      // 切换到已有对话
-      // 先检查是否有流式缓存（正在进行的流式输出）
+      // 切换到已有对话：先保存当前对话的消息到ref
+      if (currentChatIdRef.current && messages.length > 0) {
+        streamingMessagesRef.current[currentChatIdRef.current] = messages;
+      }
+
+      // 更新当前显示的对话ID
+      currentChatIdRef.current = chatId;
+
+      // 优先从ref恢复（包含完整的步骤、工具调用等状态）
+      const refMessages = streamingMessagesRef.current[chatId];
       const streamingCache = integrationChatService.getStreamingCache(chatId);
-      if (streamingCache && streamingCache.isStreaming) {
-        // 有正在进行的流式输出，恢复状态
+
+      if (refMessages && refMessages.length > 0) {
+        // 有ref消息：直接恢复完整的消息状态
+        setCurrentChatId(chatId);
+        setMessages(refMessages);
+        if (streamingCache && streamingCache.isStreaming) {
+          setLoading(true);
+        } else {
+          setLoading(false);
+        }
+        setTimeout(() => { scrollToBottomInstant(); }, 100);
+      } else if (streamingCache && streamingCache.isStreaming) {
+        // 有流式缓存但无ref（兼容旧逻辑）：从后端加载并合并缓存
         setCurrentChatId(chatId);
         setLoading(true);
-        // 加载历史消息并合并流式缓存
         loadMessages(chatId).then(() => {
-          // 如果缓存中有消息内容，更新最后一条助手消息
           if (streamingCache.currentContent || streamingCache.currentReasoningContent) {
             setMessages(prev => {
               const lastAssistantIndex = prev.map((m, i) => ({ ...m, index: i })).reverse().find(m => m.role === 'assistant');
@@ -200,12 +237,17 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           }
         });
       } else {
-        // 没有流式输出，正常加载历史消息
+        // 无内存缓存：可能是F5刷新或首次进入
+        // 检查后端是否有正在进行的流式任务，如果有则重连
         setCurrentChatId(chatId);
-        loadMessages(chatId);
+        checkAndReconnectStream(chatId);
       }
     } else if (!chatId && currentChatId) {
-      // 切换到新对话，清空消息和状态
+      // 切换到新对话：保存当前消息到ref（流式仍在后台继续）
+      if (currentChatIdRef.current && messages.length > 0) {
+        streamingMessagesRef.current[currentChatIdRef.current] = messages;
+      }
+      currentChatIdRef.current = '';
       setCurrentChatId(undefined);
       setMessages([]);
       setInputValue('');
@@ -215,6 +257,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       setExpandedReasoning(new Set());
       setExpandedToolCalls(new Set());
       setExpandedToolCallResults(new Set());
+      setLoading(false);
       // 重新随机选择欢迎语
       selectRandomWelcome();
     }
@@ -223,6 +266,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   // 监听新对话触发器，清空消息并重新选择欢迎语
   useEffect(() => {
     if (newChatTrigger > 0) {
+      // 保存当前消息到ref（流式仍在后台继续）
+      if (currentChatIdRef.current && messages.length > 0) {
+        streamingMessagesRef.current[currentChatIdRef.current] = messages;
+      }
+      currentChatIdRef.current = '';
       setMessages([]);
       setInputValue('');
       setSelectedFiles([]);
@@ -232,6 +280,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       setExpandedToolCalls(new Set());
       setExpandedToolCallResults(new Set());
       setCurrentChatId(undefined);
+      setLoading(false);
       selectRandomWelcome();
     }
   }, [newChatTrigger, selectRandomWelcome]);
@@ -245,7 +294,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
   const loadMessages = async (id: string) => {
     try {
-      const result = await integrationChatService.getMessages(apiKey, id);
+      const result = await integrationChatService.getMessages(apiKey, id, previewToken);
       const displayMsgs: DisplayMessage[] = (result.items || []).map((m: IntegrationMessage) => ({
         id: m.id,
         message_id: m.message_id || m.id,
@@ -259,6 +308,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         extra_content: m.extra_content,
       }));
       setMessages(displayMsgs);
+      // 同步到ref，用于后续切换对话时恢复
+      streamingMessagesRef.current[id] = displayMsgs;
       setTimeout(() => {
         scrollToBottomInstant();
       }, 100);
@@ -277,6 +328,224 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       ta.style.height = 'auto';
       ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
     }
+  };
+
+  /**
+   * 检查并重连流式输出（F5刷新后恢复）
+   * 加载历史消息后检查后端是否有正在进行的流式任务，如果有则重连获取流式数据
+   */
+  const checkAndReconnectStream = async (reconnectChatId: string) => {
+    try {
+      // 加载历史消息
+      const result = await integrationChatService.getMessages(apiKey, reconnectChatId, previewToken);
+      const displayMsgs: DisplayMessage[] = (result.items || []).map((m: IntegrationMessage) => ({
+        id: m.id,
+        message_id: m.message_id || m.id,
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+        reasoning_content: m.reasoning_content,
+        reasoning_time: m.reasoning_time,
+        reasoning_end: !!m.reasoning_content,
+        status: 'done' as const,
+        created_at: m.created_at,
+        extra_content: m.extra_content,
+      }));
+      setMessages(displayMsgs);
+      streamingMessagesRef.current[reconnectChatId] = displayMsgs;
+      setTimeout(() => { scrollToBottomInstant(); }, 100);
+
+      // 检查后端是否有正在进行的流式任务
+      const statusData = await integrationChatService.getStreamingStatus(apiKey, reconnectChatId);
+      if (statusData?.is_streaming) {
+        // 后端有正在进行的流式任务，重连获取流式数据
+        setLoading(true);
+        const idTracker = { assistant: '', user: '' };
+
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
+        integrationChatService.reconnectStream(
+          apiKey,
+          reconnectChatId,
+          (data: any) => {
+            // 处理重连接收到的SSE数据
+            if (data.assistant_message_id) idTracker.assistant = data.assistant_message_id;
+            if (data.user_message_id) idTracker.user = data.user_message_id;
+
+            const status = data.status || 'running';
+            const stepId = data.step_id;
+
+            if (status === 'error') {
+              updateStreamingMessages(reconnectChatId, prev => {
+                let updated = [...prev];
+                if (data.user_message_id) {
+                  updated = prev.map(msg => {
+                    if (msg.role === 'user' && (msg.id === idTracker.user || msg.message_id === idTracker.user)) {
+                      idTracker.user = data.user_message_id;
+                      return { ...msg, id: data.user_message_id, message_id: data.user_message_id };
+                    }
+                    return msg;
+                  });
+                }
+                const existingMsg = updated.find(msg =>
+                  msg.role === 'assistant' &&
+                  (msg.step_id === stepId || msg.message_id === data.assistant_message_id || msg.id === idTracker.assistant)
+                );
+                if (existingMsg) {
+                  return updated.map(msg => {
+                    if (msg.role === 'assistant' && (msg.step_id === stepId || msg.message_id === data.assistant_message_id || msg.id === idTracker.assistant)) {
+                      return { ...msg, content: data.text || '抱歉，处理您的请求时出现错误。', status: 'error' as any, reasoning_content: undefined, reasoning_end: undefined };
+                    }
+                    return msg;
+                  });
+                }
+                const errorMsg: DisplayMessage = {
+                  id: stepId || idTracker.assistant,
+                  message_id: data.assistant_message_id,
+                  role: 'assistant',
+                  content: data.text || '抱歉，处理您的请求时出现错误。',
+                  created_at: new Date().toISOString(),
+                  status: 'error' as any,
+                  step: data.step,
+                  step_id: stepId,
+                };
+                return [...updated, errorMsg];
+              });
+              return;
+            }
+
+            if (status === 'start' && stepId && data.step) {
+              updateStreamingMessages(reconnectChatId, prev => {
+                let updated = [...prev];
+                if (data.user_message_id) {
+                  updated = prev.map(msg => {
+                    if (msg.role === 'user' && (msg.id === idTracker.user || msg.message_id === idTracker.user)) {
+                      idTracker.user = data.user_message_id;
+                      return { ...msg, id: data.user_message_id, message_id: data.user_message_id };
+                    }
+                    return msg;
+                  });
+                }
+                const existingStepMsg = updated.find(msg => msg.step_id === stepId && msg.role === 'assistant');
+                if (existingStepMsg) {
+                  return updated.map(msg => {
+                    if (msg.role === 'user') return processReconnectSSEUpdate(msg, data, idTracker);
+                    if (msg.step_id === stepId) return processReconnectSSEUpdate(msg, data, idTracker);
+                    return msg;
+                  });
+                }
+                const initialMsgIndex = updated.findIndex(msg => msg.role === 'assistant' && !msg.step_id && msg.status === 'start');
+                if (initialMsgIndex >= 0) {
+                  return updated.map((msg, idx) => {
+                    if (idx === initialMsgIndex) {
+                      return { ...msg, message_id: data.assistant_message_id, status: 'start', step: data.step, step_id: stepId, tool_calls: data.tool_call ? [data.tool_call] : [] };
+                    }
+                    return msg;
+                  });
+                }
+                const newStepMsg: DisplayMessage = {
+                  id: stepId,
+                  message_id: data.assistant_message_id,
+                  role: 'assistant',
+                  content: '',
+                  created_at: new Date().toISOString(),
+                  status: 'start',
+                  step: data.step,
+                  step_id: stepId,
+                  reasoning_content: '',
+                  reasoning_end: false,
+                  tool_calls: data.tool_call ? [data.tool_call] : [],
+                };
+                return [...updated, newStepMsg];
+              });
+            } else {
+              updateStreamingMessages(reconnectChatId, prev => prev.map(msg => {
+                if (msg.role === 'user') return processReconnectSSEUpdate(msg, data, idTracker);
+                if (!stepId) return processReconnectSSEUpdate(msg, data, idTracker);
+                if (msg.step_id === stepId) return processReconnectSSEUpdate(msg, data, idTracker);
+                return msg;
+              }));
+            }
+          },
+          (err: any) => {
+            console.error('重连流式输出失败:', err);
+            updateStreamingMessages(reconnectChatId, prev => prev.map(msg => {
+              if (msg.role === 'assistant' && msg.status && msg.status !== 'done' && msg.status !== 'stop') {
+                return { ...msg, status: 'done' };
+              }
+              return msg;
+            }));
+            if (currentChatIdRef.current === reconnectChatId) {
+              setLoading(false);
+            }
+          },
+          () => {
+            updateStreamingMessages(reconnectChatId, prev => prev.map(msg => {
+              if (msg.role === 'assistant' && msg.status !== 'done' && msg.status !== 'stop') {
+                return { ...msg, status: 'done' };
+              }
+              return msg;
+            }));
+            if (currentChatIdRef.current === reconnectChatId) {
+              setLoading(false);
+            }
+            onMessageSent();
+          },
+          controller.signal
+        );
+      }
+    } catch (error) {
+      console.error('检查流式状态失败:', error);
+    }
+  };
+
+  /**
+   * 重连时的SSE消息更新处理（与sendMessageInternal中的processSSEMessageUpdate类似）
+   */
+  const processReconnectSSEUpdate = (msg: DisplayMessage, data: any, idTracker: { assistant: string; user: string }): DisplayMessage => {
+    if (msg.role === 'user') {
+      if (data.user_message_id && (msg.id === idTracker.user || msg.message_id === idTracker.user)) {
+        idTracker.user = data.user_message_id;
+        return { ...msg, id: data.user_message_id, message_id: data.user_message_id };
+      }
+      return msg;
+    }
+    if (msg.role === 'assistant') {
+      const dataStepId = data.step_id;
+      const msgStepId = msg.step_id;
+      const dataHasStepId = dataStepId !== undefined && dataStepId !== null && dataStepId !== '';
+      const msgHasStepId = msgStepId !== undefined && msgStepId !== null && msgStepId !== '';
+      if (dataHasStepId) {
+        if (!msgHasStepId || dataStepId !== msgStepId) return msg;
+      } else {
+        if (msgHasStepId) return msg;
+      }
+      const updates: any = { ...msg };
+      if (data.assistant_message_id) updates.message_id = data.assistant_message_id;
+      updates.status = data.status || 'running';
+      if (data.step) updates.step = data.step;
+      if (data.step_id) updates.step_id = data.step_id;
+      if (!msg.reasoning_end && data.reasoning_content) {
+        updates.reasoning_content = (msg.reasoning_content || '') + data.reasoning_content;
+      }
+      if (data.text) updates.content = (msg.content || '') + data.text;
+      if (data.reasoning_end) updates.reasoning_end = true;
+      if (data.tool_call) {
+        const tc = data.tool_call;
+        const existingCalls = updates.tool_calls || [];
+        const existingIndex = existingCalls.findIndex((c: any) => c.tool_call_id === tc.tool_call_id);
+        if (existingIndex >= 0) {
+          existingCalls[existingIndex] = { ...existingCalls[existingIndex], ...tc };
+        } else {
+          existingCalls.push(tc);
+        }
+        updates.tool_calls = [...existingCalls];
+      }
+      if (data.reasoning_time != null) updates.reasoning_time = data.reasoning_time;
+      updates.created_at = new Date().toISOString();
+      return updates;
+    }
+    return msg;
   };
 
   // 文件上传处理
@@ -375,6 +644,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     editMessageId?: string
   ) => {
     const idTracker = { assistant: '', user: '' };
+    // 捕获当前消息，用于初始化ref
+    const currentMessages = messages;
+    const newMessages: DisplayMessage[] = [];
 
     // 只有非编辑模式才添加用户消息
     // 编辑模式下，用户消息已经在前端存在，不需要重复添加
@@ -388,6 +660,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         created_at: new Date().toISOString(),
       };
       idTracker.user = userMsg.id;
+      newMessages.push(userMsg);
 
       setMessages((prev) => [...prev, userMsg]);
       scrollToBottom();
@@ -405,6 +678,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       tool_calls: [],
     };
     idTracker.assistant = assistantMsg.id;
+    newMessages.push(assistantMsg);
 
     setMessages((prev) => [...prev, assistantMsg]);
     setLoading(true);
@@ -414,12 +688,18 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
     // 设置流式缓存（用于切换对话后恢复）
     const cacheChatId = currentChatId || `temp-${Date.now()}`;
+    // 用于跟踪流式过程中的实际chatId（新对话时可能变化）
+    let streamingChatId = cacheChatId;
     integrationChatService.setStreamingCache(cacheChatId, {
       isStreaming: true,
       messages: [],
       assistantMessageId: assistantMsg.id,
       abortController: controller,
     });
+
+    // 初始化流式消息ref，包含当前消息 + 新添加的用户/助手消息
+    streamingMessagesRef.current[streamingChatId] = [...currentMessages, ...newMessages];
+    currentChatIdRef.current = streamingChatId;
 
     let newChatId = currentChatId;
 
@@ -513,6 +793,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             newChatId = data.chat_id;
             setCurrentChatId(newChatId);
             onChatIdChange(newChatId);
+            // 新对话创建成功：将ref从临时key迁移到真实chatId
+            if (streamingChatId !== newChatId) {
+              streamingMessagesRef.current[newChatId] = streamingMessagesRef.current[streamingChatId] || [];
+              delete streamingMessagesRef.current[streamingChatId];
+              streamingChatId = newChatId;
+              currentChatIdRef.current = newChatId;
+            }
             // 如果是新对话（之前没有chatId），立即触发历史列表刷新
             if (!currentChatId) {
               onMessageSent();
@@ -523,7 +810,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           const stepId = data.step_id;
 
           if (status === 'error') {
-            setMessages(prev => {
+            updateStreamingMessages(streamingChatId, prev => {
               let updated = [...prev];
               if (data.user_message_id) {
                 updated = prev.map(msg => {
@@ -563,7 +850,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           }
 
           if (status === 'start' && stepId && data.step) {
-            setMessages(prev => {
+            updateStreamingMessages(streamingChatId, prev => {
               let updated = [...prev];
               if (data.user_message_id) {
                 updated = prev.map(msg => {
@@ -615,7 +902,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
               return [...updated, newStepMsg];
             });
           } else {
-            setMessages(prev => prev.map(msg => {
+            updateStreamingMessages(streamingChatId, prev => prev.map(msg => {
               if (msg.role === 'user') return processSSEMessageUpdate(msg, data);
               if (!stepId) return processSSEMessageUpdate(msg, data);
               if (msg.step_id === stepId) return processSSEMessageUpdate(msg, data);
@@ -626,25 +913,29 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         (err: any) => {
           console.error('Stream error:', err);
           const errorMessage = typeof err === 'string' ? err : err?.message || err?.error || '发生了未知错误';
-          setMessages((prev) => prev.map(msg => {
+          updateStreamingMessages(streamingChatId, (prev) => prev.map(msg => {
             if (msg.role === 'assistant' && msg.status && msg.status !== 'done' && msg.status !== 'stop') {
               return { ...msg, content: msg.content || errorMessage, status: 'done' };
             }
             return msg;
           }));
-          setLoading(false);
+          if (currentChatIdRef.current === streamingChatId) {
+            setLoading(false);
+          }
           abortControllerRef.current = null;
           // 清理流式缓存
           integrationChatService.clearStreamingCache(cacheChatId);
         },
         () => {
-          setMessages((prev) => prev.map(msg => {
+          updateStreamingMessages(streamingChatId, (prev) => prev.map(msg => {
             if (msg.role === 'assistant' && msg.status !== 'done' && msg.status !== 'stop') {
               return { ...msg, status: 'done' };
             }
             return msg;
           }));
-          setLoading(false);
+          if (currentChatIdRef.current === streamingChatId) {
+            setLoading(false);
+          }
           abortControllerRef.current = null;
           onMessageSent();
           // 清理流式缓存
@@ -653,18 +944,21 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         controller.signal,
         temporary,
         deepThinking,
-        editMessageId
+        editMessageId,
+        previewToken
       );
     } catch (err: any) {
       console.error('Send message error:', err);
       const errorMessage = typeof err === 'string' ? err : err?.message || err?.error || '发生了未知错误';
-      setMessages((prev) => prev.map(msg => {
+      updateStreamingMessages(streamingChatId, (prev) => prev.map(msg => {
         if (msg.role === 'assistant' && msg.status && msg.status !== 'done') {
           return { ...msg, content: msg.content || errorMessage, status: 'done' };
         }
         return msg;
       }));
-      setLoading(false);
+      if (currentChatIdRef.current === streamingChatId) {
+        setLoading(false);
+      }
       abortControllerRef.current = null;
     }
   };
@@ -673,14 +967,20 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   const handleStop = () => {
     abortControllerRef.current?.abort();
     setLoading(false);
-    setMessages((prev) => {
+    const stopUpdater = (prev: DisplayMessage[]) => {
       const updated = [...prev];
       const last = updated[updated.length - 1];
       if (last && last.role === 'assistant') {
         updated[updated.length - 1] = { ...last, status: 'done' };
       }
       return updated;
-    });
+    };
+    setMessages(stopUpdater);
+    // 同步更新ref中的消息状态
+    const chatId = currentChatIdRef.current;
+    if (chatId && streamingMessagesRef.current[chatId]) {
+      streamingMessagesRef.current[chatId] = stopUpdater(streamingMessagesRef.current[chatId]);
+    }
   };
 
   /**

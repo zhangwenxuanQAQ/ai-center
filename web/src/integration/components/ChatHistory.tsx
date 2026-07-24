@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { Modal, Input, message } from 'antd';
+import { Modal, Input, message, Tooltip } from 'antd';
 import { EditOutlined, DeleteOutlined, MoreOutlined } from '@ant-design/icons';
 import { integrationChatService, IntegrationChat } from '../services/integrationChat';
 
@@ -14,6 +14,7 @@ interface ChatHistoryProps {
   themeMode?: string;
   colorTheme?: string;
   gradientEndColor?: string;
+  previewToken?: string;
 }
 
 const ChatHistory: React.FC<ChatHistoryProps> = ({
@@ -27,6 +28,7 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
   themeMode = 'light',
   colorTheme = 'default_blue',
   gradientEndColor = 'none',
+  previewToken,
 }) => {
   const [chats, setChats] = useState<IntegrationChat[]>([]);
   const [loading, setLoading] = useState(false);
@@ -43,7 +45,7 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
     if (!apiKey) return;
     setLoading(true);
     try {
-      const result = await integrationChatService.getChats(apiKey, keyword);
+      const result = await integrationChatService.getChats(apiKey, keyword, previewToken);
       setChats(result.items || []);
     } catch (err) {
       console.error('Failed to fetch chats:', err);
@@ -118,7 +120,7 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
       okButtonProps: { danger: true },
       onOk: async () => {
         try {
-          await integrationChatService.deleteChat(apiKey, chat.id);
+          await integrationChatService.deleteChat(apiKey, chat.id, previewToken);
           setChats(chats.filter(c => c.id !== chat.id));
           if (activeChatId === chat.id) {
             // 清空当前选中的对话
@@ -277,7 +279,9 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
                       onClick={() => onSelectChat(chat)}
                     >
                       <div className="int-history-item-content">
-                        <div className="int-history-item-title">{chat.title}</div>
+                        <Tooltip title={chat.title} placement="right" mouseEnterDelay={0.5}>
+                          <div className="int-history-item-title">{chat.title}</div>
+                        </Tooltip>
                         <div className="int-history-item-time">{formatDate(chat.created_at || '')}</div>
                       </div>
                       <div className="int-history-item-actions" onClick={e => e.stopPropagation()}>

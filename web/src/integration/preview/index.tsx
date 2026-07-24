@@ -15,6 +15,7 @@ import { Spin } from 'antd';
 const IntegrationPreviewPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
+  const [token, setToken] = useState<string>('');
   const [config, setConfig] = useState<{
     type: string;
     apiKey: string;
@@ -36,19 +37,22 @@ const IntegrationPreviewPage: React.FC = () => {
   useEffect(() => {
     // 从 URL 路径中提取 token
     const pathParts = window.location.pathname.split('/');
-    const token = pathParts[pathParts.length - 1];
+    const urlToken = pathParts[pathParts.length - 1];
 
-    if (!token || token === 'preview') {
+    if (!urlToken || urlToken === 'preview') {
       setError('缺少预览token');
       setLoading(false);
       return;
     }
 
+    // 保存token到state，用于后续数据隔离
+    setToken(urlToken);
+
     // 从后端获取配置
     const fetchConfig = async () => {
       try {
         const response = await fetch(
-          `${import.meta.env.VITE_API_BASE_URL || ''}/aicenter/v1/integration/preview/${token}`
+          `${import.meta.env.VITE_API_BASE_URL || ''}/aicenter/v1/integration/preview/${urlToken}`
         );
         const result = await response.json();
 
@@ -136,6 +140,7 @@ const IntegrationPreviewPage: React.FC = () => {
     botAvatar: config.botAvatar,
     showHistory: true,
     temporary: true,
+    previewToken: token, // 用预览token隔离不同预览之间的对话数据
   };
 
   // 悬浮球配置

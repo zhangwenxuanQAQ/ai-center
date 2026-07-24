@@ -18,6 +18,7 @@ export interface ChatWidgetConfig {
   gradientEndColor?: string;
   userAvatar?: string;  // 用户头像
   botAvatar?: string;   // 机器人头像
+  previewToken?: string; // 预览token，用于不同预览token之间的数据隔离
 }
 
 interface ChatWidgetProps {
@@ -65,6 +66,7 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ config, compact = false }) => {
           themeMode={config.themeMode}
           colorTheme={config.colorTheme}
           gradientEndColor={config.gradientEndColor}
+          previewToken={config.previewToken}
         />
       )}
       <ChatArea
@@ -86,6 +88,7 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ config, compact = false }) => {
         onMessageSent={handleMessageSent}
         temporary={config.temporary}
         newChatTrigger={newChatTrigger}
+        previewToken={config.previewToken}
       />
     </div>
   );

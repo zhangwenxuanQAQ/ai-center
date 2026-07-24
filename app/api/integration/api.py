@@ -17,6 +17,8 @@ from fastapi import Query
 from app.services.chat.dto import QueryItem
 from app.services.integration.service import ChatbotIntegrationService
 from app.core.integration.api_chat import IntegrationChatCoreService
+from app.core.chat.stream_manager import ChatStreamManager
+from app.database.redis_utils import redis_utils
 from app.utils.response import ResponseUtil, ApiResponse
 
 router = APIRouter()
@@ -41,6 +43,7 @@ class IntegrationChatRequest(BaseModel):
     stream: bool = Field(True, description="是否流式输出")
     temporary: bool = Field(False, description="临时会话模式，不保存到数据库")
     edit_message_id: Optional[str] = Field(None, description="编辑消息ID，删除该消息及其后续消息")
+    preview_token: Optional[str] = Field(None, description="预览token，用于临时会话数据隔离")
 
 
 def get_api_key_from_header(authorization: Optional[str]) -> Optional[str]:
@@ -122,36 +125,81 @@ async def chat_completions(
 
     try:
         if chat_request.stream:
-            async def generate():
-                try:
-                    async for chunk in IntegrationChatCoreService.chat_stream(
-                        query=chat_request.query,
-                        chat_id=chat_request.chat_id,
-                        integration=integration,
-                        stream=True,
-                        temporary=chat_request.temporary,
-                        config=chat_request.config,
-                        edit_message_id=chat_request.edit_message_id
-                    ):
-                        yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
-                        await asyncio.sleep(0)
-                    yield "data: [DONE]\n\n"
-                except Exception as e:
-                    logger.error(f"集成聊天流式输出异常: {str(e)}", exc_info=True)
-                    error_chunk = {"error": str(e)}
-                    yield f"data: {json.dumps(error_chunk, ensure_ascii=False)}\n\n"
-                    yield "data: [DONE]\n\n"
+            stream_chat_id = chat_request.chat_id
 
-            return StreamingResponse(
-                generate(),
-                media_type="text/event-stream",
-                headers={
-                    "Cache-Control": "no-cache",
-                    "Connection": "keep-alive",
-                    "X-Accel-Buffering": "no",
-                    "Transfer-Encoding": "chunked"
-                }
-            )
+            if stream_chat_id and redis_utils.is_available:
+                # 使用后台任务+Redis模式：后台任务持续运行chat_stream并将chunks存入Redis，
+                # HTTP响应从Redis读取chunks发送给客户端。
+                # 这样即使客户端断开连接（如F5刷新），后台任务仍继续运行，
+                # 客户端可通过重连端点接着获取剩余输出。
+                chat_stream_gen = IntegrationChatCoreService.chat_stream(
+                    query=chat_request.query,
+                    chat_id=chat_request.chat_id,
+                    integration=integration,
+                    stream=True,
+                    temporary=chat_request.temporary,
+                    config=chat_request.config,
+                    edit_message_id=chat_request.edit_message_id,
+                    preview_token=chat_request.preview_token
+                )
+                await ChatStreamManager.start_background_stream(stream_chat_id, chat_stream_gen)
+
+                async def generate_from_redis():
+                    """从Redis读取流式数据并发送给客户端"""
+                    try:
+                        async for sse_data in ChatStreamManager.stream_from_redis(stream_chat_id, 0):
+                            yield sse_data
+                            await asyncio.sleep(0)
+                    except GeneratorExit:
+                        raise
+                    except Exception as e:
+                        logger.error(f"generate_from_redis异常: {e}")
+                        yield "data: [DONE]\n\n"
+                        raise
+
+                return StreamingResponse(
+                    generate_from_redis(),
+                    media_type="text/event-stream",
+                    headers={
+                        "Cache-Control": "no-cache",
+                        "Connection": "keep-alive",
+                        "X-Accel-Buffering": "no",
+                        "Transfer-Encoding": "chunked"
+                    }
+                )
+            else:
+                # 无chat_id或Redis不可用时，回退到原始直接流式模式
+                async def generate():
+                    try:
+                        async for chunk in IntegrationChatCoreService.chat_stream(
+                            query=chat_request.query,
+                            chat_id=chat_request.chat_id,
+                            integration=integration,
+                            stream=True,
+                            temporary=chat_request.temporary,
+                            config=chat_request.config,
+                            edit_message_id=chat_request.edit_message_id,
+                            preview_token=chat_request.preview_token
+                        ):
+                            yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+                            await asyncio.sleep(0)
+                        yield "data: [DONE]\n\n"
+                    except Exception as e:
+                        logger.error(f"集成聊天流式输出异常: {str(e)}", exc_info=True)
+                        error_chunk = {"error": str(e)}
+                        yield f"data: {json.dumps(error_chunk, ensure_ascii=False)}\n\n"
+                        yield "data: [DONE]\n\n"
+
+                return StreamingResponse(
+                    generate(),
+                    media_type="text/event-stream",
+                    headers={
+                        "Cache-Control": "no-cache",
+                        "Connection": "keep-alive",
+                        "X-Accel-Buffering": "no",
+                        "Transfer-Encoding": "chunked"
+                    }
+                )
         else:
             result = await IntegrationChatCoreService.chat(
                 query=chat_request.query,
@@ -159,7 +207,8 @@ async def chat_completions(
                 integration=integration,
                 temporary=chat_request.temporary,
                 config=chat_request.config,
-                edit_message_id=chat_request.edit_message_id
+                edit_message_id=chat_request.edit_message_id,
+                preview_token=chat_request.preview_token
             )
 
             if 'error' in result:
@@ -175,6 +224,7 @@ async def chat_completions(
 @router.get("/v1/chat/{chat_id}/messages", summary="获取聊天记录")
 async def get_chat_messages(
     chat_id: str,
+    preview_token: Optional[str] = Query(None, description="预览token，用于临时会话数据隔离"),
     integration = Depends(verify_api_key)
 ):
     """
@@ -190,7 +240,7 @@ async def get_chat_messages(
         ApiResponse: 消息列表
     """
     try:
-        result = IntegrationChatCoreService.get_chat_messages(chat_id, integration)
+        result = IntegrationChatCoreService.get_chat_messages(chat_id, integration, preview_token=preview_token)
         return ResponseUtil.success(data=result)
     except Exception as e:
         logger.error(f"获取聊天记录异常: {str(e)}", exc_info=True)
@@ -200,6 +250,7 @@ async def get_chat_messages(
 @router.get("/v1/chats", summary="获取对话列表")
 async def list_chats(
     keyword: Optional[str] = Query(None, description="搜索关键词"),
+    preview_token: Optional[str] = Query(None, description="预览token，用于临时会话数据隔离"),
     integration = Depends(verify_api_key)
 ):
     """
@@ -213,7 +264,7 @@ async def list_chats(
         ApiResponse: 对话列表
     """
     try:
-        chats = ChatbotIntegrationService.list_chats(integration, keyword=keyword)
+        chats = ChatbotIntegrationService.list_chats(integration, keyword=keyword, preview_token=preview_token)
         return ResponseUtil.success(data={"items": chats, "total": len(chats)})
     except Exception as e:
         logger.error(f"获取对话列表失败: {str(e)}", exc_info=True)
@@ -252,6 +303,7 @@ async def update_chat_title(
 @router.delete("/v1/chat/{chat_id}", summary="删除对话")
 async def delete_chat(
     chat_id: str,
+    preview_token: Optional[str] = Query(None, description="预览token，用于临时会话数据隔离"),
     integration = Depends(verify_api_key)
 ):
     """
@@ -265,8 +317,82 @@ async def delete_chat(
         ApiResponse: 删除结果
     """
     try:
-        ChatbotIntegrationService.delete_chat(integration, chat_id)
+        ChatbotIntegrationService.delete_chat(integration, chat_id, preview_token=preview_token)
         return ResponseUtil.success(data=True)
     except Exception as e:
         logger.error(f"删除对话失败: {str(e)}", exc_info=True)
         return ResponseUtil.error(message=f"删除对话失败: {str(e)}")
+
+
+@router.get("/v1/chat/streaming_status/{chat_id}", summary="查询流式状态")
+async def get_streaming_status(
+    chat_id: str,
+    integration = Depends(verify_api_key)
+):
+    """
+    查询指定对话的流式处理状态
+
+    用于F5刷新后检测是否有正在进行的流式任务。
+
+    Args:
+        chat_id: 对话ID
+        integration: 集成配置对象
+
+    Returns:
+        ApiResponse: 包含is_streaming、status和chunks_count字段
+    """
+    status_val = ChatStreamManager.get_status(chat_id)
+    chunks_count = ChatStreamManager.get_chunks_count(chat_id)
+
+    return ResponseUtil.success(data={
+        "is_streaming": status_val == "streaming",
+        "status": status_val,
+        "chunks_count": chunks_count
+    })
+
+
+@router.get("/v1/chat/reconnect_stream/{chat_id}", summary="重连流式输出")
+async def reconnect_stream(
+    chat_id: str,
+    integration = Depends(verify_api_key)
+):
+    """
+    重连流式输出
+
+    在F5刷新后，前端通过此端点重新获取流式数据。
+    从Redis list的开头读取所有已存储的chunks（包含历史输出），
+    然后继续读取新产生的chunks，直到收到[DONE]标记。
+
+    Args:
+        chat_id: 对话ID
+        integration: 集成配置对象
+
+    Returns:
+        StreamingResponse: SSE流式响应
+    """
+    status_val = ChatStreamManager.get_status(chat_id)
+
+    if not status_val:
+        return ResponseUtil.error(message="没有找到流式记录")
+
+    async def generate_reconnect():
+        try:
+            async for sse_data in ChatStreamManager.stream_from_redis(chat_id, 0):
+                yield sse_data
+                await asyncio.sleep(0)
+        except GeneratorExit:
+            raise
+        except Exception as e:
+            logger.error(f"重连流式输出异常: {e}")
+            yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        generate_reconnect(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Transfer-Encoding": "chunked"
+        }
+    )

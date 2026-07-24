@@ -1041,7 +1041,8 @@ class IntegrationChatCoreService:
         stream: bool = True,
         temporary: bool = False,
         config: Optional[dict] = None,
-        edit_message_id: Optional[str] = None
+        edit_message_id: Optional[str] = None,
+        preview_token: Optional[str] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         流式聊天
@@ -1132,22 +1133,25 @@ class IntegrationChatCoreService:
         if temporary:
             temp_chat_id = chat_id or f"temp_{uuid.uuid4().hex[:12]}"
             integration_id = integration.id
+            # 预览token隔离：不同preview_token使用不同的scope_id，数据互相隔离
+            scope_id = f"{integration_id}:preview:{preview_token}" if preview_token else None
 
             # 如果是新对话，在 Redis 中创建临时聊天记录
-            if not chat_id or not TempChatStore.get_chat(integration_id, temp_chat_id):
+            if not chat_id or not TempChatStore.get_chat(integration_id, temp_chat_id, scope_id=scope_id):
                 TempChatStore.create_chat(
                     integration_id=integration_id,
                     chat_id=temp_chat_id,
                     chatbot_id=chatbot_id,
-                    title=user_text[:30] if user_text else "临时对话"
+                    title=user_text[:30] if user_text else "临时对话",
+                    scope_id=scope_id
                 )
 
             # 处理编辑消息：删除该消息及其后续所有消息
             if edit_message_id:
-                temp_messages = TempChatStore.get_messages(integration_id, temp_chat_id)
+                temp_messages = TempChatStore.get_messages(integration_id, temp_chat_id, scope_id=scope_id)
                 for i, msg in enumerate(temp_messages):
                     if msg.get('id') == edit_message_id or msg.get('message_id') == edit_message_id:
-                        TempChatStore.clear_messages_after(integration_id, temp_chat_id, i)
+                        TempChatStore.clear_messages_after(integration_id, temp_chat_id, i, scope_id=scope_id)
                         break
 
             # 保存用户消息到 Redis
@@ -1161,10 +1165,10 @@ class IntegrationChatCoreService:
                 "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             }
-            TempChatStore.add_message(integration_id, temp_chat_id, user_msg_data)
+            TempChatStore.add_message(integration_id, temp_chat_id, user_msg_data, scope_id=scope_id)
 
             # 加载历史消息
-            temp_history = TempChatStore.get_messages(integration_id, temp_chat_id)
+            temp_history = TempChatStore.get_messages(integration_id, temp_chat_id, scope_id=scope_id)
             history_messages = []
             for msg in temp_history[:-1]:
                 history_messages.append({
@@ -1247,7 +1251,7 @@ class IntegrationChatCoreService:
                     "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 }
-                TempChatStore.add_message(integration_id, temp_chat_id, assistant_msg_data)
+                TempChatStore.add_message(integration_id, temp_chat_id, assistant_msg_data, scope_id=scope_id)
 
             return
 
@@ -1411,7 +1415,8 @@ class IntegrationChatCoreService:
         integration: ChatbotIntegration,
         temporary: bool = False,
         config: Optional[dict] = None,
-        edit_message_id: Optional[str] = None
+        edit_message_id: Optional[str] = None,
+        preview_token: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         非流式聊天
@@ -1435,7 +1440,8 @@ class IntegrationChatCoreService:
             stream=False,
             temporary=temporary,
             config=config,
-            edit_message_id=edit_message_id
+            edit_message_id=edit_message_id,
+            preview_token=preview_token
         ):
             if chunk.get('status') == 'done':
                 result = chunk
@@ -1448,13 +1454,14 @@ class IntegrationChatCoreService:
         return result
 
     @staticmethod
-    def get_chat_messages(chat_id: str, integration: ChatbotIntegration) -> Dict[str, Any]:
+    def get_chat_messages(chat_id: str, integration: ChatbotIntegration, preview_token: Optional[str] = None) -> Dict[str, Any]:
         """
         获取聊天记录
 
         Args:
             chat_id: 聊天ID
             integration: 集成配置对象
+            preview_token: 预览token（可选），用于临时会话数据隔离
 
         Returns:
             Dict: 包含 items 和 total 的字典
@@ -1465,7 +1472,8 @@ class IntegrationChatCoreService:
         is_temporary = chat_id.startswith('temp_')
 
         if is_temporary:
-            messages = TempChatStore.get_messages(integration.id, chat_id)
+            scope_id = f"{integration.id}:preview:{preview_token}" if preview_token else None
+            messages = TempChatStore.get_messages(integration.id, chat_id, scope_id=scope_id)
             items = []
             for msg in messages:
                 items.append({

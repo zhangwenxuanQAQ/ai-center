@@ -1576,6 +1576,27 @@ try:
     except Exception as e:
         logger.error(f"[MIGRATION]   创建 chatbot_knowledgebase 表失败: {e}")
 
+    # 创建/更新 chatbot_chat 表（添加 title 字段）
+    logger.info("\n[MIGRATION] 检查 chatbot_chat 表 title 字段...")
+    try:
+        cursor = db.execute_sql("SHOW TABLES;")
+        tables = cursor.fetchall()
+        table_names = [table[0] for table in tables]
+        
+        if 'chatbot_chat' in table_names:
+            cursor = db.execute_sql("DESCRIBE chatbot_chat;")
+            columns = [column[0] for column in cursor.fetchall()]
+            
+            if 'title' not in columns:
+                db.execute_sql("ALTER TABLE chatbot_chat ADD COLUMN title VARCHAR(200) DEFAULT NULL AFTER chatbot_id")
+                logger.info("[MIGRATION]   成功添加 title 字段")
+            else:
+                logger.info("[MIGRATION]   title 字段已存在，跳过")
+        else:
+            logger.info("[MIGRATION]   chatbot_chat 表不存在，将在 create_tables 中创建")
+    except Exception as e:
+        logger.error(f"[MIGRATION]   检查 chatbot_chat 表 title 字段失败: {e}")
+
     logger.info("\n[MIGRATION] ✅ 数据库迁移完成")
 except Exception as e:
     logger.error(f"\n[MIGRATION] ❌ 数据库迁移失败: {e}")

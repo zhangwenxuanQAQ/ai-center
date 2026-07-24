@@ -490,7 +490,7 @@ class ChatbotIntegrationService:
         return integration
 
     @staticmethod
-    def list_chats(api_key_or_integration, keyword: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_chats(api_key_or_integration, keyword: Optional[str] = None, preview_token: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         获取该API密钥下的所有对话列表
 
@@ -546,7 +546,9 @@ class ChatbotIntegrationService:
                 'updated_at': chat.updated_at.strftime('%Y-%m-%d %H:%M:%S') if hasattr(chat, 'updated_at') and chat.updated_at else '',
             })
 
-        temp_chats = TempChatStore.list_chats(integration.id)
+        # 预览token隔离：不同preview_token使用不同的scope_id，数据互相隔离
+        scope_id = f"{integration.id}:preview:{preview_token}" if preview_token else None
+        temp_chats = TempChatStore.list_chats(integration.id, scope_id=scope_id)
         for temp_chat in temp_chats:
             temp_title = temp_chat.get('title', '临时对话')
             if keyword and keyword.strip() and keyword.strip() not in temp_title:
@@ -598,13 +600,14 @@ class ChatbotIntegrationService:
             raise ResourceNotFoundError(message='对话不存在')
 
     @staticmethod
-    def delete_chat(api_key_or_integration, chat_id: str) -> bool:
+    def delete_chat(api_key_or_integration, chat_id: str, preview_token: Optional[str] = None) -> bool:
         """
         删除对话
 
         Args:
             api_key_or_integration: API密钥字符串 或 ChatbotIntegration 对象
             chat_id: 对话ID
+            preview_token: 预览token（可选），用于临时会话数据隔离
             
         Returns:
             bool: 是否删除成功
@@ -615,6 +618,26 @@ class ChatbotIntegrationService:
                 raise ResourceNotFoundError(message='API密钥无效')
         else:
             integration = api_key_or_integration
+
+        # 临时会话：从Redis删除
+        if chat_id.startswith('temp_'):
+            scope_id = f"{integration.id}:preview:{preview_token}" if preview_token else None
+            try:
+                # 删除消息列表和聊天信息
+                from app.core.integration.temp_chat_store import TempChatStore
+                from app.database.redis_utils import redis_utils
+                messages_key = TempChatStore._get_messages_key(scope_id or integration.id, chat_id)
+                chat_key = TempChatStore._get_chat_key(scope_id or integration.id, chat_id)
+                chats_list_key = TempChatStore._get_chats_list_key(scope_id or integration.id)
+                # 从列表中移除
+                if redis_utils.is_available:
+                    redis_utils.client.lrem(chats_list_key, 0, chat_id)
+                    redis_utils.client.delete(messages_key)
+                    redis_utils.client.delete(chat_key)
+                return True
+            except Exception as e:
+                logger.error(f"删除临时对话失败: {e}")
+                raise ResourceNotFoundError(message='对话不存在')
 
         try:
             chat = ChatbotChat.get(
