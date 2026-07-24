@@ -131,3 +131,39 @@ async def thread_pool_exec(func, *args, **kwargs):
         func = functools.partial(func, *args, **kwargs)
         return await loop.run_in_executor(_thread_pool_executor(), func)
     return await loop.run_in_executor(_thread_pool_executor(), func, *args)
+
+
+def _wrap_with_db_cleanup(fn):
+    """
+    包装函数，确保在线程池线程执行完毕后自动归还数据库连接。
+    
+    解决线程池线程执行DB操作后连接泄漏的问题：
+    peewee的PooledMySQLDatabase按线程管理连接，线程池线程获取连接后
+    不会被中间件的close_db_connection释放，需要在此处显式关闭。
+    """
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            try:
+                from app.database.database import close_db_connection
+                close_db_connection()
+            except Exception:
+                pass
+    return wrapper
+
+
+async def thread_pool_exec_safe(func, *args, **kwargs):
+    """
+    在线程池中执行函数，执行完毕后自动归还该线程的数据库连接。
+    
+    这是 thread_pool_exec 的安全替代版本，解决了连接泄漏问题。
+    推荐在涉及DB操作的场景中使用此函数。
+    """
+    loop = asyncio.get_running_loop()
+    wrapped = _wrap_with_db_cleanup(func)
+    if kwargs:
+        wrapped = functools.partial(wrapped, *args, **kwargs)
+        return await loop.run_in_executor(_thread_pool_executor(), wrapped)
+    return await loop.run_in_executor(_thread_pool_executor(), wrapped, *args)

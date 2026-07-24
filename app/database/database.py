@@ -191,10 +191,19 @@ def get_pool_status():
 
 def log_pool_status_periodically():
     """
-    定期记录连接池状态到日志
+    定期记录连接池状态到日志，并主动回收泄漏的连接
+    
+    线程池(thread_pool_exec/asyncio.to_thread)中的线程执行DB操作后
+    不会主动归还连接，需要通过close_stale定期强制回收。
     """
     while True:
         try:
+            # 主动回收超过stale_timeout的in_use连接（线程池泄漏的连接）
+            if hasattr(db, 'close_stale'):
+                closed_count = db.close_stale()
+                if closed_count > 0:
+                    logger.warning(f"[连接池清理] 回收了 {closed_count} 个过期未释放的数据库连接")
+            
             pool_status = get_pool_status()
             logger.info(
                 f"数据库连接池状态 - 正在使用: {pool_status['in_use']}, "
@@ -204,17 +213,23 @@ def log_pool_status_periodically():
                 f"是否关闭: {pool_status['is_closed']}"
             )
             
-            # 如果连接数超过80%,发出警告
+            # 如果连接数超过80%,发出警告并紧急清理
             if pool_status['max'] > 0 and pool_status['in_use'] > pool_status['max'] * 0.8:
                 logger.warning(
                     f"数据库连接池使用率超过80%! "
-                    f"当前使用: {pool_status['in_use']}/{pool_status['max']}"
+                    f"当前使用: {pool_status['in_use']}/{pool_status['max']}, "
+                    f"正在执行紧急清理..."
                 )
+                # 紧急清理：用更短的age强制回收更多连接
+                if hasattr(db, 'close_stale'):
+                    emergency_closed = db.close_stale(age=30)
+                    if emergency_closed > 0:
+                        logger.warning(f"[紧急清理] 强制回收了 {emergency_closed} 个连接")
         except Exception as e:
             logger.error(f"监控连接池状态失败: {e}")
         
-        # 每5分钟记录一次
-        time.sleep(300)
+        # 每60秒检查并清理一次（缩短间隔以更快地回收泄漏连接）
+        time.sleep(60)
 
 # 启动连接池监控线程
 _pool_monitor_thread = threading.Thread(

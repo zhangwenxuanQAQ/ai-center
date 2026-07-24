@@ -13,9 +13,9 @@ mysql:
   password: '123456'
   host: '10.9.44.5'
   port: 3306
-  max_connections: 500  # 连接池最大连接数(建议不超过MySQL服务器max_connections的80%)
+  max_connections: 200  # 连接池最大连接数(每个worker进程独立, 建议不超过MySQL服务器max_connections/workers的80%)
   min_connections: 4   # 连接池最小保持的连接数
-  stale_timeout: 300   # 连接过期时间(秒),超过此时间的空闲连接会被回收
+  stale_timeout: 60    # 连接过期时间(秒),超过此时间的空闲连接会被回收,降低此值可更快回收线程池泄漏的连接
   connect_timeout: 10  # 连接超时时间(秒)  
 es:
   host: '10.9.44.5'
