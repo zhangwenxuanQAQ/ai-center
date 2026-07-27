@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { PaperClipOutlined, CopyOutlined, EditOutlined, ReloadOutlined, CheckOutlined, BulbOutlined, DownOutlined, RightOutlined, LoadingOutlined, FilePdfOutlined, FileWordOutlined, FileImageOutlined, FileTextOutlined, SoundOutlined } from '@ant-design/icons';
 import { Tooltip, message } from 'antd';
 import MDEditor from '@uiw/react-md-editor';
 import ChatMarkdown from '../../components/ChatMarkdown';
+import ChatScrollNavigator, { UserMessageAnchor } from '../../components/ChatScrollNavigator';
 import { integrationChatService, IntegrationMessage, IntegrationQueryItem } from '../services/integrationChat';
 import { usePanelDrag } from './PanelDragContext';
 import { usePanelMinimize } from './PanelMinimizeContext';
@@ -1556,7 +1557,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
   const renderUserMessage = (msg: DisplayMessage, index: number) => {
     return (
-      <div key={`user-${index}`} className={`int-message user`}>
+      <div key={`user-${index}`} className={`int-message user`} data-user-msg-id={msg.message_id || msg.id}>
         <div className={`int-msg-avatar user`}>
           {userAvatar ? (
             <img src={userAvatar} alt="用户" />
@@ -1652,6 +1653,16 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
   const showWelcome = messages.length === 0 && !loading;
 
+  // 构建用户消息锚点列表（用于右侧导航）
+  const userMessageAnchors: UserMessageAnchor[] = useMemo(() => {
+    return messages
+      .filter(msg => msg.role === 'user')
+      .map(msg => ({
+        id: msg.message_id || msg.id,
+        label: msg.content ? msg.content.replace(/[\n\r]/g, ' ').trim().substring(0, 30) : '',
+      }));
+  }, [messages]);
+
   // 面板拖拽处理（从 FloatingBall 通过 Context 传入）
   const panelDrag = usePanelDrag();
   const panelMinimize = usePanelMinimize();
@@ -1675,21 +1686,28 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       {!minimized && (
         <>
       {/* Messages or Welcome */}
-      <div
-        className="int-messages"
-        ref={messagesContainerRef}
-        style={{ paddingLeft: messagesPadding, paddingRight: messagesPadding, paddingTop: messagesPaddingTop }}
-      >
-        {showWelcome ? (
-          <div className="int-welcome-area">
-            <div className="int-welcome-icon">💬</div>
-            <div className="int-welcome-text">{randomWelcome}</div>
-            <div className="int-welcome-hint">输入消息开始对话</div>
-          </div>
-        ) : (
-          renderGroupedMessages()
-        )}
-        <div ref={messagesEndRef} />
+      <div style={{ position: 'relative', flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div
+          className="int-messages"
+          ref={messagesContainerRef}
+          style={{ paddingLeft: messagesPadding, paddingRight: messagesPadding, paddingTop: messagesPaddingTop }}
+        >
+          {showWelcome ? (
+            <div className="int-welcome-area">
+              <div className="int-welcome-icon">💬</div>
+              <div className="int-welcome-text">{randomWelcome}</div>
+              <div className="int-welcome-hint">输入消息开始对话</div>
+            </div>
+          ) : (
+            renderGroupedMessages()
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+        <ChatScrollNavigator
+          containerRef={messagesContainerRef}
+          userMessages={userMessageAnchors}
+          theme={themeMode as 'light' | 'dark'}
+        />
       </div>
 
       {/* Input */}

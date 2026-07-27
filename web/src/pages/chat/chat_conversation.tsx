@@ -4,6 +4,7 @@ import { SendOutlined, ClearOutlined, SettingOutlined, RobotOutlined, BulbOutlin
 import DataSourceFileSelector from '../datasource/datasource data_select';
 import type { MenuProps, UploadProps } from 'antd';
 import ChatMarkdown from '../../components/ChatMarkdown';
+import ChatScrollNavigator, { UserMessageAnchor } from '../../components/ChatScrollNavigator';
 import { llmModelService, LLMModel } from '../../services/llm_model';
 import { chatbotService, Chatbot } from '../../services/chatbot';
 import { chatService, Conversation, Message, QueryItem, FileInfo } from '../../services/chat';
@@ -242,6 +243,13 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       fetchConversationConfig(conversation.id);
     }
   }, [models, chatbots]);
+
+  // 当选择模型变化时，如果有对话，重新加载对话配置以确保对话config覆盖模型默认值
+  useEffect(() => {
+    if (conversation && selectedType === 'model' && selectedModel) {
+      fetchConversationConfig(conversation.id);
+    }
+  }, [selectedModel, selectedType]);
 
   const fetchConversationConfig = async (conversationId: string) => {
     try {
@@ -2337,6 +2345,61 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
 
   const currentConfigParams = configParams[selectedModel?.model_type || 'text'] || [];
 
+  const configPopoverContent = (
+    <div style={{ width: 350 }}>
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+          <span style={{ fontWeight: 500, marginRight: 8 }}>系统提示词</span>
+          <Tooltip title="设置AI助手的角色和行为方式">
+            <InfoCircleOutlined style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)' }} />
+          </Tooltip>
+        </div>
+        <TextArea
+          value={systemPrompt}
+          onChange={(e) => setSystemPrompt(e.target.value)}
+          placeholder="请输入系统提示词，定义AI助手的角色和行为方式..."
+          autoSize={{ minRows: 2, maxRows: 4 }}
+          style={{ width: '100%' }}
+        />
+      </div>
+      {currentConfigParams.length > 0 ? (
+        currentConfigParams.map(param => renderConfigParam(param))
+      ) : (
+        <div style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)', textAlign: 'center' }}>
+          该模型类型暂无可配置参数
+        </div>
+      )}
+      <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <Button
+          type="primary"
+          size="small"
+          onClick={async () => {
+            if (conversation) {
+              try {
+                // 只保存界面上的参数，排除 deep_thinking
+                const configToSave = { ...modelConfig };
+                delete configToSave.deep_thinking;
+
+                await chatService.updateConversationConfig(conversation.id, {
+                  system_prompt: systemPrompt,
+                  config: configToSave
+                });
+                message.success('配置已保存');
+              } catch (error) {
+                console.error('Failed to save config:', error);
+                message.error('保存配置失败，请重试');
+              }
+            } else {
+              message.success('配置已更新');
+            }
+          }}
+        >
+          保存
+        </Button>
+      </div>
+    </div>
+  );
+
   const handleSelectModel = (model: LLMModel) => {
     setSelectedModel(model);
     setSelectedChatbot(null);
@@ -2467,6 +2530,16 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
 
   const currentSelection = getCurrentSelection();
   const hasModelsOrChatbots = models.length > 0 || chatbots.length > 0;
+
+  // 构建用户消息锚点列表（用于右侧导航）
+  const userMessageAnchors: UserMessageAnchor[] = useMemo(() => {
+    return messages
+      .filter(msg => msg.role === 'user')
+      .map(msg => ({
+        id: msg.message_id || msg.id,
+        label: msg.content ? msg.content.replace(/[\n\r]/g, ' ').trim().substring(0, 30) : '',
+      }));
+  }, [messages]);
 
   const groupMessagesByAssistantId = () => {
     const groups: { assistantId: string; stableId: string; messages: Message[] }[] = [];
@@ -3262,6 +3335,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       <div 
         key={index} 
         id={msg.step_id || undefined}
+        data-user-msg-id={isUser ? (msg.message_id || msg.id) : undefined}
         className={`message ${msg.role}`}
       >
         <div className={`message-avatar ${theme === 'dark' ? 'dark' : 'light'}`}>
@@ -4040,7 +4114,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         <div className="chat-title">
           {hasModelsOrChatbots ? (
             <Dropdown
-              menu={{ 
+              menu={{
                 items: getDropdownItems(),
                 className: `chat-selector-dropdown ${theme === 'dark' ? 'dark' : 'light'}`,
                 style: { maxHeight: 600, overflowY: 'auto' }
@@ -4049,9 +4123,9 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               placement="bottomLeft"
             >
               <div className={`chat-selector ${theme === 'dark' ? 'dark' : 'light'}`}>
-                <img 
-                  src={currentSelection?.avatar || getDefaultAvatar()} 
-                  alt={currentSelection?.name || 'default'} 
+                <img
+                  src={currentSelection?.avatar || getDefaultAvatar()}
+                  alt={currentSelection?.name || 'default'}
                   className="selector-avatar"
                   onError={(e) => {
                     (e.target as HTMLImageElement).src = getDefaultAvatar();
@@ -4065,9 +4139,9 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             </Dropdown>
           ) : (
             <div className={`chat-selector ${theme === 'dark' ? 'dark' : 'light'}`}>
-              <img 
-                src={getDefaultAvatar()} 
-                alt="default" 
+              <img
+                src={getDefaultAvatar()}
+                alt="default"
                 className="selector-avatar"
               />
               <span className="selector-name">请选择模型或机器人</span>
@@ -4076,44 +4150,44 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         </div>
         <div className="chat-actions">
           {selectedType === 'model' && selectedModel && (
-            <Tooltip title="模型配置">
-              <Button 
-                type="text" 
-                icon={<SettingOutlined />} 
-                onClick={() => setIsConfigModalVisible(true)}
-              />
-            </Tooltip>
+            <Popover
+              content={configPopoverContent}
+              title="模型参数配置"
+              trigger="click"
+              placement="bottomRight"
+            >
+              <Tooltip title="模型参数配置">
+                <Button
+                  type="text"
+                  icon={<SettingOutlined />}
+                  style={{ color: theme === 'dark' ? '#fff' : '#000' }}
+                />
+              </Tooltip>
+            </Popover>
           )}
-          <Popconfirm
-            title="确认清空"
-            description="确定要清空当前对话吗？"
-            onConfirm={handleClearMessages}
-            okText="确认"
-            cancelText="取消"
-          >
-            <Tooltip title="清空对话">
-              <Button 
-                type="text" 
-                icon={<ClearOutlined />} 
-              />
-            </Tooltip>
-          </Popconfirm>
         </div>
       </div>
 
-      <div className={`chat-messages ${theme === 'dark' ? 'dark' : 'light'}`} ref={messagesContainerRef}>
-        {loading && messages.length === 0 ? (
-          <div className="loading-container">
-            <LoadingOutlined style={{ fontSize: 32, color: 'var(--primary-color)' }} />
-          </div>
-        ) : messages.length === 0 ? (
-          renderEmptyState()
-        ) : (
-          <>
-            {renderGroupedMessages()}
-            <div ref={messagesEndRef} />
-          </>
-        )}
+      <div style={{ position: 'relative', flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div className={`chat-messages ${theme === 'dark' ? 'dark' : 'light'}`} ref={messagesContainerRef}>
+          {loading && messages.length === 0 ? (
+            <div className="loading-container">
+              <LoadingOutlined style={{ fontSize: 32, color: 'var(--primary-color)' }} />
+            </div>
+          ) : messages.length === 0 ? (
+            renderEmptyState()
+          ) : (
+            <>
+              {renderGroupedMessages()}
+              <div ref={messagesEndRef} />
+            </>
+          )}
+        </div>
+        <ChatScrollNavigator
+          containerRef={messagesContainerRef}
+          userMessages={userMessageAnchors}
+          theme={theme}
+        />
       </div>
 
       <div className="chat-input-area">
@@ -4306,61 +4380,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         theme={theme}
       />
 
-      <Modal
-        title="模型配置"
-        open={isConfigModalVisible}
-        onCancel={() => setIsConfigModalVisible(false)}
-        footer={null}
-        width={500}
-        className={`chat-modal ${theme === 'dark' ? 'dark' : 'light'}`}
-      >
-        <div style={{ width: '100%' }}>
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-              <span style={{ fontWeight: 500, marginRight: 8 }}>系统提示词</span>
-              <Tooltip title="设置AI助手的角色和行为方式">
-                <InfoCircleOutlined style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)' }} />
-              </Tooltip>
-            </div>
-            <TextArea
-              value={systemPrompt}
-              onChange={(e) => setSystemPrompt(e.target.value)}
-              placeholder="请输入系统提示词，定义AI助手的角色和行为方式..."
-              autoSize={{ minRows: 3, maxRows: 6 }}
-              style={{ width: '100%' }}
-            />
-          </div>
-          {currentConfigParams.length > 0 ? (
-            currentConfigParams.map(param => renderConfigParam(param))
-          ) : (
-          <div style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)', textAlign: 'center' }}>
-            该模型类型暂无可配置参数
-          </div>
-          )}
-        </div>
-        <div className="config-actions">
-          <Button onClick={() => setIsConfigModalVisible(false)}>取消</Button>
-          <Button type="primary" onClick={async () => {
-            // 如果有对话，更新对话的系统提示词
-            if (conversation) {
-              try {
-                await chatService.updateConversationConfig(conversation.id, {
-                  system_prompt: systemPrompt,
-                  config: modelConfig
-                });
-                message.success('配置已保存');
-              } catch (error) {
-                console.error('Failed to save config:', error);
-                message.error('保存配置失败，请重试');
-                return;
-              }
-            }
-            setIsConfigModalVisible(false);
-          }}>
-            保存
-          </Button>
-        </div>
-      </Modal>
+
     </div>
   );
 };

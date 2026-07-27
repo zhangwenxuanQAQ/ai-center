@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Form, Input, Select, TreeSelect, Button, Switch, message, Row, Col, Spin, Slider, InputNumber, Tooltip, Tag, Dropdown } from 'antd';
 const { TextArea } = Input;
@@ -11,6 +11,7 @@ import '../../styles/common.css';
 import './llm_model_setting.less';
 import { getDefaultAvatar } from '../../utils/avatar';
 import ChatMarkdown from '../../components/ChatMarkdown';
+import ChatScrollNavigator, { UserMessageAnchor } from '../../components/ChatScrollNavigator';
 
 const { Option } = Select;
 
@@ -85,6 +86,16 @@ const LLMModelSetting: React.FC = () => {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const thinkingStartTimeRef = useRef<Record<string, number>>({});
+
+  // 构建用户消息锚点列表（用于右侧导航）
+  const userMessageAnchors: UserMessageAnchor[] = useMemo(() => {
+    return messages
+      .filter(msg => msg.role === 'user')
+      .map(msg => ({
+        id: msg.id,
+        label: msg.content ? msg.content.replace(/[\n\r]/g, ' ').trim().substring(0, 30) : '',
+      }));
+  }, [messages]);
 
   useEffect(() => {
     const currentTheme = document.body.getAttribute('data-theme') || 'light';
@@ -1456,8 +1467,8 @@ const LLMModelSetting: React.FC = () => {
                 </Tooltip>
               </div>
             </div>
-            
-            <div className="chat-messages" ref={messagesContainerRef}>
+            <div style={{ position: 'relative', flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <div className="chat-messages" ref={messagesContainerRef}>
               {messages.length === 0 ? (
                 <div className="empty-chat">
                   <div className="welcome-icon">💬</div>
@@ -1466,7 +1477,7 @@ const LLMModelSetting: React.FC = () => {
                 </div>
               ) : (
                 messages.map((msg, index) => (
-                  <div key={index} className={`message ${msg.role}`}>
+                  <div key={index} className={`message ${msg.role}`} data-user-msg-id={msg.role === 'user' ? msg.id : undefined}>
                     <div className="message-avatar">
                       {msg.role === 'user' ? '👤' : (
                         <img 
@@ -1691,6 +1702,12 @@ const LLMModelSetting: React.FC = () => {
                 ))
               )}
               <div ref={messagesEndRef} />
+            </div>
+              <ChatScrollNavigator
+                containerRef={messagesContainerRef}
+                userMessages={userMessageAnchors}
+                theme={theme}
+              />
             </div>
             
             <div className="chat-input-area">

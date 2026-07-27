@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Form, Input, Select, TreeSelect, Button, message, Row, Col, Switch, Modal, Spin, Drawer, Tag, Popover, Slider, InputNumber, Tooltip, Dropdown } from 'antd';
 const { TextArea } = Input;
@@ -6,6 +6,7 @@ const { Option } = Select;
 import { ArrowLeftOutlined, SaveOutlined, FileTextOutlined, TagsOutlined, PlayCircleOutlined, SendOutlined, PlusOutlined, SettingOutlined, ClearOutlined, BulbOutlined, CopyOutlined, EditOutlined, DownOutlined, RightOutlined, LoadingOutlined, InfoCircleOutlined, ReloadOutlined, PaperClipOutlined, StopOutlined } from '@ant-design/icons';
 import MDEditor from '@uiw/react-md-editor';
 import ChatMarkdown from '../../components/ChatMarkdown';
+import ChatScrollNavigator, { UserMessageAnchor } from '../../components/ChatScrollNavigator';
 import { promptService, Prompt, PromptCategory } from '../../services/prompt';
 import { llmModelService, LLMModel } from '../../services/llm_model';
 import PageHeader from '../../components/page-header';
@@ -71,6 +72,16 @@ const PromptSetting: React.FC = () => {
   const [modelDropdownVisible, setModelDropdownVisible] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState('');
+
+  // 构建用户消息锚点列表（用于右侧导航）
+  const userMessageAnchors: UserMessageAnchor[] = useMemo(() => {
+    return testMessages
+      .filter(msg => msg.role === 'user')
+      .map(msg => ({
+        id: msg.id,
+        label: msg.content ? msg.content.replace(/[\n\r]/g, ' ').trim().substring(0, 30) : '',
+      }));
+  }, [testMessages]);
 
   useEffect(() => {
     const currentTheme = document.body.getAttribute('data-theme') || 'light';
@@ -1238,7 +1249,8 @@ const PromptSetting: React.FC = () => {
             </div>
           </div>
           
-          <div ref={chatMessagesRef} className={`chat-messages ${theme === 'dark' ? 'dark' : 'light'}`} style={{ position: 'relative' }}>
+          <div style={{ position: 'relative', flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                    <div ref={chatMessagesRef} className={`chat-messages ${theme === 'dark' ? 'dark' : 'light'}`}>
             {testMessages.length === 0 ? (
               <div style={{ textAlign: 'center', color: theme === 'dark' ? '#fff' : '#999', padding: '40px 0' }}>
                 <PlayCircleOutlined style={{ fontSize: '48px', marginBottom: '0px', opacity: 0.3 }} />
@@ -1249,6 +1261,7 @@ const PromptSetting: React.FC = () => {
                 <div
                   key={index}
                   className={`message ${msg.role}`}
+                  data-user-msg-id={msg.role === 'user' ? msg.id : undefined}
                 >
                   <div className="message-avatar">
                     {msg.role === 'user' ? '👤' : (
@@ -1473,27 +1486,13 @@ const PromptSetting: React.FC = () => {
                 </div>
               ))
             )}
-            {showScrollToBottom && (
-              <Button
-                className="scroll-to-bottom-btn"
-                icon={<DownOutlined />}
-                onClick={scrollToBottom}
-                style={{
-                  position: 'absolute',
-                  bottom: '20px',
-                  right: '20px',
-                  zIndex: 10,
-                  borderRadius: '50%',
-                  width: '40px',
-                  height: '40px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
-                }}
-              />
-            )}
             <div ref={messagesEndRef} />
+          </div>
+          <ChatScrollNavigator
+              containerRef={chatMessagesRef}
+              userMessages={userMessageAnchors}
+              theme={theme}
+            />
           </div>
           
           <div className="chat-input-area" style={{ borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8', padding: '12px 16px', background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fff' }}>
