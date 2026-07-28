@@ -24,8 +24,8 @@
     }
 
     .csn-nav-item.active .csn-nav-dot {
-      background: var(--primary-color);
-      box-shadow: 0 0 6px rgba(90, 111, 214, 0.6);
+      background: var(--int-primary, var(--primary-color));
+      box-shadow: 0 0 6px var(--int-primary, rgba(90, 111, 214, 0.6));
     }
 
   }
@@ -39,8 +39,8 @@
 
       &:hover {
         background: #fff;
-        color: var(--primary-color);
-        border-color: var(--primary-color);
+        color: var(--int-primary, var(--primary-color));
+        border-color: var(--int-primary, var(--primary-color));
       }
     }
 
@@ -49,8 +49,8 @@
     }
 
     .csn-nav-item.active .csn-nav-dot {
-      background: var(--primary-color);
-      box-shadow: 0 0 6px rgba(90, 111, 214, 0.5);
+      background: var(--int-primary, var(--primary-color));
+      box-shadow: 0 0 6px var(--int-primary, rgba(90, 111, 214, 0.5));
     }
 
   }
