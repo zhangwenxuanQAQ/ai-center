@@ -28,11 +28,6 @@
       box-shadow: 0 0 6px rgba(90, 111, 214, 0.6);
     }
 
-    .csn-nav-label {
-      background: rgba(30, 30, 48, 0.95);
-      color: rgba(255, 255, 255, 0.9);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-    }
   }
 
   &.light {
@@ -58,12 +53,6 @@
       box-shadow: 0 0 6px rgba(90, 111, 214, 0.5);
     }
 
-    .csn-nav-label {
-      background: rgba(255, 255, 255, 0.98);
-      color: rgba(0, 0, 0, 0.75);
-      border: 1px solid rgba(0, 0, 0, 0.08);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    }
   }
 
   .csn-scroll-btn {
@@ -102,7 +91,7 @@
 
   .csn-nav-rail {
     position: absolute;
-    right: 4px;
+    right: 12px;
     top: 50%;
     transform: translateY(-50%);
     max-height: 70%;
@@ -149,30 +138,4 @@
     height: 8px;
   }
 
-  .csn-nav-label {
-    position: absolute;
-    right: 16px;
-    white-space: nowrap;
-    padding: 3px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    line-height: 1.4;
-    max-width: 150px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    pointer-events: none;
-    opacity: 0;
-    animation: csn-fade-in 0.2s ease forwards;
-  }
-}
-
-@keyframes csn-fade-in {
-  from {
-    opacity: 0;
-    transform: translateX(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
 }

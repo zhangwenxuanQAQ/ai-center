@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { UpOutlined, DownOutlined } from '@ant-design/icons';
+import { Tooltip } from 'antd';
 import './ChatScrollNavigator.less';
 
 export interface UserMessageAnchor {
@@ -32,8 +33,10 @@ const ChatScrollNavigator: React.FC<ChatScrollNavigatorProps> = ({
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
   const [activeMessageId, setActiveMessageId] = useState<string>('');
-  const [hoveredId, setHoveredId] = useState<string>('');
   const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shouldShowTopRef = useRef(false);
+  const shouldShowBottomRef = useRef(false);
 
   // 检测滚动位置
   const checkScrollPosition = useCallback(() => {
@@ -46,8 +49,26 @@ const ChatScrollNavigator: React.FC<ChatScrollNavigatorProps> = ({
     const atTop = scrollTop <= threshold;
     const atBottom = scrollHeight - scrollTop - clientHeight <= threshold;
 
-    setShowScrollTop(!atTop);
-    setShowScrollBottom(!atBottom);
+    const newShowTop = !atTop;
+    const newShowBottom = !atBottom;
+    const topChanged = newShowTop !== shouldShowTopRef.current;
+    const bottomChanged = newShowBottom !== shouldShowBottomRef.current;
+
+    shouldShowTopRef.current = newShowTop;
+    shouldShowBottomRef.current = newShowBottom;
+
+    // 滚动位置变化时重新显示按钮并重置3秒自动隐藏计时器
+    if (topChanged || bottomChanged) {
+      setShowScrollTop(newShowTop);
+      setShowScrollBottom(newShowBottom);
+      if (autoHideTimerRef.current) clearTimeout(autoHideTimerRef.current);
+      if (newShowTop || newShowBottom) {
+        autoHideTimerRef.current = setTimeout(() => {
+          if (shouldShowTopRef.current) setShowScrollTop(false);
+          if (shouldShowBottomRef.current) setShowScrollBottom(false);
+        }, 3000);
+      }
+    }
 
     // 计算当前可见的用户消息
     if (userMessages.length === 0) {
@@ -152,6 +173,9 @@ const ChatScrollNavigator: React.FC<ChatScrollNavigatorProps> = ({
       if (scrollTimerRef.current) {
         clearTimeout(scrollTimerRef.current);
       }
+      if (autoHideTimerRef.current) {
+        clearTimeout(autoHideTimerRef.current);
+      }
     };
   }, [containerRef, checkScrollPosition]);
 
@@ -160,12 +184,9 @@ const ChatScrollNavigator: React.FC<ChatScrollNavigatorProps> = ({
     checkScrollPosition();
   }, [userMessages, checkScrollPosition]);
 
-  // 获取用户消息标签（截取前N个字符）
+  // 获取用户消息完整标签
   const getMessageLabel = (msg: UserMessageAnchor): string => {
-    if (msg.label) {
-      return msg.label.length > 12 ? msg.label.substring(0, 12) + '...' : msg.label;
-    }
-    return '';
+    return msg.label?.trim() || '';
   };
 
   const hasUserMessages = userMessages.length > 0;
@@ -173,43 +194,44 @@ const ChatScrollNavigator: React.FC<ChatScrollNavigatorProps> = ({
   return (
     <div className={`chat-scroll-navigator ${theme === 'dark' ? 'dark' : 'light'}`}>
       {/* 置顶按钮 */}
-      <div
-        className={`csn-scroll-btn csn-scroll-top ${showScrollTop ? 'visible' : ''}`}
-        onClick={scrollToTop}
-        title="置顶"
-      >
-        <UpOutlined />
-      </div>
+      <Tooltip title="置顶" placement="top">
+        <div
+          className={`csn-scroll-btn csn-scroll-top ${showScrollTop ? 'visible' : ''}`}
+          onClick={scrollToTop}
+        >
+          <UpOutlined />
+        </div>
+      </Tooltip>
 
       {/* 右侧用户消息导航 */}
       {hasUserMessages && (
         <div className="csn-nav-rail">
           {userMessages.map((um, idx) => (
-            <div
+            <Tooltip
               key={um.id}
-              className={`csn-nav-item ${activeMessageId === um.id ? 'active' : ''}`}
-              onClick={() => scrollToMessage(um.id)}
-              onMouseEnter={() => setHoveredId(um.id)}
-              onMouseLeave={() => setHoveredId('')}
               title={getMessageLabel(um) || `消息 ${idx + 1}`}
+              placement="left"
             >
-              <div className="csn-nav-dot" />
-              {(hoveredId === um.id || activeMessageId === um.id) && getMessageLabel(um) && (
-                <div className="csn-nav-label">{getMessageLabel(um)}</div>
-              )}
-            </div>
+              <div
+                className={`csn-nav-item ${activeMessageId === um.id ? 'active' : ''}`}
+                onClick={() => scrollToMessage(um.id)}
+              >
+                <div className="csn-nav-dot" />
+              </div>
+            </Tooltip>
           ))}
         </div>
       )}
 
       {/* 置底按钮 */}
-      <div
-        className={`csn-scroll-btn csn-scroll-bottom ${showScrollBottom ? 'visible' : ''}`}
-        onClick={scrollToBottom}
-        title="置底"
-      >
-        <DownOutlined />
-      </div>
+      <Tooltip title="置底" placement="bottom">
+        <div
+          className={`csn-scroll-btn csn-scroll-bottom ${showScrollBottom ? 'visible' : ''}`}
+          onClick={scrollToBottom}
+        >
+          <DownOutlined />
+        </div>
+      </Tooltip>
     </div>
   );
 };
