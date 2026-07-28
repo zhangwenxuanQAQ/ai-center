@@ -969,3 +969,45 @@ body[data-theme="light"] .ant-steps-item-tail::after {
 body[data-theme="light"] .ant-steps-item-finish .ant-steps-item-tail::after {
   background: var(--primary-color) !important;
 }
+
+/* ==================== 日间模式滚动条样式 ==================== */
+body[data-theme="light"] ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+body[data-theme="light"] ::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 4px;
+}
+
+body[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+}
+
+body[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+body[data-theme="light"] ::-webkit-scrollbar-corner {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+/* ==================== 日间模式 chat-layout 背景色 ==================== */
+body[data-theme="light"] .chat-layout {
+  background: #ffffff;
+}
+
+/* ==================== 日间模式 resize-handle 样式 ==================== */
+body[data-theme="light"] .resize-handle {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+body[data-theme="light"] .resize-handle:hover {
+  background: rgba(0, 0, 0, 0.18);
+}
+
+body[data-theme="light"] .resize-handle.dragging {
+  background: var(--primary-color, rgba(90, 111, 214, 0.5));
+}

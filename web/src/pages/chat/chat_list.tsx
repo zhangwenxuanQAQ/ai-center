@@ -341,16 +341,16 @@ const ChatList: React.FC<ChatListProps> = ({
     return (
       <div className={`chat-list-collapsed ${theme === 'dark' ? 'dark' : 'light'}`}>
         <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={handleNewConversation}
-          className="new-chat-btn-collapsed"
-        />
-        <Button
           type="text"
           icon={<MenuUnfoldOutlined />}
           onClick={onToggleCollapse}
           className="toggle-btn-collapsed"
+        />
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={handleNewConversation}
+          className="new-chat-btn-collapsed"
         />
       </div>
     );

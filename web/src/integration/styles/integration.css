@@ -164,13 +164,13 @@
 /* History sidebar — iframe 模式：flex 内侧展开 */
 .int-history-sidebar {
   width: 260px;
-  min-width: 200px;
+  min-width: 0;
   max-width: 360px;
   border-right: 1px solid var(--int-border);
   display: flex;
   flex-direction: column;
   background: var(--int-bg);
-  transition: width 0.3s ease;
+  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   overflow: hidden;
   flex-shrink: 0;
 }

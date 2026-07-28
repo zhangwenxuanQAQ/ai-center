@@ -1430,21 +1430,39 @@ body[data-theme="dark"] ::-webkit-scrollbar {
 }
 
 body[data-theme="dark"] ::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.03);
   border-radius: 4px;
 }
 
 body[data-theme="dark"] ::-webkit-scrollbar-thumb {
-  background: rgba(90, 111, 214, 0.6);
+  background: rgba(255, 255, 255, 0.18);
   border-radius: 4px;
 }
 
 body[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
-  background: rgba(90, 111, 214, 0.8);
+  background: rgba(255, 255, 255, 0.3);
 }
 
 body[data-theme="dark"] ::-webkit-scrollbar-corner {
   background: rgba(255, 255, 255, 0.05);
+}
+
+/* ==================== 夜间模式 chat-layout 背景色 ==================== */
+body[data-theme="dark"] .chat-layout {
+  background: #000000;
+}
+
+/* ==================== 夜间模式 resize-handle 样式 ==================== */
+body[data-theme="dark"] .resize-handle {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+body[data-theme="dark"] .resize-handle:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+body[data-theme="dark"] .resize-handle.dragging {
+  background: var(--primary-color, rgba(90, 111, 214, 0.6));
 }
 
 body[data-theme="dark"] .w-md-editor {
