@@ -96,7 +96,7 @@ const IntegrationSidebarPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="integration-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent' }}>
+      <div className="integration-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', pointerEvents: 'none' }}>
         <Spin size="large" tip="加载中..." />
       </div>
     );
@@ -104,7 +104,7 @@ const IntegrationSidebarPage: React.FC = () => {
 
   if (error || !config) {
     return (
-      <div className="integration-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent' }}>
+      <div className="integration-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', pointerEvents: 'none' }}>
         <div style={{ textAlign: 'center', color: '#ff4d4f' }}>
           <div style={{ fontSize: '48px', marginBottom: '12px' }}>⚠️</div>
           <div>{error || '配置不存在'}</div>
@@ -114,7 +114,7 @@ const IntegrationSidebarPage: React.FC = () => {
   }
 
   return (
-    <div className="integration-page" data-theme={config.widget.themeMode} data-color-theme={config.sidebar.colorTheme} style={{ background: 'transparent' }}>
+    <div className="integration-page" data-theme={config.widget.themeMode} data-color-theme={config.sidebar.colorTheme} style={{ background: 'transparent', pointerEvents: 'none' }}>
       <FloatingBall
         position={config.sidebar.position}
         colorTheme={config.sidebar.colorTheme}

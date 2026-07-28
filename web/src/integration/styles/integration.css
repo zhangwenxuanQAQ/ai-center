@@ -1044,6 +1044,7 @@
   transition: box-shadow 0.2s;
   user-select: none;
   touch-action: none;
+  pointer-events: auto; /* 透明iframe中允许交互 */
 }
 
 .int-floating-ball:hover {
@@ -1101,6 +1102,7 @@
   transition: height 0.25s ease, opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   display: flex;
   flex-direction: column;
+  pointer-events: auto; /* 透明iframe中允许交互 */
 }
 
 .int-sidebar-panel.bottom-right {

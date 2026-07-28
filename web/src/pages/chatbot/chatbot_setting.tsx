@@ -688,15 +688,14 @@ const ChatbotSetting: React.FC = () => {
     const baseUrl = window.location.origin;
 
     if (widgetType === 'sidebar') {
-      // 悬浮球侧边栏：只传递api_key，初始化时从后端获取配置
+      // 悬浮球侧边栏：使用全屏透明 iframe 加载悬浮球组件
       return `<!-- AI助手悬浮球侧边栏 -->
-<script>
-  (function() {
-    var script = document.createElement('script');
-    script.src = '${baseUrl}/integration/sidebar.js?api_key=${apiKey}';
-    document.body.appendChild(script);
-  })();
-</script>
+<iframe
+  src="${baseUrl}/integration/sidebar?api_key=${apiKey}"
+  style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; border: none; pointer-events: none; z-index: 99999; background: transparent;"
+  allow="microphone"
+  allowtransparency="true"
+></iframe>
 <noscript>请启用JavaScript以使用AI助手</noscript>`;
     } else {
       // iframe嵌入：只传递api_key，配置从后端获取

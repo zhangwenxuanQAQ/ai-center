@@ -510,44 +510,51 @@ class ChatbotIntegrationService:
         else:
             integration = api_key_or_integration
 
-        query = ChatbotChat.select().where(
-            ChatbotChat.integration_id == integration.id
-        )
-
-        if keyword and keyword.strip():
-            keyword = keyword.strip()
-            query = query.where(ChatbotChat.title.contains(keyword))
-
-        chats = query.order_by(ChatbotChat.created_at.desc())
-
         result = []
-        for chat in chats:
-            title = chat.title or '新对话'
-            msgs = []
-            try:
-                messages_data = chat.messages
-                if isinstance(messages_data, str):
-                    msgs = json.loads(messages_data)
-                elif isinstance(messages_data, list):
-                    msgs = messages_data
-            except (json.JSONDecodeError, TypeError):
-                pass
 
-            first_content = ''
-            if msgs and len(msgs) > 0:
-                first_content = msgs[0].get('content', '')
-                if len(first_content) > 50:
-                    first_content = first_content[:50] + '...'
+        # 预览模式下只返回预览token隔离的临时对话，不返回数据库中的正式对话
+        if not preview_token:
+            query = ChatbotChat.select().where(
+                ChatbotChat.integration_id == integration.id
+            )
 
-            result.append({
-                'id': chat.id,
-                'title': title,
-                'created_at': chat.created_at.strftime('%Y-%m-%d %H:%M:%S') if chat.created_at else '',
-                'updated_at': chat.updated_at.strftime('%Y-%m-%d %H:%M:%S') if hasattr(chat, 'updated_at') and chat.updated_at else '',
-            })
+            if keyword and keyword.strip():
+                keyword = keyword.strip()
+                query = query.where(ChatbotChat.title.contains(keyword))
 
-        # 预览token隔离：不同preview_token使用不同的scope_id，数据互相隔离
-        scope_id = f"{integration.id}:preview:{preview_token}" if preview_token else None
+            chats = query.order_by(ChatbotChat.created_at.desc())
+
+            for chat in chats:
+                title = chat.title or '新对话'
+                msgs = []
+                try:
+                    messages_data = chat.messages
+                    if isinstance(messages_data, str):
+                        msgs = json.loads(messages_data)
+                    elif isinstance(messages_data, list):
+                        msgs = messages_data
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+                first_content = ''
+                if msgs and len(msgs) > 0:
+                    first_content = msgs[0].get('content', '')
+                    if len(first_content) > 50:
+                        first_content = first_content[:50] + '...'
+
+                result.append({
+                    'id': chat.id,
+                    'title': title,
+                    'created_at': chat.created_at.strftime('%Y-%m-%d %H:%M:%S') if chat.created_at else '',
+                    'updated_at': chat.updated_at.strftime('%Y-%m-%d %H:%M:%S') if hasattr(chat, 'updated_at') and chat.updated_at else '',
+                })
+
+            # 非预览模式下，scope_id为None，获取该integration的普通临时对话
+            scope_id = None
+        else:
+            # 预览模式下，使用preview_token隔离scope，只获取该预览token的临时对话
+            scope_id = f"{integration.id}:preview:{preview_token}"
+
         temp_chats = TempChatStore.list_chats(integration.id, scope_id=scope_id)
         for temp_chat in temp_chats:
             temp_title = temp_chat.get('title', '临时对话')
