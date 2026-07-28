@@ -122,7 +122,7 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
           await integrationChatService.deleteChat(apiKey, chat.id, previewToken);
           setChats(chats.filter(c => c.id !== chat.id));
           if (activeChatId === chat.id) {
-            // 清空当前选中的对话
+            onNewChat();
           }
           message.success('对话已删除');
         } catch (error) {

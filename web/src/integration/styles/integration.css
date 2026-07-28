@@ -853,6 +853,23 @@
   color: var(--int-text-tertiary, rgba(0, 0, 0, 0.45));
 }
 
+.int-msg-file-download {
+  background: transparent;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--int-primary, #1677ff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.int-msg-file-download:hover {
+  background: var(--int-bg-tertiary, rgba(0, 0, 0, 0.08));
+}
+
 .int-input-wrapper {
   display: flex;
   flex-direction: column;

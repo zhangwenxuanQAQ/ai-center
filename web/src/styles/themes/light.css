@@ -1,4 +1,4 @@
-﻿﻿﻿/* ==================== 白天模式主题样式 ==================== */
+﻿﻿/* ==================== 白天模式主题样式 ==================== */
 
 body[data-theme="light"] .ant-card-bordered:not([data-card-type="model"]) {
   border-radius: 16px !important;
@@ -837,6 +837,17 @@ body[data-theme="light"] .ant-dropdown-menu-item-selected,
 body[data-theme="light"] li.ant-dropdown-menu-item-selected {
   background: rgba(90, 111, 214, 0.08) !important;
   color: var(--primary-color) !important;
+}
+
+body[data-theme="light"] .ant-dropdown-menu-item-danger,
+body[data-theme="light"] li.ant-dropdown-menu-item-danger {
+  color: #ff4d4f !important;
+}
+
+body[data-theme="light"] .ant-dropdown-menu-item-danger:hover,
+body[data-theme="light"] li.ant-dropdown-menu-item-danger:hover {
+  background: rgba(255, 77, 79, 0.08) !important;
+  color: #ff7875 !important;
 }
 
 body[data-theme="light"] .ant-dropdown-menu-item-group-title,

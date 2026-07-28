@@ -792,7 +792,8 @@
   }
 }
 
-.chat-selector-dropdown {
+.chat-selector-dropdown,
+.chat-item-dropdown {
   &.dark {
     :global {
       .ant-dropdown-menu {
@@ -818,6 +819,15 @@
 
         &:hover {
           background: rgba(255, 255, 255, 0.08);
+        }
+      }
+
+      .ant-dropdown-menu-item-danger {
+        color: #ff4d4f !important;
+
+        &:hover {
+          background: rgba(255, 77, 79, 0.1);
+          color: #ff7875 !important;
         }
       }
 
@@ -852,6 +862,15 @@
 
         &:hover {
           background: rgba(0, 0, 0, 0.04);
+        }
+      }
+
+      .ant-dropdown-menu-item-danger {
+        color: #ff4d4f !important;
+
+        &:hover {
+          background: rgba(255, 77, 79, 0.1);
+          color: #ff7875 !important;
         }
       }
 

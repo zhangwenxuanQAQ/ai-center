@@ -828,7 +828,7 @@ class ChatbotIntegrationService:
                 f'1. 将 index.html 文件放到您的项目目录中\n'
                 f'2. 在浏览器中直接打开 index.html 即可使用\n'
                 f'3. 或在您的网页中通过 iframe 引入：\n'
-                f'   <iframe src="./index.html" style="width:100%;height:600px;border:none;"></iframe>\n\n'
+                f'   <iframe src="./index.html" style="width:100%;height:100%;border:none;"></iframe>\n\n'
                 f'如果是悬浮球模式，也可以直接在任意 HTML 页面中引入 index.html 的内容。\n\n'
                 f'API服务器地址: {base_url}\n'
                 f'生成时间: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n'

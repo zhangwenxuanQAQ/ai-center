@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Input, Button, Dropdown, Menu, Modal, message, Empty, Spin } from 'antd';
 import { PlusOutlined, SearchOutlined, DeleteOutlined, PushpinOutlined, CommentOutlined , MenuFoldOutlined, MenuUnfoldOutlined, MoreOutlined, MessageOutlined, EditOutlined, VerticalAlignTopOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
@@ -309,7 +309,12 @@ const ChatList: React.FC<ChatListProps> = ({
         <div className="chat-time">{formatDate(conversation.created_at)}</div>
       </div>
       <div className="chat-actions" onClick={e => e.stopPropagation()}>
-        <Dropdown menu={{ items: getConversationMenu(conversation) }} trigger={['click']} placement="bottomRight">
+        <Dropdown
+          menu={{ items: getConversationMenu(conversation) }}
+          trigger={['click']}
+          placement="bottomRight"
+          overlayClassName={`chat-item-dropdown ${theme === 'dark' ? 'dark' : 'light'}`}
+        >
           <Button type="text" icon={<MoreOutlined />} className="action-btn" />
         </Dropdown>
       </div>

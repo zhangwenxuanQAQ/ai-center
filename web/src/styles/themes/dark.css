@@ -458,6 +458,17 @@ body[data-theme="dark"] li.ant-dropdown-menu-item-selected {
   color: #fff !important;
 }
 
+body[data-theme="dark"] .ant-dropdown-menu-item-danger,
+body[data-theme="dark"] li.ant-dropdown-menu-item-danger {
+  color: #ff4d4f !important;
+}
+
+body[data-theme="dark"] .ant-dropdown-menu-item-danger:hover,
+body[data-theme="dark"] li.ant-dropdown-menu-item-danger:hover {
+  background: rgba(255, 77, 79, 0.1) !important;
+  color: #ff7875 !important;
+}
+
 body[data-theme="dark"] .ant-dropdown-menu-item-group-title,
 body[data-theme="dark"] div.ant-dropdown-menu-item-group-title {
   color: rgba(255, 255, 255, 0.45) !important;

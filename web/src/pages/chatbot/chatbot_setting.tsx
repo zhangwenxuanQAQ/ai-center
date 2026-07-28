@@ -703,7 +703,7 @@ const ChatbotSetting: React.FC = () => {
       return `<!-- AI助手iframe嵌入 -->
 <iframe
   src="${baseUrl}/integration/chat?api_key=${apiKey}"
-  style="width: 100%; height: 600px; border: none; border-radius: 8px;"
+  style="width: 100%; height: 100%; border: none; border-radius: 8px;"
   allow="microphone"
 ></iframe>`;
     }

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { PaperClipOutlined, CopyOutlined, EditOutlined, ReloadOutlined, CheckOutlined, BulbOutlined, DownOutlined, RightOutlined, LoadingOutlined, FilePdfOutlined, FileWordOutlined, FileImageOutlined, FileTextOutlined, SoundOutlined } from '@ant-design/icons';
+import { PaperClipOutlined, CopyOutlined, EditOutlined, ReloadOutlined, CheckOutlined, BulbOutlined, DownOutlined, RightOutlined, LoadingOutlined, FilePdfOutlined, FileWordOutlined, FileImageOutlined, FileTextOutlined, SoundOutlined, DownloadOutlined } from '@ant-design/icons';
 import { Tooltip, message } from 'antd';
 import MDEditor from '@uiw/react-md-editor';
 import ChatMarkdown from '../../components/ChatMarkdown';
@@ -55,7 +55,7 @@ interface DisplayMessage {
   step?: 'pre_process' | 'task_planning' | 'task_list' | 'model_answer' | 'task_execution' | 'result_summary';
   step_id?: string;
   extra_content?: any;
-  files?: Array<{ file_name?: string; file_size?: number; mime_type?: string; type?: string }>;
+  files?: Array<{ file_name?: string; file_size?: number; mime_type?: string; type?: string; base64_content?: string }>;
 }
 
 interface SelectedFile {
@@ -298,19 +298,30 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   const loadMessages = async (id: string) => {
     try {
       const result = await integrationChatService.getMessages(apiKey, id, previewToken);
-      const displayMsgs: DisplayMessage[] = (result.items || []).map((m: IntegrationMessage) => ({
-        id: m.id,
-        message_id: m.message_id || m.id,
-        role: m.role as 'user' | 'assistant',
-        content: m.content,
-        reasoning_content: m.reasoning_content,
-        reasoning_time: m.reasoning_time,
-        reasoning_end: !!m.reasoning_content,
-        status: 'done',
-        created_at: m.created_at,
-        extra_content: m.extra_content,
-        files: (m as any).extra_content?.files || undefined,
-      }));
+      const displayMsgs: DisplayMessage[] = (result.items || []).map((m: IntegrationMessage) => {
+        // 解析 extra_content（可能是字符串或对象）
+        let parsedExtraContent = m.extra_content;
+        if (typeof m.extra_content === 'string' && m.extra_content) {
+          try {
+            parsedExtraContent = JSON.parse(m.extra_content);
+          } catch (e) {
+            console.error('Failed to parse extra_content:', e);
+          }
+        }
+        return {
+          id: m.id,
+          message_id: m.message_id || m.id,
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+          reasoning_content: m.reasoning_content,
+          reasoning_time: m.reasoning_time,
+          reasoning_end: !!m.reasoning_content,
+          status: 'done',
+          created_at: m.created_at,
+          extra_content: parsedExtraContent,
+          files: parsedExtraContent?.files || undefined,
+        };
+      });
       setMessages(displayMsgs);
       // 同步到ref，用于后续切换对话时恢复
       streamingMessagesRef.current[id] = displayMsgs;
@@ -342,19 +353,30 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     try {
       // 加载历史消息
       const result = await integrationChatService.getMessages(apiKey, reconnectChatId, previewToken);
-      const displayMsgs: DisplayMessage[] = (result.items || []).map((m: IntegrationMessage) => ({
-        id: m.id,
-        message_id: m.message_id || m.id,
-        role: m.role as 'user' | 'assistant',
-        content: m.content,
-        reasoning_content: m.reasoning_content,
-        reasoning_time: m.reasoning_time,
-        reasoning_end: !!m.reasoning_content,
-        status: 'done' as const,
-        created_at: m.created_at,
-        extra_content: m.extra_content,
-        files: (m as any).extra_content?.files || undefined,
-      }));
+      const displayMsgs: DisplayMessage[] = (result.items || []).map((m: IntegrationMessage) => {
+        // 解析 extra_content（可能是字符串或对象）
+        let parsedExtraContent = m.extra_content;
+        if (typeof m.extra_content === 'string' && m.extra_content) {
+          try {
+            parsedExtraContent = JSON.parse(m.extra_content);
+          } catch (e) {
+            console.error('Failed to parse extra_content:', e);
+          }
+        }
+        return {
+          id: m.id,
+          message_id: m.message_id || m.id,
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+          reasoning_content: m.reasoning_content,
+          reasoning_time: m.reasoning_time,
+          reasoning_end: !!m.reasoning_content,
+          status: 'done' as const,
+          created_at: m.created_at,
+          extra_content: parsedExtraContent,
+          files: parsedExtraContent?.files || undefined,
+        };
+      });
       setMessages(displayMsgs);
       streamingMessagesRef.current[reconnectChatId] = displayMsgs;
       setTimeout(() => { scrollToBottomInstant(); }, 100);
@@ -553,16 +575,39 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     return msg;
   };
 
+  // 批量校验文件（大小 + 数量）
+  const validateFilesBatch = (files: File[]): boolean => {
+    const maxSize = 15 * 1024 * 1024;
+    const maxCount = 10;
+    if (selectedFiles.length + files.length > maxCount) {
+      message.warning(`单次提问最多上传${maxCount}个文件，当前已有${selectedFiles.length}个`);
+      return false;
+    }
+    for (const f of files) {
+      if (f.size > maxSize) {
+        message.warning(`文件 "${f.name}" 超过15MB限制，已取消本次上传`);
+        return false;
+      }
+    }
+    return true;
+  };
+
   // 文件上传处理
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
 
-    Array.from(files).forEach(file => {
+    const fileArr = Array.from(files);
+    if (!validateFilesBatch(fileArr)) {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    fileArr.forEach(file => {
       const reader = new FileReader();
       reader.onload = (event) => {
         const base64 = event.target?.result as string;
-        const base64Content = base64.split(',')[1]; // 移除 data:xxx;base64, 前缀
+        const base64Content = base64.split(',')[1];
 
         const selectedFile: SelectedFile = {
           type: 'file_base64',
@@ -631,6 +676,25 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  // 处理文件下载
+  const handleDownloadFile = async (file: any) => {
+    try {
+      await integrationChatService.downloadFile(
+        apiKey,
+        file.type || 'local',
+        file.file_name || '',
+        file.base64_content,
+        file.datasource_id,
+        file.bucket,
+        file.location
+      );
+      message.success('文件下载成功');
+    } catch (error) {
+      console.error('Failed to download file:', error);
+      message.error('文件下载失败');
+    }
   };
 
   // Send message
@@ -716,7 +780,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         content: displayContent,
         status: 'done',
         created_at: new Date().toISOString(),
-        files: filesForDisplay.map(f => ({ file_name: f.file_name, file_size: f.file_size, mime_type: f.mime_type, type: f.type })),
+        files: filesForDisplay.map(f => ({
+          file_name: f.file_name,
+          file_size: f.file_size,
+          mime_type: f.mime_type,
+          type: f.type,
+          base64_content: f.content // 保存base64内容用于下载
+        })),
       };
       idTracker.user = userMsg.id;
       newMessages.push(userMsg);
@@ -1221,8 +1291,30 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     setEditingContent('');
 
     // 构建query，发送消息（传递 editMessageId）
-    const query: IntegrationQueryItem[] = [{ type: 'text', content: editingContent }];
-    sendMessageInternal(query, editingContent, [], originalMessageId);
+    const query: IntegrationQueryItem[] = [];
+    // 保留原始消息中的文件（兼容当前会话 type='file_base64' 和历史加载 type='local'）
+    (message.files || []).forEach(f => {
+      const b64 = f.base64_content;
+      if (b64 && (f.type === 'local' || f.type === 'file_base64')) {
+        query.push({
+          type: 'file_base64',
+          content: b64,
+          mime_type: f.mime_type,
+          file_name: f.file_name,
+          file_size: f.file_size,
+        });
+      }
+    });
+    query.push({ type: 'text', content: editingContent });
+    // 保留文件信息用于显示
+    const editFiles = (message.files || []).map(f => ({
+      file_name: f.file_name,
+      file_size: f.file_size,
+      mime_type: f.mime_type,
+      type: f.type,
+      content: f.base64_content,
+    }));
+    sendMessageInternal(query, editingContent, editFiles, originalMessageId);
   };
 
   // 重新回答
@@ -1255,9 +1347,31 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     // 将用户消息 ID 作为 editMessageId 传给后端，
     // 后端从该消息起删除后续所有消息，再重新保存用户消息+新回复
     const userMsgId = userMessage.message_id || userMessage.id;
-    const query: IntegrationQueryItem[] = [{ type: 'text', content: userMessage.content }];
-    // 保留原始用户消息的文件信息用于显示
-    const originalFiles = (userMessage.files || []).map(f => ({ file_name: f.file_name, file_size: f.file_size, mime_type: f.mime_type, type: f.type }));
+    const query: IntegrationQueryItem[] = [];
+    // 将原始文件加入 query，使后端能够处理文件（兼容当前会话 type='file_base64' 和历史加载 type='local'）
+    (userMessage.files || []).forEach(f => {
+      const b64 = f.base64_content;
+      if (b64 && (f.type === 'local' || f.type === 'file_base64')) {
+        query.push({
+          type: 'file_base64',
+          content: b64,
+          mime_type: f.mime_type,
+          file_name: f.file_name,
+          file_size: f.file_size,
+        });
+      }
+    });
+    if (userMessage.content) {
+      query.push({ type: 'text', content: userMessage.content });
+    }
+    // 保留原始用户消息的文件信息（含 base64_content）用于显示和下载
+    const originalFiles = (userMessage.files || []).map(f => ({
+      file_name: f.file_name,
+      file_size: f.file_size,
+      mime_type: f.mime_type,
+      type: f.type,
+      content: f.base64_content,
+    }));
     sendMessageInternal(query, userMessage.content, originalFiles, userMsgId);
   };
 
@@ -1593,6 +1707,14 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                           <span className="int-msg-file-name">{fileName}</span>
                           <span className="int-msg-file-meta">{extension}{fileSize ? ` · ${fileSize}` : ''}</span>
                         </div>
+                        <Tooltip title="下载文件">
+                          <button
+                            className="int-msg-file-download"
+                            onClick={() => handleDownloadFile(file)}
+                          >
+                            <DownloadOutlined />
+                          </button>
+                        </Tooltip>
                       </div>
                     );
                   })}

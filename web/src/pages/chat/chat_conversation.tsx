@@ -443,6 +443,23 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     }
   };
 
+  // 批量校验文件（大小 + 数量）
+  const validateFilesBatch = (files: File[]): boolean => {
+    const maxSize = 15 * 1024 * 1024;
+    const maxCount = 10;
+    if (selectedFiles.length + files.length > maxCount) {
+      message.warning(`单次提问最多上传${maxCount}个文件，当前已有${selectedFiles.length}个`);
+      return false;
+    }
+    for (const f of files) {
+      if (f.size > maxSize) {
+        message.warning(`文件 "${f.name}" 超过15MB限制，已取消本次上传`);
+        return false;
+      }
+    }
+    return true;
+  };
+
   // 处理本地文件上传
   const handleLocalFileUpload = (file: File) => {
     const reader = new FileReader();
@@ -481,7 +498,13 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         file_size: file.size
       }
     }));
-    setSelectedFiles(prev => [...prev, ...newFiles]);
+    setSelectedFiles(prev => {
+      if (prev.length >= 10) {
+        message.warning('单次提问最多上传10个文件');
+        return prev;
+      }
+      return [...prev, ...newFiles];
+    });
   };
 
   // 处理文件下载
@@ -1417,6 +1440,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
 
     if (files.length > 0) {
       e.preventDefault();
+      if (!validateFilesBatch(files)) return;
       for (const file of files) {
         handleLocalFileUpload(file);
       }
@@ -1463,6 +1487,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     }
 
     if (files.length > 0) {
+      if (!validateFilesBatch(files)) return;
       for (const file of files) {
         handleLocalFileUpload(file);
       }
@@ -4327,8 +4352,10 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                         input.multiple = true;
                         input.onchange = (e) => {
                           const files = (e.target as HTMLInputElement).files;
-                          if (files) {
-                            Array.from(files).forEach(file => handleLocalFileUpload(file));
+                          if (files && files.length > 0) {
+                            const fileArr = Array.from(files);
+                            if (!validateFilesBatch(fileArr)) return;
+                            fileArr.forEach(file => handleLocalFileUpload(file));
                           }
                         };
                         input.click();

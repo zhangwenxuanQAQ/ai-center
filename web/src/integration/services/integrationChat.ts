@@ -393,4 +393,76 @@ export const integrationChatService = {
       onError?.(err);
     }
   },
+
+  /**
+   * 下载文件
+   */
+  downloadFile: async (
+    apiKey: string,
+    fileType: 'local' | 'datasource' | 'file_base64',
+    fileName: string,
+    base64Content?: string,
+    datasourceId?: string,
+    bucket?: string,
+    location?: string
+  ): Promise<void> => {
+    try {
+      let response;
+
+      if ((fileType === 'local' || fileType === 'file_base64') && base64Content) {
+        // 对于本地文件，使用POST请求的body发送base64内容
+        response = await fetch(`${API_BASE_URL}/aicenter/api/v1/chat/download_file`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            file_type: 'local',
+            file_name: fileName,
+            base64_content: base64Content
+          })
+        });
+      } else if (fileType === 'datasource') {
+        // 对于数据源文件，使用URL查询参数
+        let url = `${API_BASE_URL}/aicenter/api/v1/chat/download_file?file_type=${fileType}&file_name=${encodeURIComponent(fileName)}`;
+
+        if (datasourceId) {
+          url += `&datasource_id=${datasourceId}`;
+        }
+        if (bucket) {
+          url += `&bucket=${encodeURIComponent(bucket)}`;
+        }
+        if (location) {
+          url += `&location=${encodeURIComponent(location)}`;
+        }
+
+        response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+          }
+        });
+      } else {
+        throw new Error('无效的文件类型或参数');
+      }
+
+      if (!response.ok) {
+        throw new Error('下载文件失败');
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error('下载文件失败:', error);
+      throw error;
+    }
+  },
 };

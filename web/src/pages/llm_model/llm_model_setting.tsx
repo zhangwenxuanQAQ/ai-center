@@ -293,6 +293,23 @@ const LLMModelSetting: React.FC = () => {
     message.info('已恢复原始数据');
   };
 
+  // 批量校验文件（大小 + 数量）
+  const validateFilesBatch = (files: File[]): boolean => {
+    const maxSize = 15 * 1024 * 1024;
+    const maxCount = 10;
+    if (selectedFiles.length + files.length > maxCount) {
+      message.warning(`单次提问最多上传${maxCount}个文件，当前已有${selectedFiles.length}个`);
+      return false;
+    }
+    for (const f of files) {
+      if (f.size > maxSize) {
+        message.warning(`文件 "${f.name}" 超过15MB限制，已取消本次上传`);
+        return false;
+      }
+    }
+    return true;
+  };
+
   // 处理本地文件上传
   const handleLocalFileUpload = (file: File) => {
     const reader = new FileReader();
@@ -331,7 +348,13 @@ const LLMModelSetting: React.FC = () => {
         file_size: file.size
       }
     }));
-    setSelectedFiles(prev => [...prev, ...newFiles]);
+    setSelectedFiles(prev => {
+      if (prev.length >= 10) {
+        message.warning('单次提问最多上传10个文件');
+        return prev;
+      }
+      return [...prev, ...newFiles];
+    });
   };
 
   const toggleReasoning = (messageId: string) => {
@@ -1850,6 +1873,7 @@ const LLMModelSetting: React.FC = () => {
                     e.preventDefault();
                     e.stopPropagation();
                     const items = e.dataTransfer.items;
+                    const dropFiles: File[] = [];
                     for (const item of items) {
                       if (item.kind === 'file') {
                         const entry = item.webkitGetAsEntry?.();
@@ -1861,16 +1885,20 @@ const LLMModelSetting: React.FC = () => {
                           // 处理文件
                           const file = item.getAsFile();
                           if (file) {
-                            handleLocalFileUpload(file);
+                            dropFiles.push(file);
                           }
                         } else {
                           // 不支持 webkitGetAsEntry，直接获取文件
                           const file = item.getAsFile();
                           if (file && file.size > 0) {
-                            handleLocalFileUpload(file);
+                            dropFiles.push(file);
                           }
                         }
                       }
+                    }
+                    if (dropFiles.length > 0) {
+                      if (!validateFilesBatch(dropFiles)) return;
+                      dropFiles.forEach(file => handleLocalFileUpload(file));
                     }
                   }}
                   onDragOver={(e) => {
@@ -1915,8 +1943,10 @@ const LLMModelSetting: React.FC = () => {
                               input.multiple = true;
                               input.onchange = (e) => {
                                 const files = (e.target as HTMLInputElement).files;
-                                if (files) {
-                                  Array.from(files).forEach(file => handleLocalFileUpload(file));
+                                if (files && files.length > 0) {
+                                  const fileArr = Array.from(files);
+                                  if (!validateFilesBatch(fileArr)) return;
+                                  fileArr.forEach(file => handleLocalFileUpload(file));
                                 }
                               };
                               input.click();

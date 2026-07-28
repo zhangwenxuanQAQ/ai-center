@@ -1158,6 +1158,8 @@ class IntegrationChatCoreService:
                         break
 
             # 保存用户消息到 Redis
+            from app.services.chat.file_utils import build_extra_content
+            temp_extra_content = build_extra_content(query)
             user_msg_data = {
                 "id": user_message_id,
                 "message_id": user_message_id,
@@ -1165,6 +1167,7 @@ class IntegrationChatCoreService:
                 "chatbot_id": chatbot_id,
                 "role": "user",
                 "content": user_text,
+                "extra_content": json.dumps(temp_extra_content, ensure_ascii=False) if temp_extra_content else None,
                 "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             }

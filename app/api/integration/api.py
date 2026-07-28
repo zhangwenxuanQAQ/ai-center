@@ -9,8 +9,9 @@ import json
 import logging
 import asyncio
 import uuid
+import base64
 from fastapi import APIRouter, Request, Header, Depends, HTTPException, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from typing import Optional, List
 from pydantic import BaseModel, Field
 from fastapi import Query
@@ -23,6 +24,7 @@ from app.core.chat.stream_manager import ChatStreamManager
 from app.database.redis_utils import redis_utils
 from app.database.models import ChatbotChat
 from app.utils.response import ResponseUtil, ApiResponse
+from app.services.chat.file_utils import get_file_from_datasource
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -442,3 +444,103 @@ async def reconnect_stream(
             "Transfer-Encoding": "chunked"
         }
     )
+
+
+class DownloadFileRequest(BaseModel):
+    file_type: str = Field(..., description="文件类型：local/datasource")
+    file_name: str = Field(..., description="文件名")
+    base64_content: Optional[str] = Field(None, description="本地文件的base64内容")
+    datasource_id: Optional[str] = Field(None, description="数据源ID（datasource类型时必填）")
+    bucket: Optional[str] = Field(None, description="桶名称（datasource类型时可选）")
+    location: Optional[str] = Field(None, description="文件路径（datasource类型时必填）")
+
+
+@router.post("/v1/chat/download_file", summary="下载聊天中的文件")
+async def download_file(
+    request: Request,
+    params: Optional[DownloadFileRequest] = None,
+    file_type: Optional[str] = Query(None, description="文件类型：local/datasource"),
+    file_name: Optional[str] = Query(None, description="文件名"),
+    base64_content: Optional[str] = Query(None, description="本地文件的base64内容"),
+    datasource_id: Optional[str] = Query(None, description="数据源ID（datasource类型时必填）"),
+    bucket: Optional[str] = Query(None, description="桶名称（datasource类型时可选）"),
+    location: Optional[str] = Query(None, description="文件路径（datasource类型时必填）"),
+    integration = Depends(verify_api_key)
+):
+    """
+    下载聊天中的文件
+    
+    Args:
+        request: 请求对象
+        params: 请求体参数（优先使用）
+        file_type: 文件类型：local/datasource
+        file_name: 文件名
+        base64_content: 本地文件的base64内容（local类型时必填）
+        datasource_id: 数据源ID（datasource类型时必填）
+        bucket: 桶名称（datasource类型时可选）
+        location: 文件路径（datasource类型时必填）
+        integration: 集成配置对象
+        
+    Returns:
+        文件内容
+    """
+    try:
+        # 优先使用请求体参数
+        if params:
+            file_type = params.file_type
+            file_name = params.file_name
+            base64_content = params.base64_content
+            datasource_id = params.datasource_id
+            bucket = params.bucket
+            location = params.location
+        
+        if not file_type or not file_name:
+            return ResponseUtil.error(message="file_type和file_name不能为空")
+        
+        if file_type == "local":
+            if not base64_content:
+                return ResponseUtil.error(message="base64_content不能为空")
+            
+            # 解码base64内容
+            file_content = base64.b64decode(base64_content)
+            
+            # 返回文件
+            return Response(
+                content=file_content,
+                media_type="application/octet-stream",
+                headers={
+                    "Content-Disposition": f"attachment; filename={file_name.encode('utf-8').decode('latin-1')}"
+                }
+            )
+        elif file_type == "datasource":
+            if not datasource_id or not location:
+                return ResponseUtil.error(message="datasource_id和location不能为空")
+            
+            # 从数据源获取文件
+            file_result = get_file_from_datasource({
+                "datasource_id": datasource_id,
+                "bucket": bucket,
+                "location": location,
+                "file_name": file_name
+            })
+            
+            if not file_result.get("success"):
+                return ResponseUtil.error(message=file_result.get("message", "文件获取失败"))
+            
+            file_data = file_result.get("data", {})
+            file_content = file_data.get("file_content")
+            mime_type = file_data.get("mime_type", "application/octet-stream")
+            
+            # 返回文件
+            return Response(
+                content=file_content,
+                media_type=mime_type,
+                headers={
+                    "Content-Disposition": f"attachment; filename={file_name.encode('utf-8').decode('latin-1')}"
+                }
+            )
+        else:
+            return ResponseUtil.error(message="不支持的文件类型")
+    except Exception as e:
+        logger.error(f"下载文件异常: {str(e)}", exc_info=True)
+        return ResponseUtil.error(message=f"下载文件失败: {str(e)}")
