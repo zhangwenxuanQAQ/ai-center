@@ -35,12 +35,12 @@ def test_datasource_in_database():
                 # 检查密码字段
                 if 'password' in config:
                     password = config['password']
-                    print(f"密码字段: {password}")
+                    print(f"密码字段: {str(password)[:8]}...[已脱敏]")
                     
                     # 尝试解密
                     try:
                         decrypted = decrypt_password(password)
-                        print(f"解密后密码: {decrypted}")
+                        print(f"解密后密码: ***[已脱敏]")
                         
                         # 检查是否是有效的Fernet加密文本
                         if password.startswith('gAAAA'):
@@ -53,12 +53,12 @@ def test_datasource_in_database():
                 # 检查secret_key字段
                 if 'secret_key' in config:
                     secret_key = config['secret_key']
-                    print(f"Secret Key字段: {secret_key}")
+                    print(f"Secret Key字段: {str(secret_key)[:8]}...[已脱敏]")
                     
                     # 尝试解密
                     try:
                         decrypted = decrypt_password(secret_key)
-                        print(f"解密后Secret Key: {decrypted}")
+                        print(f"解密后Secret Key: ***[已脱敏]")
                         
                         # 检查是否是有效的Fernet加密文本
                         if secret_key.startswith('gAAAA'):

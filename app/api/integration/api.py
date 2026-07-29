@@ -190,7 +190,7 @@ async def chat_completions(
                             await asyncio.sleep(0)
                         yield "data: [DONE]\n\n"
                     except Exception as e:
-                        logger.error(f"集成聊天流式输出异常: {str(e)}", exc_info=True)
+                        logger.error(f"集成聊天流式输出异常: {str(e)}")
                         error_chunk = {"error": str(e)}
                         yield f"data: {json.dumps(error_chunk, ensure_ascii=False)}\n\n"
                         yield "data: [DONE]\n\n"
@@ -222,7 +222,7 @@ async def chat_completions(
             return ResponseUtil.success(data=result)
 
     except Exception as e:
-        logger.error(f"集成聊天接口异常: {str(e)}", exc_info=True)
+        logger.error(f"集成聊天接口异常: {str(e)}")
         return ResponseUtil.error(message=f"聊天失败: {str(e)}")
 
 

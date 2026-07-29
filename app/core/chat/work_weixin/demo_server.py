@@ -14,6 +14,7 @@ import time
 import base64
 import hashlib
 from urllib.parse import urlparse, parse_qs
+import re
 from WXBizJsonMsgCrypt import WXBizJsonMsgCrypt
 from Crypto.Cipher import AES
 import requests
@@ -23,6 +24,9 @@ app = FastAPI()
 # 常量定义
 CACHE_DIR = "/tmp/llm_demo_cache"
 MAX_STEPS = 10
+
+# 企业微信图片域名白名单
+ALLOWED_IMAGE_DOMAINS = ['mmbiz.qlogo.cn', 'mmbiz.qpic.cn']
 
 # 配置日志
 logging.basicConfig(
@@ -34,6 +38,22 @@ logger = logging.getLogger(__name__)
 def _generate_random_string(length):
     letters = string.ascii_letters + string.digits
     return ''.join(random.choice(letters) for _ in range(length))
+
+def _validate_stream_id(stream_id):
+    """校验stream_id格式，防止路径注入"""
+    if not re.match(r'^[a-zA-Z0-9]+$', str(stream_id)):
+        return False
+    return True
+
+def _is_safe_url(url):
+    """校验URL是否来自可信域名，防止SSRF"""
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in ('http', 'https'):
+            return False
+        return any(parsed.hostname == d or parsed.hostname.endswith('.' + d) for d in ALLOWED_IMAGE_DOMAINS)
+    except Exception:
+        return False
 
 def _process_encrypted_image(image_url, aes_key_base64):
     """
@@ -49,9 +69,15 @@ def _process_encrypted_image(image_url, aes_key_base64):
                status为False时data是错误信息
     """
     try:
-        # 1. 下载加密图片
-        logger.info("开始下载加密图片: %s", image_url)
-        response = requests.get(image_url, timeout=15)
+        # 1. 校验URL安全性（防止SSRF）
+        if not _is_safe_url(image_url):
+            error_msg = "不允许的图片URL来源"
+            logger.warning("SSRF防护: 拒绝非白名单URL: %s", image_url)
+            return False, error_msg
+        
+        # 2. 下载加密图片
+        logger.info("开始下载加密图片")
+        response = requests.get(image_url, timeout=15, allow_redirects=False)
         response.raise_for_status()
         encrypted_data = response.content
         logger.info("图片下载成功，大小: %d 字节", len(encrypted_data))
@@ -168,6 +194,8 @@ class LLMDemo():
         return stream_id
 
     def get_answer(self, stream_id):
+        if not _validate_stream_id(stream_id):
+            return u"无效的任务ID"
         cache_file = os.path.join(self.cache_dir, "%s.json" % stream_id)
         if not os.path.exists(cache_file):
             return u"任务不存在或已过期"
@@ -188,6 +216,8 @@ class LLMDemo():
         return response
 
     def is_task_finish(self, stream_id):
+        if not _validate_stream_id(stream_id):
+            return True
         cache_file = os.path.join(self.cache_dir, "%s.json" % stream_id)
         if not os.path.exists(cache_file):
             return True

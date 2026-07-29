@@ -17,13 +17,13 @@ def test_decrypt():
     
     # 测试1：加密然后解密
     plain_password = "123456"
-    print(f"\n原始密码: {plain_password}")
+    print(f"\n原始密码: ***[已脱敏]")
     
     encrypted_password = encrypt_password(plain_password)
-    print(f"加密后: {encrypted_password}")
+    print(f"加密后: {str(encrypted_password)[:10]}...[已脱敏]")
     
     decrypted_password = decrypt_password(encrypted_password)
-    print(f"解密后: {decrypted_password}")
+    print(f"解密后: ***[已脱敏]")
     
     if decrypted_password == plain_password:
         print("✓ 测试1通过")
@@ -37,14 +37,14 @@ def test_decrypt():
     
     db_password = "gAAAAABp4Fv4dqRdWQL7gmgIAUNomuMkE5rIICzZJFy_ScZH-JXGMb-m2x5FFWWcBHXn8JN5BIWZk1OxzXOzO7RfYzLUqotsjTmCDlK0sZh775CwdBrFQG4s68TdOtdVa-DCK6LeOaytoAK-O3_BgpZU2TfaSNygOfboYnJCh22XRrcTXKC1dXMLksSCaoCEvBDT4V2YH7uoECYQ-oJCtXEW9Ym5EQODZ20An_GsjDfhUA_p-3PEm1NDmjooTadE-hhRzbirV0tGB_452vWU_X_zLahGNB3-gU9a4AbjKxrupMXxEL9oNpCvnd6vS4wbIk3xNZDQHvpW0RlHzrc50AlHfafFujIehKr30rnhzF_z1RHBRCyUSTT7rj4d5nWJvl5MuTmv4JJ6"
     
-    print(f"\n数据库密码: {db_password[:50]}...")
+    print(f"\n数据库密码: {db_password[:10]}...[已脱敏]")
     
     decrypted_db_password = decrypt_password(db_password)
-    print(f"解密后: {decrypted_db_password[:50]}...")
+    print(f"解密后: {str(decrypted_db_password)[:10]}...[已脱敏]")
     
     # 再次解密
     decrypted_again = decrypt_password(decrypted_db_password)
-    print(f"再次解密: {decrypted_again[:50]}...")
+    print(f"再次解密: {str(decrypted_again)[:10]}...[已脱敏]")
     
     # 检查是否是明文
     if decrypted_again == "123456":

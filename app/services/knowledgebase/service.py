@@ -1925,7 +1925,7 @@ class KnowledgebaseDocumentService:
         if prompt:
             processed_prompt = prompt.strip()
             # 解析 {{prompt@prompt_id}} 占位符
-            pattern = r'\{\{prompt@([^}]+)\}\}'
+            pattern = r'\{\{prompt@([^}]{1,100})\}\}'
             matches = re.findall(pattern, processed_prompt)
             
             for prompt_id in matches:
@@ -2143,7 +2143,7 @@ class KnowledgebaseDocumentService:
         if prompt:
             processed_prompt = prompt.strip()
             # 解析 {{prompt@prompt_id}} 占位符
-            pattern = r'\{\{prompt@([^}]+)\}\}'
+            pattern = r'\{\{prompt@([^}]{1,100})\}\}'
             matches = re.findall(pattern, processed_prompt)
             
             for prompt_id in matches:

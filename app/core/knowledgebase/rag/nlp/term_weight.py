@@ -170,8 +170,8 @@ class Dealer:
         """
         num_pattern = re.compile(r"[0-9,.]{2,}$")
         short_letter_pattern = re.compile(r"[a-z]{1,2}$")
-        num_space_pattern = re.compile(r"[0-9. -]{2,}$")
-        letter_pattern = re.compile(r"[a-z. -]+$")
+        num_space_pattern = re.compile(r"[0-9.\- ]{2,}$")
+        letter_pattern = re.compile(r"[a-z.\- ]+$")
 
         def ner(t):
             if num_pattern.match(t):

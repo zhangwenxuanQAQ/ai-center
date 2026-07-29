@@ -641,7 +641,7 @@ async def chat_with_model(llm_model_id: str, request: dict = Body(...)):
                 yield "data: [DONE]\n\n"
                 logger.info("Stream generation completed")
             except Exception as e:
-                logger.error(f"Error in generate: {str(e)}", exc_info=True)
+                logger.error(f"Error in generate: {str(e)}")
                 yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
         return StreamingResponse(
@@ -656,5 +656,5 @@ async def chat_with_model(llm_model_id: str, request: dict = Body(...)):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error in chat_with_model: {str(e)}", exc_info=True)
+        logger.error(f"Error in chat_with_model: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
