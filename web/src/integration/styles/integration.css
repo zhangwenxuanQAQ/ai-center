@@ -22,10 +22,8 @@
   --int-radius-lg: 12px;
 }
 
-/* Dark theme - 仅作用于插件页面 */
+/* Dark theme - 仅作用于插件页面（主题色由颜色主题控制，此处仅设置背景/文字/边框等变量） */
 .integration-page[data-theme="dark"] {
-  --int-primary: #1a1a2e;
-  --int-primary-hover: #16213e;
   --int-bg: #1a1a2e;
   --int-bg-secondary: #1f1f1f;
   --int-bg-tertiary: #262626;
@@ -97,11 +95,9 @@
   --int-msg-user-bg: #6366f1;
 }
 
-/* Dark theme - 聊天区域组件级别 */
+/* Dark theme - 聊天区域组件级别（仅覆盖背景/文字/边框等非主题色变量，主题色由 .integration-page 颜色主题控制） */
 .int-chat-area[data-theme="dark"],
 .int-history-sidebar[data-theme="dark"] {
-  --int-primary: #1a1a2e;
-  --int-primary-hover: #16213e;
   --int-bg: #1a1a2e;
   --int-bg-secondary: #1f1f1f;
   --int-bg-tertiary: #262626;

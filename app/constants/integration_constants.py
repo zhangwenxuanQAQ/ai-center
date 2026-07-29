@@ -26,6 +26,7 @@
 
 # 颜色主题预设
 INTEGRATION_COLOR_THEMES = [
+    {"key": "none", "label": "无", "color": "none"},
     {"key": "default_blue", "label": "经典蓝", "color": "#1677ff"},
     {"key": "emerald", "label": "翡翠绿", "color": "#10b981"},
     {"key": "violet", "label": "紫罗兰", "color": "#8b5cf6"},
@@ -69,6 +70,7 @@ INTEGRATION_CONFIG_PARAMS = [
                         "default": "emerald",
                         "description": "聊天界面的配色主题，影响悬浮球、标题栏、按钮和用户消息气泡的颜色",
                         "options": [
+                            {"label": "无", "value": "none"},
                             {"label": "经典蓝", "value": "default_blue"},
                             {"label": "翡翠绿", "value": "emerald"},
                             {"label": "紫罗兰", "value": "violet"},
