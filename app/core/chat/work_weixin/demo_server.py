@@ -54,7 +54,6 @@ def _is_safe_url(url):
         return any(parsed.hostname == d or parsed.hostname.endswith('.' + d) for d in ALLOWED_IMAGE_DOMAINS)
     except Exception:
         return False
-
 def _process_encrypted_image(image_url, aes_key_base64):
     """
     下载并解密加密图片
@@ -70,14 +69,17 @@ def _process_encrypted_image(image_url, aes_key_base64):
     """
     try:
         # 1. 校验URL安全性（防止SSRF）
-        if not _is_safe_url(image_url):
-            error_msg = "不允许的图片URL来源"
-            logger.warning("SSRF防护: 拒绝非白名单URL: %s", image_url)
-            return False, error_msg
+        parsed_url = urlparse(image_url)
+        if parsed_url.scheme not in ('http', 'https'):
+            return False, "不允许的URL协议"
+        if not any(parsed_url.hostname == d or parsed_url.hostname.endswith('.' + d) for d in ALLOWED_IMAGE_DOMAINS):
+            logger.warning("SSRF防护: 拒绝非白名单URL")
+            return False, "不允许的图片URL来源"
         
         # 2. 下载加密图片
         logger.info("开始下载加密图片")
-        response = requests.get(image_url, timeout=15, allow_redirects=False)
+        safe_url = parsed_url.geturl()
+        response = requests.get(safe_url, timeout=15, allow_redirects=False)
         response.raise_for_status()
         encrypted_data = response.content
         logger.info("图片下载成功，大小: %d 字节", len(encrypted_data))
@@ -194,9 +196,8 @@ class LLMDemo():
         return stream_id
 
     def get_answer(self, stream_id):
-        if not _validate_stream_id(stream_id):
-            return u"无效的任务ID"
-        cache_file = os.path.join(self.cache_dir, "%s.json" % stream_id)
+        safe_id = os.path.basename(str(stream_id))
+        cache_file = os.path.join(self.cache_dir, safe_id + ".json")
         if not os.path.exists(cache_file):
             return u"任务不存在或已过期"
             
@@ -216,9 +217,8 @@ class LLMDemo():
         return response
 
     def is_task_finish(self, stream_id):
-        if not _validate_stream_id(stream_id):
-            return True
-        cache_file = os.path.join(self.cache_dir, "%s.json" % stream_id)
+        safe_id = os.path.basename(str(stream_id))
+        cache_file = os.path.join(self.cache_dir, safe_id + ".json")
         if not os.path.exists(cache_file):
             return True
             

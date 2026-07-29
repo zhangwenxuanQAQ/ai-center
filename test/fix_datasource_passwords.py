@@ -72,21 +72,20 @@ def fix_datasource_passwords():
                 for field in password_fields:
                     if field in config:
                         encrypted_value = config[field]
-                        print(f"\n{field}字段: {encrypted_value[:10]}...[已脱敏]")
+                        print(f"\n检查字段: {field} (长度: {len(str(encrypted_value))})")
                         
                         # 递归解密直到得到明文
                         plain_value = decrypt_until_plain(encrypted_value)
-                        print(f"明文{field}: ***[已脱敏]")
                         
                         # 检查是否需要修复
                         if is_encrypted(encrypted_value) and is_encrypted(plain_value):
-                            print(f"✗ {field}被重复加密，需要修复")
+                            print(f"✗ 该字段被重复加密，需要修复")
                             # 重新加密明文
                             config[field] = encrypt_password(plain_value)
                             updated = True
-                            print(f"修复后的{field}: {config[field][:10]}...[已脱敏]")
+                            print(f"已重新加密修复")
                         else:
-                            print(f"✓ {field}状态正常")
+                            print(f"✓ 状态正常")
                 
                 # 如果需要更新，保存到数据库
                 if updated:

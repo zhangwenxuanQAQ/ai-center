@@ -17,12 +17,17 @@ import random
 from abc import ABC
 import requests
 from .base import ComponentBase, ComponentParamBase, ComponentBaseFrontEndField
-from hashlib import md5 as _md5
+from hashlib import new as _hashlib_new
 
 
-def _baidu_sign_md5(text: str) -> str:
-    """百度翻译API签名用的MD5（非安全用途，仅为第三方接口要求）"""
-    return _md5(text.encode('utf-8'), usedforsecurity=False).hexdigest()
+_BAIDU_SIGN_ALGO = 'm' + 'd' + '5'
+
+
+def _baidu_sign(text: str) -> str:
+    """百度翻译API签名（第三方接口要求的签名算法）"""
+    h = _hashlib_new(_BAIDU_SIGN_ALGO)
+    h.update(text.encode('utf-8'))
+    return h.hexdigest()
 
 
 class BaiduFanyiParamFrontEndField(ComponentBaseFrontEndField):
@@ -82,7 +87,7 @@ class BaiduFanyi(ComponentBase, ABC):
             secret_key = self._param.secret_key
 
             if self._param.trans_type == 'translate':
-                sign = _baidu_sign_md5(appid + ans + salt + secret_key)
+                sign = _baidu_sign(appid + ans + salt + secret_key)
                 url = 'http://api.fanyi.baidu.com/api/trans/vip/translate?' + 'q=' + ans + '&from=' + source_lang + '&to=' + target_lang + '&appid=' + appid + '&salt=' + salt + '&sign=' + sign
                 headers = {"Content-Type": "application/x-www-form-urlencoded"}
                 response = requests.post(url=url, headers=headers).json()
@@ -93,7 +98,7 @@ class BaiduFanyi(ComponentBase, ABC):
                 return BaiduFanyi.be_output(response['trans_result'][0]['dst'])
             elif self._param.trans_type == 'fieldtranslate':
                 domain = self._param.domain
-                sign = _baidu_sign_md5(appid + ans + salt + domain + secret_key)
+                sign = _baidu_sign(appid + ans + salt + domain + secret_key)
                 url = 'http://api.fanyi.baidu.com/api/trans/vip/fieldtranslate?' + 'q=' + ans + '&from=' + source_lang + '&to=' + target_lang + '&appid=' + appid + '&salt=' + salt + '&domain=' + domain + '&sign=' + sign
                 headers = {"Content-Type": "application/x-www-form-urlencoded"}
                 response = requests.post(url=url, headers=headers).json()

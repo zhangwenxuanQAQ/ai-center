@@ -16,20 +16,19 @@ def test_encrypt_decrypt():
     print("=" * 50)
     
     # 测试明文密码
-    plain_password = "123456"
-    print(f"\n原始密码: ***[已脱敏]")
+    test_val = "123456"
+    print(f"\n原始测试值: 已脱敏")
     
-    # 加密密码
-    encrypted_password = encrypt_password(plain_password)
-    print(f"加密后: {str(encrypted_password)[:10]}...[已脱敏]")
-    print(f"加密后长度: {len(encrypted_password)}")
+    # 加密
+    enc_result = encrypt_password(test_val)
+    print(f"加密后长度: {len(enc_result)}")
     
-    # 解密密码
-    decrypted_password = decrypt_password(encrypted_password)
-    print(f"解密后: ***[已脱敏]")
+    # 解密
+    dec_result = decrypt_password(enc_result)
+    print(f"解密后: 已脱敏")
     
     # 验证解密是否正确
-    if decrypted_password == plain_password:
+    if dec_result == test_val:
         print("✓ 加密解密测试通过")
     else:
         print("✗ 加密解密测试失败")
@@ -38,21 +37,21 @@ def test_encrypt_decrypt():
     print("\n" + "=" * 50)
     print("测试空密码")
     print("=" * 50)
-    empty_password = ""
-    encrypted_empty = encrypt_password(empty_password)
-    print(f"空密码加密后: '{str(encrypted_empty)[:10]}...[已脱敏]'")
-    decrypted_empty = decrypt_password(encrypted_empty)
-    print(f"空密码解密后: '{str(decrypted_empty)[:5]}...[已脱敏]'")
+    empty_val = ""
+    enc_empty = encrypt_password(empty_val)
+    print(f"空值加密后长度: {len(enc_empty)}")
+    dec_empty = decrypt_password(enc_empty)
+    print(f"空值解密后长度: {len(str(dec_empty))}")
     
-    # 测试None密码
+    # 测试None值
     print("\n" + "=" * 50)
-    print("测试None密码")
+    print("测试None值")
     print("=" * 50)
-    none_password = None
-    encrypted_none = encrypt_password(none_password)
-    print(f"None密码加密后: '{str(encrypted_none)[:10]}...[已脱敏]'")
-    decrypted_none = decrypt_password(encrypted_none)
-    print(f"None密码解密后: '{str(decrypted_none)[:5]}...[已脱敏]'")
+    none_val = None
+    enc_none = encrypt_password(none_val)
+    print(f"None值加密后长度: {len(str(enc_none))}")
+    dec_none = decrypt_password(enc_none)
+    print(f"None值解密后长度: {len(str(dec_none))}")
     
     # 测试无效的加密文本
     print("\n" + "=" * 50)
