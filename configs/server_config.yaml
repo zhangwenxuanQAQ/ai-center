@@ -34,6 +34,9 @@ rustfs:
   password: 'rustfsadmin'
   host: '10.9.44.5'
   port: 9000
+web_search_engine:
+  host: '10.9.44.5'
+  port: 18080
 logging:
   level: 'INFO'
   format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
