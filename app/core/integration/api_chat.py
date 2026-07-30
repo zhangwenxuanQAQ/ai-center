@@ -857,7 +857,7 @@ class IntegrationChatCoreService:
                 )
 
             # 处理工具调用
-            if tool_calls_list and tool_map:
+            if tool_calls_list:
                 messages.append({
                     'role': 'assistant',
                     'content': full_response_chunk,
@@ -1091,6 +1091,27 @@ class IntegrationChatCoreService:
             user_prompt_messages = chatbot_config_data['user_prompt_messages']
             tools = chatbot_config_data['tools']
             tool_map = chatbot_config_data['tool_map']
+            # 注入内置工具（如网络搜索）
+            web_search_enabled = config_dict.get('web_search', False)
+            # 如果配置文件中禁用了搜索引擎，强制关闭
+            from app.configs.config import config as app_config
+            if not app_config.get("web_search_engine.enabled", True):
+                web_search_enabled = False
+            if web_search_enabled:
+                from app.core.llm_model.builtin_tools.tool_utils import builtin_tools_to_openai_tools
+                builtin_tools_list = builtin_tools_to_openai_tools(['web_search'])
+                if builtin_tools_list:
+                    if tools is None:
+                        tools = []
+                    tools.extend(builtin_tools_list)
+                    if tool_map is None:
+                        tool_map = {}
+                    tool_map['web_search'] = 'builtin'
+            # 确保 tools 和 tool_map 不为 None
+            if tools is None:
+                tools = []
+            if tool_map is None:
+                tool_map = {}
         except ResourceNotFoundError as e:
             # 获取机器人配置失败，返回错误
             actual_chat_id = chat_id or f"temp_{uuid.uuid4().hex[:12]}"
@@ -1128,7 +1149,10 @@ class IntegrationChatCoreService:
             model_params.update(llm_config)
         if config_dict:
             model_params.update(config_dict)
-        if tools is not None:
+            # 移除前端专用参数，不传给大模型
+            model_params.pop('web_search', None)
+            model_params.pop('deep_thinking', None)
+        if tools:
             model_params['tools'] = tools
 
         # ============ 临时会话模式 ============

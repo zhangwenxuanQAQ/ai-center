@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Form, Input, Select, TreeSelect, Button, message, Row, Col, Switch, Modal, Spin, Drawer, Tag, Popover, Slider, InputNumber, Tooltip, Dropdown } from 'antd';
 const { TextArea } = Input;
 const { Option } = Select;
-import { ArrowLeftOutlined, SaveOutlined, FileTextOutlined, TagsOutlined, PlayCircleOutlined, SendOutlined, PlusOutlined, SettingOutlined, ClearOutlined, BulbOutlined, CopyOutlined, EditOutlined, DownOutlined, RightOutlined, LoadingOutlined, InfoCircleOutlined, ReloadOutlined, PaperClipOutlined, StopOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SaveOutlined, FileTextOutlined, TagsOutlined, PlayCircleOutlined, SendOutlined, PlusOutlined, SettingOutlined, ClearOutlined, BulbOutlined, GlobalOutlined, CopyOutlined, EditOutlined, DownOutlined, RightOutlined, LoadingOutlined, InfoCircleOutlined, ReloadOutlined, PaperClipOutlined, StopOutlined } from '@ant-design/icons';
 import MDEditor from '@uiw/react-md-editor';
 import ChatMarkdown from '../../components/ChatMarkdown';
 import ChatScrollNavigator, { UserMessageAnchor } from '../../components/ChatScrollNavigator';
@@ -55,6 +55,8 @@ const PromptSetting: React.FC = () => {
   const [models, setModels] = useState<LLMModel[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [deepThinking, setDeepThinking] = useState<boolean>(true);
+  const [webSearch, setWebSearch] = useState<boolean>(true);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(true); // 搜索引擎是否可用
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [thinkingMessageId, setThinkingMessageId] = useState<string | null>(null);
   const [expandedReasoning, setExpandedReasoning] = useState<Set<string>>(new Set());
@@ -100,6 +102,7 @@ const PromptSetting: React.FC = () => {
     fetchCategories();
     fetchModels();
     fetchConfigParams();
+    fetchWebSearchConfig();
     if (id && id !== 'new') {
       fetchPrompt(id);
     } else {
@@ -134,6 +137,23 @@ const PromptSetting: React.FC = () => {
       setConfigParams(data);
     } catch (error) {
       console.error('Failed to fetch config params:', error);
+    }
+  };
+
+  // 获取网络搜索引擎状态
+  const fetchWebSearchConfig = async () => {
+    try {
+      const response = await fetch('/aicenter/v1/llm_model/web_search_config');
+      const result = await response.json();
+      if (result.code === 200 && result.data) {
+        const enabled = result.data.enabled !== false;
+        setWebSearchEnabled(enabled);
+        if (!enabled) {
+          setWebSearch(false);
+        }
+      }
+    } catch (error) {
+      console.error('获取网络搜索配置失败:', error);
     }
   };
 
@@ -456,7 +476,8 @@ const PromptSetting: React.FC = () => {
         query: filesToSend.length > 0 ? filesToSend : [],
         config: {
           ...modelConfig,
-          deep_thinking: deepThinking
+          deep_thinking: deepThinking,
+          web_search: webSearch
         }
       };
       
@@ -702,7 +723,8 @@ const PromptSetting: React.FC = () => {
         messages: chatMessages,
         config: {
           ...modelConfig,
-          deep_thinking: deepThinking
+          deep_thinking: deepThinking,
+          web_search: webSearch
         }
       };
       
@@ -1429,9 +1451,13 @@ const PromptSetting: React.FC = () => {
                     ) : (
                       <>
                         {msg.content && (
-                          <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                            <ChatMarkdown source={msg.content} className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`} onWidgetEvent={handleWidgetEvent} widgetValues={testWidgetValues} />
-                          </div>
+                          msg.role === 'user' ? (
+                            <div className="user-message-text">{msg.content}</div>
+                          ) : (
+                            <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                              <ChatMarkdown source={msg.content} className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`} onWidgetEvent={handleWidgetEvent} widgetValues={testWidgetValues} />
+                            </div>
+                          )
                         )}
                         {msg.stopped && (
                           <div 
@@ -1717,6 +1743,15 @@ const PromptSetting: React.FC = () => {
                     <span style={{ userSelect: 'none' }}>深度思考</span>
                     <Switch size="small" checked={deepThinking} onChange={setDeepThinking} />
                   </div>
+                  <Tooltip title={!webSearchEnabled ? '网络搜索引擎不可用' : (webSearch ? '网络搜索已开启' : '网络搜索已关闭')}>
+                    <div
+                      className={`web-search-icon-btn ${theme === 'dark' ? 'dark' : 'light'} ${webSearch ? 'active' : ''}`}
+                      style={!webSearchEnabled ? { opacity: 0.4, cursor: 'not-allowed' } : {}}
+                      onClick={() => webSearchEnabled && setWebSearch(!webSearch)}
+                    >
+                      <GlobalOutlined />
+                    </div>
+                  </Tooltip>
 
                   {/* 上传文件按钮 */}
                   <Dropdown

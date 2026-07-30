@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Form, Input, Select, TreeSelect, Button, Switch, message, Row, Col, Spin, Slider, InputNumber, Tooltip, Tag, Dropdown } from 'antd';
 const { TextArea } = Input;
-import { ArrowLeftOutlined, SaveOutlined, UndoOutlined, ApiTwoTone, SettingOutlined, ClearOutlined, SendOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, InfoCircleOutlined, BulbOutlined, CopyOutlined, ReloadOutlined, EditOutlined, DownOutlined, RightOutlined, PlusOutlined, PaperClipOutlined, UploadOutlined, CloseCircleOutlined as RemoveFileOutlined, InboxOutlined, StopOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SaveOutlined, UndoOutlined, ApiTwoTone, SettingOutlined, ClearOutlined, SendOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, InfoCircleOutlined, BulbOutlined, GlobalOutlined, CopyOutlined, ReloadOutlined, EditOutlined, DownOutlined, RightOutlined, PlusOutlined, PaperClipOutlined, UploadOutlined, CloseCircleOutlined as RemoveFileOutlined, InboxOutlined, StopOutlined } from '@ant-design/icons';
 import DataSourceFileSelector from '../datasource/datasource data_select';
 import { llmModelService, LLMModel, LLMCategory } from '../../services/llm_model';
 import { request, post } from '../../utils/request';
@@ -74,6 +74,8 @@ const LLMModelSetting: React.FC = () => {
   const [inputMessage, setInputMessage] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [deepThinking, setDeepThinking] = useState(true);
+  const [webSearch, setWebSearch] = useState(true);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(true); // 搜索引擎是否可用
   const [expandedReasoning, setExpandedReasoning] = useState<Set<string>>(new Set());
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState('');
@@ -117,6 +119,7 @@ const LLMModelSetting: React.FC = () => {
       fetchModelTypes();
       fetchConfigParams();
     }
+    fetchWebSearchConfig();
   }, [id]);
 
   // 检测是否在底部
@@ -204,6 +207,23 @@ const LLMModelSetting: React.FC = () => {
       setConfigParams(data);
     } catch (error) {
       console.error('Failed to fetch config params:', error);
+    }
+  };
+
+  // 获取网络搜索引擎状态
+  const fetchWebSearchConfig = async () => {
+    try {
+      const response = await fetch('/aicenter/v1/llm_model/web_search_config');
+      const result = await response.json();
+      if (result.code === 200 && result.data) {
+        const enabled = result.data.enabled !== false;
+        setWebSearchEnabled(enabled);
+        if (!enabled) {
+          setWebSearch(false);
+        }
+      }
+    } catch (error) {
+      console.error('获取网络搜索配置失败:', error);
     }
   };
 
@@ -620,7 +640,8 @@ const LLMModelSetting: React.FC = () => {
         query: currentFiles.length > 0 ? [...currentFiles] : [], // query只包含本次上传的新文件
         config: {
           ...modelConfig,
-          deep_thinking: deepThinking
+          deep_thinking: deepThinking,
+          web_search: webSearch
         }
       };
 
@@ -1119,7 +1140,8 @@ const LLMModelSetting: React.FC = () => {
         query: selectedFiles.length > 0 ? [...selectedFiles] : [], // query只包含本次上传的新文件
         config: {
           ...modelConfig,
-          deep_thinking: deepThinking
+          deep_thinking: deepThinking,
+          web_search: webSearch
         }
       };
 
@@ -1648,9 +1670,13 @@ const LLMModelSetting: React.FC = () => {
                               })}
                             </div>
                           )}
-                          <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                            <ChatMarkdown source={msg.content || ''} className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`} onWidgetEvent={handleWidgetEvent} widgetValues={widgetValues} />
-                          </div>
+                          {msg.role === 'user' ? (
+                            <div className="user-message-text">{msg.content || ''}</div>
+                          ) : (
+                            <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                              <ChatMarkdown source={msg.content || ''} className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`} onWidgetEvent={handleWidgetEvent} widgetValues={widgetValues} />
+                            </div>
+                          )}
                         </>
                       )}
                       <div className="message-footer">
@@ -1914,6 +1940,15 @@ const LLMModelSetting: React.FC = () => {
                       <span>深度思考</span>
                       <Switch size="small" checked={deepThinking} onChange={setDeepThinking} />
                     </div>
+                    <Tooltip title={!webSearchEnabled ? '网络搜索引擎不可用' : (webSearch ? '网络搜索已开启' : '网络搜索已关闭')}>
+                      <div
+                        className={`web-search-icon-btn ${theme === 'dark' ? 'dark' : 'light'} ${webSearch ? 'active' : ''}`}
+                        style={!webSearchEnabled ? { opacity: 0.4, cursor: 'not-allowed' } : {}}
+                        onClick={() => webSearchEnabled && setWebSearch(!webSearch)}
+                      >
+                        <GlobalOutlined />
+                      </div>
+                    </Tooltip>
 
                     {/* 上传文件下拉菜单 */}
                     <Dropdown

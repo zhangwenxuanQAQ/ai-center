@@ -97,6 +97,29 @@ def _execute_single_tool(tool_call: Dict, tool_map: Dict[str, str]) -> Dict[str,
     task_name = function_args.get('task_name', '')
     action = function_args.get('action', '')
 
+    # 检查是否为内置工具（如网络搜索）
+    tool_id = tool_map.get(function_name, '')
+    if tool_id == 'builtin':
+        from app.core.llm_model.builtin_tools.tool_utils import call_builtin_tool
+        result = call_builtin_tool(function_name, function_args)
+        elapsed = int((time.time() - start_time) * 1000)
+        if result.get('success'):
+            return {
+                'tool_call_id': tool_call_id,
+                'tool_name': function_name,
+                'task_name': task_name,
+                'elapsed_ms': elapsed,
+                'result': result.get('result', '')
+            }
+        else:
+            return {
+                'tool_call_id': tool_call_id,
+                'tool_name': function_name,
+                'task_name': task_name,
+                'elapsed_ms': elapsed,
+                'error': result.get('error', '内置工具调用失败')
+            }
+
     if action == 'knowledgebase_search':
         kb_id = function_args.get('kb_id', '')
         query = function_args.get('query', '')

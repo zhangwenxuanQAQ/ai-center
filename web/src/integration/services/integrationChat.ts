@@ -130,7 +130,8 @@ export const integrationChatService = {
     temporary?: boolean,
     deepThinking?: boolean,
     editMessageId?: string,
-    previewToken?: string
+    previewToken?: string,
+    webSearch?: boolean
   ): Promise<void> => {
     const body: Record<string, any> = {
       query,
@@ -138,9 +139,10 @@ export const integrationChatService = {
     };
     if (chatId) body.chat_id = chatId;
     if (temporary) body.temporary = true;
-    if (deepThinking) {
-      body.config = { deep_thinking: true };
-    }
+    const configObj: Record<string, any> = {};
+    if (deepThinking) configObj.deep_thinking = true;
+    if (webSearch) configObj.web_search = true;
+    if (Object.keys(configObj).length > 0) body.config = configObj;
     if (editMessageId) body.edit_message_id = editMessageId;
     if (previewToken) body.preview_token = previewToken;
 

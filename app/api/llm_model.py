@@ -52,6 +52,22 @@ def get_config_params():
     return ResponseUtil.success(data=MODEL_CONFIG_PARAMS, message="获取模型配置参数成功")
 
 
+@router.get("/web_search_config", response_model=ApiResponse)
+def get_web_search_config():
+    """
+    获取网络搜索引擎配置状态
+    
+    Returns:
+        ApiResponse: 返回 web_search_engine.enabled 配置，默认为 true
+    """
+    from app.configs.config import config as app_config
+    enabled = app_config.get("web_search_engine.enabled", True)
+    # YAML解析时可能返回字符串，统一转成 bool
+    if isinstance(enabled, str):
+        enabled = enabled.lower() in ('true', '1', 'yes', 'on')
+    return ResponseUtil.success(data={"enabled": bool(enabled)}, message="获取网络搜索配置成功")
+
+
 @router.post("/category", response_model=ApiResponse)
 def create_llm_category(category: LLMCategoryCreate):
     """
@@ -628,6 +644,10 @@ async def chat_with_model(llm_model_id: str, request: dict = Body(...)):
 
         model_instance = LLMFactory.create_model(model_type, model_config)
         logger.info(f"Model instance created successfully")
+
+        # 移除前端专用参数，不传给大模型
+        config.pop('web_search', None)
+        config.pop('deep_thinking', None)
 
         def generate():
             try:

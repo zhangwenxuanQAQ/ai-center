@@ -2140,3 +2140,95 @@ data: {"text": "", "chat_id": "c4038367a29a419cbed6e0a67db73672", "user_message_
    - 界面集成：展示界面集成方式，包括悬浮球侧边栏、iframe嵌入等。
    - 嵌入代码展示：展示html嵌入代码，用户可以复制粘贴到自己的网站上。
    - 预览：用户可以在前端预览嵌入效果，确认无误后再发布。
+
+
+
+   ## 现在开始实现大模型内置工具功能：
+   1. 在core/llm_model目录下新建builtin_tools子目录，用于存储项目内置工具。每个工具需要单独的子文件夹，文件夹名称为工具名称。
+   2. 每个工具文件夹下需要包含一个python文件，文件名与工具名称相同，文件内容为工具的实现代码。
+    - 在builtin_tools下顶一个工具父类，用于定义工具的公共属性和方法，所有的工具需要继承自这个父类。
+    - 每个工具都需要定义一个class，类名与工具名称相同。
+    - 每个工具需要定义需要的参数，以及参数描述，用于后续转为openai tool格式中参数的定义。
+    - 每个工具的class需要实现run方法，用于执行工具的逻辑。
+    - 每个工具的run方法需要返回一个结果，结果为工具的输出。
+
+   3. 现在实现一个web_search工具，用于在互联网上搜索信息。我选择使用SearXNG搜索引擎。
+   这是引擎的官方文档地址：https://docs.searxng.org/dev/search_api.html
+   - 我在server_config.yaml中添加了web_search_engine配置项，用于存储SearXNG引擎的地址和端口。
+   - 工具需要定义参数：
+      - query: 搜索查询字符串
+      - format: 返回格式（可选，默认为json）
+      - max_results: 返回的最大结果数（可选，默认为10）
+      - engines: 要使用的搜索引擎列表（可选，如果配置文件中定义了则默认使用配置文件中的搜索引擎，否则不指定）
+   - 当搜索到网页列表后需要使用BeautifulSoup进入url，提取网页内容。
+   - 最后返回网页列表（将实际的网页内容使用"web_content"字段放到json中）
+   - 如果搜索报错（比如网络错误，引擎连不上等）则需要返回一个错误信息。错误信息为"网络搜索失败，错误信息：{错误信息}"
+
+   4. 在builtin_tools下创建tool_utils.py文件，用于存储工具的公共方法。
+    - 实现内置工具转openai tool格式的方法。
+    - 实现工具调用方法，用于调用工具的run方法，返回工具的输出。
+
+   5. 在web_search目录下写一个README.md文件，用于说明工具的使用方法，配置文件说明，docker部署方法，启动方法等。
+    现在我的配置文件（settings.yml）内容如下，需要写到README.md中：
+    ```
+server:
+  secret_key: "aicenter"   # 务必改成一个随机字符串
+  limiter: true                                  # 关闭限流（内网用，公网建议开启）
+  public_instance: false
+    
+# 网络请求配置
+outgoing:
+  request_timeout: 5.0        # 超时5秒，防止慢引擎卡死
+  max_request_timeout: 10.0
+  pool_connections: 100
+  pool_maxsize: 20
+  enable_http2: true
+
+use_default_settings:
+  engines:
+    remove:
+      - google #去掉谷歌（要翻墙）
+
+    
+search:
+  safe_search: 0              # 0=关闭安全搜索, 1=中等, 2=严格
+  autocomplete: ""            # 关闭自动补全（节省资源）
+  default_lang: "zh-CN"       # 默认中文\
+  formats:
+    - html
+    - json
+  max_results: 50             # 全局默认最大返回5条，请求参数中的会覆盖这个
+  
+engines:
+  # ----- 第一梯队（中文最优，优先展示） -----
+  - name: baidu
+    use: true
+    weight: 3                 # weight越高，同质量时排名更靠前
+    disabled: false
+
+  - name: sogou
+    use: true
+    weight: 3
+    disabled: false
+    
+  - name: 360search
+    use: true
+    weight: 3
+    disabled: false
+
+  # ----- 第二梯队（全球通用） -----
+  - name: google
+    use: true
+    weight: 2
+    disabled: true #禁用
+
+  - name: bing
+    use: true
+    weight: 2
+    disabled: false
+
+  - name: duckduckgo
+    use: true
+    weight: 2
+    disabled: false
+    ```

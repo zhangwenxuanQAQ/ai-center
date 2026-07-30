@@ -1198,6 +1198,15 @@
   word-break: break-word;
 }
 
+.user-message-text {
+  font-size: 13px;
+  line-height: 1.6;
+  word-break: break-word;
+  white-space: pre-wrap;
+  text-align: left;
+  color: inherit;
+}
+
 .markdown-content {
   p {
     margin: 0 0 8px 0;
@@ -1721,6 +1730,46 @@
 
   span {
     user-select: none;
+  }
+}
+
+.web-search-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-size: 16px;
+
+  &.dark {
+    color: rgba(255, 255, 255, 0.45);
+    background: rgba(255, 255, 255, 0.08);
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    &.active {
+      color: #1668dc;
+      background: rgba(22, 104, 220, 0.15);
+    }
+  }
+
+  &.light {
+    color: rgba(0, 0, 0, 0.45);
+    background: rgba(0, 0, 0, 0.04);
+
+    &:hover {
+      background: rgba(0, 0, 0, 0.08);
+    }
+
+    &.active {
+      color: #1677ff;
+      background: rgba(22, 119, 255, 0.1);
+    }
   }
 }
 

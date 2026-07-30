@@ -1262,7 +1262,7 @@ class ChatCoreService:
                     step=MessageStep.MODEL_ANSWER
                 )
         
-            if tool_calls_list and tool_map:
+            if tool_calls_list:
                 messages.append({
                     'role': 'assistant',
                     'content': full_response_chunk,
@@ -1488,6 +1488,11 @@ class ChatCoreService:
         tools = None
         tool_map = None
         user_prompt_messages = None
+        web_search_enabled = config_dict.get('web_search', False)
+        # 如果配置文件中禁用了搜索引擎，强制关闭
+        from app.configs.config import config as app_config
+        if not app_config.get("web_search_engine.enabled", True):
+            web_search_enabled = False
         
         # 使用机器人聊天
         if chatbot_id:
@@ -1498,6 +1503,17 @@ class ChatCoreService:
                 user_prompt_messages = chatbot_config['user_prompt_messages']
                 tools = chatbot_config['tools'] if chatbot_config['tools'] else None
                 tool_map = chatbot_config['tool_map']
+                # 注入内置工具（如网络搜索）
+                if web_search_enabled:
+                    from app.core.llm_model.builtin_tools.tool_utils import builtin_tools_to_openai_tools
+                    builtin_tools_list = builtin_tools_to_openai_tools(['web_search'])
+                    if builtin_tools_list:
+                        if tools is None:
+                            tools = []
+                        tools.extend(builtin_tools_list)
+                        if tool_map is None:
+                            tool_map = {}
+                        tool_map['web_search'] = 'builtin'
                 # 获取机器人模型关联表中的模型配置
                 from app.database.models import ChatbotModel
                 try:
@@ -1536,7 +1552,23 @@ class ChatCoreService:
                     avatar=avatar
                 ).to_dict()
                 return
-        
+
+        # 非机器人聊天时，如果开启了网络搜索也需要注入内置工具
+        if web_search_enabled and tools is None:
+            from app.core.llm_model.builtin_tools.tool_utils import builtin_tools_to_openai_tools
+            builtin_tools_list = builtin_tools_to_openai_tools(['web_search'])
+            if builtin_tools_list:
+                tools = builtin_tools_list
+                if tool_map is None:
+                    tool_map = {}
+                tool_map['web_search'] = 'builtin'
+
+        # 确保 tools 和 tool_map 不为 None
+        if tools is None:
+            tools = []
+        if tool_map is None:
+            tool_map = {}
+
         if not chat_id:
             title = user_text[:20] if len(user_text) > 20 else user_text
             # 当选择的是模型时，机器人id设为空；当选择的是机器人时，模型id设为空
@@ -1631,7 +1663,10 @@ class ChatCoreService:
             model_params.update(llm_config)
         if config_dict:
             model_params.update(config_dict)
-        if tools is not None:
+            # 移除前端专用参数，不传给大模型
+            model_params.pop('web_search', None)
+            model_params.pop('deep_thinking', None)
+        if tools:
             model_params['tools'] = tools
         
         ChatService.update_chat_config(
@@ -2313,6 +2348,9 @@ class ChatCoreService:
             model_params.update(llm_config)
         if config_dict:
             model_params.update(config_dict)
+            # 移除前端专用参数，不传给大模型
+            model_params.pop('web_search', None)
+            model_params.pop('deep_thinking', None)
         if tools is not None:
             model_params['tools'] = tools
         

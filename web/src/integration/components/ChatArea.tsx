@@ -3,6 +3,7 @@ import { PaperClipOutlined, CopyOutlined, EditOutlined, ReloadOutlined, CheckOut
 import { Tooltip, message } from 'antd';
 import MDEditor from '@uiw/react-md-editor';
 import ChatMarkdown from '../../components/ChatMarkdown';
+import WebSearchResult from '../../components/WebSearchResult';
 import ChatScrollNavigator, { UserMessageAnchor } from '../../components/ChatScrollNavigator';
 import { integrationChatService, IntegrationMessage, IntegrationQueryItem } from '../services/integrationChat';
 import { usePanelDrag } from './PanelDragContext';
@@ -91,6 +92,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(false);
   const [deepThinking, setDeepThinking] = useState(true);
+  const [webSearch, setWebSearch] = useState(true);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(true); // 搜索引擎是否可用
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | undefined>(chatId);
   const [randomWelcome, setRandomWelcome] = useState<string>('');
@@ -158,6 +161,26 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   useEffect(() => {
     selectRandomWelcome();
   }, [selectRandomWelcome]);
+
+  // 获取网络搜索引擎状态
+  useEffect(() => {
+    const fetchWebSearchConfig = async () => {
+      try {
+        const response = await fetch('/aicenter/v1/llm_model/web_search_config');
+        const result = await response.json();
+        if (result.code === 200 && result.data) {
+          const enabled = result.data.enabled !== false;
+          setWebSearchEnabled(enabled);
+          if (!enabled) {
+            setWebSearch(false);
+          }
+        }
+      } catch (error) {
+        console.error('获取网络搜索配置失败:', error);
+      }
+    };
+    fetchWebSearchConfig();
+  }, []);
 
   // 动态计算消息区域左右padding
   useEffect(() => {
@@ -1079,7 +1102,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         temporary,
         deepThinking,
         editMessageId,
-        previewToken
+        previewToken,
+        webSearch
       );
     } catch (err: any) {
       console.error('Send message error:', err);
@@ -1505,7 +1529,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             {msg.tool_calls && msg.tool_calls.length > 0 && (
               <div className="int-tool-calls-container">
                 {msg.tool_calls.map((tc, tcIndex) => (
-                  <div key={tc.tool_call_id || `tc-${tcIndex}`} className={`int-tool-call-card int-tool-call-${tc.status}`}>
+                  <div key={tc.tool_call_id || `tc-${tcIndex}`} className={`int-tool-call-card int-tool-call-${tc.status}${tc.name === 'web_search' ? ' int-tool-call-web-search' : ''}`}>
                     <div className="int-tool-call-header" onClick={() => toggleToolCall(tc.tool_call_id || `tc-${tcIndex}`)}>
                       <div className="int-tool-call-header-left">
                         {tc.status === 'start' && <LoadingOutlined spin className="int-tool-call-icon-start" />}
@@ -1529,14 +1553,15 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                     </div>
                     {expandedToolCalls.has(tc.tool_call_id || `tc-${tcIndex}`) && (
                       <div className="int-tool-call-content">
-                        {tc.message && (
+                        {/* web_search不显示原始消息 */}
+                        {tc.message && tc.name !== 'web_search' && (
                           <div className="int-tool-call-message">
                             <ChatMarkdown source={tc.message} />
                           </div>
                         )}
                         {tc.result && (
                           <>
-                            {tc.message && <div className="int-tool-call-divider" />}
+                            {tc.message && tc.name !== 'web_search' && <div className="int-tool-call-divider" />}
                             <div
                               className="int-tool-call-result-header"
                               onClick={(e) => {
@@ -1553,9 +1578,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                             </div>
                             {expandedToolCallResults.has(tc.tool_call_id || `tc-${tcIndex}`) && (
                               <div className="int-tool-call-result">
-                                <ChatMarkdown
-                                  source={typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result, null, 2)}
-                                />
+                                {tc.name === 'web_search' ? (
+                                  <WebSearchResult result={tc.result} theme={theme} />
+                                ) : (
+                                  <ChatMarkdown
+                                    source={typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result, null, 2)}
+                                  />
+                                )}
                               </div>
                             )}
                           </>
@@ -1720,10 +1749,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                   })}
                 </div>
               )}
-              {/* 显示用户消息文本 */}
+              {/* 显示用户消息文本 - 纯文本，不使用markdown渲染 */}
               {msg.content && (
-                <div className="int-md-editor-container">
-                  <ChatMarkdown source={msg.content} />
+                <div className="int-user-message-text">
+                  {msg.content}
                 </div>
               )}
             </>
@@ -1878,6 +1907,16 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                 <span className="int-deep-thinking-label">深度思考</span>
                 <span className={`int-deep-thinking-switch ${deepThinking ? 'on' : ''}`}></span>
               </div>
+
+              <Tooltip title={!webSearchEnabled ? '网络搜索引擎不可用' : (webSearch ? '网络搜索已开启' : '网络搜索已关闭')}>
+                <div
+                  className={`int-web-search-icon ${webSearch ? 'active' : ''}`}
+                  style={!webSearchEnabled ? { opacity: 0.4, cursor: 'not-allowed' } : {}}
+                  onClick={() => webSearchEnabled && setWebSearch(!webSearch)}
+                >
+                  🌐
+                </div>
+              </Tooltip>
               {/* 文件上传按钮 */}
               <input
                 ref={fileInputRef}

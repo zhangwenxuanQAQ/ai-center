@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Input, Button, Switch, Modal, Slider, message, Popconfirm, Tooltip, Dropdown, Empty, Spin, Popover, InputNumber, Select, Steps, Upload, List } from 'antd';
-import { SendOutlined, ClearOutlined, SettingOutlined, RobotOutlined, BulbOutlined, LoadingOutlined, DownOutlined, RightOutlined, CopyOutlined, ReloadOutlined, EditOutlined, InfoCircleOutlined, StopOutlined, PaperClipOutlined, FolderOpenOutlined, FileTextOutlined, UploadOutlined, CloseCircleOutlined, InboxOutlined, FilePdfOutlined, FileWordOutlined, FileImageOutlined, SoundOutlined, DownloadOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import { SendOutlined, ClearOutlined, SettingOutlined, RobotOutlined, BulbOutlined, LoadingOutlined, DownOutlined, RightOutlined, CopyOutlined, ReloadOutlined, EditOutlined, InfoCircleOutlined, StopOutlined, PaperClipOutlined, FolderOpenOutlined, FileTextOutlined, UploadOutlined, CloseCircleOutlined, InboxOutlined, FilePdfOutlined, FileWordOutlined, FileImageOutlined, SoundOutlined, DownloadOutlined, CheckCircleOutlined, ClockCircleOutlined, GlobalOutlined } from '@ant-design/icons';
 import DataSourceFileSelector from '../datasource/datasource data_select';
 import type { MenuProps, UploadProps } from 'antd';
 import ChatMarkdown from '../../components/ChatMarkdown';
+import WebSearchResult from '../../components/WebSearchResult';
 import ChatScrollNavigator, { UserMessageAnchor } from '../../components/ChatScrollNavigator';
 import { llmModelService, LLMModel } from '../../services/llm_model';
 import { chatbotService, Chatbot } from '../../services/chatbot';
@@ -92,6 +93,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(false);
   const [deepThinking, setDeepThinking] = useState(true);
+  const [webSearch, setWebSearch] = useState(true);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(true); // 搜索引擎是否可用
   const [selectedType, setSelectedType] = useState<'model' | 'chatbot'>('model');
   const [selectedModel, setSelectedModel] = useState<LLMModel | null>(null);
   const [selectedChatbot, setSelectedChatbot] = useState<Chatbot | null>(null);
@@ -157,7 +160,25 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     fetchModels();
     fetchChatbots();
     fetchConfigParams();
+    fetchWebSearchConfig();
   }, []);
+
+  // 获取网络搜索引擎状态
+  const fetchWebSearchConfig = async () => {
+    try {
+      const response = await fetch('/aicenter/v1/llm_model/web_search_config');
+      const result = await response.json();
+      if (result.code === 200 && result.data) {
+        const enabled = result.data.enabled !== false;
+        setWebSearchEnabled(enabled);
+        if (!enabled) {
+          setWebSearch(false);
+        }
+      }
+    } catch (error) {
+      console.error('获取网络搜索配置失败:', error);
+    }
+  };
 
   useEffect(() => {
     if (isCreatingNewConversation.current) {
@@ -1145,7 +1166,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         selectedModel?.id,
         selectedChatbot?.id,
         currentConversation?.id,
-        { ...modelConfig, deep_thinking: deepThinking },
+        { ...modelConfig, deep_thinking: deepThinking, web_search: webSearch },
         undefined, // messageId is undefined for new messages
         systemPrompt, // 系统提示词
         (data) => {
@@ -1776,7 +1797,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           selectedModel?.id,
           selectedChatbot?.id,
           conversation?.id,
-          { ...modelConfig, deep_thinking: deepThinking },
+          { ...modelConfig, deep_thinking: deepThinking, web_search: webSearch },
           messageId,
           systemPrompt,
           (data) => {
@@ -1968,7 +1989,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           selectedModel?.id,
           selectedChatbot?.id,
           conversation?.id,
-          { ...modelConfig, deep_thinking: deepThinking },
+          { ...modelConfig, deep_thinking: deepThinking, web_search: webSearch },
           messageId,
           systemPrompt,
           (data) => {
@@ -2941,7 +2962,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               </div>
             )}
             {msg.tool_calls && msg.tool_calls.length > 0 && msg.tool_calls.map((tc, tcIndex) => (
-              <div key={tc.tool_call_id || `tc-${tcIndex}`} className={`tool-call-card tool-call-${tc.status}`}>
+              <div key={tc.tool_call_id || `tc-${tcIndex}`} className={`tool-call-card tool-call-${tc.status}${tc.name === 'web_search' ? ' tool-call-web-search' : ''}`}>
                 <div className="tool-call-header" onClick={() => toggleToolCall(tc.tool_call_id || `tc-${tcIndex}`)}>
                   <div className="tool-call-header-left">
                     {tc.status === 'start' && <LoadingOutlined spin className="tool-call-icon-start" />}
@@ -2997,8 +3018,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                         {/* 工具结果内容 */}
                         {expandedToolCallResults.has(tc.tool_call_id || `tc-${tcIndex}`) && (
                           <>
-                            {/* 工具调用消息 */}
-                            {tc.message && (
+                            {/* 工具调用消息 - web_search不显示原始消息 */}
+                            {tc.message && tc.name !== 'web_search' && (
                               <div className={`tool-call-message ${theme === 'dark' ? 'dark' : 'light'}`}>
                                 <ChatMarkdown
                                   source={tc.message}
@@ -3009,10 +3030,14 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                             {/* 工具调用结果 */}
                             {tc.result && (
                               <div className={`tool-call-result ${theme === 'dark' ? 'dark' : 'light'}`}>
-                                <ChatMarkdown
-                                  source={typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result, null, 2)}
-                                  className={`md-editor small-text ${theme === 'dark' ? 'dark' : 'light'}`}
-                                />
+                                {tc.name === 'web_search' ? (
+                                  <WebSearchResult result={tc.result} theme={theme} />
+                                ) : (
+                                  <ChatMarkdown
+                                    source={typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result, null, 2)}
+                                    className={`md-editor small-text ${theme === 'dark' ? 'dark' : 'light'}`}
+                                  />
+                                )}
                               </div>
                             )}
                           </>
@@ -3042,7 +3067,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               </div>
             )}
             {msg.tool_calls && msg.tool_calls.length > 0 && msg.tool_calls.map((tc, tcIndex) => (
-              <div key={tc.tool_call_id || `tc-${tcIndex}`} className={`tool-call-card tool-call-${tc.status}`}>
+              <div key={tc.tool_call_id || `tc-${tcIndex}`} className={`tool-call-card tool-call-${tc.status}${tc.name === 'web_search' ? ' tool-call-web-search' : ''}`}>
                 <div className="tool-call-header" onClick={() => toggleToolCall(tc.tool_call_id || `tc-${tcIndex}`)}>
                   <div className="tool-call-header-left">
                     {tc.status === 'start' && <LoadingOutlined spin className="tool-call-icon-start" />}
@@ -3066,7 +3091,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 </div>
                 {expandedToolCalls.has(tc.tool_call_id || `tc-${tcIndex}`) && (
                   <div className="tool-call-content">
-                    {tc.message && (
+                    {/* web_search不显示原始消息 */}
+                    {tc.message && tc.name !== 'web_search' && (
                       <div className={`tool-call-message ${theme === 'dark' ? 'dark' : 'light'}`}>
                         <ChatMarkdown
                           source={tc.message}
@@ -3076,10 +3102,14 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                     )}
                     {tc.result && (
                       <div className={`tool-call-result ${theme === 'dark' ? 'dark' : 'light'}`}>
-                        <ChatMarkdown
-                          source={JSON.stringify(tc.result, null, 2)}
-                          className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
-                        />
+                        {tc.name === 'web_search' ? (
+                          <WebSearchResult result={tc.result} theme={theme} />
+                        ) : (
+                          <ChatMarkdown
+                            source={JSON.stringify(tc.result, null, 2)}
+                            className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                          />
+                        )}
                       </div>
                     )}
                   </div>
@@ -3245,9 +3275,10 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     const hasReasoning = toolCall?.reasoning_content;
     const hasResult = toolCall?.result != null;
     const hasMessage = msg.content;
+    const isWebSearch = toolCall?.name === 'web_search';
 
     return (
-      <div className={`tool-call-card tool-call-${toolCall?.status || 'success'}`}>
+      <div className={`tool-call-card tool-call-${toolCall?.status || 'success'}${isWebSearch ? ' tool-call-web-search' : ''}`}>
         <div className="tool-call-header" onClick={() => toggleToolCall(toolCallId)}>
           <div className="tool-call-header-left">
             {toolCall?.status === 'start' && <LoadingOutlined spin className="tool-call-icon-start" />}
@@ -3298,7 +3329,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 </div>
                 {expandedToolCallResults.has(toolCallId) && (
                   <>
-                    {hasMessage && (
+                    {/* web_search不显示原始消息 */}
+                    {hasMessage && !isWebSearch && (
                       <div className={`tool-call-message ${theme === 'dark' ? 'dark' : 'light'}`}>
                         <ChatMarkdown
                           source={msg.content}
@@ -3310,10 +3342,14 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                     )}
                     {hasResult && (
                       <div className={`tool-call-result ${theme === 'dark' ? 'dark' : 'light'}`}>
-                        <ChatMarkdown
-                          source={typeof toolCall.result === 'string' ? toolCall.result : JSON.stringify(toolCall.result, null, 2)}
-                          className={`md-editor small-text ${theme === 'dark' ? 'dark' : 'light'}`}
-                        />
+                        {isWebSearch ? (
+                          <WebSearchResult result={toolCall.result} theme={theme} />
+                        ) : (
+                          <ChatMarkdown
+                            source={typeof toolCall.result === 'string' ? toolCall.result : JSON.stringify(toolCall.result, null, 2)}
+                            className={`md-editor small-text ${theme === 'dark' ? 'dark' : 'light'}`}
+                          />
+                        )}
                       </div>
                     )}
                   </>
@@ -3688,7 +3724,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                     </div>
                   )}
                   {msg.tool_calls && msg.tool_calls.length > 0 && msg.tool_calls.map((tc, tcIndex) => (
-                    <div key={tc.tool_call_id || `tc-${tcIndex}`} className={`tool-call-card tool-call-${tc.status}`}>
+                    <div key={tc.tool_call_id || `tc-${tcIndex}`} className={`tool-call-card tool-call-${tc.status}${tc.name === 'web_search' ? ' tool-call-web-search' : ''}`}>
                       <div className="tool-call-header" onClick={() => toggleToolCall(tc.tool_call_id || `tc-${tcIndex}`)}>
                         <div className="tool-call-header-left">
                           {tc.status === 'start' && <LoadingOutlined spin className="tool-call-icon-start" />}
@@ -3723,7 +3759,11 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                           )}
                           {tc.status === 'success' && tc.result != null && (
                             <div className="tool-call-result">
-                              <pre>{typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result, null, 2)}</pre>
+                              {tc.name === 'web_search' ? (
+                                <WebSearchResult result={tc.result} theme={theme} />
+                              ) : (
+                                <pre>{typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result, null, 2)}</pre>
+                              )}
                             </div>
                           )}
                           {tc.status === 'error' && tc.message && (
@@ -3960,20 +4000,14 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                   })}
                 </div>
               )}
-              {/* 显示用户消息内容 */}
-              <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+              {/* 显示用户消息内容 - 纯文本，不使用markdown渲染 */}
+              <div className="user-message-text">
                 {(() => {
-                  const widgetEvent = isUser ? tryParseWidgetEvent(msg.content) : null;
+                  const widgetEvent = tryParseWidgetEvent(msg.content);
                   const displaySource = widgetEvent
                     ? formatWidgetValueForDisplay(widgetEvent.widgetId, widgetEvent.widgetValue)
                     : msg.content;
-                  return (
-                    <ChatMarkdown
-                      source={displaySource}
-                      onWidgetEvent={handleWidgetEvent}
-                      className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
-                    />
-                  );
+                  return displaySource;
                 })()}
               </div>
             </>
@@ -4323,6 +4357,16 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 <span>深度思考</span>
                 <Switch size="small" checked={deepThinking} onChange={setDeepThinking} />
               </div>
+
+              <Tooltip title={!webSearchEnabled ? '网络搜索引擎不可用' : (webSearch ? '网络搜索已开启' : '网络搜索已关闭')}>
+                <div
+                  className={`web-search-icon-btn ${theme === 'dark' ? 'dark' : 'light'} ${webSearch ? 'active' : ''}`}
+                  style={!webSearchEnabled ? { opacity: 0.4, cursor: 'not-allowed' } : {}}
+                  onClick={() => webSearchEnabled && setWebSearch(!webSearch)}
+                >
+                  <GlobalOutlined />
+                </div>
+              </Tooltip>
               
               {/* 上传文件下拉菜单 */}
               <Dropdown
