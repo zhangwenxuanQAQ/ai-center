@@ -703,3 +703,44 @@ async def download_file(
     except Exception as e:
         logger.error(f"下载文件异常: {str(e)}", exc_info=True)
         return ResponseUtil.error(message=f"下载文件失败: {str(e)}")
+
+
+@router.get("/download_ppt/{file_id}", summary="下载生成的PPT文件")
+async def download_ppt(file_id: str):
+    """
+    通过 file_id 下载 Redis 缓存中的 PPT 文件
+    
+    Args:
+        file_id: PPT 文件唯一标识
+        
+    Returns:
+        PPT 文件流
+    """
+    try:
+        from app.core.llm_model.builtin_tools.generate_ppt.generate_ppt import get_ppt_from_cache
+        
+        cached = get_ppt_from_cache(file_id)
+        if not cached:
+            return Response(
+                content=b"File not found or expired",
+                status_code=404,
+                media_type="text/plain"
+            )
+        
+        file_content = base64.b64decode(cached["base64"])
+        file_name = cached["file_name"]
+        
+        return Response(
+            content=file_content,
+            media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            headers={
+                "Content-Disposition": f"attachment; filename={file_name.encode('utf-8').decode('latin-1')}"
+            }
+        )
+    except Exception as e:
+        logger.error(f"下载 PPT 异常: {str(e)}", exc_info=True)
+        return Response(
+            content=f"Download failed: {str(e)}".encode(),
+            status_code=500,
+            media_type="text/plain"
+        )

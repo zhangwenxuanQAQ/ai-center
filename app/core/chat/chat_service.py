@@ -1503,17 +1503,6 @@ class ChatCoreService:
                 user_prompt_messages = chatbot_config['user_prompt_messages']
                 tools = chatbot_config['tools'] if chatbot_config['tools'] else None
                 tool_map = chatbot_config['tool_map']
-                # 注入内置工具（如网络搜索）
-                if web_search_enabled:
-                    from app.core.llm_model.builtin_tools.tool_utils import builtin_tools_to_openai_tools
-                    builtin_tools_list = builtin_tools_to_openai_tools(['web_search'])
-                    if builtin_tools_list:
-                        if tools is None:
-                            tools = []
-                        tools.extend(builtin_tools_list)
-                        if tool_map is None:
-                            tool_map = {}
-                        tool_map['web_search'] = 'builtin'
                 # 获取机器人模型关联表中的模型配置
                 from app.database.models import ChatbotModel
                 try:
@@ -1553,32 +1542,13 @@ class ChatCoreService:
                 ).to_dict()
                 return
 
-        # 非机器人聊天时，如果开启了网络搜索也需要注入内置工具
-        if web_search_enabled and tools is None:
-            from app.core.llm_model.builtin_tools.tool_utils import builtin_tools_to_openai_tools
-            builtin_tools_list = builtin_tools_to_openai_tools(['web_search'])
-            if builtin_tools_list:
-                tools = builtin_tools_list
-                if tool_map is None:
-                    tool_map = {}
-                tool_map['web_search'] = 'builtin'
-
-        # 始终注入 generate_ppt 工具
-        from app.core.llm_model.builtin_tools.tool_utils import builtin_tools_to_openai_tools as _tools_to_openai
-        ppt_tools = _tools_to_openai(['generate_ppt'])
-        if ppt_tools:
-            if tools is None:
-                tools = []
-            tools.extend(ppt_tools)
-            if tool_map is None:
-                tool_map = {}
-            tool_map['generate_ppt'] = 'builtin'
-
-        # 确保 tools 和 tool_map 不为 None
-        if tools is None:
-            tools = []
-        if tool_map is None:
-            tool_map = {}
+        # 注入内置工具（网络搜索和PPT生成等）
+        from app.core.llm_model.builtin_tools.tool_utils import inject_builtin_tools
+        tools, tool_map = inject_builtin_tools(
+            tools=tools,
+            tool_map=tool_map,
+            web_search_enabled=web_search_enabled
+        )
 
         if not chat_id:
             title = user_text[:20] if len(user_text) > 20 else user_text
@@ -2259,6 +2229,11 @@ class ChatCoreService:
         tools = None
         tool_map = None
         user_prompt_messages = None
+        web_search_enabled = config_dict.get('web_search', False)
+        # 如果配置文件中禁用了搜索引擎，强制关闭
+        from app.configs.config import config as app_config
+        if not app_config.get("web_search_engine.enabled", True):
+            web_search_enabled = False
         
         # 使用机器人聊天
         if chatbot_id:
@@ -2288,6 +2263,14 @@ class ChatCoreService:
                     pass
             except ResourceNotFoundError as e:
                 return {'error': str(e), 'chat_id': chat_id}
+        
+        # 注入内置工具（网络搜索和PPT生成等）
+        from app.core.llm_model.builtin_tools.tool_utils import inject_builtin_tools
+        tools, tool_map = inject_builtin_tools(
+            tools=tools,
+            tool_map=tool_map,
+            web_search_enabled=web_search_enabled
+        )
         
         if not chat_id:
             title = user_text[:20] if len(user_text) > 20 else user_text

@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Dict, List, Optional, Tuple, Type
 
 from app.core.llm_model.builtin_tools.base_tool import BuiltinTool
 
@@ -67,6 +67,48 @@ def call_builtin_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
 
 def is_builtin_tool(name: str) -> bool:
     return name in _BUILTIN_TOOL_REGISTRY
+
+
+def inject_builtin_tools(
+    tools: Optional[List[Dict[str, Any]]] = None,
+    tool_map: Optional[Dict[str, str]] = None,
+    web_search_enabled: bool = False
+) -> Tuple[List[Dict[str, Any]], Dict[str, str]]:
+    """
+    注入内置工具到tools和tool_map中
+
+    Args:
+        tools: 已有的工具列表（可为None）
+        tool_map: 已有的工具映射（可为None）
+        web_search_enabled: 是否启用网络搜索功能
+
+    Returns:
+        Tuple[List[Dict[str, Any]], Dict[str, str]]: 更新后的工具列表和工具映射
+    """
+    if tools is None:
+        tools = []
+    if tool_map is None:
+        tool_map = {}
+
+    # 需要始终注入的内置工具列表
+    always_inject_tools = ['generate_ppt']
+    for tool_name in always_inject_tools:
+        builtin_tools_list = builtin_tools_to_openai_tools([tool_name])
+        if builtin_tools_list:
+            # 避免重复注入
+            if tool_name not in tool_map:
+                tools.extend(builtin_tools_list)
+                tool_map[tool_name] = 'builtin'
+
+    # 网络搜索工具根据web_search_enabled决定是否注入
+    if web_search_enabled:
+        web_search_tools = builtin_tools_to_openai_tools(['web_search'])
+        if web_search_tools:
+            if 'web_search' not in tool_map:
+                tools.extend(web_search_tools)
+                tool_map['web_search'] = 'builtin'
+
+    return tools, tool_map
 
 
 def _load_builtin_tools():

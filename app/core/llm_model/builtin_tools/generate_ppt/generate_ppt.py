@@ -19,6 +19,38 @@ from app.core.llm_model.builtin_tools.tool_utils import register_builtin_tool
 
 logger = logging.getLogger(__name__)
 
+# PPT 文件缓存 key 前缀
+PPT_CACHE_PREFIX = "ppt_file:"
+# 缓存过期时间（秒），默认 24 小时
+PPT_CACHE_EXPIRE = 86400
+
+
+def save_ppt_to_cache(file_id: str, file_base64: str, file_name: str) -> bool:
+    """将 PPT 文件存入 Redis 缓存"""
+    try:
+        from app.database.redis_utils import redis_utils
+        return redis_utils.set(
+            f"{PPT_CACHE_PREFIX}{file_id}",
+            json.dumps({"base64": file_base64, "file_name": file_name}, ensure_ascii=False),
+            exp=PPT_CACHE_EXPIRE
+        )
+    except Exception as e:
+        logger.error(f"PPT 存入 Redis 失败: {e}", exc_info=True)
+        return False
+
+
+def get_ppt_from_cache(file_id: str) -> Optional[Dict[str, str]]:
+    """从 Redis 缓存中获取 PPT 文件"""
+    try:
+        from app.database.redis_utils import redis_utils
+        value = redis_utils.get(f"{PPT_CACHE_PREFIX}{file_id}")
+        if value:
+            return json.loads(value)
+        return None
+    except Exception as e:
+        logger.error(f"PPT 从 Redis 读取失败: {e}", exc_info=True)
+        return None
+
 
 def _parse_color(color_str: str) -> Optional[RGBColor]:
     """解析颜色字符串，支持 #RRGGBB、RRGGBB(6位十六进制) 和常见颜色名"""
@@ -48,19 +80,43 @@ def _parse_color(color_str: str) -> Optional[RGBColor]:
 
 
 def _set_text_style(run, style: Dict[str, Any]):
-    """设置文本运行样式"""
+    """设置文本运行样式，支持 python-pptx Font 的所有常用属性"""
+    if not isinstance(style, dict):
+        return
+    font = run.font
     if "font_size" in style:
-        run.font.size = Pt(int(style["font_size"]))
+        font.size = Pt(int(style["font_size"]))
     if "bold" in style:
-        run.font.bold = bool(style["bold"])
+        font.bold = bool(style["bold"])
     if "italic" in style:
-        run.font.italic = bool(style["italic"])
+        font.italic = bool(style["italic"])
+    if "underline" in style:
+        font.underline = bool(style["underline"])
+    if "strikethrough" in style:
+        font.strikethrough = bool(style["strikethrough"])
     if "color" in style:
         c = _parse_color(style["color"])
         if c:
-            run.font.color.rgb = c
+            font.color.rgb = c
     if "font_name" in style:
-        run.font.name = style["font_name"]
+        font.name = style["font_name"]
+    if "font_name_east_asian" in style:
+        try:
+            font._element.rPr.set('{http://schemas.openxmlformats.org/drawingml/2006/main}ea', style["font_name_east_asian"])
+        except Exception:
+            pass
+    if "shadow" in style:
+        font.shadow = bool(style["shadow"])
+    if "highlight_color" in style:
+        c = _parse_color(style["highlight_color"])
+        if c:
+            font.highlight_color = c
+    if "spacing" in style:
+        font.spacing = Pt(float(style["spacing"]))
+    if "superscript" in style and style["superscript"]:
+        font.superscript = True
+    if "subscript" in style and style["subscript"]:
+        font.subscript = True
 
 
 def _add_slide_from_definition(prs: Presentation, slide_def: Dict[str, Any], style_config: Dict[str, Any]):
@@ -141,6 +197,8 @@ def _add_slide_from_definition(prs: Presentation, slide_def: Dict[str, Any], sty
         tf = body_shape.text_frame
         tf.word_wrap = True
         content_style = style_config.get("content_style", {})
+        if not isinstance(content_style, dict):
+            content_style = {}
 
         if isinstance(content, str):
             # 纯文本
@@ -165,6 +223,8 @@ def _add_slide_from_definition(prs: Presentation, slide_def: Dict[str, Any], sty
                     p.text = item.get("text", "")
                     p.level = item.get("level", 0)
                     item_style = item.get("style", {})
+                    if not isinstance(item_style, dict):
+                        item_style = {}
                     merged_style = {**content_style, **item_style}
                     for run in p.runs:
                         _set_text_style(run, merged_style)
@@ -191,7 +251,7 @@ class generate_ppt(BuiltinTool):
     description = (
         "生成 PowerPoint (.pptx) 演示文稿。当用户需要创建幻灯片、演示文稿、PPT时使用此工具。"
         "支持自定义模板、多页幻灯片、标题/副标题/正文/列表等内容。"
-        "生成成功后返回文件下载链接。"
+        "生成成功后会返回下载链接(download_url)，请在回复中用 markdown 链接格式输出该下载链接供用户点击下载。"
     )
     params = [
         BuiltinToolParam(
@@ -221,11 +281,13 @@ class generate_ppt(BuiltinTool):
             name="style_config",
             type="object",
             description=(
-                "全局样式配置对象，可选字段："
-                "title_style({font_size, bold, italic, color, font_name})、"
-                "content_style({font_size, bold, italic, color, font_name})、"
-                "slide_width_inches(幻灯片宽度英寸，默认13.33)、"
-                "slide_height_inches(幻灯片高度英寸，默认7.5)。"
+                "全局样式配置对象。包含 title_style 和 content_style 两个子对象，"
+                "每个子对象的字段对应 python-pptx Font 属性，常用字段："
+                "font_size(字号磅值)、bold(加粗)、italic(斜体)、underline(下划线)、"
+                "strikethrough(删除线)、color(颜色,#RRGGBB格式)、font_name(字体名)、"
+                "font_name_east_asian(东亚字体)、shadow(阴影)、highlight_color(高亮色)、"
+                "spacing(字符间距磅值)。"
+                "另支持 slide_width_inches 和 slide_height_inches 设置幻灯片尺寸。"
                 "颜色尽量用 #RRGGBB 格式（如 #FF5733）"
             ),
             required=False,
@@ -334,14 +396,19 @@ class generate_ppt(BuiltinTool):
             buf.seek(0)
             file_base64 = base64.b64encode(buf.read()).decode("utf-8")
 
+            # 存入 Redis 缓存，供下载端点使用
+            save_ppt_to_cache(file_id, file_base64, file_name)
+
+            download_url = f"/aicenter/v1/chat/download_ppt/{file_id}"
+
             return {
                 "type": "ppt_file",
                 "file_name": file_name,
                 "file_id": file_id,
                 "title": title,
                 "slide_count": len(slides),
-                "file_base64": file_base64,
-                "message": f"成功生成 PPT「{title}」，共 {len(slides)} 页幻灯片。"
+                "download_url": download_url,
+                "message": f"成功生成 PPT「{title}」，共 {len(slides)} 页幻灯片。请使用 markdown 链接格式输出下载链接：[{file_name}]({download_url})"
             }
         except Exception as e:
             logger.error(f"导出 PPT 失败: {e}", exc_info=True)

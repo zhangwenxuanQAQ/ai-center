@@ -34,6 +34,24 @@ const PPTDownloadCard: React.FC<PPTDownloadCardProps> = ({ result, theme = 'ligh
   if (!data) return null;
 
   const handleDownload = async () => {
+    // 优先使用 download_url（GET 直接下载）
+    if (data.download_url) {
+      setDownloading(true);
+      try {
+        const a = document.createElement('a');
+        a.href = data.download_url;
+        a.download = data.file_name || 'presentation.pptx';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } catch (err) {
+        console.error('下载 PPT 失败:', err);
+      } finally {
+        setDownloading(false);
+      }
+      return;
+    }
+    // 兑容旧版 file_base64 方式
     if (!data.file_base64) return;
     setDownloading(true);
     try {

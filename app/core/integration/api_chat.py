@@ -1091,37 +1091,20 @@ class IntegrationChatCoreService:
             user_prompt_messages = chatbot_config_data['user_prompt_messages']
             tools = chatbot_config_data['tools']
             tool_map = chatbot_config_data['tool_map']
-            # 注入内置工具（如网络搜索）
+            
+            # 注入内置工具（网络搜索和PPT生成等）
             web_search_enabled = config_dict.get('web_search', False)
             # 如果配置文件中禁用了搜索引擎，强制关闭
             from app.configs.config import config as app_config
             if not app_config.get("web_search_engine.enabled", True):
                 web_search_enabled = False
-            if web_search_enabled:
-                from app.core.llm_model.builtin_tools.tool_utils import builtin_tools_to_openai_tools
-                builtin_tools_list = builtin_tools_to_openai_tools(['web_search'])
-                if builtin_tools_list:
-                    if tools is None:
-                        tools = []
-                    tools.extend(builtin_tools_list)
-                    if tool_map is None:
-                        tool_map = {}
-                    tool_map['web_search'] = 'builtin'
-            # 始终注入 generate_ppt 工具
-            from app.core.llm_model.builtin_tools.tool_utils import builtin_tools_to_openai_tools as _ppt_tools
-            ppt_tools_list = _ppt_tools(['generate_ppt'])
-            if ppt_tools_list:
-                if tools is None:
-                    tools = []
-                tools.extend(ppt_tools_list)
-                if tool_map is None:
-                    tool_map = {}
-                tool_map['generate_ppt'] = 'builtin'
-            # 确保 tools 和 tool_map 不为 None
-            if tools is None:
-                tools = []
-            if tool_map is None:
-                tool_map = {}
+            
+            from app.core.llm_model.builtin_tools.tool_utils import inject_builtin_tools
+            tools, tool_map = inject_builtin_tools(
+                tools=tools,
+                tool_map=tool_map,
+                web_search_enabled=web_search_enabled
+            )
         except ResourceNotFoundError as e:
             # 获取机器人配置失败，返回错误
             actual_chat_id = chat_id or f"temp_{uuid.uuid4().hex[:12]}"
