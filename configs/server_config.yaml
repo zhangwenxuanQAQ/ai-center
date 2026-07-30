@@ -38,6 +38,7 @@ web_search_engine:
   host: '10.9.44.5'
   port: 18080
   enabled: false
+  engines: 'baidu'
 logging:
   level: 'INFO'
   format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
