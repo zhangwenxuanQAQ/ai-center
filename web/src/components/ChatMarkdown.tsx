@@ -87,6 +87,7 @@ const MermaidChart: React.FC<{ chart: string; theme: 'light' | 'dark' }> = React
 
     // 设置延迟渲染（防抖），等待流式传输完成
     renderTimeoutRef.current = setTimeout(async () => {
+      const renderId = `mermaid-${Math.random().toString(36).slice(2)}`;
       try {
         // 检查代码完整性
         if (!isComplete(chart)) {
@@ -102,17 +103,25 @@ const MermaidChart: React.FC<{ chart: string; theme: 'light' | 'dark' }> = React
           startOnLoad: false,
           theme: theme === 'dark' ? 'dark' : 'default',
           securityLevel: 'loose',
+          suppressErrors: true,
         });
-        const { svg } = await mermaid.render(`mermaid-${Math.random().toString(36).slice(2)}`, chart);
+        const { svg } = await mermaid.render(renderId, chart);
+
+        // 检查是否渲染出错误 SVG（mermaid 有时不抛异常而是返回包含错误信息的 SVG）
+        if (svg && (svg.includes('errorContainer') || svg.includes('Syntax error'))) {
+          throw new Error('图表语法错误');
+        }
+
         setSvg(svg);
         setError('');
       } catch (err) {
-        console.error('Mermaid rendering error:', err);
-        // 只有在代码完整时才显示错误
-        if (isComplete(chart)) {
-          setError(`图表渲染失败: ${err instanceof Error ? err.message : '未知错误'}`);
-        }
-        setIsValid(false);
+        // 清理 mermaid 注入到 DOM 中的错误元素
+        const errorEl = document.getElementById(`d${renderId}`);
+        if (errorEl) errorEl.remove();
+
+        // 回退显示原始 mermaid 代码
+        setError(chart);
+        setIsValid(true);
       }
     }, 500); // 500ms 延迟，等待流式传输稳定
 
@@ -133,7 +142,25 @@ const MermaidChart: React.FC<{ chart: string; theme: 'light' | 'dark' }> = React
   }
 
   if (error) {
-    return <div style={{ color: '#ff4d4f', padding: '12px' }}>{error}</div>;
+    return (
+      <div className="mermaid-container" style={{ padding: '12px' }}>
+        <div style={{ fontSize: '12px', color: '#999', marginBottom: '8px' }}>
+          图表渲染失败，原始代码：
+        </div>
+        <pre style={{
+          margin: 0,
+          padding: '12px',
+          background: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#f5f5f5',
+          borderRadius: '6px',
+          fontSize: '12px',
+          lineHeight: '1.5',
+          overflow: 'auto',
+          color: theme === 'dark' ? '#e0e0e0' : '#333',
+        }}>
+          <code>{error}</code>
+        </pre>
+      </div>
+    );
   }
 
   return (
