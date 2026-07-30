@@ -4,6 +4,7 @@ import { Tooltip, message } from 'antd';
 import MDEditor from '@uiw/react-md-editor';
 import ChatMarkdown from '../../components/ChatMarkdown';
 import WebSearchResult from '../../components/WebSearchResult';
+import PPTDownloadCard from '../../components/PPTDownloadCard';
 import ChatScrollNavigator, { UserMessageAnchor } from '../../components/ChatScrollNavigator';
 import { integrationChatService, IntegrationMessage, IntegrationQueryItem } from '../services/integrationChat';
 import { usePanelDrag } from './PanelDragContext';
@@ -1529,7 +1530,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             {msg.tool_calls && msg.tool_calls.length > 0 && (
               <div className="int-tool-calls-container">
                 {msg.tool_calls.map((tc, tcIndex) => (
-                  <div key={tc.tool_call_id || `tc-${tcIndex}`} className={`int-tool-call-card int-tool-call-${tc.status}${tc.name === 'web_search' ? ' int-tool-call-web-search' : ''}`}>
+                  <div key={tc.tool_call_id || `tc-${tcIndex}`} className={`int-tool-call-card int-tool-call-${tc.status}${tc.name === 'web_search' ? ' int-tool-call-web-search' : ''}${tc.name === 'generate_ppt' ? ' int-tool-call-generate-ppt' : ''}`}>
                     <div className="int-tool-call-header" onClick={() => toggleToolCall(tc.tool_call_id || `tc-${tcIndex}`)}>
                       <div className="int-tool-call-header-left">
                         {tc.status === 'start' && <LoadingOutlined spin className="int-tool-call-icon-start" />}
@@ -1553,15 +1554,15 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                     </div>
                     {expandedToolCalls.has(tc.tool_call_id || `tc-${tcIndex}`) && (
                       <div className="int-tool-call-content">
-                        {/* web_search不显示原始消息 */}
-                        {tc.message && tc.name !== 'web_search' && (
+                        {/* web_search/generate_ppt不显示原始消息 */}
+                        {tc.message && tc.name !== 'web_search' && tc.name !== 'generate_ppt' && (
                           <div className="int-tool-call-message">
                             <ChatMarkdown source={tc.message} />
                           </div>
                         )}
                         {tc.result && (
                           <>
-                            {tc.message && tc.name !== 'web_search' && <div className="int-tool-call-divider" />}
+                            {tc.message && tc.name !== 'web_search' && tc.name !== 'generate_ppt' && <div className="int-tool-call-divider" />}
                             <div
                               className="int-tool-call-result-header"
                               onClick={(e) => {
@@ -1580,6 +1581,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                               <div className="int-tool-call-result">
                                 {tc.name === 'web_search' ? (
                                   <WebSearchResult result={tc.result} theme={theme} />
+                                ) : tc.name === 'generate_ppt' ? (
+                                  <PPTDownloadCard result={tc.result} theme={theme} />
                                 ) : (
                                   <ChatMarkdown
                                     source={typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result, null, 2)}

@@ -5,6 +5,7 @@ import DataSourceFileSelector from '../datasource/datasource data_select';
 import type { MenuProps, UploadProps } from 'antd';
 import ChatMarkdown from '../../components/ChatMarkdown';
 import WebSearchResult from '../../components/WebSearchResult';
+import PPTDownloadCard from '../../components/PPTDownloadCard';
 import ChatScrollNavigator, { UserMessageAnchor } from '../../components/ChatScrollNavigator';
 import { llmModelService, LLMModel } from '../../services/llm_model';
 import { chatbotService, Chatbot } from '../../services/chatbot';
@@ -2962,7 +2963,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               </div>
             )}
             {msg.tool_calls && msg.tool_calls.length > 0 && msg.tool_calls.map((tc, tcIndex) => (
-              <div key={tc.tool_call_id || `tc-${tcIndex}`} className={`tool-call-card tool-call-${tc.status}${tc.name === 'web_search' ? ' tool-call-web-search' : ''}`}>
+              <div key={tc.tool_call_id || `tc-${tcIndex}`} className={`tool-call-card tool-call-${tc.status}${tc.name === 'web_search' ? ' tool-call-web-search' : ''}${tc.name === 'generate_ppt' ? ' tool-call-generate-ppt' : ''}`}>
                 <div className="tool-call-header" onClick={() => toggleToolCall(tc.tool_call_id || `tc-${tcIndex}`)}>
                   <div className="tool-call-header-left">
                     {tc.status === 'start' && <LoadingOutlined spin className="tool-call-icon-start" />}
@@ -3018,8 +3019,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                         {/* 工具结果内容 */}
                         {expandedToolCallResults.has(tc.tool_call_id || `tc-${tcIndex}`) && (
                           <>
-                            {/* 工具调用消息 - web_search不显示原始消息 */}
-                            {tc.message && tc.name !== 'web_search' && (
+                            {/* 工具调用消息 - web_search/generate_ppt不显示原始消息 */}
+                            {tc.message && tc.name !== 'web_search' && tc.name !== 'generate_ppt' && (
                               <div className={`tool-call-message ${theme === 'dark' ? 'dark' : 'light'}`}>
                                 <ChatMarkdown
                                   source={tc.message}
@@ -3032,6 +3033,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                               <div className={`tool-call-result ${theme === 'dark' ? 'dark' : 'light'}`}>
                                 {tc.name === 'web_search' ? (
                                   <WebSearchResult result={tc.result} theme={theme} />
+                                ) : tc.name === 'generate_ppt' ? (
+                                  <PPTDownloadCard result={tc.result} theme={theme} />
                                 ) : (
                                   <ChatMarkdown
                                     source={typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result, null, 2)}
@@ -3067,7 +3070,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               </div>
             )}
             {msg.tool_calls && msg.tool_calls.length > 0 && msg.tool_calls.map((tc, tcIndex) => (
-              <div key={tc.tool_call_id || `tc-${tcIndex}`} className={`tool-call-card tool-call-${tc.status}${tc.name === 'web_search' ? ' tool-call-web-search' : ''}`}>
+              <div key={tc.tool_call_id || `tc-${tcIndex}`} className={`tool-call-card tool-call-${tc.status}${tc.name === 'web_search' ? ' tool-call-web-search' : ''}${tc.name === 'generate_ppt' ? ' tool-call-generate-ppt' : ''}`}>
                 <div className="tool-call-header" onClick={() => toggleToolCall(tc.tool_call_id || `tc-${tcIndex}`)}>
                   <div className="tool-call-header-left">
                     {tc.status === 'start' && <LoadingOutlined spin className="tool-call-icon-start" />}
@@ -3091,8 +3094,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 </div>
                 {expandedToolCalls.has(tc.tool_call_id || `tc-${tcIndex}`) && (
                   <div className="tool-call-content">
-                    {/* web_search不显示原始消息 */}
-                    {tc.message && tc.name !== 'web_search' && (
+                    {/* web_search/generate_ppt不显示原始消息 */}
+                    {tc.message && tc.name !== 'web_search' && tc.name !== 'generate_ppt' && (
                       <div className={`tool-call-message ${theme === 'dark' ? 'dark' : 'light'}`}>
                         <ChatMarkdown
                           source={tc.message}
@@ -3104,6 +3107,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                       <div className={`tool-call-result ${theme === 'dark' ? 'dark' : 'light'}`}>
                         {tc.name === 'web_search' ? (
                           <WebSearchResult result={tc.result} theme={theme} />
+                        ) : tc.name === 'generate_ppt' ? (
+                          <PPTDownloadCard result={tc.result} theme={theme} />
                         ) : (
                           <ChatMarkdown
                             source={JSON.stringify(tc.result, null, 2)}
@@ -3276,9 +3281,10 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     const hasResult = toolCall?.result != null;
     const hasMessage = msg.content;
     const isWebSearch = toolCall?.name === 'web_search';
+    const isGeneratePpt = toolCall?.name === 'generate_ppt';
 
     return (
-      <div className={`tool-call-card tool-call-${toolCall?.status || 'success'}${isWebSearch ? ' tool-call-web-search' : ''}`}>
+      <div className={`tool-call-card tool-call-${toolCall?.status || 'success'}${isWebSearch ? ' tool-call-web-search' : ''}${isGeneratePpt ? ' tool-call-generate-ppt' : ''}`}>
         <div className="tool-call-header" onClick={() => toggleToolCall(toolCallId)}>
           <div className="tool-call-header-left">
             {toolCall?.status === 'start' && <LoadingOutlined spin className="tool-call-icon-start" />}
@@ -3329,8 +3335,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 </div>
                 {expandedToolCallResults.has(toolCallId) && (
                   <>
-                    {/* web_search不显示原始消息 */}
-                    {hasMessage && !isWebSearch && (
+                    {/* web_search/generate_ppt不显示原始消息 */}
+                    {hasMessage && !isWebSearch && !isGeneratePpt && (
                       <div className={`tool-call-message ${theme === 'dark' ? 'dark' : 'light'}`}>
                         <ChatMarkdown
                           source={msg.content}
@@ -3344,6 +3350,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                       <div className={`tool-call-result ${theme === 'dark' ? 'dark' : 'light'}`}>
                         {isWebSearch ? (
                           <WebSearchResult result={toolCall.result} theme={theme} />
+                        ) : isGeneratePpt ? (
+                          <PPTDownloadCard result={toolCall.result} theme={theme} />
                         ) : (
                           <ChatMarkdown
                             source={typeof toolCall.result === 'string' ? toolCall.result : JSON.stringify(toolCall.result, null, 2)}
@@ -3724,7 +3732,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                     </div>
                   )}
                   {msg.tool_calls && msg.tool_calls.length > 0 && msg.tool_calls.map((tc, tcIndex) => (
-                    <div key={tc.tool_call_id || `tc-${tcIndex}`} className={`tool-call-card tool-call-${tc.status}${tc.name === 'web_search' ? ' tool-call-web-search' : ''}`}>
+                    <div key={tc.tool_call_id || `tc-${tcIndex}`} className={`tool-call-card tool-call-${tc.status}${tc.name === 'web_search' ? ' tool-call-web-search' : ''}${tc.name === 'generate_ppt' ? ' tool-call-generate-ppt' : ''}`}>
                       <div className="tool-call-header" onClick={() => toggleToolCall(tc.tool_call_id || `tc-${tcIndex}`)}>
                         <div className="tool-call-header-left">
                           {tc.status === 'start' && <LoadingOutlined spin className="tool-call-icon-start" />}
@@ -3761,6 +3769,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                             <div className="tool-call-result">
                               {tc.name === 'web_search' ? (
                                 <WebSearchResult result={tc.result} theme={theme} />
+                              ) : tc.name === 'generate_ppt' ? (
+                                <PPTDownloadCard result={tc.result} theme={theme} />
                               ) : (
                                 <pre>{typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result, null, 2)}</pre>
                               )}

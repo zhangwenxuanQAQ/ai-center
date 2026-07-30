@@ -1107,6 +1107,16 @@ class IntegrationChatCoreService:
                     if tool_map is None:
                         tool_map = {}
                     tool_map['web_search'] = 'builtin'
+            # 始终注入 generate_ppt 工具
+            from app.core.llm_model.builtin_tools.tool_utils import builtin_tools_to_openai_tools as _ppt_tools
+            ppt_tools_list = _ppt_tools(['generate_ppt'])
+            if ppt_tools_list:
+                if tools is None:
+                    tools = []
+                tools.extend(ppt_tools_list)
+                if tool_map is None:
+                    tool_map = {}
+                tool_map['generate_ppt'] = 'builtin'
             # 确保 tools 和 tool_map 不为 None
             if tools is None:
                 tools = []

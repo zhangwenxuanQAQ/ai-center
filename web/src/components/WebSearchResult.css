@@ -146,3 +146,54 @@ body[data-theme="dark"] .tool-call-card.tool-call-web-search .tool-call-icon-sta
 body[data-theme="dark"] .tool-call-card.tool-call-web-search .tool-call-icon-running {
   color: #22d3ee;
 }
+
+/* ========== generate_ppt 工具卡片特殊颜色（橙红色） ========== */
+
+.tool-call-card.tool-call-generate-ppt {
+  border-color: rgba(212, 56, 13, 0.35) !important;
+}
+
+.tool-call-card.tool-call-generate-ppt .tool-call-header {
+  color: #d4380d;
+}
+
+.tool-call-card.tool-call-generate-ppt .tool-call-icon-success {
+  color: #d4380d;
+}
+
+.tool-call-card.tool-call-generate-ppt .tool-call-icon-start,
+.tool-call-card.tool-call-generate-ppt .tool-call-icon-running {
+  color: #d4380d;
+}
+
+.int-tool-call-card.int-tool-call-generate-ppt {
+  border-color: rgba(212, 56, 13, 0.35) !important;
+}
+
+.int-tool-call-card.int-tool-call-generate-ppt .int-tool-call-header {
+  color: #d4380d;
+}
+
+.int-tool-call-card.int-tool-call-generate-ppt .int-tool-call-icon-success {
+  color: #d4380d;
+}
+
+.int-tool-call-card.int-tool-call-generate-ppt .int-tool-call-icon-start,
+.int-tool-call-card.int-tool-call-generate-ppt .int-tool-call-icon-running {
+  color: #d4380d;
+}
+
+/* Dark theme */
+body[data-theme="dark"] .tool-call-card.tool-call-generate-ppt .tool-call-header,
+body[data-theme="dark"] .tool-call-card.tool-call-generate-ppt .tool-call-icon-success,
+body[data-theme="dark"] .tool-call-card.tool-call-generate-ppt .tool-call-icon-start,
+body[data-theme="dark"] .tool-call-card.tool-call-generate-ppt .tool-call-icon-running {
+  color: #ff7a45;
+}
+
+.integration-page[data-theme="dark"] .int-tool-call-card.int-tool-call-generate-ppt .int-tool-call-header,
+.integration-page[data-theme="dark"] .int-tool-call-card.int-tool-call-generate-ppt .int-tool-call-icon-success,
+.integration-page[data-theme="dark"] .int-tool-call-card.int-tool-call-generate-ppt .int-tool-call-icon-start,
+.integration-page[data-theme="dark"] .int-tool-call-card.int-tool-call-generate-ppt .int-tool-call-icon-running {
+  color: #ff7a45;
+}

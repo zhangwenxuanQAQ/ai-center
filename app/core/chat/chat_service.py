@@ -1563,6 +1563,17 @@ class ChatCoreService:
                     tool_map = {}
                 tool_map['web_search'] = 'builtin'
 
+        # 始终注入 generate_ppt 工具
+        from app.core.llm_model.builtin_tools.tool_utils import builtin_tools_to_openai_tools as _tools_to_openai
+        ppt_tools = _tools_to_openai(['generate_ppt'])
+        if ppt_tools:
+            if tools is None:
+                tools = []
+            tools.extend(ppt_tools)
+            if tool_map is None:
+                tool_map = {}
+            tool_map['generate_ppt'] = 'builtin'
+
         # 确保 tools 和 tool_map 不为 None
         if tools is None:
             tools = []

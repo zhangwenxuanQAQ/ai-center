@@ -72,6 +72,7 @@ def is_builtin_tool(name: str) -> bool:
 def _load_builtin_tools():
     try:
         from app.core.llm_model.builtin_tools.web_search import web_search  # noqa: F401
+        from app.core.llm_model.builtin_tools.generate_ppt import generate_ppt  # noqa: F401
         logger.info("builtin tools loaded")
     except Exception as e:
         logger.error(f"load builtin tools failed: {e}", exc_info=True)
