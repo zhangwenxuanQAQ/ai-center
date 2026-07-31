@@ -266,13 +266,6 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     }
   }, [models, chatbots]);
 
-  // 当选择模型变化时，如果有对话，重新加载对话配置以确保对话config覆盖模型默认值
-  useEffect(() => {
-    if (conversation && selectedType === 'model' && selectedModel) {
-      fetchConversationConfig(conversation.id);
-    }
-  }, [selectedModel, selectedType]);
-
   const fetchConversationConfig = async (conversationId: string) => {
     try {
       const detail = await chatService.getConversation(conversationId);
@@ -2447,7 +2440,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     </div>
   );
 
-  const handleSelectModel = (model: LLMModel) => {
+  const handleSelectModel = async (model: LLMModel) => {
     setSelectedModel(model);
     setSelectedChatbot(null);
     setSelectedType('model');
@@ -2456,12 +2449,36 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     } else {
       setModelConfig({});
     }
+
+    // 如果当前有对话，更新对话的模型
+    if (conversation) {
+      try {
+        await chatService.updateConversationConfig(conversation.id, {
+          model_id: model.id,
+          chatbot_id: undefined
+        });
+      } catch (error) {
+        console.error('更新对话模型失败:', error);
+      }
+    }
   };
 
-  const handleSelectChatbot = (chatbot: Chatbot) => {
+  const handleSelectChatbot = async (chatbot: Chatbot) => {
     setSelectedChatbot(chatbot);
     setSelectedModel(null);
     setSelectedType('chatbot');
+
+    // 如果当前有对话，更新对话的机器人
+    if (conversation) {
+      try {
+        await chatService.updateConversationConfig(conversation.id, {
+          model_id: undefined,
+          chatbot_id: chatbot.id
+        });
+      } catch (error) {
+        console.error('更新对话机器人失败:', error);
+      }
+    }
   };
 
   const getDropdownItems = (): MenuProps['items'] => {
