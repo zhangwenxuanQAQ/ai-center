@@ -1,11 +1,12 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layout, Tree, Empty, Spin, Button, Modal, Form, Input, Select, Tag, message, Popconfirm, Table, Pagination, Switch, Space, TreeSelect, Checkbox, Tooltip, Drawer, Descriptions, Row, Col } from 'antd';
 const { TextArea } = Input;
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, FileTextOutlined, CheckCircleOutlined, CloseCircleOutlined, PlusSquareOutlined, UpOutlined, DownOutlined, CloseOutlined, EyeOutlined } from '@ant-design/icons';
 import type { TreeDataNode } from 'antd';
-import MDEditor from '@uiw/react-md-editor';
 import ChatMarkdown from '../../components/ChatMarkdown';
+import PromptTipTapEditor from '../../components/PromptTipTapEditor';
+import PromptContentRenderer from '../../components/PromptContentRenderer';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -1098,18 +1099,11 @@ const PromptManagement: React.FC = () => {
                 </div>
               </div>
               <div style={{ flex: 1, minHeight: '350px' }} className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                <MDEditor
+                <PromptTipTapEditor
                   value={promptContent}
                   onChange={(value) => handleContentChange(value || '')}
-                  height="100%"
-                  preview="edit"
-                  className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
-                  style={{
-                    background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fff',
-                    height: '100%',
-                    minHeight: '350px',
-                    color: theme === 'dark' ? '#fff' : '#000'
-                  }}
+                  height={350}
+                  placeholder="请输入提示词内容，输入 / 可引用其他提示词"
                 />
               </div>
             </div>
@@ -1180,15 +1174,15 @@ const PromptManagement: React.FC = () => {
             </Descriptions>
             
             <div style={{ marginTop: '24px' }}>
-              <div style={{ 
-                fontWeight: 'bold', 
+              <div style={{
+                fontWeight: 'bold',
                 marginBottom: '12px',
                 color: theme === 'dark' ? '#fff' : '#000',
                 fontSize: '14px'
               }}>
                 提示词内容
               </div>
-              <div 
+              <div
                 className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}
                 style={{
                   background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fff',
@@ -1198,9 +1192,10 @@ const PromptManagement: React.FC = () => {
                   minHeight: '300px'
                 }}
               >
-                <ChatMarkdown
-                  source={viewingPrompt.content || ''}
-                  className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                <PromptContentRenderer
+                  content={viewingPrompt.content || ''}
+                  prompts={prompts}
+                  theme={theme}
                 />
               </div>
             </div>

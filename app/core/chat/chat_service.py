@@ -231,15 +231,17 @@ class ChatCoreService:
                     pass
             elif prompt.prompt_source == 'manual' and prompt.prompt_content:
                 system_prompt_parts.append(prompt.prompt_content)
-        
-        system_prompt = '\n'.join(system_prompt_parts) if system_prompt_parts else None
-        
+
+        # 解析提示词中的引用占位符 {{prompt@prompt_id}}
+        from app.core.llm_model.utils.llm_util import resolve_prompt_references
+        system_prompt = resolve_prompt_references('\n'.join(system_prompt_parts)) if system_prompt_parts else None
+
         user_prompts = list(ChatbotPrompt.select().where(
             (ChatbotPrompt.chatbot_id == chatbot_id) &
             (ChatbotPrompt.prompt_type == 'user') &
             (ChatbotPrompt.deleted == False)
         ).order_by(ChatbotPrompt.sort_order))
-        
+
         user_prompt_messages = []
         for prompt in user_prompts:
             if prompt.prompt_source == 'library' and prompt.prompt_id:
@@ -257,6 +259,10 @@ class ChatCoreService:
                     'role': 'user',
                     'content': prompt.prompt_content
                 })
+
+        # 解析用户提示词中的引用占位符 {{prompt@prompt_id}}
+        for msg in user_prompt_messages:
+            msg['content'] = resolve_prompt_references(msg['content'])
         
         tool_bindings = list(ChatbotTool.select().where(
             (ChatbotTool.chatbot_id == chatbot_id) &

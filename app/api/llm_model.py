@@ -361,7 +361,9 @@ async def chat_with_model(llm_model_id: str, request: dict = Body(...)):
         processed_messages = []
         for msg in messages:
             if msg.get('role') == 'system':
-                built_system_prompt = build_system_prompt(msg.get('content'))
+                from app.core.llm_model.utils.llm_util import resolve_prompt_references
+                system_content = resolve_prompt_references(msg.get('content', ''))
+                built_system_prompt = build_system_prompt(system_content)
                 processed_messages.append({
                     'role': 'system',
                     'content': built_system_prompt

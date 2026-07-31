@@ -1840,7 +1840,6 @@ class KnowledgebaseDocumentService:
         """
         import json
         import asyncio
-        import re
         from app.database.models import KnowledgebaseDocumentCategory, LLMModel
         from app.core.llm_model.utils.llm_util import convert_query_to_message, format_prompt
         from app.core.prompt.utils.system_prompt_builder import _load_prompt_file
@@ -1848,7 +1847,6 @@ class KnowledgebaseDocumentService:
         from app.services.chat.dto import QueryItem
         # 从 starlette 导入 UploadFile，FastAPI 路由参数实际传入的是 starlette 的 UploadFile 实例
         from starlette.datastructures import UploadFile
-        from app.services.prompt.service import PromptService
         
         try:
             category = KnowledgebaseDocumentCategory.get(KnowledgebaseDocumentCategory.id == category_id)
@@ -1919,26 +1917,11 @@ class KnowledgebaseDocumentService:
             ))
         
         user_message = convert_query_to_message(query_items, llm_model.model_type, model_id, chunk_method="one")
-        
+
         # 处理 prompt 中的提示词引用占位符
-        processed_prompt = ""
-        if prompt:
-            processed_prompt = prompt.strip()
-            # 解析 {{prompt@prompt_id}} 占位符
-            pattern = r'\{\{prompt@([^}]{1,100})\}\}'
-            matches = re.findall(pattern, processed_prompt)
-            
-            for prompt_id in matches:
-                # 查询提示词内容
-                referenced_prompt = PromptService.get_prompt(prompt_id)
-                if referenced_prompt and referenced_prompt.content:
-                    # 替换占位符为实际的提示词内容
-                    placeholder = f"{{{{prompt@{prompt_id}}}}}"
-                    processed_prompt = processed_prompt.replace(placeholder, referenced_prompt.content)
-                else:
-                    logger.warning(f"提示词引用 {prompt_id} 不存在或无内容，保留占位符")
-        
-        
+        from app.core.llm_model.utils.llm_util import resolve_prompt_references
+        processed_prompt = resolve_prompt_references(prompt.strip()) if prompt else ""
+
         messages = [
             {'role': 'system', 'content': system_prompt},
             user_message,
@@ -2035,7 +2018,6 @@ class KnowledgebaseDocumentService:
         from app.core.llm_model.factory import LLMFactory
         from app.services.chat.dto import QueryItem
         from starlette.datastructures import UploadFile
-        from app.services.prompt.service import PromptService
         
         # 获取知识目录配置
         try:
@@ -2137,25 +2119,11 @@ class KnowledgebaseDocumentService:
 
         # 转换为用户消息
         user_message = convert_query_to_message(query_items, llm_model.model_type, model_id, chunk_method="one")
-        
+
         # 处理 prompt 中的提示词引用占位符
-        processed_prompt = ""
-        if prompt:
-            processed_prompt = prompt.strip()
-            # 解析 {{prompt@prompt_id}} 占位符
-            pattern = r'\{\{prompt@([^}]{1,100})\}\}'
-            matches = re.findall(pattern, processed_prompt)
-            
-            for prompt_id in matches:
-                # 查询提示词内容
-                referenced_prompt = PromptService.get_prompt(prompt_id)
-                if referenced_prompt and referenced_prompt.content:
-                    # 替换占位符为实际的提示词内容
-                    placeholder = f"{{{{prompt@{prompt_id}}}}}"
-                    processed_prompt = processed_prompt.replace(placeholder, referenced_prompt.content)
-                else:
-                    logger.warning(f"提示词引用 {prompt_id} 不存在或无内容，保留占位符")
-        
+        from app.core.llm_model.utils.llm_util import resolve_prompt_references
+        processed_prompt = resolve_prompt_references(prompt.strip()) if prompt else ""
+
         messages = [
             {'role': 'system', 'content': system_prompt},
             user_message,

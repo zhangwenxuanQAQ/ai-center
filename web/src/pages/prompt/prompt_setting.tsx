@@ -4,8 +4,8 @@ import { Form, Input, Select, TreeSelect, Button, message, Row, Col, Switch, Mod
 const { TextArea } = Input;
 const { Option } = Select;
 import { ArrowLeftOutlined, SaveOutlined, FileTextOutlined, TagsOutlined, PlayCircleOutlined, SendOutlined, PlusOutlined, SettingOutlined, ClearOutlined, BulbOutlined, GlobalOutlined, CopyOutlined, EditOutlined, DownOutlined, RightOutlined, LoadingOutlined, InfoCircleOutlined, ReloadOutlined, PaperClipOutlined, StopOutlined } from '@ant-design/icons';
-import MDEditor from '@uiw/react-md-editor';
 import ChatMarkdown from '../../components/ChatMarkdown';
+import PromptTipTapEditor from '../../components/PromptTipTapEditor';
 import ChatScrollNavigator, { UserMessageAnchor } from '../../components/ChatScrollNavigator';
 import { promptService, Prompt, PromptCategory } from '../../services/prompt';
 import { llmModelService, LLMModel } from '../../services/llm_model';
@@ -317,11 +317,8 @@ const PromptSetting: React.FC = () => {
   const handleSave = async () => {
     try {
       const values = await form.validateFields();
-      
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = content;
-      const textContent = tempDiv.textContent || tempDiv.innerText || '';
-      if (!textContent.trim()) {
+
+      if (!content || !content.trim()) {
         message.warning('请输入提示词内容');
         return;
       }
@@ -449,12 +446,9 @@ const PromptSetting: React.FC = () => {
       const chatMessages = [];
 
       if (content && content.trim()) {
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = content;
-        const textContent = tempDiv.textContent || tempDiv.innerText || '';
         chatMessages.push({
           role: 'system',
-          content: textContent
+          content: content
         });
       }
 
@@ -696,17 +690,14 @@ const PromptSetting: React.FC = () => {
       abortControllerRef.current = new AbortController();
       
       const chatMessages = [];
-      
+
       if (content && content.trim()) {
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = content;
-        const textContent = tempDiv.textContent || tempDiv.innerText || '';
         chatMessages.push({
           role: 'system',
-          content: textContent
+          content: content
         });
       }
-      
+
       previousMessages.forEach(msg => {
         chatMessages.push({
           role: msg.role,
@@ -1127,17 +1118,11 @@ const PromptSetting: React.FC = () => {
                 </Button>
               </div>
               <div style={{ flex: 1, minHeight: '300px', maxHeight: 'calc(100vh - 10px)' }} className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                <MDEditor
+                <PromptTipTapEditor
                   value={content}
                   onChange={(value) => handleContentChange(value || '')}
-                  height="100%"
-                  preview="edit"
-                  className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
-                  style={{
-                    background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fff',
-                    height: '100%',
-                    color: theme === 'dark' ? '#fff' : '#000'
-                  }}
+                  height={400}
+                  placeholder="请输入提示词内容，输入 / 可引用其他提示词"
                 />
               </div>
             </div>

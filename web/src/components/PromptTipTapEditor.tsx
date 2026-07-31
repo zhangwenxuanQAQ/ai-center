@@ -652,6 +652,7 @@ const PromptTipTapEditor = forwardRef<PromptTipTapEditorRef, PromptTipTapEditorP
             overflow-y: auto;
             font-size: 14px;
             line-height: 1.6;
+            text-align: left;
           }
           .prompt-tiptap-wrapper .tiptap p.is-editor-empty:first-child::before {
             content: attr(data-placeholder);

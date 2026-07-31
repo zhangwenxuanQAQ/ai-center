@@ -7,6 +7,7 @@ import type { UploadProps } from 'antd';
 import type { MenuProps } from 'antd';
 import MDEditor from '@uiw/react-md-editor';
 import ChatMarkdown from '../../components/ChatMarkdown';
+import PromptContentRenderer from '../../components/PromptContentRenderer';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -3704,7 +3705,7 @@ const ChatbotSetting: React.FC = () => {
               <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', marginBottom: '8px' }}>
                 提示词内容
               </h4>
-              <div 
+              <div
                 className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}
                 style={{
                   background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fff',
@@ -3714,9 +3715,10 @@ const ChatbotSetting: React.FC = () => {
                   minHeight: '300px'
                 }}
               >
-                <ChatMarkdown
-                  source={currentViewPrompt.prompt_content || currentViewPrompt.content || ''}
-                  className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                <PromptContentRenderer
+                  content={currentViewPrompt.prompt_content || currentViewPrompt.content || ''}
+                  prompts={prompts}
+                  theme={theme}
                 />
               </div>
             </div>

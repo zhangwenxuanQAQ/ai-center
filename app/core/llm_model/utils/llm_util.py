@@ -3,8 +3,58 @@
 """
 
 import re
+import logging
 from typing import Optional, Dict, Any, List, Tuple
 from jinja2 import Environment
+
+logger = logging.getLogger(__name__)
+
+
+def resolve_prompt_references(prompt: str, max_depth: int = 5) -> str:
+    """
+    解析并替换提示词中的引用占位符
+
+    将 {{prompt@prompt_id}} 格式的占位符替换为对应提示词的实际内容。
+    支持嵌套引用（引用的提示词中包含其他引用），通过 max_depth 限制递归深度防止循环引用。
+
+    Args:
+        prompt: 包含引用占位符的提示词字符串
+        max_depth: 最大递归深度，默认为5，防止循环引用导致的无限递归
+
+    Returns:
+        替换占位符后的提示词字符串，若占位符对应的提示词不存在则保留原占位符
+    """
+    if not prompt:
+        return prompt
+
+    # 延迟导入避免循环依赖
+    from app.services.prompt.service import PromptService
+
+    result = prompt
+    pattern = r'\{\{prompt@([^}]{1,100})\}\}'
+
+    depth = 0
+    while depth < max_depth:
+        matches = re.findall(pattern, result)
+        if not matches:
+            break
+
+        has_replacement = False
+        for prompt_id in matches:
+            referenced_prompt = PromptService.get_prompt(prompt_id)
+            if referenced_prompt and referenced_prompt.content:
+                placeholder = f"{{{{prompt@{prompt_id}}}}}"
+                result = result.replace(placeholder, referenced_prompt.content)
+                has_replacement = True
+            else:
+                logger.warning(f"提示词引用 {prompt_id} 不存在或无内容，保留占位符")
+
+        if not has_replacement:
+            break
+
+        depth += 1
+
+    return result
 
 
 def get_output_json_content(response: str) -> str:
