@@ -1,4 +1,4 @@
-﻿﻿/* ==================== 白天模式主题样式 ==================== */
+/* ==================== 白天模式主题样式 ==================== */
 
 body[data-theme="light"] .ant-card-bordered:not([data-card-type="model"]) {
   border-radius: 16px !important;
@@ -153,6 +153,53 @@ body[data-theme="light"] div.ant-popover-title {
 body[data-theme="light"] .ant-popover-inner-content,
 body[data-theme="light"] div.ant-popover-inner-content {
   color: rgba(0, 0, 0, 0.85) !important;
+}
+
+/* Popconfirm 详细样式 */
+body[data-theme="light"] .ant-popconfirm .ant-popconfirm-title {
+  color: rgba(0, 0, 0, 0.9) !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+}
+
+body[data-theme="light"] .ant-popconfirm .ant-popconfirm-description {
+  color: rgba(0, 0, 0, 0.75) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+}
+
+body[data-theme="light"] .ant-popconfirm .ant-popconfirm-message .ant-popconfirm-description {
+  color: rgba(0, 0, 0, 0.75) !important;
+}
+
+body[data-theme="light"] .ant-popconfirm .ant-popconfirm-buttons {
+  margin-top: 12px !important;
+}
+
+body[data-theme="light"] .ant-popconfirm .ant-popconfirm-buttons .ant-btn {
+  border-radius: 8px !important;
+  font-weight: 500 !important;
+}
+
+body[data-theme="light"] .ant-popconfirm .ant-popconfirm-buttons .ant-btn-primary {
+  background: #5a6fd6 !important;
+  border: none !important;
+  color: white !important;
+}
+
+body[data-theme="light"] .ant-popconfirm .ant-popconfirm-buttons .ant-btn-primary:hover {
+  background: #4a5fc6 !important;
+}
+
+body[data-theme="light"] .ant-popconfirm .ant-popconfirm-buttons .ant-btn:not(.ant-btn-primary) {
+  border: 1px solid #d9d9d9 !important;
+  background: transparent !important;
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+body[data-theme="light"] .ant-popconfirm .ant-popconfirm-buttons .ant-btn:not(.ant-btn-primary):hover {
+  border-color: #5a6fd6 !important;
+  color: #5a6fd6 !important;
 }
 
 /* Message 样式 */

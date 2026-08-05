@@ -28,7 +28,7 @@ from app.constants.knowledgebase_constants import FILE_NAME_LEN_LIMIT, RETRIEVAL
 from app.constants.knowledgebase_document_constants import (
     CHUNK_METHOD_LABELS, CHUNK_METHOD_CONFIGS, SOURCE_TYPE_LABELS, SourceType, SourceConfigDefinition,
     get_available_chunk_methods, get_default_chunk_method, DOCUMENT_RUNNING_STATUS, METADATA_FIELD_TYPES,
-    KNOWLEDGE_TEMPLATES
+    KNOWLEDGE_TEMPLATES, METADATA_FILTER_TYPES
 )
 
 logger = logging.getLogger(__name__)
@@ -71,6 +71,7 @@ def get_document_constants():
         "source_configs": source_configs,
         "running_status": DOCUMENT_RUNNING_STATUS,
         "metadata_field_types": METADATA_FIELD_TYPES,
+        "metadata_filter_types": METADATA_FILTER_TYPES,
         "knowledge_templates": KNOWLEDGE_TEMPLATES,
     })
 
@@ -307,7 +308,7 @@ def retrieval(
     sort_by: str = Body(None, description="排序方式：sim=混合相似度，vsim=向量相似度，tsim=关键词相似度"),
     embedding_model_id: str = Body(None, description="Embedding模型ID，为空则使用知识库配置"),
     rerank_model_id: str = Body(None, description="Rerank模型ID，为空则使用知识库配置"),
-    metadatas: dict = Body(None, description="元数据过滤条件，格式为{字段名: {value: 值, fuzzy: 是否模糊查询, relation: 范围关系}}"),
+    metadatas: dict = Body(None, description="元数据过滤条件，格式为{字段名: {value: 值, filter_type: 过滤类型, relation: 范围关系}}。filter_type可选: term=精准匹配(默认), match_phrase=短语匹配, match=全文搜索, wildcard=通配符匹配"),
 ):
     """
     知识库检索

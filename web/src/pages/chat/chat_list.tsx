@@ -218,7 +218,6 @@ const ChatList: React.FC<ChatListProps> = ({
           content: '确定要删除这个对话吗？删除后无法恢复。',
           okText: '确认',
           cancelText: '取消',
-          okButtonProps: { danger: true },
           onOk: () => handleDeleteConversation(conversation),
         });
       },

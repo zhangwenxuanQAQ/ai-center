@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Slider, Select, Input, Button, Card, Tag, Spin, Empty, Pagination, Image, Popover, InputNumber, Tooltip, message, Switch, DatePicker, Space } from 'antd';
+import { Layout, Slider, Select, Input, Button, Card, Tag, Spin, Empty, Pagination, Image, Popover, InputNumber, Tooltip, message, DatePicker, Space } from 'antd';
 import { SearchOutlined, FileTextOutlined, DownOutlined, UpOutlined, QuestionCircleOutlined, FilterOutlined } from '@ant-design/icons';
 import ChatMarkdown from '../../components/ChatMarkdown';
 import { knowledgebaseService, Knowledgebase } from '../../services/knowledgebase';
+import { METADATA_FILTER_TYPES } from '../../constants/knowledgebase';
 import dayjs from 'dayjs';
 import zhCN from 'antd/es/date-picker/locale/zh_CN';
 import '../../styles/common.css';
@@ -58,7 +59,7 @@ interface MetadataFilter {
   field_type: string;
   control_type: string;
   value: any;
-  fuzzy?: boolean;
+  filter_type?: string;
   relation?: string;
 }
 
@@ -294,7 +295,7 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
         setMetadataFilters(fields.map(field => ({
           ...field,
           value: undefined,
-          fuzzy: field.field_type === 'text' ? false : undefined,
+          filter_type: 'term',
           relation: field.field_type.includes('_range') ? 'INTERSECTS' : undefined,
         })));
       } catch (error) {
@@ -311,7 +312,7 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
       if (filter.value !== undefined && filter.value !== null && filter.value !== '') {
         result[filter.field_name] = {
           value: filter.value,
-          fuzzy: filter.fuzzy,
+          filter_type: filter.filter_type,
           relation: filter.relation,
         };
       }
@@ -406,11 +407,10 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
       return;
     }
     const isRangeType = field.field_type.includes('_range');
-    const isTextType = ['text', 'keyword'].includes(field.field_type);
     setMetadataFilters([...metadataFilters, {
       ...field,
       value: isRangeType ? [null, null] : '',
-      fuzzy: isTextType ? false : undefined,
+      filter_type: 'term',
       relation: isRangeType ? 'INTERSECTS' : undefined,
     }]);
   };
@@ -545,7 +545,7 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
     setMetadataFilters(metadataFields.map(field => ({
       ...field,
       value: undefined,
-      fuzzy: field.field_type === 'text' ? false : undefined,
+      filter_type: 'term',
       relation: field.field_type.includes('_range') ? 'INTERSECTS' : undefined,
     })));
   };
@@ -586,14 +586,24 @@ const KnowledgebaseRetrieval: React.FC<KnowledgebaseRetrievalProps> = ({ knowled
                 <div style={{ flex: 1 }}>
                   {renderMetadataValueInput(filter, index)}
                 </div>
-                {filter.field_type === 'text' && (
-                  <Tooltip title="模糊查询">
-                    <Switch
-                      checked={filter.fuzzy || false}
-                      onChange={(v) => handleMetadataFilterChange(index, 'fuzzy', v)}
-                      size="small"
-                    />
-                  </Tooltip>
+                {!filter.field_type.includes('_range') && (
+                  <Select
+                    value={filter.filter_type || 'term'}
+                    onChange={(v) => handleMetadataFilterChange(index, 'filter_type', v)}
+                    style={{ width: 100 }}
+                    size="small"
+                  >
+                    {METADATA_FILTER_TYPES.map(t => (
+                      <Option key={t.key} value={t.key}>
+                        <Tooltip
+                          title={<span style={{ whiteSpace: 'pre-wrap' }}>{t.description}</span>}
+                          placement="left"
+                        >
+                          {t.title}
+                        </Tooltip>
+                      </Option>
+                    ))}
+                  </Select>
                 )}
                 {filter.field_type.includes('_range') && (
                   <Select

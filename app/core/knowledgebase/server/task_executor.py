@@ -1,4 +1,4 @@
-"""
+﻿"""
 文档切片任务调度器和执行器
 参考RAGFLOW的task_executor.py实现
 
@@ -393,8 +393,8 @@ class TaskExecutor:
                 for field_name, field_config in custom_field_mappings.items():
                     field_type = field_config.get('type', 'text')
                     
-                    # 保留原字段类型并添加keyword子类型
-                    metadata_properties[field_name] = {
+                    # text类型字段使用ngram分析器
+                    field_mapping = {
                         "type": field_type,
                         "fields": {
                             "keyword": {
@@ -402,6 +402,11 @@ class TaskExecutor:
                             }
                         }
                     }
+                    if field_type == 'text':
+                        field_mapping["analyzer"] = "text_ngram"
+                        field_mapping["search_analyzer"] = "text_ngram"
+                    
+                    metadata_properties[field_name] = field_mapping
                 
                 metadatas_mappings = {
                     "metadatas": {
@@ -413,14 +418,7 @@ class TaskExecutor:
                 logger.info(f"ES索引已存在: {index_name}")
                 # 如果索引已存在，需要更新映射以添加自定义字段
                 if metadatas_mappings:
-                    try:
-                        es_utils.client.indices.put_mapping(
-                            index=index_name,
-                            body={"properties": metadatas_mappings}
-                        )
-                        logger.info(f"成功更新ES索引映射，添加metadatas自定义字段: {list(custom_field_mappings.keys())}")
-                    except Exception as e:
-                        logger.warning(f"更新ES索引映射失败: {e}")
+                    self._update_existing_index(index_name, metadatas_mappings, custom_field_mappings)
                 return True
 
             mappings = None
@@ -443,19 +441,199 @@ class TaskExecutor:
                 es_utils.create_index(index_name)
                 # 如果使用默认创建，也需要添加自定义字段映射
                 if metadatas_mappings:
-                    try:
-                        es_utils.client.indices.put_mapping(
-                            index=index_name,
-                            body={"properties": metadatas_mappings}
-                        )
-                        logger.info(f"成功更新ES索引映射，添加metadatas自定义字段: {list(custom_field_mappings.keys())}")
-                    except Exception as e:
-                        logger.warning(f"更新ES索引映射失败: {e}")
+                    self._update_existing_index(index_name, metadatas_mappings, custom_field_mappings)
 
             return True
         except Exception as e:
             logger.error(f"初始化ES索引失败 {kb_id}: {e}")
             return False
+
+    def _get_ngram_settings(self) -> Dict[str, Any]:
+        """获取ngram分析器的settings配置"""
+        return {
+            "index": {
+                "max_ngram_diff": 3
+            },
+            "analysis": {
+                "filter": {
+                    "ngram_token_filter": {
+                        "type": "ngram",
+                        "min_gram": 3,
+                        "max_gram": 5,
+                        "token_chars": ["letter", "digit", "punctuation", "symbol"]
+                    }
+                },
+                "analyzer": {
+                    "text_ngram": {
+                        "type": "custom",
+                        "tokenizer": "standard",
+                        "filter": ["ngram_token_filter"]
+                    }
+                }
+            }
+        }
+
+    def _update_existing_index(self, index_name: str, metadatas_mappings: Dict[str, Any], custom_field_mappings: Dict[str, Any]):
+        """更新已存在的ES索引：先更新settings添加ngram分析器，再更新mapping
+        
+        对于已存在的text字段需要更新analyzer时，通过reindex方式重建索引。
+        
+        Args:
+            index_name: 索引名称
+            metadatas_mappings: metadatas映射配置
+            custom_field_mappings: 自定义字段映射
+        """
+        try:
+            # 获取已存在的字段映射
+            existing_mapping = es_utils.client.indices.get_mapping(index=index_name)
+            mapping_key = list(existing_mapping.keys())[0]
+            existing_metadata_props = existing_mapping[mapping_key].get('mappings', {}).get('properties', {}).get('metadatas', {}).get('properties', {})
+
+            # 检查索引是否已包含ngram分析器配置
+            index_settings = es_utils.client.indices.get_settings(index=index_name)
+            settings_key = list(index_settings.keys())[0]
+            existing_analysis = index_settings[settings_key].get('settings', {}).get('index', {}).get('analysis', {})
+            has_ngram = 'analyzer' in existing_analysis and 'text_ngram' in existing_analysis.get('analyzer', {})
+
+            # 区分新字段和需要更新analyzer/search_analyzer的已有text字段
+            new_fields = {}
+            fields_need_reindex = []
+            for field_name, field_mapping in metadatas_mappings.get('metadatas', {}).get('properties', {}).items():
+                if field_name in existing_metadata_props:
+                    # 已存在的text字段，检查analyzer和search_analyzer是否一致
+                    if field_mapping.get('analyzer') == 'text_ngram':
+                        existing_field = existing_metadata_props[field_name]
+                        existing_analyzer = existing_field.get('analyzer')
+                        existing_search_analyzer = existing_field.get('search_analyzer')
+                        expected_search_analyzer = field_mapping.get('search_analyzer', 'text_ngram')
+                        if existing_analyzer != 'text_ngram' or existing_search_analyzer != expected_search_analyzer:
+                            fields_need_reindex.append(field_name)
+                else:
+                    new_fields[field_name] = field_mapping
+
+            # 如果有已存在的text字段需要更新analyzer，通过reindex重建索引
+            if fields_need_reindex:
+                logger.info(f"检测到已存在的text字段需要更新analyzer，启动reindex重建: {fields_need_reindex}")
+                self._reindex_with_updated_mapping(index_name, metadatas_mappings)
+                return
+
+            # 确保索引有ngram分析器配置
+            if not has_ngram and (new_fields or fields_need_reindex):
+                es_utils.client.indices.close(index=index_name)
+                es_utils.client.indices.put_settings(index=index_name, body=self._get_ngram_settings())
+                es_utils.client.indices.open(index=index_name)
+                logger.info(f"成功更新ES索引settings，添加ngram分析器")
+
+            # 新增不存在的字段
+            if new_fields:
+                filtered_mappings = {
+                    "metadatas": {
+                        "properties": new_fields
+                    }
+                }
+                es_utils.client.indices.put_mapping(
+                    index=index_name,
+                    body={"properties": filtered_mappings}
+                )
+                logger.info(f"成功更新ES索引映射，新增metadatas字段: {list(new_fields.keys())}")
+            else:
+                logger.info(f"没有需要新增的metadatas字段，跳过mapping更新")
+        except Exception as e:
+            logger.warning(f"更新ES索引映射失败: {e}")
+
+    def _reindex_with_updated_mapping(self, index_name: str, metadatas_mappings: Dict[str, Any]):
+        """通过reindex方式重建索引，更新已存在字段的analyzer
+        
+        流程：创建临时索引 → reindex数据 → 删除旧索引 → 重建同名索引 → reindex回数据 → 删除临时索引
+        
+        Args:
+            index_name: 原始索引名称
+            metadatas_mappings: 包含ngram analyzer的metadatas映射配置
+        """
+        temp_index = f"{index_name}_temp_reindex"
+        try:
+            # 1. 获取原索引的完整mapping
+            existing_mapping_resp = es_utils.client.indices.get_mapping(index=index_name)
+            mapping_key = list(existing_mapping_resp.keys())[0]
+            existing_mappings = existing_mapping_resp[mapping_key].get('mappings', {})
+
+            # 2. 合并mapping：将metadatas中text字段的analyzer更新为text_ngram
+            merged_mappings = existing_mappings.copy()
+            existing_metadata_props = merged_mappings.get('properties', {}).get('metadatas', {}).get('properties', {})
+            new_metadata_props = metadatas_mappings.get('metadatas', {}).get('properties', {})
+            for field_name, field_mapping in new_metadata_props.items():
+                if field_name in existing_metadata_props:
+                    existing_metadata_props[field_name].update(field_mapping)
+                else:
+                    existing_metadata_props[field_name] = field_mapping
+            merged_mappings.setdefault('properties', {}).setdefault('metadatas', {}).setdefault('properties', {}).update(existing_metadata_props)
+
+            # 3. 创建临时索引（保留原索引settings + 添加ngram配置）
+            # 从原索引提取完整settings：分片/副本、similarity、analysis等
+            existing_settings_resp = es_utils.client.indices.get_settings(index=index_name)
+            settings_key = list(existing_settings_resp.keys())[0]
+            existing_index_settings = existing_settings_resp[settings_key].get('settings', {}).get('index', {})
+            base_settings = {
+                "number_of_shards": existing_index_settings.get("number_of_shards", "2"),
+                "number_of_replicas": existing_index_settings.get("number_of_replicas", "0"),
+            }
+            # 保留similarity配置（dynamic_templates中的tks模板引用了scripted_sim）
+            if 'similarity' in existing_index_settings:
+                base_settings['similarity'] = existing_index_settings['similarity']
+            # 保留refresh_interval
+            if 'refresh_interval' in existing_index_settings:
+                base_settings['refresh_interval'] = existing_index_settings['refresh_interval']
+            # 添加ngram分析器配置
+            base_settings.update(self._get_ngram_settings())
+
+            if es_utils.client.indices.exists(index=temp_index):
+                es_utils.client.indices.delete(index=temp_index)
+            es_utils.client.indices.create(
+                index=temp_index,
+                settings=base_settings,
+                mappings=merged_mappings,
+            )
+            logger.info(f"Reindex: 已创建临时索引 {temp_index}")
+
+            # 4. reindex: 原索引 → 临时索引
+            es_utils.client.reindex(
+                body={"source": {"index": index_name}, "dest": {"index": temp_index}},
+                wait_for_completion=True,
+            )
+            logger.info(f"Reindex: 数据已从 {index_name} 复制到 {temp_index}")
+
+            # 5. 删除原索引
+            es_utils.client.indices.delete(index=index_name)
+            logger.info(f"Reindex: 已删除原索引 {index_name}")
+
+            # 6. 用原名称重建索引（带ngram settings + 合并后的mapping）
+            es_utils.client.indices.create(
+                index=index_name,
+                settings=base_settings,
+                mappings=merged_mappings,
+            )
+            logger.info(f"Reindex: 已重建原索引 {index_name}")
+
+            # 7. reindex: 临时索引 → 原索引
+            es_utils.client.reindex(
+                body={"source": {"index": temp_index}, "dest": {"index": index_name}},
+                wait_for_completion=True,
+            )
+            logger.info(f"Reindex: 数据已从 {temp_index} 复制回 {index_name}")
+
+            # 8. 删除临时索引
+            es_utils.client.indices.delete(index=temp_index)
+            logger.info(f"Reindex: 已删除临时索引 {temp_index}，索引重建完成")
+
+        except Exception as e:
+            logger.error(f"Reindex重建索引失败: {e}")
+            # 清理临时索引
+            try:
+                if es_utils.client.indices.exists(index=temp_index):
+                    es_utils.client.indices.delete(index=temp_index)
+            except Exception:
+                pass
+            raise
 
     def submit_task(
         self,

@@ -891,3 +891,44 @@ METADATA_FIELD_TYPES = [
         "description": "日期时间范围类型",
     },
 ]
+
+
+class MetadataFilterType:
+    """元数据过滤类型枚举"""
+    TERM = "term"
+    MATCH_PHRASE = "match_phrase"
+    MATCH = "match"
+    WILDCARD = "wildcard"
+
+
+METADATA_FILTER_TYPES: List[Dict[str, Any]] = [
+    {
+        "key": MetadataFilterType.TERM,
+        "title": "精准匹配",
+        "query": "term",
+        "description": "查询语句: term\n性能: 最快，要求完全匹配，不适用于模糊搜索",
+    },
+    # 暂时隐藏短语匹配选项
+    # {
+    #     "key": MetadataFilterType.MATCH_PHRASE,
+    #     "title": "短语匹配",
+    #     "query": "match_phrase",
+    #     "description": "查询语句: match_phrase\n性能: 中等，保留词语顺序和邻近关系，适用于text类型字段的精确短语查找",
+    # },
+    {
+        "key": MetadataFilterType.MATCH,
+        "title": "全文搜索",
+        "query": "match",
+        "description": "查询语句: match\n性能: 较快，分词后全文检索，不要求词语顺序和完整性，适用于text类型字段",
+    },
+    {
+        "key": MetadataFilterType.WILDCARD,
+        "title": "通配符匹配",
+        "query": "wildcard",
+        "description": "查询语句: wildcard\n性能: 最慢，支持通配符（*匹配任意字符, ?匹配单个字符）\n检索样例: 输入 \"test*\" 可匹配 test, testing, tester 等",
+    },
+]
+
+METADATA_FILTER_TYPE_MAP: Dict[str, Dict[str, Any]] = {
+    item["key"]: item for item in METADATA_FILTER_TYPES
+}

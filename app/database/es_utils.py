@@ -20,6 +20,8 @@ from typing import Optional, Dict, Any, List, Callable, Tuple
 import json
 import numpy as np
 
+from app.constants.knowledgebase_document_constants import MetadataFilterType
+
 try:
     from elasticsearch import Elasticsearch
     from elasticsearch.helpers import bulk
@@ -1064,7 +1066,13 @@ class ESUtils:
         构建元数据过滤条件
 
         Args:
-            metadatas: 元数据过滤条件，格式为{字段名: {value: 值, fuzzy: 是否模糊查询, relation: 范围关系}}
+            metadatas: 元数据过滤条件，格式为{字段名: {value: 值, filter_type: 过滤类型, relation: 范围关系}}
+                filter_type可选值:
+                - precise_match: 精准匹配（默认），对keyword/数值/布尔类型字段使用term查询
+                - phrase_match: 短语匹配，对text类型字段使用match_phrase查询
+                - fulltext_search: 全文搜索，对text类型字段使用match查询
+                - wildcard_match: 通配符匹配，使用wildcard查询
+                兼容旧格式: fuzzy=True等价于fulltext_search, fuzzy=False等价于precise_match
 
         Returns:
             List[Dict]: ES过滤条件列表
@@ -1081,7 +1089,12 @@ class ESUtils:
             if value is None or value == '':
                 continue
 
-            fuzzy = field_config.get('fuzzy', False)
+            # 获取过滤类型，兼容旧的fuzzy参数
+            filter_type = field_config.get('filter_type')
+            if not filter_type:
+                fuzzy = field_config.get('fuzzy', False)
+                filter_type = MetadataFilterType.MATCH if fuzzy else MetadataFilterType.TERM
+
             relation = field_config.get('relation', 'INTERSECTS')
 
             # 基础字段名和精准查询字段名
@@ -1093,19 +1106,30 @@ class ESUtils:
                 range_filter = self._build_range_filter(base_field_name, value, relation)
                 if range_filter:
                     filter_conditions.append(range_filter)
-            elif fuzzy and isinstance(value, str):
-                # 模糊查询使用基础字段名(不带.keyword)
+            elif filter_type == MetadataFilterType.MATCH_PHRASE and isinstance(value, str):
+                # 短语匹配：保留词语顺序和邻近关系
+                filter_conditions.append({
+                    "match_phrase": {base_field_name: value}
+                })
+            elif filter_type == MetadataFilterType.MATCH and isinstance(value, str):
+                # 全文搜索：分词后匹配，不要求词语顺序
                 filter_conditions.append({
                     "match": {base_field_name: value}
                 })
+            elif filter_type == MetadataFilterType.WILDCARD and isinstance(value, str):
+                # 通配符匹配：前后加*实现模糊查询
+                wildcard_value = f"*{value}*"
+                filter_conditions.append({
+                    "wildcard": {keyword_field_name: {"value": wildcard_value}}
+                })
             elif isinstance(value, list):
-                # 精准查询使用.keyword后缀
+                # 精准查询：使用.keyword后缀
                 if len(value) == 1:
                     filter_conditions.append({"term": {keyword_field_name: value[0]}})
                 else:
                     filter_conditions.append({"terms": {keyword_field_name: value}})
             else:
-                # 精准查询使用.keyword后缀
+                # 精准查询：使用.keyword后缀
                 filter_conditions.append({"term": {keyword_field_name: value}})
 
         return filter_conditions

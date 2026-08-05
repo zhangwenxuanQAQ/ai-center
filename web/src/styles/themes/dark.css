@@ -156,15 +156,16 @@ body[data-theme="dark"] div.ant-modal-confirm-content {
 /* Popconfirm 样式 */
 body[data-theme="dark"] .ant-popover-inner,
 body[data-theme="dark"] div.ant-popover-inner {
-  background: #1a1a2e !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: rgba(26, 26, 46, 0.95) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
   border-radius: 12px !important;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4) !important;
+  backdrop-filter: blur(20px) !important;
 }
 
 body[data-theme="dark"] .ant-popover-title,
 body[data-theme="dark"] div.ant-popover-title {
-  color: #e0e0e0 !important;
+  color: #ffffff !important;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 
@@ -175,8 +176,55 @@ body[data-theme="dark"] div.ant-popover-inner-content {
 
 body[data-theme="dark"] .ant-popover-arrow::before,
 body[data-theme="dark"] div.ant-popover-arrow::before {
-  background: #1a1a2e !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: rgba(26, 26, 46, 0.95) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Popconfirm 详细样式 */
+body[data-theme="dark"] .ant-popconfirm .ant-popconfirm-title {
+  color: #ffffff !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+}
+
+body[data-theme="dark"] .ant-popconfirm .ant-popconfirm-description {
+  color: rgba(255, 255, 255, 0.85) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+}
+
+body[data-theme="dark"] .ant-popconfirm .ant-popconfirm-message .ant-popconfirm-description {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+body[data-theme="dark"] .ant-popconfirm .ant-popconfirm-buttons {
+  margin-top: 12px !important;
+}
+
+body[data-theme="dark"] .ant-popconfirm .ant-popconfirm-buttons .ant-btn {
+  border-radius: 8px !important;
+  font-weight: 500 !important;
+}
+
+body[data-theme="dark"] .ant-popconfirm .ant-popconfirm-buttons .ant-btn-primary {
+  background: linear-gradient(135deg, #5a6fd6 0%, #6b7fe6 100%) !important;
+  border: none !important;
+  color: white !important;
+}
+
+body[data-theme="dark"] .ant-popconfirm .ant-popconfirm-buttons .ant-btn-primary:hover {
+  background: linear-gradient(135deg, #6b7fe6 0%, #5a6fd6 100%) !important;
+}
+
+body[data-theme="dark"] .ant-popconfirm .ant-popconfirm-buttons .ant-btn:not(.ant-btn-primary) {
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+body[data-theme="dark"] .ant-popconfirm .ant-popconfirm-buttons .ant-btn:not(.ant-btn-primary):hover {
+  border-color: rgba(255, 255, 255, 0.4) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
 }
 
 /* Message 样式 */

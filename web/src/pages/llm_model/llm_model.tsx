@@ -681,7 +681,7 @@ const LLMModelManagement: React.FC = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
               <span style={{ fontWeight: '500', color: theme === 'dark' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.75)', whiteSpace: 'nowrap' }}>模型类型:</span>
               <Button
-                type={filterModelTypes.length === 0 ? 'primary' : 'default'}
+                className={`model-type-filter-btn ${filterModelTypes.length === 0 ? 'active' : ''}`}
                 onClick={() => {
                   setFilterModelTypes([]);
                   setFilterTags([]);
@@ -694,8 +694,11 @@ const LLMModelManagement: React.FC = () => {
                   background: filterModelTypes.length === 0 
                     ? 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)' 
                     : (theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#f5f5f5'),
-                  border: 'none',
-                  color: filterModelTypes.length === 0 ? '#ffffff' : (theme === 'dark' ? '#ffffff' : '#000000')
+                  border: filterModelTypes.length === 0 ? '1px solid var(--primary-color)' : 'none',
+                  color: filterModelTypes.length === 0 ? '#ffffff' : (theme === 'dark' ? '#ffffff' : '#000000'),
+                  boxShadow: filterModelTypes.length === 0 ? '0 2px 8px rgba(22, 119, 255, 0.4)' : 'none',
+                  transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                  transform: filterModelTypes.length === 0 ? 'translateY(-1px)' : 'none'
                 }}
               >
                 全部
@@ -736,7 +739,7 @@ const LLMModelManagement: React.FC = () => {
                                 style={{
                                   cursor: 'pointer',
                                   background: isSelected
-                                    ? 'var(--primary-color)'
+                                    ? 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)'
                                     : (theme === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.06)'),
                                   color: isSelected
                                     ? '#ffffff'
@@ -745,7 +748,10 @@ const LLMModelManagement: React.FC = () => {
                                   border: isSelected
                                     ? '1px solid var(--primary-color)'
                                     : (theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.2)' : '1px solid rgba(0, 0, 0, 0.1)'),
-                                  transition: 'all 0.2s ease'
+                                  boxShadow: isSelected ? '0 2px 6px rgba(22, 119, 255, 0.4)' : 'none',
+                                  fontWeight: isSelected ? '600' : '400',
+                                  transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                                  transform: isSelected ? 'translateY(-1px)' : 'none'
                                 }}
                               >
                                 {tag}
@@ -759,6 +765,7 @@ const LLMModelManagement: React.FC = () => {
                   >
                     <Button
                       key={key}
+                      className={`model-type-filter-btn ${filterModelTypes.includes(key) ? 'active' : ''}`}
                       onClick={() => {
                         const currentTags = tagsByModelType[key] || [];
                         if (filterModelTypes.includes(key)) {
@@ -772,12 +779,15 @@ const LLMModelManagement: React.FC = () => {
                         borderRadius: '20px',
                         padding: '6px 16px',
                         height: '32px',
-                        fontWeight: '400',
+                        fontWeight: filterModelTypes.includes(key) ? '600' : '400',
                         background: filterModelTypes.includes(key) 
-                          ? 'rgba(22, 119, 255, 0.12)'
+                          ? 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)'
                           : (theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#f5f5f5'),
-                        border: filterModelTypes.includes(key) ? '1px solid #1677ff' : 'none',
-                        color: filterModelTypes.includes(key) ? '#1677ff' : (theme === 'dark' ? 'rgba(255, 255, 255, 0.75)' : 'rgba(0, 0, 0, 0.65)')
+                        border: filterModelTypes.includes(key) ? '1px solid var(--primary-color)' : 'none',
+                        color: filterModelTypes.includes(key) ? '#ffffff' : (theme === 'dark' ? 'rgba(255, 255, 255, 0.75)' : 'rgba(0, 0, 0, 0.65)'),
+                        boxShadow: filterModelTypes.includes(key) ? '0 2px 8px rgba(22, 119, 255, 0.4)' : 'none',
+                        transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                        transform: filterModelTypes.includes(key) ? 'translateY(-1px)' : 'none'
                       }}
                     >
                       {value}
@@ -786,6 +796,7 @@ const LLMModelManagement: React.FC = () => {
                 ) : (
                   <Button
                     key={key}
+                    className={`model-type-filter-btn ${filterModelTypes.includes(key) ? 'active' : ''}`}
                     onClick={() => {
                       if (filterModelTypes.includes(key)) {
                         setFilterModelTypes(filterModelTypes.filter(type => type !== key));
@@ -797,12 +808,15 @@ const LLMModelManagement: React.FC = () => {
                       borderRadius: '20px',
                       padding: '6px 16px',
                       height: '32px',
-                      fontWeight: '400',
+                      fontWeight: filterModelTypes.includes(key) ? '600' : '400',
                       background: filterModelTypes.includes(key) 
-                        ? 'rgba(22, 119, 255, 0.12)'
+                        ? 'linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%)'
                         : (theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#f5f5f5'),
-                      border: filterModelTypes.includes(key) ? '1px solid #1677ff' : 'none',
-                      color: filterModelTypes.includes(key) ? '#1677ff' : (theme === 'dark' ? 'rgba(255, 255, 255, 0.75)' : 'rgba(0, 0, 0, 0.65)')
+                      border: filterModelTypes.includes(key) ? '1px solid var(--primary-color)' : 'none',
+                      color: filterModelTypes.includes(key) ? '#ffffff' : (theme === 'dark' ? 'rgba(255, 255, 255, 0.75)' : 'rgba(0, 0, 0, 0.65)'),
+                      boxShadow: filterModelTypes.includes(key) ? '0 2px 8px rgba(22, 119, 255, 0.4)' : 'none',
+                      transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                      transform: filterModelTypes.includes(key) ? 'translateY(-1px)' : 'none'
                     }}
                   >
                     {value}

@@ -3,13 +3,31 @@
     "index": {
       "number_of_shards": 2,
       "number_of_replicas": 0,
-      "refresh_interval": "1000ms"
+      "refresh_interval": "1000ms",
+      "max_ngram_diff": 3
     },
     "similarity": {
       "scripted_sim": {
         "type": "scripted",
         "script": {
           "source": "double idf = Math.log(1+(field.docCount-term.docFreq+0.5)/(term.docFreq + 0.5))/Math.log(1+((field.docCount-0.5)/1.5)); return query.boost * idf * Math.min(doc.freq, 1);"
+        }
+      }
+    },
+    "analysis": {
+      "filter": {
+        "ngram_token_filter": {
+          "type": "ngram",
+          "min_gram": 3,
+          "max_gram": 5,
+          "token_chars": ["letter", "digit", "punctuation", "symbol"]
+        }
+      },
+      "analyzer": {
+        "text_ngram": {
+          "type": "custom",
+          "tokenizer": "standard",
+          "filter": ["ngram_token_filter"]
         }
       }
     }

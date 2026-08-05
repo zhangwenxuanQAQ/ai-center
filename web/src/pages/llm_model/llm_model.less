@@ -1,5 +1,50 @@
 // LLM模型页面样式
 
+// 模型类型过滤按钮样式（使用高优先级选择器覆盖主题样式）
+.model-type-filter-btn {
+  &.active {
+    background: linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%) !important;
+    border: 1px solid var(--primary-color) !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
+    box-shadow: 0 2px 8px rgba(22, 119, 255, 0.4) !important;
+    transform: translateY(-1px);
+    
+    &:hover {
+      background: linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%) !important;
+      color: #ffffff !important;
+    }
+  }
+}
+
+// 使用更高优先级的选择器（针对 light 主题）
+body[data-theme="light"] .model-type-filter-btn.active {
+  background: linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%) !important;
+  border: 1px solid var(--primary-color) !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  box-shadow: 0 2px 8px rgba(22, 119, 255, 0.4) !important;
+  
+  &:hover {
+    background: linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%) !important;
+    color: #ffffff !important;
+  }
+}
+
+// 使用更高优先级的选择器（针对 dark 主题）
+body[data-theme="dark"] .model-type-filter-btn.active {
+  background: linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%) !important;
+  border: 1px solid var(--primary-color) !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  box-shadow: 0 2px 8px rgba(22, 119, 255, 0.4) !important;
+  
+  &:hover {
+    background: linear-gradient(135deg, var(--primary-color) 0%, #6b7fe6 100%) !important;
+    color: #ffffff !important;
+  }
+}
+
 .llm-model-layout {
   flex: 1;
   display: flex;

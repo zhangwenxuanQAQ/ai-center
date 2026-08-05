@@ -63,23 +63,15 @@ const getBreadcrumbItems = (path: string) => {
   return breadcrumbMap[matchedKey || '/'] || breadcrumbMap['/'];
 };
 
-function AppContent() {
+interface AppContentProps {
+  theme: 'light' | 'dark';
+  toggleTheme: () => void;
+}
+
+function AppContent({ theme, toggleTheme }: AppContentProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    const savedTheme = localStorage.getItem('theme');
-    return (savedTheme as 'light' | 'dark') || 'dark';
-  });
   const [collapsed, setCollapsed] = useState(false);
-
-  useEffect(() => {
-    document.body.setAttribute('data-theme', theme);
-    localStorage.setItem('theme', theme);
-  }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme(theme === 'light' ? 'dark' : 'light');
-  };
 
   const toggleCollapsed = () => {
     setCollapsed(!collapsed);
@@ -286,10 +278,24 @@ function AppContent() {
 }
 
 function App() {
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const savedTheme = localStorage.getItem('theme');
+    return (savedTheme as 'light' | 'dark') || 'dark';
+  });
+
+  useEffect(() => {
+    document.body.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(theme === 'light' ? 'dark' : 'light');
+  };
+
   return (
     <ConfigProvider
       theme={{
-        algorithm: localStorage.getItem('theme') === 'dark' ? antTheme.darkAlgorithm : antTheme.defaultAlgorithm,
+        algorithm: theme === 'dark' ? antTheme.darkAlgorithm : antTheme.defaultAlgorithm,
         token: {
           colorPrimary: '#5a6fd6',
           colorPrimaryHover: '#6b7fe6',
@@ -301,7 +307,7 @@ function App() {
       hashed={false}
     >
     <Router>
-      <AppContent />
+      <AppContent theme={theme} toggleTheme={toggleTheme} />
     </Router>
     </ConfigProvider>
   );
