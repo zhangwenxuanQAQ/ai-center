@@ -5,12 +5,21 @@
 
 独立实现聊天流程，不依赖 Chat 和 ChatMessage 表，
 所有聊天数据持久化到 ChatbotChat 和 ChatbotChatMessage 表。
+
+架构说明：
+    聊天流程分为三大阶段：
+        1. 聊天前预处理（IntegrationChatPreprocessor）：参数校验、初始化参数、提示词拼装等
+        2. 聊天执行（IntegrationChatCoreService._run_conversation_loop）：模型流式调用与工具调用循环
+        3. 聊天后置处理（IntegrationChatCoreService._postprocess）：消息持久化与收尾
+
+    各阶段通过 IntegrationChatContext 共享状态，层级分明、易于扩展。
 """
 
 import json
 import uuid
 import time
 import logging
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Dict, Any, Optional, AsyncGenerator, Union, Tuple
 
@@ -30,6 +39,351 @@ from app.core.integration.temp_chat_store import TempChatStore
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class IntegrationChatContext:
+    """
+    集成聊天上下文
+
+    在聊天前预处理阶段构建，贯穿聊天执行与后置处理全流程，
+    集中持有集成聊天所需的全部状态，避免在方法间传递大量零散参数。
+
+    Attributes:
+        chat_id: 对话ID
+        chatbot_id: 机器人ID
+        integration: 集成配置对象
+        integration_id: 集成配置ID
+        user_text: 用户输入文本
+        user_message_id: 用户消息ID
+        assistant_message_id: 助手消息ID
+        model_id: 模型ID
+        model: LLM模型实例
+        model_type: 模型类型
+        config: 原始配置（字符串或字典）
+        config_dict: 解析后的配置字典
+        system_prompt: 系统提示词
+        user_prompt_messages: 用户提示词消息列表
+        messages: 完整的消息列表（含系统提示词、历史消息、用户消息）
+        history_messages: 历史消息列表
+        tools: OpenAI tool格式工具列表
+        tool_map: 工具名称到工具ID的映射
+        model_params: 传给大模型的参数
+        avatar: 头像URL
+        temporary: 是否临时会话模式
+        edit_message_id: 编辑消息ID
+        preview_token: 预览token
+        scope_id: 临时会话数据隔离scope
+        bot_chat: ChatbotChat对象（正式会话模式）
+        start_time: 聊天开始时间戳
+        reasoning_end_time: 推理结束时间戳
+        full_response: 累积的完整响应文本
+        reasoning_content: 累积的推理内容
+    """
+    chat_id: str = ''
+    chatbot_id: str = ''
+    integration: Optional[ChatbotIntegration] = None
+    integration_id: Optional[Any] = None
+    query: List[QueryItem] = field(default_factory=list)
+    user_text: str = ''
+    user_message_id: str = ''
+    assistant_message_id: str = ''
+    model_id: Optional[str] = None
+    model: Any = None
+    model_type: Optional[str] = None
+    config: Optional[Any] = None
+    config_dict: Dict[str, Any] = field(default_factory=dict)
+    system_prompt: Optional[str] = None
+    user_prompt_messages: Optional[List[Dict]] = None
+    messages: List[Dict[str, Any]] = field(default_factory=list)
+    history_messages: List[Dict[str, Any]] = field(default_factory=list)
+    tools: Optional[List[Dict]] = None
+    tool_map: Optional[Dict[str, str]] = None
+    model_params: Dict[str, Any] = field(default_factory=dict)
+    avatar: Optional[str] = None
+    temporary: bool = False
+    edit_message_id: Optional[str] = None
+    preview_token: Optional[str] = None
+    scope_id: Optional[str] = None
+    bot_chat: Optional[ChatbotChat] = None
+    start_time: float = 0.0
+    reasoning_end_time: Optional[float] = None
+    full_response: str = ''
+    reasoning_content: str = ''
+
+
+class IntegrationChatPreprocessor:
+    """
+    集成聊天前处理器
+
+    负责聊天执行前的全部准备工作，按步骤组织：
+        - 参数校验与初始化（解析config、获取机器人配置、校验模型）
+        - 临时/正式会话处理（创建对话、处理编辑消息、加载历史消息）
+        - 提示词与消息拼装（构建系统提示词、历史消息、用户消息）
+        - 工具与模型参数准备（注入内置工具、组装model_params、创建模型实例）
+        - 用户消息持久化与头像解析
+
+    所有方法均为静态方法，返回值写入 IntegrationChatContext。
+    若预处理过程中出现需要终止的错误，会抛出 PreprocessError。
+    """
+
+    @staticmethod
+    def _parse_config(config: Optional[Any]) -> Dict[str, Any]:
+        """将config统一解析为字典"""
+        config_dict = {}
+        if config:
+            if isinstance(config, str):
+                try:
+                    config_dict = json.loads(config)
+                except json.JSONDecodeError:
+                    pass
+            elif isinstance(config, dict):
+                config_dict = config
+        return config_dict
+
+    @staticmethod
+    def _resolve_avatar(chatbot_id: str) -> Optional[str]:
+        """获取机器人头像"""
+        try:
+            chatbot = Chatbot.get(Chatbot.id == chatbot_id)
+            return chatbot.avatar
+        except Chatbot.DoesNotExist:
+            return None
+
+    @staticmethod
+    def _load_chatbot_config(ctx: IntegrationChatContext) -> None:
+        """
+        加载机器人配置（模型、提示词、工具等）并合并模型关联表配置
+
+        Raises:
+            ResourceNotFoundError: 机器人不存在或未绑定模型
+        """
+        chatbot_config = ChatCoreService.get_chatbot_config(ctx.chatbot_id)
+        ctx.model_id = chatbot_config['model_id']
+        ctx.system_prompt = chatbot_config['system_prompt']
+        ctx.user_prompt_messages = chatbot_config['user_prompt_messages']
+        ctx.tools = chatbot_config['tools'] if chatbot_config['tools'] else None
+        ctx.tool_map = chatbot_config['tool_map']
+
+        # 获取机器人模型关联表中的模型配置，合并到 config_dict
+        try:
+            chatbot_model = ChatbotModel.get(
+                (ChatbotModel.chatbot_id == ctx.chatbot_id) &
+                (ChatbotModel.model_id == ctx.model_id) &
+                (ChatbotModel.deleted == False)
+            )
+            if chatbot_model.config:
+                try:
+                    chatbot_model_config = json.loads(chatbot_model.config)
+                    if isinstance(chatbot_model_config, dict):
+                        ctx.config_dict.update(chatbot_model_config)
+                except json.JSONDecodeError:
+                    pass
+        except ChatbotModel.DoesNotExist:
+            pass
+
+    @staticmethod
+    def _inject_builtin_tools(ctx: IntegrationChatContext) -> None:
+        """注入内置工具（网络搜索、PPT生成等）"""
+        from app.core.llm_model.builtin_tools.tool_utils import inject_builtin_tools
+        web_search_enabled = ctx.config_dict.get('web_search', False)
+        # 如果配置文件中禁用了搜索引擎，强制关闭
+        from app.configs.config import config as app_config
+        if not app_config.get("web_search_engine.enabled", True):
+            web_search_enabled = False
+        ctx.tools, ctx.tool_map = inject_builtin_tools(
+            tools=ctx.tools,
+            tool_map=ctx.tool_map,
+            web_search_enabled=web_search_enabled
+        )
+
+    @staticmethod
+    def _resolve_model(ctx: IntegrationChatContext) -> None:
+        """
+        校验并解析模型配置、创建模型实例
+
+        Raises:
+            PreprocessError: 未指定模型
+        """
+        if not ctx.model_id:
+            raise PreprocessError('未指定模型', chat_id=ctx.chat_id)
+
+        model_config, llm_config, model_type = ChatCoreService.get_model_config(ctx.model_id)
+        ctx.model_type = model_type
+        ctx.model = LLMFactory.create_model(model_type, model_config)
+        ctx.model_params = dict(llm_config) if llm_config else {}
+
+    @staticmethod
+    def _build_model_params(ctx: IntegrationChatContext) -> None:
+        """组装传给大模型的参数（合并配置、剔除前端专用参数、挂载工具）"""
+        if ctx.config_dict:
+            ctx.model_params.update(ctx.config_dict)
+            # 移除前端专用参数，不传给大模型
+            ctx.model_params.pop('web_search', None)
+            ctx.model_params.pop('deep_thinking', None)
+        if ctx.tools:
+            ctx.model_params['tools'] = ctx.tools
+
+    @staticmethod
+    def _setup_temporary_session(ctx: IntegrationChatContext) -> None:
+        """设置临时会话：创建/加载临时聊天记录、处理编辑消息、保存用户消息、加载历史消息"""
+        temp_chat_id = ctx.chat_id or f"temp_{uuid.uuid4().hex[:12]}"
+        ctx.chat_id = temp_chat_id
+        ctx.scope_id = f"{ctx.integration_id}:preview:{ctx.preview_token}" if ctx.preview_token else None
+
+        # 如果是新对话，在 Redis 中创建临时聊天记录
+        if not ctx.chat_id or not TempChatStore.get_chat(ctx.integration_id, temp_chat_id, scope_id=ctx.scope_id):
+            TempChatStore.create_chat(
+                integration_id=ctx.integration_id,
+                chat_id=temp_chat_id,
+                chatbot_id=ctx.chatbot_id,
+                title=ctx.user_text[:30] if ctx.user_text else "临时对话",
+                scope_id=ctx.scope_id
+            )
+
+        # 处理编辑消息：删除该消息及其后续所有消息
+        if ctx.edit_message_id:
+            temp_messages = TempChatStore.get_messages(ctx.integration_id, temp_chat_id, scope_id=ctx.scope_id)
+            for i, msg in enumerate(temp_messages):
+                if msg.get('id') == ctx.edit_message_id or msg.get('message_id') == ctx.edit_message_id:
+                    TempChatStore.clear_messages_after(ctx.integration_id, temp_chat_id, i, scope_id=ctx.scope_id)
+                    break
+
+        # 保存用户消息到 Redis
+        from app.services.chat.file_utils import build_extra_content
+        temp_extra_content = build_extra_content(ctx.query)
+        user_msg_data = {
+            "id": ctx.user_message_id,
+            "message_id": ctx.user_message_id,
+            "chat_id": temp_chat_id,
+            "chatbot_id": ctx.chatbot_id,
+            "role": "user",
+            "content": ctx.user_text,
+            "extra_content": json.dumps(temp_extra_content, ensure_ascii=False) if temp_extra_content else None,
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        TempChatStore.add_message(ctx.integration_id, temp_chat_id, user_msg_data, scope_id=ctx.scope_id)
+
+        # 加载历史消息
+        temp_history = TempChatStore.get_messages(ctx.integration_id, temp_chat_id, scope_id=ctx.scope_id)
+        ctx.history_messages = []
+        for msg in temp_history[:-1]:
+            ctx.history_messages.append({
+                "role": msg.get("role", ""),
+                "content": msg.get("content", "")
+            })
+
+    @staticmethod
+    def _setup_formal_session(ctx: IntegrationChatContext) -> None:
+        """设置正式会话：创建/加载ChatbotChat、处理编辑消息、加载历史消息、保存用户消息"""
+        # 获取或创建 ChatbotChat
+        chat_title = ctx.user_text[:20] if len(ctx.user_text) > 20 else ctx.user_text
+        ctx.bot_chat = IntegrationChatCoreService._get_or_create_bot_chat(
+            ctx.integration, ctx.chatbot_id, ctx.chat_id, title=chat_title
+        )
+        ctx.chat_id = ctx.bot_chat.id
+
+        # 处理编辑消息：删除该消息及其后续所有消息
+        if ctx.edit_message_id:
+            IntegrationChatCoreService._delete_messages_after(ctx.chat_id, ctx.edit_message_id)
+
+        # 加载历史消息
+        ctx.history_messages = IntegrationChatCoreService._load_history_messages(ctx.chat_id)
+
+        # 保存用户消息到 ChatbotChatMessage
+        from app.services.chat.file_utils import build_extra_content
+        extra_content = build_extra_content(ctx.query)
+        IntegrationChatCoreService._save_user_message(
+            chatbot_id=ctx.chatbot_id,
+            chat_id=ctx.chat_id,
+            message_id=ctx.user_message_id,
+            content=ctx.user_text,
+            model_id=ctx.model_id,
+            extra_content=extra_content
+        )
+
+    @staticmethod
+    def _build_messages(ctx: IntegrationChatContext, query: List[QueryItem]) -> None:
+        """构建完整的消息列表（系统提示词 + 用户提示词 + 历史消息 + 用户消息）"""
+        user_message = ChatCoreService.convert_query_to_message(query, ctx.model_type, ctx.model_id)
+        ctx.messages = ChatCoreService.build_messages(
+            ctx.system_prompt, ctx.history_messages, user_message, ctx.user_prompt_messages
+        )
+
+    @staticmethod
+    def preprocess(
+        query: List[QueryItem],
+        chat_id: Optional[str],
+        integration: ChatbotIntegration,
+        temporary: bool,
+        config: Optional[dict],
+        edit_message_id: Optional[str],
+        preview_token: Optional[str],
+    ) -> IntegrationChatContext:
+        """
+        执行聊天前预处理，构建完整的 IntegrationChatContext
+
+        按顺序执行各预处理步骤，任一步骤失败抛出 PreprocessError 或 ResourceNotFoundError。
+
+        Returns:
+            IntegrationChatContext: 预处理完成的聊天上下文
+        """
+        chatbot_id = integration.chatbot_id
+
+        ctx = IntegrationChatContext(
+            chat_id=chat_id or '',
+            chatbot_id=chatbot_id,
+            integration=integration,
+            integration_id=integration.id,
+            query=query,
+            config=config,
+            config_dict=IntegrationChatPreprocessor._parse_config(config),
+            temporary=temporary,
+            edit_message_id=edit_message_id,
+            preview_token=preview_token,
+            user_message_id=uuid.uuid4().hex,
+            assistant_message_id=uuid.uuid4().hex,
+        )
+        ctx.user_text = ChatCoreService.extract_text_from_query(query)
+
+        # 1. 加载机器人配置（模型、提示词、工具等）
+        IntegrationChatPreprocessor._load_chatbot_config(ctx)
+        # 2. 注入内置工具
+        IntegrationChatPreprocessor._inject_builtin_tools(ctx)
+        # 3. 校验并创建模型实例
+        IntegrationChatPreprocessor._resolve_model(ctx)
+        # 4. 组装模型参数
+        IntegrationChatPreprocessor._build_model_params(ctx)
+        # 5. 设置会话（临时/正式）
+        if temporary:
+            IntegrationChatPreprocessor._setup_temporary_session(ctx)
+        else:
+            IntegrationChatPreprocessor._setup_formal_session(ctx)
+        # 6. 构建消息列表
+        IntegrationChatPreprocessor._build_messages(ctx, query)
+        # 7. 解析头像
+        ctx.avatar = IntegrationChatPreprocessor._resolve_avatar(ctx.chatbot_id)
+        # 8. 初始化计时
+        ctx.start_time = time.time()
+
+        return ctx
+
+
+class PreprocessError(Exception):
+    """
+    预处理阶段错误
+
+    携带 chat_id 与错误信息，供调用方在流式返回错误响应时使用。
+
+    Attributes:
+        message: 错误信息
+        chat_id: 对话ID（可能为空）
+    """
+    def __init__(self, message: str, chat_id: str = ''):
+        super().__init__(message)
+        self.message = message
+        self.chat_id = chat_id
+
+
 class IntegrationChatCoreService:
     """
     插件集成聊天核心服务
@@ -38,6 +392,9 @@ class IntegrationChatCoreService:
     不再调用 ChatCoreService.chat_stream，避免对 Chat 和 ChatMessage 表的写入。
     复用 ChatCoreService 中不涉及 chat/chat_message 表的纯静态方法（如 get_chatbot_config、
     build_messages、convert_query_to_message 等）。
+
+    流程编排：
+        preprocess（IntegrationChatPreprocessor） -> execute（_run_conversation_loop） -> postprocess（_postprocess）
     """
 
     # ==================== 数据持久化辅助方法 ====================
@@ -611,121 +968,38 @@ class IntegrationChatCoreService:
         except Exception as e:
             logger.error(f"更新ChatbotChat messages失败: {e}")
 
-    @staticmethod
-    def _get_chatbot_avatar(chatbot_id: str) -> Optional[str]:
-        """
-        获取机器人头像
-
-        Args:
-            chatbot_id: 机器人ID
-
-        Returns:
-            Optional[str]: 头像URL
-        """
-        try:
-            chatbot = Chatbot.get(Chatbot.id == chatbot_id)
-            return chatbot.avatar
-        except Chatbot.DoesNotExist:
-            return None
-
-    @staticmethod
-    def _prepare_chatbot_config(chatbot_id: str, config_dict: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        准备机器人配置：获取模型、系统提示词、工具等
-
-        Args:
-            chatbot_id: 机器人ID
-            config_dict: 当前配置字典（会被机器人模型关联表中的配置覆盖更新）
-
-        Returns:
-            Dict: 包含 model_id、system_prompt、user_prompt_messages、tools、tool_map、chatbot_config 的字典
-
-        Raises:
-            ResourceNotFoundError: 机器人不存在或未绑定模型
-        """
-        chatbot_config = ChatCoreService.get_chatbot_config(chatbot_id)
-        model_id = chatbot_config['model_id']
-        system_prompt = chatbot_config['system_prompt']
-        user_prompt_messages = chatbot_config['user_prompt_messages']
-        tools = chatbot_config['tools'] if chatbot_config['tools'] else None
-        tool_map = chatbot_config['tool_map']
-
-        # 获取机器人模型关联表中的模型配置，合并到 config_dict
-        try:
-            chatbot_model = ChatbotModel.get(
-                (ChatbotModel.chatbot_id == chatbot_id) &
-                (ChatbotModel.model_id == model_id) &
-                (ChatbotModel.deleted == False)
-            )
-            if chatbot_model.config:
-                try:
-                    chatbot_model_config = json.loads(chatbot_model.config)
-                    if isinstance(chatbot_model_config, dict):
-                        config_dict.update(chatbot_model_config)
-                except json.JSONDecodeError:
-                    pass
-        except ChatbotModel.DoesNotExist:
-            pass
-
-        return {
-            'model_id': model_id,
-            'system_prompt': system_prompt,
-            'user_prompt_messages': user_prompt_messages,
-            'tools': tools,
-            'tool_map': tool_map,
-            'chatbot_config': chatbot_config
-        }
-
     # ==================== 核心聊天方法 ====================
 
     @staticmethod
-    async def _execute_direct_answer(
-        model,
-        messages: List[Dict[str, Any]],
-        chat_id: str,
-        chatbot_id: str,
-        user_message_id: str,
-        assistant_message_id: str,
-        model_id: Optional[str],
-        config: Optional[Any],
-        avatar: Optional[str],
-        tool_map: Dict[str, str],
-        planning_messages_history: List[Dict[str, Any]],
-        start_time: float,
-        reasoning_end_time: Optional[float],
-        reasoning_content: str,
-        full_response: str,
-        temporary: bool = False,
-        **model_params
+    async def _run_conversation_loop(
+        ctx: IntegrationChatContext
     ) -> AsyncGenerator[Union[Dict[str, Any], Tuple[None, List[Dict[str, Any]], List[Dict[str, Any]]]], None]:
         """
-        执行直接回答逻辑（不需要子任务）
+        执行聊天主循环（模型流式生成 + 工具调用循环）
 
-        复用 ChatCoreService._execute_direct_answer 的核心流程，但消息持久化改为写入
-        ChatbotChatMessage 表；temporary=True 时不进行任何持久化。
+        循环执行模型流式生成，遇到工具调用时执行工具并将结果回填给模型，
+        直到模型不再发起工具调用为止。期间处理停止信号与错误。
 
         Args:
-            model: LLM 模型实例
-            messages: 消息列表（会被本方法在工具调用循环中追加内容）
-            chat_id: 聊天ID
-            chatbot_id: 机器人ID
-            user_message_id: 用户消息ID
-            assistant_message_id: 助手消息ID
-            model_id: 模型ID
-            config: 配置（原样保留，用于兼容签名）
-            avatar: 头像URL
-            tool_map: 工具映射
-            planning_messages_history: 任务规划历史消息
-            start_time: 流程开始时间
-            reasoning_end_time: 推理结束时间
-            reasoning_content: 累计推理内容
-            full_response: 累计完整响应
-            temporary: 是否临时会话模式
-            **model_params: 模型参数
+            ctx: 集成聊天上下文（包含 model、messages、tool_map 等运行时状态）
 
         Yields:
-            Dict: 流式响应数据；最后 yield 一个 (None, messages, planning_messages_history) 元组
+            Dict: 流式响应数据
+            Tuple[None, List, List]: 循环结束时的最终消息列表（供后置处理使用）
         """
+        chat_id = ctx.chat_id
+        user_message_id = ctx.user_message_id
+        assistant_message_id = ctx.assistant_message_id
+        model = ctx.model
+        messages = ctx.messages
+        tool_map = ctx.tool_map or {}
+        avatar = ctx.avatar
+        model_id = ctx.model_id
+        chatbot_id = ctx.chatbot_id
+        model_params = ctx.model_params
+        temporary = ctx.temporary
+        planning_messages_history = ctx.history_messages.copy()
+
         while True:
             model_answer_step_id = f"step_{uuid.uuid4().hex[:8]}"
 
@@ -802,11 +1076,11 @@ class IntegrationChatCoreService:
                     if round_reasoning_end_time is None and reasoning_content_chunk:
                         round_reasoning_end_time = time.time()
                     full_response_chunk += chunk['text']
-                    full_response += chunk['text']
+                    ctx.full_response += chunk['text']
 
                 if chunk.get('reasoning_content'):
                     reasoning_content_chunk += chunk['reasoning_content']
-                    reasoning_content += chunk['reasoning_content']
+                    ctx.reasoning_content += chunk['reasoning_content']
 
                 if chunk.get('tool_calls'):
                     tool_calls_list = chunk.get('tool_calls')
@@ -827,7 +1101,7 @@ class IntegrationChatCoreService:
                     chat_id=chat_id,
                     user_message_id=user_message_id,
                     assistant_message_id=assistant_message_id,
-                    reasoning_content=chunk.get('reasoning_content',''),
+                    reasoning_content=chunk.get('reasoning_content', ''),
                     reasoning_end=reasoning_end,
                     finish_reason=chunk.get('finish_reason'),
                     usage=chunk.get('usage'),
@@ -1037,6 +1311,37 @@ class IntegrationChatCoreService:
         yield (None, messages, planning_messages_history)
 
     @staticmethod
+    def _postprocess(ctx: IntegrationChatContext) -> None:
+        """
+        聊天后置处理：持久化助手消息与收尾
+
+        - 临时会话：将助手最终消息保存到 Redis
+        - 正式会话：更新 ChatbotChat 的 messages 摘要
+        """
+        if ctx.temporary:
+            # 临时会话：保存助手最终消息到 Redis
+            if ctx.full_response or ctx.reasoning_content:
+                assistant_msg_data = {
+                    "id": ctx.assistant_message_id,
+                    "message_id": ctx.assistant_message_id,
+                    "chat_id": ctx.chat_id,
+                    "chatbot_id": ctx.chatbot_id,
+                    "role": "assistant",
+                    "content": ctx.full_response,
+                    "reasoning_content": ctx.reasoning_content,
+                    "reasoning_time": int((ctx.reasoning_end_time - ctx.start_time) * 1000) if ctx.reasoning_end_time else None,
+                    "model_id": ctx.model_id,
+                    "extra_content": None,
+                    "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                }
+                TempChatStore.add_message(ctx.integration_id, ctx.chat_id, assistant_msg_data, scope_id=ctx.scope_id)
+        else:
+            # 正式会话：更新 ChatbotChat 的 messages 摘要
+            if ctx.bot_chat:
+                IntegrationChatCoreService._update_chat_messages_summary(ctx.bot_chat, ctx.chat_id)
+
+    @staticmethod
     async def chat_stream(
         query: List[QueryItem],
         chat_id: Optional[str],
@@ -1050,8 +1355,7 @@ class IntegrationChatCoreService:
         """
         流式聊天
 
-        独立实现聊天流程，所有消息持久化到 ChatbotChat 和 ChatbotChatMessage 表，
-        不再调用 ChatCoreService.chat_stream，避免对 Chat 和 ChatMessage 表的写入。
+        流程：聊天前预处理 -> 聊天执行 -> 聊天后置处理
 
         Args:
             query: 查询数组
@@ -1061,53 +1365,36 @@ class IntegrationChatCoreService:
             temporary: 临时会话模式，不保存对话和消息到数据库
             config: 对话配置JSON，包含 deep_thinking 等配置项
             edit_message_id: 编辑消息ID，删除该消息及其后续消息
+            preview_token: 预览token
 
         Yields:
             Dict: 流式响应数据
         """
-        chatbot_id = integration.chatbot_id
-        user_text = ChatCoreService.extract_text_from_query(query)
-
-        # 统一处理 config 参数为字典
-        config_dict: Dict[str, Any] = {}
-        if config:
-            if isinstance(config, str):
-                try:
-                    config_dict = json.loads(config)
-                except json.JSONDecodeError:
-                    pass
-            elif isinstance(config, dict):
-                config_dict = config
-
-        # 生成基础消息ID
-        user_message_id = uuid.uuid4().hex
-        assistant_message_id = uuid.uuid4().hex
-
-        # 获取机器人配置（模型、系统提示词、工具等）
+        # 1. 聊天前预处理
         try:
-            chatbot_config_data = IntegrationChatCoreService._prepare_chatbot_config(chatbot_id, config_dict)
-            model_id = chatbot_config_data['model_id']
-            system_prompt = chatbot_config_data['system_prompt']
-            user_prompt_messages = chatbot_config_data['user_prompt_messages']
-            tools = chatbot_config_data['tools']
-            tool_map = chatbot_config_data['tool_map']
-            
-            # 注入内置工具（网络搜索和PPT生成等）
-            web_search_enabled = config_dict.get('web_search', False)
-            # 如果配置文件中禁用了搜索引擎，强制关闭
-            from app.configs.config import config as app_config
-            if not app_config.get("web_search_engine.enabled", True):
-                web_search_enabled = False
-            
-            from app.core.llm_model.builtin_tools.tool_utils import inject_builtin_tools
-            tools, tool_map = inject_builtin_tools(
-                tools=tools,
-                tool_map=tool_map,
-                web_search_enabled=web_search_enabled
+            ctx = IntegrationChatPreprocessor.preprocess(
+                query=query,
+                chat_id=chat_id,
+                integration=integration,
+                temporary=temporary,
+                config=config,
+                edit_message_id=edit_message_id,
+                preview_token=preview_token,
             )
+        except PreprocessError as e:
+            actual_chat_id = e.chat_id or chat_id or f"temp_{uuid.uuid4().hex[:12]}"
+            yield ChatStreamResponse.error_response(
+                error=e.message,
+                chat_id=actual_chat_id,
+                user_message_id='',
+                assistant_message_id='',
+                text=f"抱歉，发送消息时出现错误：{e.message}"
+            ).to_dict()
+            return
         except ResourceNotFoundError as e:
-            # 获取机器人配置失败，返回错误
             actual_chat_id = chat_id or f"temp_{uuid.uuid4().hex[:12]}"
+            user_message_id = uuid.uuid4().hex
+            assistant_message_id = uuid.uuid4().hex
             yield ChatStreamResponse.error_response(
                 error=str(e),
                 chat_id=actual_chat_id,
@@ -1117,320 +1404,38 @@ class IntegrationChatCoreService:
             ).to_dict()
             return
 
-        if not model_id:
-            actual_chat_id = chat_id or f"temp_{uuid.uuid4().hex[:12]}"
-            yield ChatStreamResponse.error_response(
-                error='未指定模型',
-                chat_id=actual_chat_id,
-                user_message_id=user_message_id,
-                assistant_message_id=assistant_message_id,
-                text="抱歉，发送消息时出现错误：未指定模型"
-            ).to_dict()
-            return
-
-        # 获取头像
-        avatar = IntegrationChatCoreService._get_chatbot_avatar(chatbot_id)
-
-        # 获取模型配置并创建模型实例
-        model_config, llm_config, model_type = ChatCoreService.get_model_config(model_id)
-        user_message = ChatCoreService.convert_query_to_message(query, model_type, model_id)
-        model = LLMFactory.create_model(model_type, model_config)
-
-        # 合并模型参数
-        model_params: Dict[str, Any] = {}
-        if llm_config:
-            model_params.update(llm_config)
-        if config_dict:
-            model_params.update(config_dict)
-            # 移除前端专用参数，不传给大模型
-            model_params.pop('web_search', None)
-            model_params.pop('deep_thinking', None)
-        if tools:
-            model_params['tools'] = tools
-
-        # ============ 临时会话模式 ============
-        # 不创建 ChatbotChat 记录，将聊天记录和消息保存到 Redis
-        if temporary:
-            temp_chat_id = chat_id or f"temp_{uuid.uuid4().hex[:12]}"
-            integration_id = integration.id
-            # 预览token隔离：不同preview_token使用不同的scope_id，数据互相隔离
-            scope_id = f"{integration_id}:preview:{preview_token}" if preview_token else None
-
-            # 如果是新对话，在 Redis 中创建临时聊天记录
-            if not chat_id or not TempChatStore.get_chat(integration_id, temp_chat_id, scope_id=scope_id):
-                TempChatStore.create_chat(
-                    integration_id=integration_id,
-                    chat_id=temp_chat_id,
-                    chatbot_id=chatbot_id,
-                    title=user_text[:30] if user_text else "临时对话",
-                    scope_id=scope_id
-                )
-
-            # 处理编辑消息：删除该消息及其后续所有消息
-            if edit_message_id:
-                temp_messages = TempChatStore.get_messages(integration_id, temp_chat_id, scope_id=scope_id)
-                for i, msg in enumerate(temp_messages):
-                    if msg.get('id') == edit_message_id or msg.get('message_id') == edit_message_id:
-                        TempChatStore.clear_messages_after(integration_id, temp_chat_id, i, scope_id=scope_id)
-                        break
-
-            # 保存用户消息到 Redis
-            from app.services.chat.file_utils import build_extra_content
-            temp_extra_content = build_extra_content(query)
-            user_msg_data = {
-                "id": user_message_id,
-                "message_id": user_message_id,
-                "chat_id": temp_chat_id,
-                "chatbot_id": chatbot_id,
-                "role": "user",
-                "content": user_text,
-                "extra_content": json.dumps(temp_extra_content, ensure_ascii=False) if temp_extra_content else None,
-                "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            }
-            TempChatStore.add_message(integration_id, temp_chat_id, user_msg_data, scope_id=scope_id)
-
-            # 加载历史消息
-            temp_history = TempChatStore.get_messages(integration_id, temp_chat_id, scope_id=scope_id)
-            history_messages = []
-            for msg in temp_history[:-1]:
-                history_messages.append({
-                    "role": msg.get("role", ""),
-                    "content": msg.get("content", "")
-                })
-
-            # 构建消息列表
-            messages = ChatCoreService.build_messages(
-                system_prompt, history_messages, user_message, user_prompt_messages
-            )
-
-            start_time = time.time()
-            reasoning_end_time = None
-            full_response = ''
-            reasoning_content = ''
-            planning_messages_history: List[Dict[str, Any]] = []
-
-            try:
-                ChatStopManager().clear_stop(temp_chat_id)
-
-                async for result in IntegrationChatCoreService._execute_direct_answer(
-                    model=model,
-                    messages=messages,
-                    chat_id=temp_chat_id,
-                    chatbot_id=chatbot_id,
-                    user_message_id=user_message_id,
-                    assistant_message_id=assistant_message_id,
-                    model_id=model_id,
-                    config=config,
-                    avatar=avatar,
-                    tool_map=tool_map,
-                    planning_messages_history=planning_messages_history,
-                    start_time=start_time,
-                    reasoning_end_time=reasoning_end_time,
-                    reasoning_content=reasoning_content,
-                    full_response=full_response,
-                    temporary=True,
-                    **model_params
-                ):
-                    if isinstance(result, dict):
-                        if result.get('status') == MessageStatus.STOP:
-                            ChatStopManager().clear_stop(temp_chat_id)
-                            return
-                        if result.get('text'):
-                            full_response += result['text']
-                        if result.get('reasoning_content'):
-                            reasoning_content += result['reasoning_content']
-                        if result.get('reasoning_end') and reasoning_end_time is None:
-                            reasoning_end_time = time.time()
-                        result['chat_id'] = temp_chat_id
-                        yield result
-                    elif isinstance(result, tuple) and len(result) == 3:
-                        _, messages, planning_messages_history = result
-            except GeneratorExit:
-                ChatStopManager().request_stop(temp_chat_id)
-            except Exception as e:
-                logger.error(f"集成临时会话流式输出异常: {e}", exc_info=True)
-                yield ChatStreamResponse.error_response(
-                    error=str(e),
-                    chat_id=temp_chat_id,
-                    user_message_id=user_message_id,
-                    assistant_message_id=assistant_message_id,
-                    text=f"抱歉，发送消息时出现错误：{str(e)}"
-                ).to_dict()
-
-            # 保存助手最终消息到 Redis
-            if full_response or reasoning_content:
-                assistant_msg_data = {
-                    "id": assistant_message_id,
-                    "message_id": assistant_message_id,
-                    "chat_id": temp_chat_id,
-                    "chatbot_id": chatbot_id,
-                    "role": "assistant",
-                    "content": full_response,
-                    "reasoning_content": reasoning_content,
-                    "reasoning_time": int((reasoning_end_time - start_time) * 1000) if reasoning_end_time else None,
-                    "model_id": model_id,
-                    "extra_content": None,
-                    "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                }
-                TempChatStore.add_message(integration_id, temp_chat_id, assistant_msg_data, scope_id=scope_id)
-
-            return
-
-        # ============ 正式会话模式 ============
-        # 获取或创建 ChatbotChat
-        chat_title = user_text[:20] if len(user_text) > 20 else user_text
-        bot_chat = IntegrationChatCoreService._get_or_create_bot_chat(integration, chatbot_id, chat_id, title=chat_title)
-        actual_chat_id = bot_chat.id
-
-        # 处理编辑消息：删除该消息及其后续所有消息
-        if edit_message_id:
-            IntegrationChatCoreService._delete_messages_after(actual_chat_id, edit_message_id)
-
-        # 加载历史消息
-        history_messages = IntegrationChatCoreService._load_history_messages(actual_chat_id)
-
-        # 构建完整消息列表
-        messages = ChatCoreService.build_messages(
-            system_prompt, history_messages, user_message, user_prompt_messages
-        )
-
-        # 保存用户消息到 ChatbotChatMessage
-        from app.services.chat.file_utils import build_extra_content
-        extra_content = build_extra_content(query)
-        IntegrationChatCoreService._save_user_message(
-            chatbot_id=chatbot_id,
-            chat_id=actual_chat_id,
-            message_id=user_message_id,
-            content=user_text,
-            model_id=model_id,
-            extra_content=extra_content
-        )
-
-        start_time = time.time()
-        reasoning_end_time = None
-        full_response = ''
-        reasoning_content = ''
-        is_stopped = False
-        planning_messages_history = history_messages.copy()
-
-        current_step: Optional[str] = None
-        current_step_id: Optional[str] = None
-
+        # 2. 聊天执行
         try:
-            ChatStopManager().clear_stop(actual_chat_id)
-
-            while True:
-                # 检查停止信号
-                if ChatStopManager().is_stop_requested(actual_chat_id):
-                    yield ChatStreamResponse.text_response(
-                        text='',
-                        chat_id=actual_chat_id,
-                        user_message_id=user_message_id,
-                        assistant_message_id=assistant_message_id,
-                        status=MessageStatus.STOP,
-                        step_id=current_step_id or '',
-                        step=current_step,
-                        avatar=avatar
-                    ).to_dict()
-                    is_stopped = True
-
-                    # 保存已生成的内容
-                    if full_response or reasoning_content:
-                        reasoning_time = None
-                        if reasoning_content and reasoning_end_time:
-                            reasoning_time = int((reasoning_end_time - start_time) * 1000)
-
-                        if current_step_id:
-                            IntegrationChatCoreService._upsert_assistant_message(
-                                chatbot_id=chatbot_id,
-                                chat_id=actual_chat_id,
-                                message_id=assistant_message_id,
-                                step_id=current_step_id,
-                                content=full_response,
-                                model_id=model_id,
-                                reasoning_content=reasoning_content if reasoning_content else None,
-                                reasoning_time=reasoning_time,
-                                step=current_step
-                            )
-
-                    IntegrationChatCoreService._stop_chat_messages(actual_chat_id)
-                    ChatStopManager().clear_stop(actual_chat_id)
-                    break
-
-                # 任务规划已注释，直接执行直接回答
-                direct_answer_result = IntegrationChatCoreService._execute_direct_answer(
-                    model=model,
-                    messages=messages,
-                    chat_id=actual_chat_id,
-                    chatbot_id=chatbot_id,
-                    user_message_id=user_message_id,
-                    assistant_message_id=assistant_message_id,
-                    model_id=model_id,
-                    config=config,
-                    avatar=avatar,
-                    tool_map=tool_map,
-                    planning_messages_history=planning_messages_history,
-                    start_time=start_time,
-                    reasoning_end_time=reasoning_end_time,
-                    reasoning_content=reasoning_content,
-                    full_response=full_response,
-                    temporary=False,
-                    **model_params
-                )
-
-                async for result in direct_answer_result:
-                    if isinstance(result, dict):
-                        if result.get('status') == MessageStatus.STOP:
-                            is_stopped = True
-
-                            # 保存已生成的内容
-                            if full_response or reasoning_content:
-                                reasoning_time = None
-                                if reasoning_content and reasoning_end_time:
-                                    reasoning_time = int((reasoning_end_time - start_time) * 1000)
-
-                                if current_step_id:
-                                    IntegrationChatCoreService._upsert_assistant_message(
-                                        chatbot_id=chatbot_id,
-                                        chat_id=actual_chat_id,
-                                        message_id=assistant_message_id,
-                                        step_id=current_step_id,
-                                        content=full_response,
-                                        model_id=model_id,
-                                        reasoning_content=reasoning_content if reasoning_content else None,
-                                        reasoning_time=reasoning_time,
-                                        step=current_step
-                                    )
-
-                            IntegrationChatCoreService._stop_chat_messages(actual_chat_id)
-                            ChatStopManager().clear_stop(actual_chat_id)
-                            return
-
-                        # 确保返回的 chat_id 是 ChatbotChat 的 id
-                        result['chat_id'] = actual_chat_id
-                        yield result
-                    elif isinstance(result, tuple) and len(result) == 3:
-                        # 最终返回值 (None, messages, planning_messages_history)
-                        _, messages, planning_messages_history = result
-                # 任务规划已注释，直接结束主循环
-                break
+            ChatStopManager().clear_stop(ctx.chat_id)
+            async for result in IntegrationChatCoreService._run_conversation_loop(ctx):
+                if isinstance(result, dict):
+                    if result.get('status') == MessageStatus.STOP:
+                        ChatStopManager().clear_stop(ctx.chat_id)
+                        return
+                    if result.get('text'):
+                        ctx.full_response += result['text']
+                    if result.get('reasoning_content'):
+                        ctx.reasoning_content += result['reasoning_content']
+                    if result.get('reasoning_end') and ctx.reasoning_end_time is None:
+                        ctx.reasoning_end_time = time.time()
+                    result['chat_id'] = ctx.chat_id
+                    yield result
+                elif isinstance(result, tuple) and len(result) == 3:
+                    _, ctx.messages, _ = result
         except GeneratorExit:
-            is_stopped = True
-            ChatStopManager().request_stop(actual_chat_id)
+            ChatStopManager().request_stop(ctx.chat_id)
         except Exception as e:
             logger.error(f"集成聊天流式输出异常: {e}", exc_info=True)
             yield ChatStreamResponse.error_response(
                 error=str(e),
-                chat_id=actual_chat_id,
-                user_message_id=user_message_id,
-                assistant_message_id=assistant_message_id,
+                chat_id=ctx.chat_id,
+                user_message_id=ctx.user_message_id,
+                assistant_message_id=ctx.assistant_message_id,
                 text=f"抱歉，发送消息时出现错误：{str(e)}"
             ).to_dict()
+        # 3. 聊天后置处理
         finally:
-            # 更新 ChatbotChat 的 messages 摘要
-            IntegrationChatCoreService._update_chat_messages_summary(bot_chat, actual_chat_id)
+            IntegrationChatCoreService._postprocess(ctx)
 
     @staticmethod
     async def chat(

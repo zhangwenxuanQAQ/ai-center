@@ -209,13 +209,19 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
     elif re.search(r"\.(md|markdown|mdx)$", filename, re.IGNORECASE):
         callback(0.1, "开始解析Markdown文件")
         markdown_parser = _Markdown(int(parser_config.get("chunk_token_num", 128)))
-        sections, tables, section_images = markdown_parser(
+        return_section_images = kwargs.get("return_section_images", True)
+        md_result = markdown_parser(
             filename,
             binary,
             separate_tables=False,
             delimiter=parser_config.get("delimiter", "\n"),
-            return_section_images=True,
+            return_section_images=return_section_images,
         )
+        if return_section_images:
+            sections, tables, section_images = md_result
+        else:
+            sections, tables = md_result
+            section_images = None
         is_markdown = True
         res = tokenize_table(tables, doc, is_eng)
         callback(0.8, "Markdown解析完成")
