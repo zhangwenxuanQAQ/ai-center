@@ -37,6 +37,21 @@ function extractText(children: React.ReactNode): string {
 }
 
 /**
+ * 获取当前主题：优先从 body 获取，回退到 .integration-page 元素
+ */
+function getCurrentTheme(): 'light' | 'dark' {
+  const bodyTheme = document.body.getAttribute('data-theme');
+  if (bodyTheme === 'light' || bodyTheme === 'dark') return bodyTheme;
+  // 插件页面：从 .integration-page 元素获取主题
+  const integrationPage = document.querySelector('.integration-page');
+  if (integrationPage) {
+    const pageTheme = integrationPage.getAttribute('data-theme');
+    if (pageTheme === 'light' || pageTheme === 'dark') return pageTheme;
+  }
+  return 'dark';
+}
+
+/**
  * Mermaid 图表渲染组件
  */
 const MermaidChart: React.FC<{ chart: string; theme: 'light' | 'dark' }> = React.memo(({ chart, theme }) => {
@@ -406,14 +421,16 @@ const CollapsibleCodeBlock: React.FC<{ title: string; content: React.ReactNode }
   const codeTextRef = useRef('');
 
   useEffect(() => {
-    const currentTheme = document.body.getAttribute('data-theme') || 'dark';
-    setTheme(currentTheme as 'light' | 'dark');
+    setTheme(getCurrentTheme());
 
     const observer = new MutationObserver(() => {
-      const newTheme = document.body.getAttribute('data-theme') || 'dark';
-      setTheme(newTheme as 'light' | 'dark');
+      setTheme(getCurrentTheme());
     });
     observer.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
+    const integrationPage = document.querySelector('.integration-page');
+    if (integrationPage) {
+      observer.observe(integrationPage, { attributes: true, attributeFilter: ['data-theme'] });
+    }
     return () => observer.disconnect();
   }, []);
 
@@ -516,14 +533,16 @@ const ChatMarkdown: React.FC<ChatMarkdownProps> = React.memo(({ source, classNam
   }, [widgetValues]);
 
   useEffect(() => {
-    const currentTheme = document.body.getAttribute('data-theme') || 'dark';
-    setTheme(currentTheme as 'light' | 'dark');
+    setTheme(getCurrentTheme());
 
     const observer = new MutationObserver(() => {
-      const newTheme = document.body.getAttribute('data-theme') || 'dark';
-      setTheme(newTheme as 'light' | 'dark');
+      setTheme(getCurrentTheme());
     });
     observer.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
+    const integrationPage = document.querySelector('.integration-page');
+    if (integrationPage) {
+      observer.observe(integrationPage, { attributes: true, attributeFilter: ['data-theme'] });
+    }
     return () => observer.disconnect();
   }, []);
 
