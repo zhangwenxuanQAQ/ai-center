@@ -653,9 +653,30 @@ class AgentInstance(SoftDeleteModel):
     tags = TextField(null=True, verbose_name="智能体标签JSON")
     status = BooleanField(default=True, verbose_name="状态：True启用，False停用")
     is_template = BooleanField(default=False, verbose_name="是否为模板")
-    
+
     class Meta:
         table_name = 'agent_instance'
+
+
+class ToolkitCategory(SoftDeleteModel):
+    """
+    工具箱分类模型
+
+    存储工具箱分类信息，支持树形结构。
+    顶级分类按工具类型（mcp/api/code_script/builtin_tool）划分。
+    """
+    name = CharField(max_length=255, index=True, verbose_name="分类名称")
+    description = TextField(null=True, verbose_name="分类描述")
+    type = CharField(max_length=50, index=True, verbose_name="工具类型：mcp/api/code_script/builtin_tool")
+    parent_id = CharField(max_length=40, null=True, index=True, verbose_name="父分类ID")
+    sort_order = IntegerField(default=0, verbose_name="排序序号")
+    is_default = BooleanField(default=False, verbose_name="是否默认分类")
+
+    class Meta:
+        table_name = 'toolkit_category'
+        indexes = (
+            (('parent_id', 'sort_order'), False),
+        )
 
 
 def create_tables():
@@ -690,6 +711,7 @@ def create_tables():
         AgentCategory,
         AgentComponent,
         AgentInstance,
+        ToolkitCategory,
         ChatbotIntegration,
         ChatbotChat,
         ChatbotChatMessage,

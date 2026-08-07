@@ -324,10 +324,17 @@ class MCPServerService:
             DuplicateResourceError: 编码已存在
         """
         server_data = server.model_dump()
-        
+
         if not server_data.get('category_id'):
-            default_category = MCPCategoryService._get_or_create_default_category()
-            server_data['category_id'] = default_category.id
+            # 查找工具箱中type为mcp的默认分类
+            from app.database.models import ToolkitCategory
+            default_category = ToolkitCategory.select().where(
+                (ToolkitCategory.type == "mcp") &
+                (ToolkitCategory.is_default == True) &
+                (ToolkitCategory.deleted == False)
+            ).first()
+            if default_category:
+                server_data['category_id'] = default_category.id
         
         existing = MCPServer.select().where(
             (MCPServer.code == server_data['code']) &
@@ -348,7 +355,7 @@ class MCPServerService:
         return db_server
     
     @staticmethod
-    def get_servers(skip: int = 0, limit: int = 100, category_id: str = None, name: str = None, source_type: str = None, code: str = None):
+    def get_servers(skip: int = 0, limit: int = 100, category_id: str = None, name: str = None, source_type: str = None, code: str = None, tool_type: str = None):
         """
         获取MCP服务列表
         
@@ -359,6 +366,7 @@ class MCPServerService:
             name: 服务名称（模糊查询）
             source_type: 来源类型
             code: 服务编码（模糊查询）
+            tool_type: 工具类型（可选，按类型下的所有分类查询）
             
         Returns:
             List[MCPServer]: MCP服务列表
@@ -367,6 +375,23 @@ class MCPServerService:
         
         if category_id:
             query = query.where(MCPServer.category_id == category_id)
+        elif tool_type:
+            # 按工具类型查询：获取该类型下所有分类ID
+            from app.database.models import ToolkitCategory
+            category_ids = list(ToolkitCategory.select(ToolkitCategory.id).where(
+                (ToolkitCategory.type == tool_type) &
+                (ToolkitCategory.deleted == False)
+            ).tuples())
+            category_id_list = [cid[0] for cid in category_ids]
+            if category_id_list:
+                # 包含属于该类型分类的服务，以及category_id为空的MCP服务（历史数据兼容）
+                query = query.where(
+                    (MCPServer.category_id.in_(category_id_list)) |
+                    (MCPServer.category_id.is_null())
+                )
+            else:
+                # 没有该类型的分类，只返回category_id为空的服务
+                query = query.where(MCPServer.category_id.is_null())
         
         if name:
             query = query.where(MCPServer.name.contains(name))
@@ -380,7 +405,7 @@ class MCPServerService:
         return list(query.order_by(MCPServer.created_at.desc()).offset(skip).limit(limit))
     
     @staticmethod
-    def count_servers(category_id: str = None, name: str = None, source_type: str = None, code: str = None) -> int:
+    def count_servers(category_id: str = None, name: str = None, source_type: str = None, code: str = None, tool_type: str = None) -> int:
         """
         统计MCP服务总数
         
@@ -389,6 +414,7 @@ class MCPServerService:
             name: 服务名称（模糊查询）
             source_type: 来源类型
             code: 服务编码（模糊查询）
+            tool_type: 工具类型（可选，按类型下的所有分类查询）
             
         Returns:
             int: MCP服务总数
@@ -397,6 +423,23 @@ class MCPServerService:
         
         if category_id:
             query = query.where(MCPServer.category_id == category_id)
+        elif tool_type:
+            # 按工具类型查询：获取该类型下所有分类ID
+            from app.database.models import ToolkitCategory
+            category_ids = list(ToolkitCategory.select(ToolkitCategory.id).where(
+                (ToolkitCategory.type == tool_type) &
+                (ToolkitCategory.deleted == False)
+            ).tuples())
+            category_id_list = [cid[0] for cid in category_ids]
+            if category_id_list:
+                # 包含属于该类型分类的服务，以及category_id为空的MCP服务（历史数据兼容）
+                query = query.where(
+                    (MCPServer.category_id.in_(category_id_list)) |
+                    (MCPServer.category_id.is_null())
+                )
+            else:
+                # 没有该类型的分类，只返回category_id为空的服务
+                query = query.where(MCPServer.category_id.is_null())
         
         if name:
             query = query.where(MCPServer.name.contains(name))

@@ -126,12 +126,13 @@ export const mcpService = {
   /**
    * 获取MCP服务列表（分页）
    */
-  getServers: async (page: number = 1, pageSize: number = 12, category_id?: string, name?: string, source_type?: string, code?: string): Promise<{ data: MCPServer[], total: number }> => {
+  getServers: async (page: number = 1, pageSize: number = 12, category_id?: string, name?: string, source_type?: string, code?: string, tool_type?: string): Promise<{ data: MCPServer[], total: number }> => {
     let params = [`page=${page}`, `page_size=${pageSize}`];
     if (category_id) params.push(`category_id=${category_id}`);
     if (name) params.push(`name=${encodeURIComponent(name)}`);
     if (source_type) params.push(`source_type=${encodeURIComponent(source_type)}`);
     if (code) params.push(`code=${encodeURIComponent(code)}`);
+    if (tool_type) params.push(`tool_type=${encodeURIComponent(tool_type)}`);
     return http.get<{ data: MCPServer[], total: number }>(`/aicenter/v1/mcp/server?${params.join('&')}`);
   },
 

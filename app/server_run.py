@@ -1597,6 +1597,75 @@ try:
     except Exception as e:
         logger.error(f"[MIGRATION]   检查 chatbot_chat 表 title 字段失败: {e}")
 
+    # 创建 toolkit_category 表（工具箱分类表）
+    logger.info("\n[MIGRATION] 创建 toolkit_category 表...")
+    try:
+        cursor = db.execute_sql("SHOW TABLES;")
+        tables = cursor.fetchall()
+        table_names = [table[0] for table in tables]
+
+        if 'toolkit_category' not in table_names:
+            db.execute_sql("""
+                CREATE TABLE toolkit_category (
+                    id CHAR(36) NOT NULL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    type VARCHAR(50) DEFAULT NULL,
+                    parent_id CHAR(36) DEFAULT NULL,
+                    sort_order INT DEFAULT 0,
+                    is_default TINYINT DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    create_user_id VARCHAR(40) DEFAULT NULL,
+                    update_user_id VARCHAR(40) DEFAULT NULL,
+                    deleted TINYINT DEFAULT 0,
+                    deleted_at DATETIME DEFAULT NULL,
+                    deleted_user_id VARCHAR(36) DEFAULT NULL,
+                    INDEX idx_name (name),
+                    INDEX idx_type (type),
+                    INDEX idx_parent_id (parent_id),
+                    INDEX idx_sort_order (sort_order),
+                    INDEX idx_deleted (deleted)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            """)
+            logger.info("[MIGRATION]   成功创建 toolkit_category 表")
+        else:
+            logger.info("[MIGRATION]   toolkit_category 表已存在，检查字段...")
+            cursor = db.execute_sql("DESCRIBE toolkit_category;")
+            columns = [column[0] for column in cursor.fetchall()]
+
+            if 'type' not in columns:
+                db.execute_sql("ALTER TABLE toolkit_category ADD COLUMN type VARCHAR(50) DEFAULT NULL")
+                logger.info("[MIGRATION]   成功添加 type 字段")
+            else:
+                logger.info("[MIGRATION]   type 字段已存在，跳过")
+
+            if 'is_default' not in columns:
+                db.execute_sql("ALTER TABLE toolkit_category ADD COLUMN is_default TINYINT DEFAULT 0")
+                logger.info("[MIGRATION]   成功添加 is_default 字段")
+            else:
+                logger.info("[MIGRATION]   is_default 字段已存在，跳过")
+    except Exception as e:
+        logger.error(f"[MIGRATION]   创建 toolkit_category 表失败: {e}")
+
+    # 初始化工具箱默认分类
+    logger.info("\n[MIGRATION] 初始化工具箱默认分类...")
+    try:
+        from app.services.toolkit.service import ToolkitCategoryService
+        ToolkitCategoryService.init_default_categories()
+        logger.info("[MIGRATION]   工具箱默认分类初始化完成")
+    except Exception as e:
+        logger.error(f"[MIGRATION]   初始化工具箱默认分类失败: {e}")
+
+    # 清空 mcp_server 表中的 category_id 字段（弃用 mcp_category 分类）
+    logger.info("\n[MIGRATION] 清空 mcp_server 表的 category_id 字段...")
+    try:
+        db.execute_sql("UPDATE mcp_server SET category_id = NULL WHERE category_id IS NOT NULL;")
+        affected = cursor.rowcount if hasattr(cursor, 'rowcount') else 0
+        logger.info("[MIGRATION]   已清空 mcp_server.category_id 字段")
+    except Exception as e:
+        logger.error(f"[MIGRATION]   清空 mcp_server.category_id 字段失败: {e}")
+
     logger.info("\n[MIGRATION] ✅ 数据库迁移完成")
 except Exception as e:
     logger.error(f"\n[MIGRATION] ❌ 数据库迁移失败: {e}")

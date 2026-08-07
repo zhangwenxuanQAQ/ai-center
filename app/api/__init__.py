@@ -12,6 +12,7 @@ from .datasource_category import router as datasource_category_router
 from .system.monitor import router as system_monitor_router
 from .agent import router as agent_router
 from .mcp import router as mcp_router
+from .toolkit import router as toolkit_router
 from .integration.management import router as integration_management_router
 from .integration.api import router as integration_api_router
 
@@ -20,6 +21,7 @@ router = APIRouter()
 router.include_router(chatbot_router, prefix="/chatbot", tags=["chatbot"])
 router.include_router(chatbot_category_router, prefix="/chatbot_category", tags=["chatbot_category"])
 router.include_router(mcp_router, prefix="/mcp", tags=["mcp"])
+router.include_router(toolkit_router, prefix="/toolkit", tags=["toolkit"])
 
 router.include_router(knowledgebase_router, prefix="/knowledgebase", tags=["knowledgebase"])
 router.include_router(llm_model_router, prefix="/llm_model", tags=["llm_model"])

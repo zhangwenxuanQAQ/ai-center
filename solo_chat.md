@@ -2232,3 +2232,21 @@ engines:
     weight: 2
     disabled: false
     ```
+
+
+
+# 现在开始实现工具箱功能
+1、 功能模块前后端目录名称统一为toolkit。
+2、 新增一个工具箱常量文件，定义支持的工具类型：
+    - MCP: "mcp"
+    - API: "api"
+    - CODE_SCRIPT: "code_script"
+    - BUILTIN_TOOL: "builtin_tool"
+2、 数据库添加tool_category表，用于存储工具的分类。 需要初始化几个顶级分类（根据上面的常量定义）：
+    - mcp服务
+    - api接口
+    - 代码脚本
+    - 内置工具。
+    表字段需要有type字段，用户存储工具类型
+3、 目前的mcp分类暂时弃用，改成使用toolkit_category表中的分类。服务启动时如果toolkit_category不存在测需要初始化，并且清空mcp表中的分类id字段。
+4、 前端左侧功能树MCP改成工具箱，点击进入工具箱主页面。工具箱主页面需要展示所有工具的分类，点击分类可以展示该分类下的所有工具。

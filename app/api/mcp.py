@@ -203,7 +203,8 @@ def get_mcp_servers(
     category_id: str = Query(None, description="分类ID"),
     name: str = Query(None, description="服务名称（模糊查询）"),
     source_type: str = Query(None, description="来源类型"),
-    code: str = Query(None, description="服务编码（模糊查询）")
+    code: str = Query(None, description="服务编码（模糊查询）"),
+    tool_type: str = Query(None, description="工具类型（按类型查询）")
 ):
     """
     获取MCP服务列表（分页）
@@ -215,13 +216,14 @@ def get_mcp_servers(
         name: 服务名称（模糊查询，可选）
         source_type: 来源类型（可选）
         code: 服务编码（模糊查询，可选）
+        tool_type: 工具类型（可选，按类型下的所有分类查询）
         
     Returns:
         ApiResponse: 统一格式的响应对象，包含data和total
     """
     skip = (page - 1) * page_size
-    servers = MCPServerService.get_servers(skip, page_size, category_id, name, source_type, code)
-    total = MCPServerService.count_servers(category_id, name, source_type, code)
+    servers = MCPServerService.get_servers(skip, page_size, category_id, name, source_type, code, tool_type)
+    total = MCPServerService.count_servers(category_id, name, source_type, code, tool_type)
     servers_data = [server.__data__ for server in servers]
     return ResponseUtil.success(data={"data": servers_data, "total": total}, message="获取MCP服务列表成功")
 
