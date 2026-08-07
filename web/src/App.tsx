@@ -7,6 +7,7 @@ import './styles/common.css';
 import './styles/variables.css';
 import './styles/themes/dark.css';
 import './styles/themes/light.css';
+import logo from './assets/logo.png';
 import Home from './pages/home/home.tsx';
 import Chatbot from './pages/chatbot/chatbot.tsx';
 import ChatbotSetting from './pages/chatbot/chatbot_setting.tsx';
@@ -102,13 +103,13 @@ function AppContent({ theme, toggleTheme }: AppContentProps) {
           collapsed={collapsed}
           style={{ overflow: 'hidden', height: '100%', display: 'flex', flexDirection: 'column' }}
         >
-           <div style={{ display: 'flex', alignItems: 'center', gap: 12,height:69,paddingLeft:24,borderBottom:'1px solid', borderBottomColor: theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#e8eaed' }}>  
-            <img 
-            src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=modern%20AI%20logo%20with%20blue%20and%20green%20colors%2C%20simple%20and%20clean%2C%20technology%20theme%2C%20transparent%20background&image_size=square" 
-            alt="AI Center Logo" 
-            style={{ height: 36 }}
+           <div style={{ display: 'flex', alignItems: 'center', gap: 12,height:69,paddingLeft:24,borderBottom:'1px solid', borderBottomColor: theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#e8eaed' }}>
+            <img
+            src={logo}
+            alt="AI Center Logo"
+            style={{ height: 36, cursor: 'pointer' }}
+            onClick={() => navigate('/')}
           />
-          <h1 style={{ color: theme === 'dark' ? '#e0e0e0' : '#333333', margin: 0, fontSize: '1.2em', fontWeight: 'normal' }}>AI Center</h1>
           </div>
           <Menu
             mode="inline"

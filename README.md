@@ -103,7 +103,6 @@ ai-center/
 │   │   └── user/                  # 用户服务
 │   ├── test/                      # 测试和验证脚本
 │   ├── server_run.py              # 服务定义
-│   ├── server_wsgi.py             # 生产环境入口
 │   ├── start_server.py            # 启动后端服务入口
 │   └── mcp_server.py              # MCP服务器入口
 │
@@ -284,7 +283,7 @@ ES_PASSWORD=your_password
 RUSTFS_HOST=rustfs
 RUSTFS_PORT=9000
 RUSTFS_USER=rustfsadmin
-RUSTFS_PASSWORD=rustfsadmin
+RUSTFS_PASSWORD=<your_password>
 ```
 
 ### 打包步骤
@@ -461,7 +460,7 @@ docker run -d \
 | MYSQL_HOST | MySQL服务器地址 | 127.0.0.1 |
 | MYSQL_PORT | MySQL端口 | 3306 |
 | MYSQL_USER | MySQL用户名 | root |
-| MYSQL_PASSWORD | MySQL密码 | 123456 |
+| MYSQL_PASSWORD | MySQL密码 | <your_password> |
 | MYSQL_DATABASE | 数据库名称 | ai_center |
 | REDIS_HOST | Redis服务器地址 | 127.0.0.1 |
 | REDIS_PORT | Redis端口 | 6379 |
@@ -471,12 +470,12 @@ docker run -d \
 | ES_HOST | Elasticsearch地址 | 127.0.0.1 |
 | ES_PORT | Elasticsearch端口 | 9200 |
 | ES_USER | Elasticsearch用户名 | elastic |
-| ES_PASSWORD | Elasticsearch密码 | 123456 |
+| ES_PASSWORD | Elasticsearch密码 | <your_password> |
 | ES_SCHEME | Elasticsearch协议 | http |
 | RUSTFS_HOST | RustFS服务器地址 | 127.0.0.1 |
 | RUSTFS_PORT | RustFS端口 | 9000 |
 | RUSTFS_USER | RustFS用户名 | rustfsadmin |
-| RUSTFS_PASSWORD | RustFS密码 | rustfsadmin |
+| RUSTFS_PASSWORD | RustFS密码 | <your_password> |
 | MCP_HOST | MCP服务地址 | 0.0.0.0 |
 | MCP_PORT | MCP端口 | 8082 |
 | MCP_ENABLED | 是否启用MCP | true |
@@ -495,7 +494,7 @@ server:
 mysql:
   name: 'ai_center'
   user: 'root'
-  password: 'your_password'
+  password: '<your_password>'
   host: 'mysql'  # Docker环境使用服务名
   port: 3306
   max_connections: 900
@@ -515,7 +514,7 @@ es:
   host: 'elasticsearch'  # Docker环境使用服务名
   port: 9200
   username: 'elastic'
-  password: 'your_password'
+  password: '<your_password>'
   scheme: 'http'
 
 redis:
@@ -527,7 +526,7 @@ redis:
 
 rustfs:
   username: 'rustfsadmin'
-  password: 'rustfsadmin'
+  password: '<your_password>'
   host: 'rustfs'  # Docker环境使用服务名
   port: 9000
 ```

@@ -100,7 +100,7 @@ def _execute_single_tool(tool_call: Dict, tool_map: Dict[str, str]) -> Dict[str,
     # 检查是否为内置工具（如网络搜索）
     tool_id = tool_map.get(function_name, '')
     if tool_id == 'builtin':
-        from app.core.llm_model.builtin_tools.tool_utils import call_builtin_tool
+        from app.core.tools.tool_runner import call_builtin_tool
         result = call_builtin_tool(function_name, function_args)
         elapsed = int((time.time() - start_time) * 1000)
         if result.get('success'):

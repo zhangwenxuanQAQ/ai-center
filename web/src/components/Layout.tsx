@@ -1,7 +1,8 @@
-﻿﻿import { Layout, Menu, Button, Breadcrumb } from 'antd';
+import { Layout, Menu, Button, Breadcrumb } from 'antd';
 import { HomeOutlined, MessageOutlined, SettingOutlined, RobotOutlined, BookOutlined, DatabaseOutlined, CommentOutlined, MoonOutlined, SunOutlined, MenuFoldOutlined, MenuUnfoldOutlined, HistoryOutlined, TeamOutlined, ToolOutlined, FileTextOutlined, CloudServerOutlined, DashboardOutlined, DesktopOutlined, ApartmentOutlined, SearchOutlined, BellOutlined } from '@ant-design/icons';
 import { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import logo from '../assets/logo.png';
 
 const { Header, Content, Sider } = Layout;
 
@@ -77,22 +78,21 @@ function AppLayout({ children }: LayoutProps) {
         collapsed={collapsed}
         style={{ overflow: 'hidden', height: '100%', display: 'flex', flexDirection: 'column' }}
       >
-        {/* Logo 和标题 */}
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          background: theme === 'dark' ? 'rgb(30, 30, 30)' : '#ffffff', 
-          height: 64, 
+        {/* Logo */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          background: theme === 'dark' ? 'rgb(30, 30, 30)' : '#ffffff',
+          height: 64,
           padding: '0 16px',
           borderBottom: theme === 'dark' ? '1px solid #333' : '1px solid #e8e8e8'
         }}>
-          <img 
-            src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=modern%20AI%20logo%20with%20blue%20and%20green%20colors%2C%20simple%20and%20clean%2C%20technology%20theme%2C%20transparent%20background&image_size=square" 
-            alt="AI Center Logo" 
-            style={{ height: 36, marginRight: 12 }}
+          <img
+            src={logo}
+            alt="AI Center Logo"
+            style={{ height: 36, cursor: 'pointer' }}
+            onClick={() => navigate('/')}
           />
-          <h1 style={{ color: theme === 'dark' ? 'white' : '#000000', margin: 0, fontSize: '1.2em', fontWeight: 'normal', whiteSpace: 'nowrap' }}>
-            AI Center</h1>
         </div>
         
         {/* 左侧菜单栏 */}

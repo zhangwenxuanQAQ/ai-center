@@ -717,7 +717,7 @@ async def download_ppt(file_id: str):
         PPT 文件流
     """
     try:
-        from app.core.llm_model.builtin_tools.generate_ppt.generate_ppt import get_ppt_from_cache
+        from app.core.tools.builtin_tools.generate_ppt.generate_ppt import get_ppt_from_cache
         
         cached = get_ppt_from_cache(file_id)
         if not cached:

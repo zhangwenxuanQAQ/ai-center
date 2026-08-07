@@ -183,7 +183,7 @@ class IntegrationChatPreprocessor:
     @staticmethod
     def _inject_builtin_tools(ctx: IntegrationChatContext) -> None:
         """注入内置工具（网络搜索、PPT生成等）"""
-        from app.core.llm_model.builtin_tools.tool_utils import inject_builtin_tools
+        from app.core.tools.tool_convert import inject_builtin_tools
         web_search_enabled = ctx.config_dict.get('web_search', False)
         # 如果配置文件中禁用了搜索引擎，强制关闭
         from app.configs.config import config as app_config

@@ -60,7 +60,7 @@ service nginx start
 
 echo "Starting AI Center Server (includes MCP and Task Executor)..."
 cd /aicenter
-python3 -m app.start_server &
+python3 -m app.main &
 BACKEND_PID=$!
 
 echo "AI Center is running!"
