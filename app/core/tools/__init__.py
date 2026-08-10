@@ -24,6 +24,7 @@ def _load_builtin_tools():
     try:
         from app.core.tools.builtin_tools.web_search import web_search  # noqa: F401
         from app.core.tools.builtin_tools.generate_ppt import generate_ppt  # noqa: F401
+        from app.core.tools.builtin_tools.clarify import clarify  # noqa: F401
         import logging
         logging.getLogger(__name__).info("builtin tools loaded")
     except Exception as e:

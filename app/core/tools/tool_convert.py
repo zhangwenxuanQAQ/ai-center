@@ -57,7 +57,7 @@ class ToolConvert:
             tool_map = {}
 
         # 需要始终注入的内置工具列表
-        always_inject_tools = ['generate_ppt']
+        always_inject_tools = ['generate_ppt', 'clarify']
         for tool_name in always_inject_tools:
             tool = ToolRegistry.get_tool(tool_name)
             if tool:
