@@ -3,14 +3,12 @@ import requests
 from typing import Any, Dict, List, Optional
 from bs4 import BeautifulSoup
 
-from app.core.tools.base_tool import BaseTool, BaseToolParam
-from app.core.tools.tool_registry import register_builtin_tool
+from app.core.tools import BaseTool, BaseToolParam, ToolRegistry
 from app.configs.config import config
 
 logger = logging.getLogger(__name__)
 
-
-@register_builtin_tool
+@ToolRegistry.register
 class web_search(BaseTool):
     """基于 SearXNG 搜索引擎的网络搜索工具。"""
 

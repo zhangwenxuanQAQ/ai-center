@@ -14,9 +14,6 @@
 
 import json
 import uuid
-import base64
-import os
-import importlib.util
 import time
 import threading
 from dataclasses import dataclass, field
@@ -26,7 +23,7 @@ from app.database.models import Chat, ChatMessage, LLMModel, Chatbot, ChatbotPro
 from app.services.chat.dto import QueryItem
 from app.services.chat.service import ChatService, ChatMessageService
 from app.core.llm_model.factory import LLMFactory
-from app.core.llm_model.utils.tool_util import process_tool_calls
+from app.core.tools.tool_util import process_tool_calls, convert_db_tools_to_openai_tools, convert_kbs_to_openai_tools
 from app.core.exceptions import ResourceNotFoundError
 from app.core.utils.resource_utils import get_provider_avatar_url
 from app.core.chat.dto import ChatStreamResponse, ToolCallInfo, MessageStatus, MessageStep
@@ -67,35 +64,6 @@ class ChatStopManager:
             self._stop_flags.pop(chat_id, None)
 
 
-def _load_mcp_tool_util():
-    """
-    动态加载MCP工具转换模块，避免循环导入
-    
-    Returns:
-        module: MCP工具转换模块
-    """
-    import os
-    tool_util_path = os.path.join(os.path.dirname(__file__), '..', 'mcp', 'utils', 'tool_util.py')
-    spec = importlib.util.spec_from_file_location("mcp_tool_util", tool_util_path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def convert_db_tools_to_openai_tools(db_tools):
-    """
-    批量将数据库中的MCP工具对象转换为OpenAI tool格式
-    
-    Args:
-        db_tools: MCPTool数据库对象列表
-        
-    Returns:
-        List[Dict[str, Any]]: OpenAI tool格式的工具定义列表
-    """
-    mcp_tool_util = _load_mcp_tool_util()
-    return mcp_tool_util.convert_db_tools_to_openai_tools(db_tools)
-
-
 @dataclass
 class ChatContext:
     """
@@ -122,7 +90,7 @@ class ChatContext:
         messages: 完整的消息列表（含系统提示词、历史消息、用户消息）
         history_messages: 历史消息列表
         tools: OpenAI tool格式工具列表
-        tool_map: 工具名称到工具ID的映射
+        tool_map: 工具名称到工具实例的映射
         model_params: 传给大模型的参数
         avatar: 头像URL
         start_time: 聊天开始时间戳
@@ -147,7 +115,7 @@ class ChatContext:
     messages: List[Dict[str, Any]] = field(default_factory=list)
     history_messages: List[Dict[str, Any]] = field(default_factory=list)
     tools: Optional[List[Dict]] = None
-    tool_map: Optional[Dict[str, str]] = None
+    tool_map: Optional[Dict[str, Any]] = None
     model_params: Dict[str, Any] = field(default_factory=dict)
     avatar: Optional[str] = None
     start_time: float = 0.0
@@ -249,13 +217,13 @@ class ChatPreprocessor:
     @staticmethod
     def _inject_builtin_tools(ctx: ChatContext) -> None:
         """注入内置工具（网络搜索、PPT生成等）"""
-        from app.core.tools.tool_convert import inject_builtin_tools
+        from app.core.tools import ToolConvert
         web_search_enabled = ctx.config_dict.get('web_search', False)
         # 如果配置文件中禁用了搜索引擎，强制关闭
         from app.configs.config import config as app_config
         if not app_config.get("web_search_engine.enabled", True):
             web_search_enabled = False
-        ctx.tools, ctx.tool_map = inject_builtin_tools(
+        ctx.tools, ctx.tool_map = ToolConvert.inject_builtin_tools(
             tools=ctx.tools,
             tool_map=ctx.tool_map,
             web_search_enabled=web_search_enabled
@@ -652,13 +620,13 @@ class ChatCoreService:
         ))
         
         openai_tools = convert_db_tools_to_openai_tools(tools)
-        
+
+        from app.core.tools.builtin_tools.mcp_tool import McpTool
         tool_map = {}
         for tool in tools:
-            tool_map[tool.name] = tool.id
+            tool_map[tool.name] = McpTool.from_db_tool(tool)
 
         from app.database.models import ChatbotKnowledgebase, Knowledgebase
-        from app.core.knowledgebase.utils.tool_util import convert_kbs_to_openai_tools
 
         kb_bindings = list(ChatbotKnowledgebase.select().where(
             (ChatbotKnowledgebase.chatbot_id == chatbot_id) &
@@ -674,8 +642,9 @@ class ChatCoreService:
         kb_tools = convert_kbs_to_openai_tools(knowledgebases)
         openai_tools.extend(kb_tools)
 
+        from app.core.tools.builtin_tools.knowledgebase_search import KnowledgebaseSearch
         for kb in knowledgebases:
-            tool_map[kb.name] = str(kb.id)
+            tool_map[kb.name] = KnowledgebaseSearch.from_kb(kb)
 
         return {
             'model_id': model_id,
@@ -1409,8 +1378,8 @@ class ChatCoreService:
                         continue
                     
                     # 检查工具是否存在
-                    tool_id = tool_map.get(function_name)
-                    if not tool_id:
+                    tool_instance = tool_map.get(function_name)
+                    if not tool_instance:
                         tool_message_content = f"工具 {function_name} 不存在"
                         messages.append({
                             'role': 'tool',

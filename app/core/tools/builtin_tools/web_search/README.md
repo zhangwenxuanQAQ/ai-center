@@ -140,22 +140,21 @@ curl "http://10.9.44.5:18080/search?q=test&format=json"
 
 1. 在 `builtin_tools` 目录下创建新的工具子目录
 2. 创建与工具同名的 Python 文件
-3. 继承 `BuiltinTool` 基类并使用 `@register_builtin_tool` 装饰器
-4. 在 `tool_utils.py` 的 `_load_builtin_tools()` 中添加导入语句
+3. 继承 `BaseTool` 基类并使用 `@ToolRegistry.register` 装饰器
+4. 在 `app/core/tools/__init__.py` 的 `_load_builtin_tools()` 中添加导入语句
 
 示例：
 
 ```python
-from app.core.tools.base_tool import BaseTool, BaseToolParam
-from app.core.tools.tool_registry import register_builtin_tool
+from app.core.tools import BaseTool, BaseToolParam, ToolRegistry
 
-@register_builtin_tool
+@ToolRegistry.register
 class my_tool(BaseTool):
     name = "my_tool"
     title = "My Tool"
     description = "Tool description"
     params = [
-        BuiltinToolParam(name="param1", type="string", description="Param description", required=True),
+        BaseToolParam(name="param1", type="string", description="Param description", required=True),
     ]
 
     def run(self, **kwargs):

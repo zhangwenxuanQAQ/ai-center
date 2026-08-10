@@ -14,8 +14,7 @@ from pptx.util import Inches, Pt, Emu
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.dml.color import RGBColor
 
-from app.core.tools.base_tool import BaseTool, BaseToolParam
-from app.core.tools.tool_registry import register_builtin_tool
+from app.core.tools import BaseTool, BaseToolParam, ToolRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -242,7 +241,7 @@ def _add_slide_from_definition(prs: Presentation, slide_def: Dict[str, Any], sty
             pass
 
 
-@register_builtin_tool
+@ToolRegistry.register
 class generate_ppt(BaseTool):
     """基于 python-pptx 的 PPT 生成工具。"""
 

@@ -32,7 +32,7 @@ from app.core.chat.dto import (
     ChatStreamResponse, ToolCallInfo, MessageStatus, MessageStep
 )
 from app.core.llm_model.factory import LLMFactory
-from app.core.llm_model.utils.tool_util import process_tool_calls
+from app.core.tools.tool_util import process_tool_calls
 from app.core.exceptions import ResourceNotFoundError
 from app.core.integration.temp_chat_store import TempChatStore
 
@@ -65,7 +65,7 @@ class IntegrationChatContext:
         messages: 完整的消息列表（含系统提示词、历史消息、用户消息）
         history_messages: 历史消息列表
         tools: OpenAI tool格式工具列表
-        tool_map: 工具名称到工具ID的映射
+        tool_map: 工具名称到工具实例的映射
         model_params: 传给大模型的参数
         avatar: 头像URL
         temporary: 是否临时会话模式
@@ -96,7 +96,7 @@ class IntegrationChatContext:
     messages: List[Dict[str, Any]] = field(default_factory=list)
     history_messages: List[Dict[str, Any]] = field(default_factory=list)
     tools: Optional[List[Dict]] = None
-    tool_map: Optional[Dict[str, str]] = None
+    tool_map: Optional[Dict[str, Any]] = None
     model_params: Dict[str, Any] = field(default_factory=dict)
     avatar: Optional[str] = None
     temporary: bool = False
@@ -183,13 +183,13 @@ class IntegrationChatPreprocessor:
     @staticmethod
     def _inject_builtin_tools(ctx: IntegrationChatContext) -> None:
         """注入内置工具（网络搜索、PPT生成等）"""
-        from app.core.tools.tool_convert import inject_builtin_tools
+        from app.core.tools import ToolConvert
         web_search_enabled = ctx.config_dict.get('web_search', False)
         # 如果配置文件中禁用了搜索引擎，强制关闭
         from app.configs.config import config as app_config
         if not app_config.get("web_search_engine.enabled", True):
             web_search_enabled = False
-        ctx.tools, ctx.tool_map = inject_builtin_tools(
+        ctx.tools, ctx.tool_map = ToolConvert.inject_builtin_tools(
             tools=ctx.tools,
             tool_map=ctx.tool_map,
             web_search_enabled=web_search_enabled

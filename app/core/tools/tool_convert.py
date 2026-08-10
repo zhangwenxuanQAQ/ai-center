@@ -34,19 +34,22 @@ class ToolConvert:
     @staticmethod
     def inject_builtin_tools(
         tools: Optional[List[Dict[str, Any]]] = None,
-        tool_map: Optional[Dict[str, str]] = None,
+        tool_map: Optional[Dict[str, BaseTool]] = None,
         web_search_enabled: bool = False
-    ) -> Tuple[List[Dict[str, Any]], Dict[str, str]]:
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, BaseTool]]:
         """
         注入内置工具到tools和tool_map中
 
+        将内置工具（generate_ppt、web_search等）的OpenAI格式定义注入tools列表，
+        并将工具实例存入tool_map供ToolRunner.call调用。
+
         Args:
             tools: 已有的工具列表（可为None）
-            tool_map: 已有的工具映射（可为None）
+            tool_map: 已有的工具映射（可为None），key为工具名称，value为工具实例
             web_search_enabled: 是否启用网络搜索功能
 
         Returns:
-            Tuple[List[Dict[str, Any]], Dict[str, str]]: 更新后的工具列表和工具映射
+            Tuple[List[Dict[str, Any]], Dict[str, BaseTool]]: 更新后的工具列表和工具映射
         """
         if tools is None:
             tools = []
@@ -56,19 +59,19 @@ class ToolConvert:
         # 需要始终注入的内置工具列表
         always_inject_tools = ['generate_ppt']
         for tool_name in always_inject_tools:
-            builtin_tools_list = ToolConvert.to_openai_tools([tool_name])
-            if builtin_tools_list:
+            tool = ToolRegistry.get_tool(tool_name)
+            if tool:
                 # 避免重复注入
                 if tool_name not in tool_map:
-                    tools.extend(builtin_tools_list)
-                    tool_map[tool_name] = 'builtin'
+                    tools.append(tool.to_openai_tool())
+                    tool_map[tool_name] = tool
 
         # 网络搜索工具根据web_search_enabled决定是否注入
         if web_search_enabled:
-            web_search_tools = ToolConvert.to_openai_tools(['web_search'])
-            if web_search_tools:
+            tool = ToolRegistry.get_tool('web_search')
+            if tool:
                 if 'web_search' not in tool_map:
-                    tools.extend(web_search_tools)
-                    tool_map['web_search'] = 'builtin'
+                    tools.append(tool.to_openai_tool())
+                    tool_map['web_search'] = tool
 
         return tools, tool_map
