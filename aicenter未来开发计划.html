@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AICenter 未来开发计划</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --primary-light: #dbeafe;
+    --success: #16a34a;
+    --success-light: #dcfce7;
+    --warning: #d97706;
+    --warning-light: #fef3c7;
+    --danger: #dc2626;
+    --danger-light: #fee2e2;
+    --dark: #1e293b;
+    --slate-900: #0f172a;
+    --slate-800: #1e293b;
+    --slate-700: #334155;
+    --slate-600: #475569;
+    --slate-500: #64748b;
+    --slate-400: #94a3b8;
+    --slate-300: #cbd5e1;
+    --slate-200: #e2e8f0;
+    --slate-100: #f1f5f9;
+    --slate-50: #f8fafc;
+    --white: #ffffff;
+    --code-bg: #f6f8fa;
+    --code-text: #24292f;
+    --sidebar-w: 300px;
+    --header-h: 56px;
+  }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+    color: var(--slate-800);
+    background: var(--slate-50);
+    line-height: 1.75;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* ===== Header ===== */
+  .header {
+    position: fixed; top: 0; left: 0; right: 0; height: var(--header-h);
+    background: linear-gradient(90deg, var(--slate-900), var(--slate-800));
+    color: #fff;
+    display: flex; align-items: center; padding: 0 24px;
+    z-index: 100; box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+  }
+  .header .logo {
+    width: 28px; height: 28px; border-radius: 6px;
+    background: var(--primary); margin-right: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px;
+  }
+  .header h1 { font-size: 17px; font-weight: 600; letter-spacing: 0.3px; }
+  .menu-toggle {
+    display: none; background: none; border: none; color: #fff;
+    font-size: 22px; cursor: pointer; margin-right: 12px; padding: 4px;
+  }
+  /* ===== Sidebar ===== */
+  .sidebar {
+    position: fixed; top: var(--header-h); left: 0; bottom: 0; width: var(--sidebar-w);
+    background: #fff; border-right: 1px solid var(--slate-200);
+    overflow-y: auto; padding: 12px 0 40px;
+    transition: transform 0.25s ease;
+    z-index: 90;
+  }
+  .sidebar::-webkit-scrollbar { width: 6px; }
+  .sidebar::-webkit-scrollbar-thumb { background: var(--slate-300); border-radius: 3px; }
+  .sidebar::-webkit-scrollbar-track { background: transparent; }
+  .toc { list-style: none; }
+  .toc ul { list-style: none; }
+  .toc-item { position: relative; }
+  .toc-row { display: flex; align-items: center; }
+  .toc-toggle {
+    width: 18px; height: 26px; flex: 0 0 18px;
+    background: none; border: none; cursor: pointer;
+    color: var(--slate-400); font-size: 10px;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.15s;
+  }
+  .toc-toggle.collapsed { transform: rotate(-90deg); }
+  .toc-toggle.empty { visibility: hidden; }
+  .toc-link {
+    flex: 1; display: block; padding: 5px 8px 5px 0;
+    color: var(--slate-700); text-decoration: none;
+    font-size: 13px; line-height: 1.5;
+    border-left: 3px solid transparent;
+    transition: all 0.12s;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .toc-link:hover { color: var(--primary); }
+  .toc-link.active {
+    color: var(--primary); font-weight: 600;
+    background: var(--primary-light);
+    border-left-color: var(--primary);
+  }
+  .toc .level-1 > .toc-row .toc-link { padding-left: 16px; font-weight: 600; }
+  .toc .level-2 > .toc-row .toc-link { padding-left: 32px; font-size: 12.5px; }
+  .toc .level-3 > .toc-row .toc-link { padding-left: 48px; font-size: 12px; color: var(--slate-600); }
+  .toc-children { overflow: hidden; transition: max-height 0.2s ease; }
+  .toc-children.hidden { display: none; }
+  /* ===== Main ===== */
+  .main {
+    margin-left: var(--sidebar-w); margin-top: var(--header-h);
+    padding: 36px 48px 80px; max-width: 1200px;
+  }
+  .content {
+    background: #fff; border-radius: 10px; padding: 40px 52px;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04);
+  }
+  /* ===== Typography ===== */
+  h1.doc-title {
+    font-size: 28px; color: var(--slate-900); font-weight: 700;
+    padding-bottom: 16px; margin-bottom: 8px;
+    border-bottom: 3px solid var(--primary);
+  }
+  h2 {
+    font-size: 23px; color: var(--slate-900); font-weight: 700;
+    margin-top: 48px; margin-bottom: 18px; padding-bottom: 10px;
+    border-bottom: 2px solid var(--slate-200);
+    scroll-margin-top: calc(var(--header-h) + 16px);
+  }
+  h3 {
+    font-size: 19px; color: var(--slate-800); font-weight: 600;
+    margin-top: 36px; margin-bottom: 14px;
+    padding-left: 12px; border-left: 4px solid var(--primary);
+    scroll-margin-top: calc(var(--header-h) + 16px);
+  }
+  h4 {
+    font-size: 16px; color: var(--slate-700); font-weight: 600;
+    margin-top: 26px; margin-bottom: 10px;
+    scroll-margin-top: calc(var(--header-h) + 16px);
+  }
+  p { margin: 10px 0; color: var(--slate-700); }
+  strong { color: var(--slate-900); font-weight: 600; }
+  a { color: var(--primary); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code {
+    font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", Consolas, "Courier New", monospace;
+    background: var(--slate-100); color: var(--primary-dark);
+    padding: 2px 6px; border-radius: 4px; font-size: 0.88em;
+    border: 1px solid var(--slate-200);
+  }
+  ul, ol { margin: 10px 0 10px 4px; padding-left: 24px; }
+  li { margin: 4px 0; color: var(--slate-700); }
+  li > ul, li > ol { margin: 4px 0; }
+  blockquote {
+    margin: 14px 0; padding: 12px 18px;
+    background: var(--primary-light); border-left: 4px solid var(--primary);
+    border-radius: 0 6px 6px 0; color: var(--slate-700);
+  }
+  blockquote p { margin: 4px 0; }
+  hr { border: none; border-top: 1px solid var(--slate-200); margin: 32px 0; }
+  /* tables */
+  .table-wrap { overflow-x: auto; margin: 16px 0; border-radius: 8px; border: 1px solid var(--slate-200); }
+  table {
+    border-collapse: collapse; width: 100%; font-size: 13.5px;
+    background: #fff;
+  }
+  th {
+    background: var(--slate-800); color: #fff; font-weight: 600;
+    padding: 10px 14px; text-align: left;
+    border: 1px solid var(--slate-700); white-space: nowrap;
+  }
+  td {
+    padding: 9px 14px; border: 1px solid var(--slate-200);
+    color: var(--slate-700); vertical-align: top;
+  }
+  tbody tr:nth-child(even) { background: var(--slate-50); }
+  tbody tr:hover { background: var(--primary-light); }
+  td code, th code { white-space: nowrap; }
+  /* badges */
+  .badge {
+    display: inline-block; padding: 2px 10px; border-radius: 12px;
+    font-size: 12px; font-weight: 600; line-height: 1.5;
+  }
+  .badge-have { background: var(--success-light); color: var(--success); }
+  .badge-miss { background: var(--danger-light); color: var(--danger); }
+  .badge-partial { background: var(--warning-light); color: var(--warning); }
+  .badge-p0 { background: #fee2e2; color: #dc2626; }
+  .badge-p1 { background: #fef3c7; color: #d97706; }
+  .badge-p2 { background: #dbeafe; color: #2563eb; }
+  .badge-p3 { background: #f1f5f9; color: #475569; }
+  /* priority cards */
+  .priority-card {
+    border-radius: 10px; padding: 20px 24px; margin: 16px 0;
+    border: 1px solid var(--slate-200); background: #fff;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+  }
+  .priority-card.p0 { border-left: 5px solid var(--danger); }
+  .priority-card.p1 { border-left: 5px solid var(--warning); }
+  .priority-card.p2 { border-left: 5px solid var(--primary); }
+  .priority-card.p3 { border-left: 5px solid var(--slate-400); }
+  .priority-card h4 {
+    margin-top: 0; display: flex; align-items: center; gap: 8px;
+  }
+  .priority-card .desc { color: var(--slate-600); font-size: 14px; margin: 8px 0; }
+  .priority-card .deliverables {
+    background: var(--slate-50); border-radius: 6px; padding: 12px 16px; margin-top: 10px;
+  }
+  .priority-card .deliverables li { font-size: 13.5px; }
+  /* stat cards */
+  .stat-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px; margin: 20px 0;
+  }
+  .stat-card {
+    background: #fff; border-radius: 10px; padding: 20px;
+    border: 1px solid var(--slate-200); text-align: center;
+    box-shadow: 0 1px 2px rgba(15,23,42,0.04);
+  }
+  .stat-card .num { font-size: 32px; font-weight: 700; color: var(--primary); }
+  .stat-card .num.danger { color: var(--danger); }
+  .stat-card .num.warning { color: var(--warning); }
+  .stat-card .num.success { color: var(--success); }
+  .stat-card .label { font-size: 13px; color: var(--slate-600); margin-top: 4px; }
+  /* back to top */
+  .back-top {
+    position: fixed; right: 32px; bottom: 32px;
+    width: 42px; height: 42px; border-radius: 50%;
+    background: var(--primary); color: #fff; border: none;
+    cursor: pointer; font-size: 18px; z-index: 80;
+    box-shadow: 0 4px 12px rgba(37,99,235,0.4);
+    opacity: 0; transition: opacity 0.2s; pointer-events: none;
+  }
+  .back-top.show { opacity: 1; pointer-events: auto; }
+  .back-top:hover { background: var(--primary-dark); }
+  /* mobile overlay */
+  .overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(15,23,42,0.5); z-index: 85;
+  }
+  .overlay.show { display: block; }
+  /* responsive */
+  @media (max-width: 900px) {
+    .menu-toggle { display: block; }
+    .sidebar { transform: translateX(-100%); width: 280px; }
+    .sidebar.open { transform: translateX(0); }
+    .main { margin-left: 0; padding: 24px 16px 60px; }
+    .content { padding: 24px 18px; }
+    h2 { font-size: 20px; }
+    h3 { font-size: 17px; }
+    .header h1 { font-size: 15px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <button class="menu-toggle" id="menuToggle" aria-label="目录">☰</button>
+  <div class="logo">A</div>
+  <h1>AICenter 未来开发计划</h1>
+</header>
+
+<div class="overlay" id="overlay"></div>
+
+<aside class="sidebar" id="sidebar">
+  <nav>
+    <ul class="toc" id="toc"></ul>
+  </nav>
+</aside>
+
+<main class="main">
+  <article class="content" id="content">
+
+<h1 class="doc-title">AICenter 未来开发计划</h1>
+
+<p>本文档基于对 <strong>Serpmind</strong>（企业级多渠道 AI Agent 框架）架构总结文档与 <strong>AICenter</strong>（大模型 AI 服务中心）项目的深度对比分析，梳理两者功能差异、AICenter 缺失的功能模块，并按重要程度规划未来开发路线。</p>
+
+<blockquote>
+  <p><strong>对比基准</strong>：Serpmind 总结文档（2026-08-07）vs AICenter 当前版本（aihub_v2_beta_0.1-r2）</p>
+</blockquote>
+
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="num">10+</div>
+    <div class="label">AICenter 已有核心模块</div>
+  </div>
+  <div class="stat-card">
+    <div class="num danger">12+</div>
+    <div class="label">缺失/薄弱功能模块</div>
+  </div>
+  <div class="stat-card">
+    <div class="num warning">13+</div>
+    <div class="label">缺失内置工具</div>
+  </div>
+  <div class="stat-card">
+    <div class="num success">4</div>
+    <div class="label">开发优先级阶段</div>
+  </div>
+</div>
+
+<hr>
+
+<h2 id="一、项目定位与架构对比">一、项目定位与架构对比</h2>
+
+<h3 id="1.1-项目定位差异">1.1 项目定位差异</h3>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>维度</th><th>AICenter</th><th>Serpmind</th></tr></thead>
+<tbody>
+<tr><td><strong>定位</strong></td><td>AI 应用开发与管理平台（B 端管理后台）</td><td>企业级多渠道 AI Agent 框架（Agent 引擎）</td></tr>
+<tr><td><strong>核心能力</strong></td><td>知识库 RAG + 可视化 Agent 编排 + 模型管理</td><td>多渠道接入 + 长期记忆 + 自主 Agent 循环</td></tr>
+<tr><td><strong>交互方式</strong></td><td>Web 前端（React + Ant Design）</td><td>20+ 聊天平台 + OpenAI 兼容 API</td></tr>
+<tr><td><strong>架构风格</strong></td><td>FastAPI 同步 + Peewee ORM + MySQL</td><td>asyncio 异步 + Pydantic v2 + 文件持久化</td></tr>
+<tr><td><strong>Agent 模型</strong></td><td>可视化 DSL 编排（组件拖拽连线）</td><td>AgentLoop 主循环 + 工具自主调用</td></tr>
+<tr><td><strong>记忆机制</strong></td><td>无独立长期记忆系统</td><td>Consolidator + AutoCompact + Dream 三机制</td></tr>
+<tr><td><strong>安全策略</strong></td><td>基础用户/角色管理</td><td>RBAC + SSRF 防护 + 限流 + 审计 + 工作区隔离</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3 id="1.2-架构设计差异">1.2 架构设计差异</h3>
+
+<h4>AICenter 架构特点</h4>
+<ul>
+<li><strong>管理后台导向</strong>：完整的 CRUD 管理界面，面向运维和业务人员</li>
+<li><strong>可视化编排</strong>：Agent 通过 DSL 组件拖拽编排（begin → categorize → retrieval → generate → answer）</li>
+<li><strong>RAG 为核心</strong>：DeepDoc 文档解析 + Elasticsearch 向量检索 + 多种切片策略</li>
+<li><strong>同步架构</strong>：基于 FastAPI + Uvicorn，多 worker 进程</li>
+<li><strong>关系型存储</strong>：MySQL 持久化，Redis 缓存，ES 检索</li>
+</ul>
+
+<h4>Serpmind 架构特点</h4>
+<ul>
+<li><strong>Agent 引擎导向</strong>：以 AgentLoop 为核心，面向自主任务执行</li>
+<li><strong>事件驱动</strong>：MessageBus 双 asyncio.Queue 解耦渠道与 Agent</li>
+<li><strong>多进程隔离</strong>：每个 Agent 独立 Worker 进程，崩溃隔离</li>
+<li><strong>文件持久化</strong>：JSONL 会话存储 + Markdown 记忆文件 + Git 版本控制</li>
+<li><strong>异步优先</strong>：全链路 asyncio，支持高并发流式输出</li>
+</ul>
+
+<hr>
+
+<h2 id="二、功能差异对比">二、功能差异对比</h2>
+
+<h3 id="2.1-功能矩阵总览">2.1 功能矩阵总览</h3>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>功能模块</th><th>AICenter</th><th>Serpmind</th><th>差异说明</th></tr></thead>
+<tbody>
+<tr><td><strong>知识库 RAG</strong></td><td><span class="badge badge-have">完善</span></td><td><span class="badge badge-miss">无</span></td><td>AICenter 优势：DeepDoc 解析 + 多切片策略 + 向量检索</td></tr>
+<tr><td><strong>可视化 Agent 编排</strong></td><td><span class="badge badge-have">完善</span></td><td><span class="badge badge-miss">无</span></td><td>AICenter 优势：DSL 组件拖拽编排</td></tr>
+<tr><td><strong>模型管理</strong></td><td><span class="badge badge-have">完善</span></td><td><span class="badge badge-partial">配置化</span></td><td>AICenter 有完整 UI，Serpmind 仅配置文件</td></tr>
+<tr><td><strong>提示词管理</strong></td><td><span class="badge badge-have">完善</span></td><td><span class="badge badge-partial">文件化</span></td><td>AICender 有数据库管理，Serpmind 用 Markdown 文件</td></tr>
+<tr><td><strong>数据源管理</strong></td><td><span class="badge badge-have">完善</span></td><td><span class="badge badge-miss">无</span></td><td>AICenter 支持 7+ 种数据源</td></tr>
+<tr><td><strong>长期记忆系统</strong></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">完善</span></td><td>Serpmind 优势：Dream + Consolidator + AutoCompact</td></tr>
+<tr><td><strong>安全策略体系</strong></td><td><span class="badge badge-partial">基础</span></td><td><span class="badge badge-have">完善</span></td><td>Serpmind 优势：RBAC + SSRF + 限流 + 审计</td></tr>
+<tr><td><strong>内置工具数量</strong></td><td><span class="badge badge-miss">2 个</span></td><td><span class="badge badge-have">15+ 个</span></td><td>Serpmind 优势：文件/搜索/Shell/Web/子Agent等</td></tr>
+<tr><td><strong>上下文治理</strong></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">5层流水线</span></td><td>Serpmind 优势：孤儿清理/微压缩/Token裁剪</td></tr>
+<tr><td><strong>子 Agent 管理</strong></td><td><span class="badge badge-partial">DSL编排</span></td><td><span class="badge badge-have">运行时</span></td><td>Serpmind 可运行时 spawn 子 Agent 并行任务</td></tr>
+<tr><td><strong>定时任务</strong></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">CronService</span></td><td>Serpmind 支持 at/every/cron 三种调度</td></tr>
+<tr><td><strong>OpenAI 兼容 API</strong></td><td><span class="badge badge-have">完整</span></td><td><span class="badge badge-have">完整</span></td><td>双方均已实现 /v1/chat/completions 兼容，AICenter 缺企业限流等增强</td></tr>
+<tr><td><strong>会话管理</strong></td><td><span class="badge badge-have">数据库</span></td><td><span class="badge badge-have">JSONL</span></td><td>方式不同，AICenter 用 MySQL，Serpmind 用文件</td></tr>
+<tr><td><strong>流式重连</strong></td><td><span class="badge badge-have">Redis</span></td><td><span class="badge badge-miss">无</span></td><td>AICenter 支持刷新/切换后继续输出</td></tr>
+<tr><td><strong>Docker 部署</strong></td><td><span class="badge badge-have">完善</span></td><td><span class="badge badge-partial">基础</span></td><td>AICenter 有完整 docker-compose</td></tr>
+<tr><td><strong>文档解析</strong></td><td><span class="badge badge-have">DeepDoc</span></td><td><span class="badge badge-miss">无</span></td><td>AICenter 支持 PDF/Word/Excel/PPT 等</td></tr>
+<tr><td><strong>命令路由</strong></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">CommandRouter</span></td><td>Serpmind 支持斜杠命令 /stop /new /dream 等</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3 id="2.2-aicenter-独有优势">2.2 AICenter 独有优势</h3>
+
+<p>以下是 AICenter 相比 Serpmind <strong>已具备且更优</strong> 的能力，未来开发中应继续保持和强化：</p>
+
+<ol>
+<li><strong>知识库 RAG 体系</strong>：DeepDoc 文档解析（PDF/Word/Excel/PPT/HTML/Markdown）、多种切片策略（naive/book/qa/table/resume 等）、Elasticsearch 向量检索 + 全文搜索、知识库转工具（react 模式）、智能知识提取</li>
+<li><strong>可视化 Agent 编排</strong>：DSL 组件拖拽编排，支持 30+ 组件节点（categorize/switch/iteration/concentrator/retrieval/generate 等），适合非开发人员构建复杂流程</li>
+<li><strong>统一模型管理</strong>：支持文本生成、图像理解、语音识别、语音合成、Embedding、Rerank 多种模型类型，UI 化配置</li>
+<li><strong>多数据源管理</strong>：MySQL、PostgreSQL、Oracle、SQL Server、RustFS、S3、Tavily 等 7+ 种数据源连接器</li>
+<li><strong>Web 管理后台</strong>：React + Ant Design 完整前端，机器人/知识库/模型/提示词/用户全管理</li>
+<li><strong>流式重连机制</strong>：基于 Redis 的流式数据存储，切换对话或刷新页面后可继续输出</li>
+<li><strong>插件集成</strong>：支持第三方插件嵌入 HTML 聊天界面，API Key 认证</li>
+<li><strong>Docker 完整部署</strong>：docker-compose 一键部署完整环境</li>
+</ol>
+
+<hr>
+
+<h2 id="三、缺失功能详细分析">三、缺失功能详细分析</h2>
+
+<h3 id="3.1-长期记忆系统（完全缺失）">3.1 长期记忆系统（完全缺失）</h3>
+
+<p><strong>这是 AICenter 与 Serpmind 最大的差距。</strong>Serpmind 拥有三套协同的记忆机制，而 AICenter 目前仅有聊天记录的数据库存储，无任何长期记忆能力。</p>
+
+<h4>Serpmind 三大记忆机制</h4>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>机制</th><th>触发时机</th><th>职责</th><th>存储</th></tr></thead>
+<tbody>
+<tr><td><strong>Consolidator</strong></td><td>每次用户消息前同步检查</td><td>Token 超限时 LLM 总结旧消息</td><td>history.jsonl（追加摘要）</td></tr>
+<tr><td><strong>AutoCompact</strong></td><td>会话空闲超时（后台异步）</td><td>归档空闲会话，只留最近 8 条</td><td>history.jsonl + session 摘要</td></tr>
+<tr><td><strong>Dream</strong></td><td>Cron 定时（每 2 小时）</td><td>分析历史摘要，编辑长期记忆文件</td><td>MEMORY.md / SOUL.md / USER.md</td></tr>
+</tbody>
+</table>
+</div>
+
+<h4>AICenter 缺失内容</h4>
+<ul>
+<li><strong>长期记忆文件</strong>：无 MEMORY.md（项目知识/用户偏好/待办事项）、SOUL.md（Agent 人格）、USER.md（用户画像）</li>
+<li><strong>历史摘要流</strong>：无 history.jsonl 追加式对话摘要</li>
+<li><strong>Dream 记忆整合器</strong>：无两阶段 Agent（Phase1 分析 + Phase2 编辑），无法自动整理和更新记忆</li>
+<li><strong>Git 版本控制</strong>：无记忆文件版本管理和回滚能力</li>
+<li><strong>Token 预算压缩</strong>：无 Consolidator 的 5 轮压缩机制</li>
+<li><strong>空闲会话归档</strong>：无 AutoCompact 的后台压缩能力</li>
+</ul>
+
+<h3 id="3.2-内置工具系统（严重缺失）">3.2 内置工具系统（严重缺失）</h3>
+
+<p>AICenter 目前仅有 <code>web_search</code> 和 <code>generate_ppt</code> 两个内置工具，而 Serpmind 拥有 15+ 个功能完善的内置工具。</p>
+
+<h4>工具对比</h4>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>工具</th><th>AICenter</th><th>Serpmind</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td><code>web_search</code></td><td><span class="badge badge-have">有</span></td><td><span class="badge badge-have">有</span></td><td>双方均支持，基于 SearXNG</td></tr>
+<tr><td><code>web_fetch</code></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">有</span></td><td>网页抓取（含重定向后 SSRF 防护）</td></tr>
+<tr><td><code>read_file</code></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">有</span></td><td>读取文件（支持用户隔离边界检查）</td></tr>
+<tr><td><code>write_file</code></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">有</span></td><td>写入文件</td></tr>
+<tr><td><code>edit_file</code></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">有</span></td><td>编辑文件（字符串替换）</td></tr>
+<tr><td><code>list_dir</code></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">有</span></td><td>列出目录</td></tr>
+<tr><td><code>glob</code></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">有</span></td><td>Glob 模式文件搜索</td></tr>
+<tr><td><code>grep</code></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">有</span></td><td>正则内容搜索</td></tr>
+<tr><td><code>exec</code></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">有</span></td><td>Shell 命令执行（含 SSRF 检测）</td></tr>
+<tr><td><code>notebook_edit</code></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">有</span></td><td>Jupyter Notebook 编辑</td></tr>
+<tr><td><code>ask_user</code></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">有</span></td><td>向用户提问，中断循环等待回答</td></tr>
+<tr><td><code>spawn</code></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">有</span></td><td>启动子 Agent 并行任务</td></tr>
+<tr><td><code>cron</code></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">有</span></td><td>管理定时任务</td></tr>
+<tr><td><code>message</code></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">有</span></td><td>发送消息到渠道</td></tr>
+<tr><td><code>my</code></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">有</span></td><td>Agent 自我管理（读写 SOUL/USER 等）</td></tr>
+<tr><td><code>generate_ppt</code></td><td><span class="badge badge-have">有</span></td><td><span class="badge badge-miss">无</span></td><td>AICenter 独有：PPT 生成</td></tr>
+</tbody>
+</table>
+</div>
+
+<h4>工具基础设施缺失</h4>
+<ul>
+<li><strong>工具授权网关</strong>：无 <code>guard_tool_call</code> 统一授权机制（工具白名单 + 参数级授权）</li>
+<li><strong>工具作用域</strong>：无 <code>is_tool_allowed</code> 基于角色的工具白名单控制</li>
+<li><strong>工具并发控制</strong>：无 <code>read_only</code> / <code>concurrency_safe</code> / <code>exclusive</code> 并发标记</li>
+<li><strong>工具指标埋点</strong>：无工具调用的计数和延迟统计</li>
+<li><strong>SSRF 防护</strong>：web_search / web_fetch 无内网地址封堵和重定向校验</li>
+</ul>
+
+<h3 id="3.3-安全策略体系（严重缺失）">3.3 安全策略体系（严重缺失）</h3>
+
+<p>AICenter 仅有基础的用户/角色管理（is_admin 字段），缺乏完整的安全治理体系。</p>
+
+<h4>缺失的安全能力</h4>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>安全能力</th><th>AICenter</th><th>Serpmind</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td><strong>RBAC 角色权限</strong></td><td><span class="badge badge-partial">仅 is_admin</span></td><td><span class="badge badge-have">完善</span></td><td>Serpmind 有 platform_admin/tenant_admin/user/webui 多角色</td></tr>
+<tr><td><strong>多租户隔离</strong></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">有</span></td><td>Serpmind 支持 tenant_id + workspace_id 隔离</td></tr>
+<tr><td><strong>工作区隔离</strong></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">有</span></td><td>Serpmind 有 immutable/project/memory 路径分区</td></tr>
+<tr><td><strong>SSRF 防护</strong></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">三层</span></td><td>Serpmind 有 DNS 解析校验 + 重定向校验 + 命令内 URL 检测</td></tr>
+<tr><td><strong>限流</strong></td><td><span class="badge badge-partial">常量定义</span></td><td><span class="badge badge-have">滑动窗口</span></td><td>Serpmind 有 user/tenant/IP 三级限流</td></tr>
+<tr><td><strong>审计日志</strong></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">JSONL</span></td><td>Serpmind 记录所有工具拒绝/队列拒绝决策</td></tr>
+<tr><td><strong>安全指标</strong></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">MetricsStore</span></td><td>Serpmind 有 tool.denied/tool.error/latency 等指标</td></tr>
+<tr><td><strong>Agent 定义文件锁</strong></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">有</span></td><td>Serpmind 保护 SOUL/USER/AGENTS 等文件防篡改</td></tr>
+<tr><td><strong>路径穿越拦截</strong></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">有</span></td><td>Serpmind 拦截 ../ 路径穿越攻击</td></tr>
+<tr><td><strong>用户隔离</strong></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">有</span></td><td>Serpmind 阻止访问其他用户目录</td></tr>
+<tr><td><strong>超级权限</strong></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">有</span></td><td>Serpmind 有 super_permission 绕过所有边界</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3 id="3.4-agent-执行引擎（部分缺失）">3.4 Agent 执行引擎（部分缺失）</h3>
+
+<p>本项目的"Agent 执行引擎"即 <code>ChatCoreService</code> 聊天服务，已具备完整的对话主循环与开始/停止控制逻辑：</p>
+
+<ul>
+<li><strong>对话主循环</strong>：<code>_run_conversation_loop</code> 实现"消息接收 → 上下文构建 → LLM 调用 → 工具执行 → 响应发送"完整循环</li>
+<li><strong>开始逻辑</strong>：<code>chat_stream</code> 流式入口，包含 preprocess（预处理）→ execute（执行）→ postprocess（后置处理）三段式流程编排</li>
+<li><strong>停止逻辑</strong>：<code>ChatStopManager</code> 单例管理停止状态，提供 <code>request_stop</code>（标记停止）、<code>is_stop_requested</code>（循环中检查停止标记）、<code>clear_stop</code>（清除标记）三个方法，<code>GeneratorExit</code> 时自动触发停止</li>
+<li><strong>流式重连</strong>：基于 Redis 存储，刷新或切换会话后可继续输出</li>
+</ul>
+
+<p>但相比 Serpmind 的 AgentLoop，仍缺少以下增强能力：</p>
+
+<h4>缺失的 Agent 引擎增强能力</h4>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>能力</th><th>AICenter</th><th>Serpmind</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td><strong>上下文治理流水线</strong></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">5层</span></td><td>孤儿清理/补全/微压缩/Token预算/历史裁剪</td></tr>
+<tr><td><strong>Mid-turn injection</strong></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">有</span></td><td>工具执行后注入新消息继续循环</td></tr>
+<tr><td><strong>Checkpoint 恢复</strong></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">有</span></td><td>中断后可恢复部分上下文</td></tr>
+<tr><td><strong>空响应重试</strong></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">有</span></td><td>最多 2 次空响应重试</td></tr>
+<tr><td><strong>Length 恢复</strong></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">有</span></td><td>finish_reason=length 时追加继续提示</td></tr>
+<tr><td><strong>子 Agent 管理</strong></td><td><span class="badge badge-partial">DSL编排</span></td><td><span class="badge badge-have">运行时spawn</span></td><td>Serpmind 可运行时启动子 Agent 并行处理</td></tr>
+<tr><td><strong>生命周期钩子</strong></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">6个</span></td><td>before_iteration/on_stream/before_execute_tools 等</td></tr>
+<tr><td><strong>技能系统</strong></td><td><span class="badge badge-miss">无</span></td><td><span class="badge badge-have">SkillsLoader</span></td><td>SKILL.md 技能文件 + 渐进式披露</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3 id="3.5-自主性基础设施（完全缺失）">3.5 自主性基础设施（完全缺失）</h3>
+
+<h4>缺失模块</h4>
+<ul>
+<li><strong>CronService 定时任务</strong>：支持 at（一次性）、every（固定间隔）、cron（cron 表达式 + 时区）三种调度，用于 Dream 记忆整合、reminder 提醒</li>
+<li><strong>CommandRouter 命令路由</strong>：四层优先级分发（priority/exact/prefix/interceptors），支持 /stop、/restart、/status、/new、/history、/dream 等斜杠命令</li>
+</ul>
+
+<h3 id="3.6-运行时调度（部分缺失）">3.6 运行时调度（部分缺失）</h3>
+
+<h4>缺失的运行时能力</h4>
+<ul>
+<li><strong>多进程调度器</strong>：Dispatcher 每 Agent 一个独立 Worker 进程，崩溃隔离</li>
+<li><strong>TurnWorkerPool 轮次工作池</strong>：固定大小 worker 池，同会话串行、跨会话并发</li>
+<li><strong>AdmissionController 准入控制</strong>：背压（队列满时拒绝）+ 排队位置通知</li>
+<li><strong>AgentRestartOrchestrator 重启编排器</strong>：协调 agent 运行时重启与渠道热重载</li>
+<li><strong>MessageBus 事件总线</strong>：双 asyncio.Queue（inbound 有界 + outbound 无界）解耦渠道与 Agent</li>
+</ul>
+
+<h3 id="3.7-openai-兼容-api（部分缺失）">3.7 OpenAI 兼容 API（部分缺失）</h3>
+
+<p>AICenter 已实现完整的 OpenAI 兼容接口，包括 <code>/v1/chat/completions</code>（流式 SSE 与非流式）、<code>/v1/models</code>、Agent 路由、会话隔离、认证中间件（Bearer Token / api-key / x-api-key，localhost 豁免）等核心能力。相比 Serpmind 仍缺少以下增强能力：</p>
+
+<h4>缺失的增强能力</h4>
+<ul>
+<li><strong>企业限流</strong>：按 user/tenant 维度 RPM 限流</li>
+<li><strong>流式实现</strong>：asyncio.Queue + on_stream/on_stream_end 回调 → OpenAI SSE chunk</li>
+<li><strong>ask_user 交互</strong>：finish_reason 为 stop + buttons 字段携带选项</li>
+</ul>
+
+<hr>
+
+<h2 id="四、未来开发计划">四、未来开发计划</h2>
+
+<p>根据功能重要程度、技术依赖关系和对核心竞争力的提升，将未来开发分为 <strong>4 个优先级阶段</strong>：</p>
+
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="num danger">P0</div>
+    <div class="label">核心基础能力</div>
+  </div>
+  <div class="stat-card">
+    <div class="num warning">P1</div>
+    <div class="label">安全与自主性</div>
+  </div>
+  <div class="stat-card">
+    <div class="num">P2</div>
+    <div class="label">生态扩展</div>
+  </div>
+  <div class="stat-card">
+    <div class="num success">P3</div>
+    <div class="label">增强与优化</div>
+  </div>
+</div>
+
+<h3 id="4.1-p0-阶段：核心基础能力（最高优先级）">4.1 P0 阶段：核心基础能力（最高优先级）</h3>
+
+<p><strong>目标</strong>：补齐 Agent 自主执行的核心基础设施，使 AICenter 从"编排工具"升级为"自主 Agent 平台"。</p>
+
+<div class="priority-card p0">
+  <h4>P0-1. 上下文治理流水线 <span class="badge badge-p0">P0</span></h4>
+  <p class="desc">实现 Serpmind 的 5 层上下文治理，解决长对话 Token 超限问题</p>
+  <div class="deliverables">
+    <ul>
+      <li><code>_drop_orphan_tool_results</code>：删除无对应 tool_call 的孤儿工具结果</li>
+      <li><code>_backfill_missing_tool_results</code>：为缺失 tool_result 的 tool_call 补充合成错误消息</li>
+      <li><code>_microcompact</code>：将旧工具结果替换为一行摘要（保留最近 10 个原样）</li>
+      <li><code>_apply_tool_result_budget</code>：对超长工具结果按 max_tool_result_chars 截断</li>
+      <li><code>_snip_history</code>：Token 预算裁断，确保 user 角色开头</li>
+      <li>容错设计：治理失败回退到只跑前两步，再失败用原始消息</li>
+    </ul>
+  </div>
+</div>
+
+<div class="priority-card p0">
+  <h4>P0-2. 内置工具体系扩展 <span class="badge badge-p0">P0</span></h4>
+  <p class="desc">从 2 个工具扩展到 10+ 个，覆盖文件/搜索/Web/交互核心场景</p>
+  <div class="deliverables">
+    <ul>
+      <li><strong>文件工具</strong>：read_file、write_file、edit_file、list_dir</li>
+      <li><strong>搜索工具</strong>：glob（文件搜索）、grep（内容搜索）</li>
+      <li><strong>Web 工具</strong>：web_fetch（网页抓取，含内容提取）</li>
+      <li><strong>交互工具</strong>：ask_user（向用户提问，中断循环等待回答）</li>
+      <li><strong>工具基类增强</strong>：增加 read_only/concurrency_safe/exclusive 标记</li>
+      <li><strong>工具参数校验</strong>：完善 validate_params 和 cast_params 类型转换</li>
+      <li><strong>工具指标埋点</strong>：记录 tool.{name}.ok/error/latency_ms</li>
+    </ul>
+  </div>
+</div>
+
+<div class="priority-card p0">
+  <h4>P0-3. 长期记忆系统 <span class="badge badge-p0">P0</span></h4>
+  <p class="desc">实现 Consolidator + AutoCompact 双机制，解决长对话记忆丢失问题</p>
+  <div class="deliverables">
+    <ul>
+      <li><strong>Consolidator</strong>：每次用户消息前同步检查 Token 预算，超限时 LLM 总结旧消息</li>
+      <li><strong>压缩配置</strong>：consolidation_ratio=0.5，最多 5 轮压缩</li>
+      <li><strong>摘要存储</strong>：会话级摘要表（替代 history.jsonl），记录 cursor/timestamp/content</li>
+      <li><strong>AutoCompact</strong>：后台扫描空闲会话（TTL 过期），保留最近 8 条 + 摘要</li>
+      <li><strong>会话恢复</strong>：下次用户回来时注入压缩摘要为 runtime context</li>
+      <li><strong>Token 估算</strong>：实现基于消息链的 Token 数估算</li>
+    </ul>
+  </div>
+</div>
+
+<div class="priority-card p0">
+  <h4>P0-4. Agent 执行循环增强 <span class="badge badge-p0">P0</span></h4>
+  <p class="desc">基于现有 ChatCoreService 聊天循环（已具备开始/停止/流式重连），增加容错和恢复能力</p>
+  <div class="deliverables">
+    <ul>
+      <li><strong>空响应重试</strong>：最多 2 次空响应重试</li>
+      <li><strong>Length 恢复</strong>：finish_reason=length 时追加继续提示，最多 3 次</li>
+      <li><strong>Checkpoint 机制</strong>：每个 iteration 发出 checkpoint，中断后可恢复</li>
+      <li><strong>ask_user 中断恢复</strong>：检测未应答的 ask_user tool_call，用户回复填入 tool_result</li>
+      <li><strong>Mid-turn injection</strong>：工具执行后检查 pending_queue，有新消息则注入</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="4.2-p1-阶段：安全与自主性（高优先级）">4.2 P1 阶段：安全与自主性（高优先级）</h3>
+
+<p><strong>目标</strong>：建立完整的安全防护体系和自主执行能力，支撑企业级生产部署。</p>
+
+<div class="priority-card p1">
+  <h4>P1-1. 安全策略体系 <span class="badge badge-p1">P1</span></h4>
+  <p class="desc">构建纵深防御的安全架构，从限流到工具授权全覆盖</p>
+  <div class="deliverables">
+    <ul>
+      <li><strong>RequestContext 安全上下文</strong>：user_id/tenant_id/role/workspace_id，基于 ContextVar 异步隔离</li>
+      <li><strong>RBAC 角色权限</strong>：platform_admin/tenant_admin/user/webui 多角色</li>
+      <li><strong>工具授权网关</strong>：guard_tool_call 统一网关（工具白名单 + 参数级授权）</li>
+      <li><strong>SSRF 防护</strong>：内网地址黑名单 + DNS 解析校验 + 重定向后校验 + 命令内 URL 检测</li>
+      <li><strong>滑动窗口限流</strong>：user/tenant/IP 三级 RPM 限流（基于 time.monotonic）</li>
+      <li><strong>审计日志</strong>：JSONL 记录所有工具拒绝/队列拒绝决策</li>
+      <li><strong>安全指标</strong>：MetricsStore 计数器 + 延迟统计</li>
+      <li><strong>路径穿越拦截</strong>：拦截 ../ 路径穿越攻击</li>
+    </ul>
+  </div>
+</div>
+
+<div class="priority-card p1">
+  <h4>P1-2. Dream 长期记忆整合器 <span class="badge badge-p1">P1</span></h4>
+  <p class="desc">实现 Dream 两阶段 Agent，自动整理和更新长期记忆</p>
+  <div class="deliverables">
+    <ul>
+      <li><strong>记忆文件体系</strong>：MEMORY.md（长期记忆）、SOUL.md（Agent 人格）、USER.md（用户画像）</li>
+      <li><strong>Dream Phase 1</strong>：读取历史摘要未处理条目，LLM 分析产出报告</li>
+      <li><strong>Dream Phase 2</strong>：AgentRunner 用 read_file/edit_file/write_file 编辑记忆文件</li>
+      <li><strong>git-blame 年龄标注</strong>：超过 14 天的行标记 ← 30d</li>
+      <li><strong>Dream cursor</strong>：跟踪已处理进度，每批最多 20 条</li>
+      <li><strong>版本控制</strong>：记忆文件变更支持 diff 查看和回滚</li>
+    </ul>
+  </div>
+</div>
+
+<div class="priority-card p1">
+  <h4>P1-3. 定时任务服务 <span class="badge badge-p1">P1</span></h4>
+  <p class="desc">实现 CronService，支撑 Dream 记忆整合和用户提醒</p>
+  <div class="deliverables">
+    <ul>
+      <li><strong>三种调度模式</strong>：at（一次性）、every（固定间隔）、cron（cron 表达式 + 时区）</li>
+      <li><strong>持久化存储</strong>：jobs.json + action.jsonl（操作日志）+ FileLock</li>
+      <li><strong>数据安全</strong>：损坏文件备份为 .corrupt-{ts}（保留 5 份），原子写入</li>
+      <li><strong>系统任务</strong>：Dream 记忆整合（每 2 小时）、reminder 提醒</li>
+      <li><strong>管理 API</strong>：创建/列表/删除定时任务接口</li>
+    </ul>
+  </div>
+</div>
+
+<div class="priority-card p1">
+  <h4>P1-4. 命令路由系统 <span class="badge badge-p1">P1</span></h4>
+  <p class="desc">实现斜杠命令支持，增强用户交互控制能力</p>
+  <div class="deliverables">
+    <ul>
+      <li><strong>四层优先级分发</strong>：priority（锁外）/ exact（锁内）/ prefix / interceptors</li>
+      <li><strong>内置命令</strong>：/stop（取消任务）、/new（清空会话）、/status（状态）、/history（历史）</li>
+      <li><strong>记忆命令</strong>：/dream（手动触发）、/dream-log（查看 diff）、/dream-restore（回滚）</li>
+      <li><strong>命令权限</strong>：基于角色控制命令可用性</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="4.3-p2-阶段：生态扩展（中优先级）">4.3 P2 阶段：生态扩展（中优先级）</h3>
+
+<p><strong>目标</strong>：扩展外部集成与生态兼容性，提升平台开放能力。</p>
+
+<div class="priority-card p2">
+  <h4>P2-1. OpenAI 兼容 API 增强 <span class="badge badge-p2">P2</span></h4>
+  <p class="desc">OpenAI 兼容接口核心能力（/v1/chat/completions、/v1/models、Agent 路由、会话隔离、认证中间件）已实现，在此基础上增强企业级能力</p>
+  <div class="deliverables">
+    <ul>
+      <li><strong>企业限流</strong>：按 user/tenant 维度 RPM 限流</li>
+      <li><strong>ask_user 交互</strong>：buttons 字段携带选项，前端渲染按钮</li>
+    </ul>
+  </div>
+</div>
+
+<div class="priority-card p2">
+  <h4>P2-2. 子 Agent 管理 <span class="badge badge-p2">P2</span></h4>
+  <p class="desc">支持运行时启动子 Agent 并行处理独立任务</p>
+  <div class="deliverables">
+    <ul>
+      <li><strong>SubagentManager</strong>：spawn(task, label, session_key) 启动子 Agent</li>
+      <li><strong>状态追踪</strong>：SubagentStatus（initializing → awaiting_tools → done/error）</li>
+      <li><strong>独立工具注册表</strong>：子 Agent 拥有独立工具集（不含 spawn 防递归）</li>
+      <li><strong>完成通知</strong>：通过消息总线向原会话发送完成通知</li>
+      <li><strong>并发控制</strong>：限制最大并发子 Agent 数量</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="4.4-p3-阶段：增强与优化（较低优先级）">4.4 P3 阶段：增强与优化（较低优先级）</h3>
+
+<p><strong>目标</strong>：完善细节体验，提升系统稳定性和可维护性。</p>
+
+<div class="priority-card p3">
+  <h4>P3-1. 技能系统 <span class="badge badge-p3">P3</span></h4>
+  <p class="desc">实现 SKILL.md 技能文件体系，教会 Agent 如何使用特定工具</p>
+  <div class="deliverables">
+    <ul>
+      <li><strong>SkillsLoader</strong>：技能发现（内置 + 工作区）+ YAML Frontmatter 解析</li>
+      <li><strong>渐进式披露</strong>：always:true 技能全文注入，其他仅注入摘要</li>
+      <li><strong>按需加载</strong>：Agent 通过 read_file 加载完整技能内容</li>
+      <li><strong>内置技能</strong>：weather、memory、summarize 等示例技能</li>
+    </ul>
+  </div>
+</div>
+
+<div class="priority-card p3">
+  <h4>P3-2. 生命周期钩子 <span class="badge badge-p3">P3</span></h4>
+  <p class="desc">提供 Agent 执行全生命周期的扩展点</p>
+  <div class="deliverables">
+    <ul>
+      <li><strong>6 个钩子</strong>：before_iteration/on_stream/on_stream_end/before_execute_tools/after_iteration/finalize_content</li>
+      <li><strong>CompositeHook</strong>：聚合多个钩子，顺序调用，错误隔离</li>
+      <li><strong>插件化扩展</strong>：第三方可通过钩子注入自定义逻辑</li>
+    </ul>
+  </div>
+</div>
+
+<div class="priority-card p3">
+  <h4>P3-3. 多进程调度优化 <span class="badge badge-p3">P3</span></h4>
+  <p class="desc">提升高并发场景下的稳定性</p>
+  <div class="deliverables">
+    <ul>
+      <li><strong>TurnWorkerPool</strong>：固定大小 worker 池，同会话串行、跨会话并发</li>
+      <li><strong>AdmissionController</strong>：背压（队列满时拒绝）+ 排队位置通知</li>
+      <li><strong>多进程隔离</strong>：每 Agent 独立 Worker 进程（可选）</li>
+      <li><strong>重启编排</strong>：AgentRestartOrchestrator 协调重启与热重载</li>
+    </ul>
+  </div>
+</div>
+
+<div class="priority-card p3">
+  <h4>P3-4. 多租户与工作区隔离 <span class="badge badge-p3">P3</span></h4>
+  <p class="desc">支持企业级多租户场景</p>
+  <div class="deliverables">
+    <ul>
+      <li><strong>多租户</strong>：tenant_id 隔离，每租户独立用户/配置/数据</li>
+      <li><strong>工作区</strong>：workspace_id 隔离，immutable/project/memory 路径分区</li>
+      <li><strong>用户隔离</strong>：阻止访问其他用户目录</li>
+      <li><strong>超级权限</strong>：super_permission 绕过所有边界（运维场景）</li>
+    </ul>
+  </div>
+</div>
+
+<hr>
+
+<h2 id="五、开发路线图总结">五、开发路线图总结</h2>
+
+<h3 id="5.1-优先级总览">5.1 优先级总览</h3>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>优先级</th><th>阶段目标</th><th>核心任务</th><th>预期价值</th></tr></thead>
+<tbody>
+<tr>
+  <td><span class="badge badge-p0">P0</span></td>
+  <td><strong>核心基础能力</strong></td>
+  <td>上下文治理 + 内置工具扩展 + 长期记忆 + Agent 循环增强</td>
+  <td>从编排工具升级为自主 Agent 平台，解决长对话和工具调用核心问题</td>
+</tr>
+<tr>
+  <td><span class="badge badge-p1">P1</span></td>
+  <td><strong>安全与自主性</strong></td>
+  <td>安全策略体系 + Dream 记忆整合 + 定时任务 + 命令路由</td>
+  <td>支撑企业级生产部署，建立安全防护和自主执行能力</td>
+</tr>
+<tr>
+  <td><span class="badge badge-p2">P2</span></td>
+  <td><strong>生态扩展</strong></td>
+  <td>OpenAI 兼容 API 增强 + 子 Agent 管理</td>
+  <td>提升平台开放能力，支持第三方工具集成</td>
+</tr>
+<tr>
+  <td><span class="badge badge-p3">P3</span></td>
+  <td><strong>增强与优化</strong></td>
+  <td>技能系统 + 生命周期钩子 + 多进程调度 + 多租户</td>
+  <td>完善细节体验，提升系统稳定性和可维护性</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<h3 id="5.2-技术依赖关系">5.2 技术依赖关系</h3>
+
+<pre style="background: var(--code-bg); padding: 18px; border-radius: 8px; overflow-x: auto; font-family: monospace; font-size: 13px; line-height: 1.6; border: 1px solid var(--slate-200);">
+P0-1 上下文治理 ──→ P0-4 Agent 循环增强
+                       ↓
+P0-2 内置工具扩展 ──→ P1-1 安全策略体系 ──→ P3-4 多租户隔离
+                       ↓
+P0-3 长期记忆(Consolidator+AutoCompact)
+       ↓
+P1-2 Dream 记忆整合 ←── P1-3 定时任务(CronService)
+       ↓
+P1-4 命令路由
+
+P2-1 OpenAI 兼容 API 增强 ←── P2-2 子 Agent 管理
+                                      ↑
+P3-1 技能系统    P3-2 生命周期钩子    P3-3 多进程调度</pre>
+
+<h3 id="5.3-建议实施顺序">5.3 建议实施顺序</h3>
+
+<ol>
+<li><strong>第一阶段</strong>：P0-1 → P0-2 → P0-3 → P0-4（核心基础，有依赖关系需顺序执行）</li>
+<li><strong>第二阶段</strong>：P1-1（安全）可与 P1-3（定时任务）并行，P1-3 完成后做 P1-2（Dream），最后 P1-4（命令路由）</li>
+<li><strong>第三阶段</strong>：P2-1（OpenAI API 增强）→ P2-2（子Agent）</li>
+<li><strong>第四阶段</strong>：P3 各项可并行推进，按实际需求排优先级</li>
+</ol>
+
+<h3 id="5.4-核心原则">5.4 核心原则</h3>
+
+<blockquote>
+  <p>在开发过程中应遵循以下原则：</p>
+  <ol>
+  <li><strong>保持 AICenter 优势</strong>：知识库 RAG、可视化编排、模型管理、Web 后台等已有优势功能不能退化</li>
+  <li><strong>渐进式增强</strong>：新功能与现有架构融合，不推翻重写，保证平滑过渡</li>
+  <li><strong>配置驱动</strong>：安全策略、记忆机制等采用配置驱动，默认宽松，按需启用</li>
+  <li><strong>复用现有基础设施</strong>：MySQL 持久化（替代 JSONL）、Redis 缓存、ES 检索等现有组件优先复用</li>
+  <li><strong>代码风格统一</strong>：新代码遵循现有项目风格，重复代码提取为公共方法</li>
+  </ol>
+</blockquote>
+
+<hr>
+
+<p style="text-align: center; color: var(--slate-500); font-size: 13px; margin-top: 40px;">
+  本文档基于 Serpmind 架构总结与 AICenter 项目现状对比分析生成<br>
+  生成日期：2026-08-10
+</p>
+
+  </article>
+</main>
+
+<button class="back-top" id="backTop" aria-label="回到顶部">↑</button>
+
+<script>
+(function(){
+  // ===== Build TOC from headings =====
+  var content = document.getElementById('content');
+  var toc = document.getElementById('toc');
+  var headings = content.querySelectorAll('h2, h3, h4');
+  var tocData = [];
+  var stack = [{level:0, children:[], el:null}];
+
+  headings.forEach(function(h){
+    if(!h.id) return;
+    var level = parseInt(h.tagName.charAt(1), 10);
+    var item = {id:h.id, text:h.textContent, level:level, children:[]};
+    while(stack.length > 1 && stack[stack.length-1].level >= level){
+      stack.pop();
+    }
+    stack[stack.length-1].children.push(item);
+    stack.push(item);
+    tocData.push(item);
+  });
+
+  function buildToc(items, parentEl, depth){
+    var ul = document.createElement('ul');
+    items.forEach(function(item){
+      var li = document.createElement('li');
+      li.className = 'toc-item level-' + depth;
+      var row = document.createElement('div');
+      row.className = 'toc-row';
+      var toggle = document.createElement('button');
+      toggle.className = 'toc-toggle';
+      toggle.innerHTML = '▼';
+      var link = document.createElement('a');
+      link.className = 'toc-link';
+      link.href = '#' + item.id;
+      link.textContent = item.text;
+      link.title = item.text;
+      row.appendChild(toggle);
+      row.appendChild(link);
+      li.appendChild(row);
+
+      if(item.children.length > 0){
+        var childWrap = document.createElement('div');
+        childWrap.className = 'toc-children';
+        buildToc(item.children, childWrap, depth+1);
+        li.appendChild(childWrap);
+        toggle.addEventListener('click', function(e){
+          e.preventDefault();
+          childWrap.classList.toggle('hidden');
+          toggle.classList.toggle('collapsed');
+        });
+      } else {
+        toggle.classList.add('empty');
+      }
+      parentEl.appendChild(li);
+    });
+    parentEl.appendChild(ul);
+  }
+  buildToc(stack[0].children, toc, 1);
+
+  // ===== Smooth scroll with offset =====
+  var headerH = 56;
+  document.querySelectorAll('.toc-link').forEach(function(link){
+    link.addEventListener('click', function(e){
+      e.preventDefault();
+      var target = document.getElementById(this.getAttribute('href').slice(1));
+      if(target){
+        var top = target.getBoundingClientRect().top + window.pageYOffset - headerH - 12;
+        window.scrollTo({top:top, behavior:'smooth'});
+        document.getElementById('sidebar').classList.remove('open');
+        document.getElementById('overlay').classList.remove('show');
+      }
+    });
+  });
+
+  // ===== Scroll spy =====
+  var allLinks = document.querySelectorAll('.toc-link');
+  var linkMap = {};
+  allLinks.forEach(function(l){ linkMap[l.getAttribute('href').slice(1)] = l; });
+
+  function spy(){
+    var scrollY = window.pageYOffset + headerH + 80;
+    var current = null;
+    for(var i=0; i<headings.length; i++){
+      var h = headings[i];
+      if(!h.id) continue;
+      if(h.offsetTop <= scrollY){
+        current = h.id;
+      }
+    }
+    if(current){
+      allLinks.forEach(function(l){ l.classList.remove('active'); });
+      if(linkMap[current]){
+        linkMap[current].classList.add('active');
+        var parent = linkMap[current].closest('.toc-children');
+        while(parent){
+          parent.classList.remove('hidden');
+          var toggle = parent.previousElementSibling ? parent.previousElementSibling.querySelector('.toc-toggle') : null;
+          if(toggle){ toggle.classList.remove('collapsed'); }
+          parent = parent.parentElement.closest('.toc-children');
+        }
+      }
+    }
+  }
+  window.addEventListener('scroll', spy, {passive:true});
+  spy();
+
+  // ===== Back to top =====
+  var backTop = document.getElementById('backTop');
+  window.addEventListener('scroll', function(){
+    if(window.pageYOffset > 600){ backTop.classList.add('show'); }
+    else { backTop.classList.remove('show'); }
+  }, {passive:true});
+  backTop.addEventListener('click', function(){
+    window.scrollTo({top:0, behavior:'smooth'});
+  });
+
+  // ===== Mobile sidebar toggle =====
+  var menuToggle = document.getElementById('menuToggle');
+  var sidebar = document.getElementById('sidebar');
+  var overlay = document.getElementById('overlay');
+  menuToggle.addEventListener('click', function(){
+    sidebar.classList.toggle('open');
+    overlay.classList.toggle('show');
+  });
+  overlay.addEventListener('click', function(){
+    sidebar.classList.remove('open');
+    overlay.classList.remove('show');
+  });
+})();
+</script>
+
+</body>
+</html>
