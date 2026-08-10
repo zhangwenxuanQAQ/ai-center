@@ -50,42 +50,12 @@ def _load_prompt_file(filename: str) -> str:
 
 def load_react_system_prompt() -> str:
     """
-    加载react_system_prompt.md文件内容
+    加载backbone.md文件内容
 
     Returns:
         str: react系统提示词内容
     """
-    return _load_prompt_file('react_system_prompt.md')
-
-
-def load_task_planner_prompt() -> str:
-    """
-    加载task_planner.md文件内容（任务规划提示词）
-
-    Returns:
-        str: 任务规划提示词内容
-    """
-    return _load_prompt_file('task_planner.md')
-
-
-def load_if_need_task_prompt() -> str:
-    """
-    加载if_need_task.md文件内容（判断是否需要子任务的提示词）
-
-    Returns:
-        str: 判断是否需要子任务的提示词内容
-    """
-    return _load_prompt_file('if_need_task.md')
-
-
-def load_result_summary_prompt() -> str:
-    """
-    加载result_summary.md文件内容（结果汇总提示词）
-
-    Returns:
-        str: 结果汇总提示词内容
-    """
-    return _load_prompt_file('result_summary.md')
+    return _load_prompt_file('backbone.md')
 
 
 def load_thinking_answer_rule_prompt() -> str:
@@ -132,7 +102,7 @@ def build_system_prompt(original_prompt: Optional[str] = None, include_react_pro
     """
     构建系统提示词
 
-    将react_system_prompt.md内容作为顶级提示词放在最顶部，
+    将backbone.md内容作为顶级提示词放在最顶部，
     然后拼接原始系统提示词、当前时间、时区等额外信息
 
     Args:

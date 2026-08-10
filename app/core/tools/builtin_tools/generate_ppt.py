@@ -319,7 +319,7 @@ class generate_ppt(BaseTool):
         ),
     ]
 
-    def run(self, **kwargs) -> Any:
+    def _run(self, **kwargs) -> Any:
         title = kwargs.get("title", "未命名演示文稿")
         slides = kwargs.get("slides", [])
         template_ppt = kwargs.get("template_ppt", "")

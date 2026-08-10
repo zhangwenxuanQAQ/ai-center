@@ -2250,3 +2250,21 @@ engines:
     表字段需要有type字段，用户存储工具类型
 3、 目前的mcp分类暂时弃用，改成使用toolkit_category表中的分类。服务启动时如果toolkit_category不存在测需要初始化，并且清空mcp表中的分类id字段。
 4、 前端左侧功能树MCP改成工具箱，点击进入工具箱主页面。工具箱主页面需要展示所有工具的分类，点击分类可以展示该分类下的所有工具。
+
+
+
+
+
+
+## 现在开始实现HOOK机制
+在core目录下创建hooks目录，手动创建一个base_hook.py文件，用于定义基础hook类。
+- 入参需要包括 before_tools, after_tools, ongoing_tools 三个列表，分别对应在被勾的方法执行前、执行过程中、执行后的工具调用。
+- hook中需要有before方法，用于被勾的方法执行前调用。
+- hook中需要有ongoing方法，用于在被勾的方法执行过程中调用。
+- hook中需要有after方法，用于被勾的方法执行后调用。
+先实现一个ToolHook类，用于处理工具的调用，继承自baseHook类。
+- before方法入参和出参都需要是工具调用的参数, 按照before_tools顺序执行工具。
+- ongoing方法入参是执行过程中的中间结果， 按照ongoing_tools顺序执行工具。
+- after方法入参是工具执行结果， 按照after_tools顺序执行工具。
+
+BaseTool需要定义hooks属性，用于存储工具的hooks。 run方法需要在调用工具前调用hooks中的before方法，在调用工具后调用hooks中的after方法。ongoing暂时不实现。

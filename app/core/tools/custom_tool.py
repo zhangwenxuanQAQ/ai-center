@@ -27,7 +27,7 @@ class CustomTool(BaseTool):
                 BaseToolParam(name="input", type="string", description="输入内容", required=True),
             ]
 
-            def run(self, **kwargs) -> Any:
+            def _run(self, **kwargs) -> Any:
                 input_text = kwargs.get("input", "")
                 return {"result": f"处理完成: {input_text}"}
 
@@ -79,9 +79,9 @@ class CustomTool(BaseTool):
         for key, value in extra.items():
             setattr(self, key, value)
 
-    def run(self, **kwargs) -> Any:
+    def _run(self, **kwargs) -> Any:
         """
-        执行工具
+        执行工具实际逻辑
 
         如果设置了callback函数，则调用callback执行实际逻辑
         否则子类需要重写此方法
@@ -95,5 +95,5 @@ class CustomTool(BaseTool):
         if self._callback is not None:
             return self._callback(**kwargs)
         raise NotImplementedError(
-            "CustomTool must either be initialized with a callback or have run() overridden"
+            "CustomTool must either be initialized with a callback or have _run() overridden"
         )

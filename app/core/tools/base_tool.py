@@ -1,5 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from app.core.hooks.base_hook import BaseHook
 
 
 class BaseToolParam:
@@ -29,10 +32,60 @@ class BaseTool(ABC):
     title: str = ""
     description: str = ""
     params: List[BaseToolParam] = []
+    hooks: List["BaseHook"] = []
+
+    def run(self, **kwargs) -> Any:
+        """
+        执行工具（模板方法）
+
+        按照以下顺序执行：
+        1. 调用所有hooks的before方法，处理并可能修改工具调用参数
+        2. 调用_run方法执行实际工具逻辑
+        3. 调用所有hooks的after方法，处理并可能修改工具执行结果
+
+        Args:
+            **kwargs: 工具调用参数
+
+        Returns:
+            Any: 工具执行结果
+        """
+        # 1. 执行before hooks，处理入参
+        for hook in self.hooks:
+            try:
+                kwargs = hook.before(**kwargs)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(
+                    f"hook.before 执行失败: {e}", exc_info=True
+                )
+
+        # 2. 执行实际工具逻辑
+        result = self._run(**kwargs)
+
+        # 3. 执行after hooks，处理出参
+        for hook in self.hooks:
+            try:
+                result = hook.after(result)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(
+                    f"hook.after 执行失败: {e}", exc_info=True
+                )
+
+        return result
 
     @abstractmethod
-    def run(self, **kwargs) -> Any:
-        raise NotImplementedError("Subclass must implement run()")
+    def _run(self, **kwargs) -> Any:
+        """
+        执行实际工具逻辑（由子类实现）
+
+        Args:
+            **kwargs: 工具调用参数
+
+        Returns:
+            Any: 工具执行结果
+        """
+        raise NotImplementedError("Subclass must implement _run()")
 
     def get_required_params(self) -> List[str]:
         return [p.name for p in self.params if p.required]
