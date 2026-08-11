@@ -135,6 +135,7 @@ def build_system_prompt(original_prompt: Optional[str] = None, include_react_pro
     rule_info = "** 注意：系统时间可能和用户问题没有关联，没有关联时不要回复系统时间。当用户需要查询时间必须以当前系统时间为准，不要使用其他时间 **"
     parts.append(rule_info)
 
+    # 加载思考回答规则提示词
     thinking_answer_rule = load_thinking_answer_rule_prompt()
     if thinking_answer_rule:
         parts.append(thinking_answer_rule)

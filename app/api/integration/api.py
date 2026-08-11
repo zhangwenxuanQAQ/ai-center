@@ -21,8 +21,9 @@ from app.services.integration.service import ChatbotIntegrationService
 from app.core.integration.api_chat import IntegrationChatCoreService
 from app.core.integration.temp_chat_store import TempChatStore
 from app.core.chat.stream_manager import ChatStreamManager
+from app.core.chat.chat_service import ChatInputManager
+from app.database.models import ChatbotChat, ChatbotChatMessage
 from app.database.redis_utils import redis_utils
-from app.database.models import ChatbotChat
 from app.utils.response import ResponseUtil, ApiResponse
 from app.services.chat.file_utils import get_file_from_datasource
 
@@ -41,6 +42,7 @@ class IntegrationChatRequest(BaseModel):
         stream: 是否流式输出
         temporary: 临时会话模式，不保存对话和消息到数据库
         edit_message_id: 编辑消息ID，表示编辑的是哪条用户消息，会删除该消息及其后续所有消息
+        message_id: 消息ID，用于标识澄清问题的回复
     """
     config: Optional[dict] = Field(None, description="对话配置JSON，包含deep_thinking等配置项")
     query: List[QueryItem] = Field(..., description="查询数组")
@@ -49,6 +51,7 @@ class IntegrationChatRequest(BaseModel):
     temporary: bool = Field(False, description="临时会话模式，不保存到数据库")
     edit_message_id: Optional[str] = Field(None, description="编辑消息ID，删除该消息及其后续消息")
     preview_token: Optional[str] = Field(None, description="预览token，用于临时会话数据隔离")
+    message_id: Optional[str] = Field(None, max_length=40, description="消息ID，用于标识澄清问题的回复")
 
 
 def get_api_key_from_header(authorization: Optional[str]) -> Optional[str]:
@@ -129,6 +132,45 @@ async def chat_completions(
     logger.info(f"集成聊天接口请求 - chatbot_id: {integration.chatbot_id}, chat_id: {chat_request.chat_id}, stream: {chat_request.stream}")
 
     try:
+        # 检查是否为澄清问题的回复：最新消息是 clarify 工具结果，且入参 message_id 与之匹配时，才将用户输入传递给等待中的对话循环
+        if chat_request.chat_id:
+            latest_msg = None
+            is_temporary = chat_request.chat_id.startswith('temp_')
+            if is_temporary:
+                scope_id = f"{integration.id}:preview:{chat_request.preview_token}" if chat_request.preview_token else None
+                temp_msgs = TempChatStore.get_messages(integration.id, chat_request.chat_id, scope_id=scope_id)
+                if temp_msgs:
+                    latest_msg = temp_msgs[-1]
+            else:
+                latest_msg = ChatbotChatMessage.select().where(
+                    ChatbotChatMessage.chat_id == chat_request.chat_id
+                ).order_by(ChatbotChatMessage.created_at.desc()).first()
+
+            # 统一获取字段：临时会话消息为 dict，正式会话消息为 model 对象
+            def _get_field(obj, name, default=None):
+                if obj is None:
+                    return default
+                if isinstance(obj, dict):
+                    return obj.get(name, default)
+                return getattr(obj, name, default)
+
+            if latest_msg and _get_field(latest_msg, 'role', '') == 'tool' and _get_field(latest_msg, 'extra_content', None):
+                try:
+                    ec_str = _get_field(latest_msg, 'extra_content')
+                    ec = json.loads(ec_str) if isinstance(ec_str, str) else ec_str
+                    tool_call = ec.get('tool_call', {}) if isinstance(ec, dict) else {}
+                    if tool_call.get('name') == 'clarify' and chat_request.message_id and chat_request.message_id == _get_field(latest_msg, 'message_id', ''):
+                        # 提取用户回复文本，传递给等待中的对话循环（Service 层负责保存用户消息）
+                        user_response = ''
+                        for item in chat_request.query:
+                            if item.type == 'text' and item.content:
+                                user_response = item.content
+                                break
+                        ChatInputManager().set_input(_get_field(latest_msg, 'message_id', ''), user_response)
+                        return ResponseUtil.success(message="已提交回复")
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
         if chat_request.stream:
             stream_chat_id = chat_request.chat_id
 

@@ -151,7 +151,8 @@ def _execute_single_tool(tool_call: Dict, tool_map: Dict[str, BaseTool]) -> Dict
             'tool_name': function_name,
             'task_name': task_name,
             'elapsed_ms': elapsed,
-            'result': result.get('result', '')
+            'result': result.get('result', ''),
+            'parameters': function_args
         }
     else:
         return {
@@ -159,7 +160,8 @@ def _execute_single_tool(tool_call: Dict, tool_map: Dict[str, BaseTool]) -> Dict
             'tool_name': function_name,
             'task_name': task_name,
             'elapsed_ms': elapsed,
-            'error': result.get('error', '工具调用失败')
+            'error': result.get('error', '工具调用失败'),
+            'parameters': function_args
         }
 
 
@@ -191,6 +193,7 @@ async def process_tool_calls(tool_calls: List[Dict], tool_map: Dict[str, BaseToo
         try:
             tool_call_task_names = {}
             tool_call_reasoning_contents = {}
+            tool_call_parameters = {}
 
             # 先yield每个工具的start状态
             for tool_call in tool_calls:
@@ -199,6 +202,7 @@ async def process_tool_calls(tool_calls: List[Dict], tool_map: Dict[str, BaseToo
                 function_args_str = tool_call.get('function', {}).get('arguments', '{}')
                 task_name = ''
                 reasoning_content = ''
+                function_args = {}
                 try:
                     function_args = json.loads(function_args_str)
                     task_name = function_args.get('task_name', '')
@@ -207,6 +211,7 @@ async def process_tool_calls(tool_calls: List[Dict], tool_map: Dict[str, BaseToo
                     pass
                 tool_call_task_names[tool_call_id] = task_name
                 tool_call_reasoning_contents[tool_call_id] = reasoning_content
+                tool_call_parameters[tool_call_id] = function_args
 
                 asyncio.run_coroutine_threadsafe(
                     queue.put({
@@ -215,7 +220,8 @@ async def process_tool_calls(tool_calls: List[Dict], tool_map: Dict[str, BaseToo
                         'task_name': task_name,
                         'status': 'start',
                         'elapsed_ms': 0,
-                        'reasoning_content': reasoning_content
+                        'reasoning_content': reasoning_content,
+                        'parameters': function_args
                     }),
                     loop
                 )
@@ -237,7 +243,8 @@ async def process_tool_calls(tool_calls: List[Dict], tool_map: Dict[str, BaseToo
                             'task_name': tool_call_task_names.get(tool_call_id, ''),
                             'status': 'running',
                             'elapsed_ms': 0,
-                            'reasoning_content': tool_call_reasoning_contents.get(tool_call_id, '')
+                            'reasoning_content': tool_call_reasoning_contents.get(tool_call_id, ''),
+                            'parameters': tool_call_parameters.get(tool_call_id, {})
                         }),
                         loop
                     )

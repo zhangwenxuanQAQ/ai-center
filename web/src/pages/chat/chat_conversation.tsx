@@ -6,6 +6,7 @@ import type { MenuProps, UploadProps } from 'antd';
 import ChatMarkdown from '../../components/ChatMarkdown';
 import WebSearchResult from '../../components/WebSearchResult';
 import PPTDownloadCard from '../../components/PPTDownloadCard';
+import ClarifyCard from '../../components/ClarifyCard';
 import ChatScrollNavigator, { UserMessageAnchor } from '../../components/ChatScrollNavigator';
 import { llmModelService, LLMModel } from '../../services/llm_model';
 import { chatbotService, Chatbot } from '../../services/chatbot';
@@ -108,6 +109,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
   const [modelConfig, setModelConfig] = useState<Record<string, any>>({});
   const [systemPrompt, setSystemPrompt] = useState<string>('');
   const [expandedReasoning, setExpandedReasoning] = useState<Set<string>>(new Set());
+  const [collapsedReasoning, setCollapsedReasoning] = useState<Set<string>>(new Set());
   const [expandedToolCalls, setExpandedToolCalls] = useState<Set<string>>(new Set());
   const [expandedToolCallResults, setExpandedToolCallResults] = useState<Set<string>>(new Set());
   const [expandedTaskPlans, setExpandedTaskPlans] = useState<Set<string>>(new Set());
@@ -116,6 +118,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
   const [editingFiles, setEditingFiles] = useState<any[]>([]); // 保存编辑消息的文件信息
   const [thinkingMessageId, setThinkingMessageId] = useState<string | null>(null);
   const [thinkingDuration, setThinkingDuration] = useState<Record<string, number>>({});
+  // 记录已回复的澄清问题 tool_call_id，避免用户在等待澄清回复时发送新消息
+  const [respondedClarifyIds, setRespondedClarifyIds] = useState<Set<string>>(new Set());
   const thinkingStartTimeRef = useRef<Record<string, number>>({});
   const isCreatingNewConversation = useRef(false);
   // 标记切换对话后是否需要滚动到底部
@@ -584,7 +588,18 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     setLoading(true);
     try {
       const result = await chatService.getMessages(conversationId, 1, 50);
-      const mappedMessages = result.items.map((msg: any) => {
+      const rawItems = result.items.filter((msg: any) => {
+        // 过滤掉 clarify 工具的独立 tool 消息，避免与 assistant 消息中的 tool_calls 重复渲染
+        try {
+          let ec = msg.extra_content;
+          if (typeof ec === 'string') ec = JSON.parse(ec);
+          if (msg.role === 'tool' && ec?.tool_call?.name === 'clarify') {
+            return false;
+          }
+        } catch (e) { /* ignore */ }
+        return true;
+      });
+      const mappedMessages = rawItems.map((msg: any) => {
         let extraContent = msg.extra_content;
         let step_id = undefined;
         let step = undefined;
@@ -1532,16 +1547,28 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     }
   };
 
-  const toggleReasoning = (messageId: string) => {
-    setExpandedReasoning(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(messageId)) {
-        newSet.delete(messageId);
-      } else {
-        newSet.add(messageId);
-      }
-      return newSet;
-    });
+  const toggleReasoning = (messageId: string, isRunning: boolean = false) => {
+    if (isRunning) {
+      setCollapsedReasoning(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(messageId)) {
+          newSet.delete(messageId);
+        } else {
+          newSet.add(messageId);
+        }
+        return newSet;
+      });
+    } else {
+      setExpandedReasoning(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(messageId)) {
+          newSet.delete(messageId);
+        } else {
+          newSet.add(messageId);
+        }
+        return newSet;
+      });
+    }
   };
 
   const toggleToolCall = (toolCallId: string) => {
@@ -2646,6 +2673,70 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     return groups;
   };
 
+  // 检查消息组中是否存在未回复的澄清问题
+  const hasPendingClarify = (groupMessages: Message[]): boolean => {
+    for (const msg of groupMessages) {
+      const toolCalls = msg.tool_calls || [];
+      for (const tc of toolCalls) {
+        if (tc.name === 'clarify' && tc.result && !respondedClarifyIds.has(tc.tool_call_id)) {
+          return true;
+        }
+      }
+      // 独立 tool 消息中的 clarify
+      const tc = msg.extra_content?.tool_call;
+      if (tc?.name === 'clarify' && tc.result && !respondedClarifyIds.has(tc.tool_call_id)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // 检查全局是否存在任何未回复的澄清问题（用于禁用输入区）
+  const hasAnyPendingClarify = (): boolean => {
+    for (const msg of messages) {
+      const toolCalls = msg.tool_calls || [];
+      for (const tc of toolCalls) {
+        if (tc.name === 'clarify' && tc.result && !respondedClarifyIds.has(tc.tool_call_id)) {
+          return true;
+        }
+      }
+      const tc = msg.extra_content?.tool_call;
+      if (tc?.name === 'clarify' && tc.result && !respondedClarifyIds.has(tc.tool_call_id)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // 标记某个澄清问题已回复
+  const handleClarifyResponded = (toolCallId: string) => {
+    setRespondedClarifyIds(prev => {
+      const next = new Set(prev);
+      next.add(toolCallId);
+      return next;
+    });
+  };
+
+  // 判断助手消息是否有可见内容（避免渲染空的 step-container）
+  const hasAssistantVisibleContent = (msg: Message): boolean => {
+    if (msg.role !== 'assistant') return true;
+    const step = msg.step || msg.extra_content?.step;
+    // 有文本内容
+    if (msg.content && (msg.status !== 'start' || !msg.status)) return true;
+    // 有思考过程内容
+    if (msg.reasoning_content) return true;
+    // 有工具调用
+    if (msg.tool_calls && msg.tool_calls.length > 0) return true;
+    // 有任务计划
+    if (msg.task_plan && msg.task_plan.length > 0) return true;
+    // start 状态总会显示加载提示
+    if (msg.status === 'start') return true;
+    // 已知 step 类型且非 start 状态：各阶段在 done/stop 时可能有独立提示（如预处理完成）
+    if (step === 'pre_process' && msg.status === 'done') return true;
+    if (step === 'task_list' && msg.status === 'start') return true;
+    return false;
+  };
+
   const renderAssistantMessageContent = (msg: Message) => {
     if (msg.role !== 'assistant') return null;
 
@@ -2665,7 +2756,12 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             )}
             {msg.status === 'running' && msg.reasoning_content && !msg.reasoning_end && (
               <div className="message-reasoning">
-                <div className="reasoning-header">
+                <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id, true)}>
+                  {collapsedReasoning.has(msg.step_id || msg.id) ? (
+                    <RightOutlined />
+                  ) : (
+                    <DownOutlined />
+                  )}
                   <LoadingOutlined spin />
                   <BulbOutlined />
                   <span>分析问题中</span>
@@ -2675,14 +2771,16 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                     </span>
                   )}
                 </div>
-                <div className="reasoning-text">
-                  <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                    <ChatMarkdown
-                      source={msg.reasoning_content}
-                      className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
-                    />
+                {!collapsedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
+                  <div className="reasoning-text">
+                    <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                      <ChatMarkdown
+                        source={msg.reasoning_content}
+                        className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
             {(msg.status !== 'start' || !msg.status) && msg.reasoning_content && (msg.reasoning_end || msg.status === 'done' || msg.status === 'stop') && (
@@ -2746,7 +2844,12 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             )}
             {msg.status === 'running' && msg.reasoning_content && !msg.reasoning_end && (
               <div className="message-reasoning">
-                <div className="reasoning-header">
+                <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id, true)}>
+                  {collapsedReasoning.has(msg.step_id || msg.id) ? (
+                    <RightOutlined />
+                  ) : (
+                    <DownOutlined />
+                  )}
                   <LoadingOutlined spin />
                   <BulbOutlined />
                   <span>任务规划中</span>
@@ -2756,14 +2859,16 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                     </span>
                   )}
                 </div>
-                <div className="reasoning-text">
-                  <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                    <ChatMarkdown
-                      source={msg.reasoning_content}
-                      className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
-                    />
+                {!collapsedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
+                  <div className="reasoning-text">
+                    <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                      <ChatMarkdown
+                        source={msg.reasoning_content}
+                        className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
             {(msg.status !== 'start' || !msg.status) && msg.reasoning_content && (msg.reasoning_end || msg.status === 'done' || msg.status === 'stop') && (
@@ -2899,7 +3004,12 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             )}
             {msg.status === 'running' && msg.reasoning_content && !msg.reasoning_end && (
               <div className="message-reasoning">
-                <div className="reasoning-header">
+                <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id, true)}>
+                  {collapsedReasoning.has(msg.step_id || msg.id) ? (
+                    <RightOutlined />
+                  ) : (
+                    <DownOutlined />
+                  )}
                   <LoadingOutlined spin />
                   <BulbOutlined />
                   <span>正在思考中</span>
@@ -2909,14 +3019,16 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                     </span>
                   )}
                 </div>
-                <div className="reasoning-text">
-                  <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                    <ChatMarkdown
-                      source={msg.reasoning_content}
-                      className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
-                    />
+                {!collapsedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
+                  <div className="reasoning-text">
+                    <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                      <ChatMarkdown
+                        source={msg.reasoning_content}
+                        className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`}
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
             {(msg.status !== 'start' || !msg.status) && msg.reasoning_content && (msg.reasoning_end || msg.status === 'done' || msg.status === 'stop') && (
@@ -2979,19 +3091,22 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 </div>
               </div>
             )}
-            {msg.tool_calls && msg.tool_calls.length > 0 && msg.tool_calls.map((tc, tcIndex) => (
-              <div key={tc.tool_call_id || `tc-${tcIndex}`} className={`tool-call-card tool-call-${tc.status}${tc.name === 'web_search' ? ' tool-call-web-search' : ''}${tc.name === 'generate_ppt' ? ' tool-call-generate-ppt' : ''}`}>
-                <div className="tool-call-header" onClick={() => toggleToolCall(tc.tool_call_id || `tc-${tcIndex}`)}>
+            {msg.tool_calls && msg.tool_calls.length > 0 && msg.tool_calls.map((tc, tcIndex) => {
+              const tcId = tc.tool_call_id || `tc-${tcIndex}`;
+              const isClarify = tc.name === 'clarify';
+              return (
+              <div key={tcId} className={`tool-call-card tool-call-${tc.status}${tc.name === 'web_search' ? ' tool-call-web-search' : ''}${tc.name === 'generate_ppt' ? ' tool-call-generate-ppt' : ''}${isClarify ? ' tool-call-clarify' : ''}`}>
+                <div className="tool-call-header" onClick={() => !isClarify && toggleToolCall(tcId)}>
                   <div className="tool-call-header-left">
                     {tc.status === 'start' && <LoadingOutlined spin className="tool-call-icon-start" />}
                     {tc.status === 'running' && <LoadingOutlined spin className="tool-call-icon-running" />}
                     {tc.status === 'success' && <span className="tool-call-icon-success">✓</span>}
                     {tc.status === 'error' && <span className="tool-call-icon-error">✗</span>}
-                    {expandedToolCalls.has(tc.tool_call_id || `tc-${tcIndex}`) ? (
+                    {!isClarify && (expandedToolCalls.has(tcId) ? (
                       <DownOutlined style={{ fontSize: 10 }} />
                     ) : (
                       <RightOutlined style={{ fontSize: 10 }} />
-                    )}
+                    ))}
                     {tc.task_name && <span className="tool-call-task-name">{tc.task_name}</span>}
                   </div>
                   <div className="tool-call-header-right">
@@ -3002,7 +3117,13 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                     )}
                   </div>
                 </div>
-                {expandedToolCalls.has(tc.tool_call_id || `tc-${tcIndex}`) && (
+                {/* clarify 工具：在卡片外部直接渲染交互组件，无需展开 */}
+                {isClarify && tc.result && (
+                  <div className="tool-call-content tool-call-clarify-content">
+                    <ClarifyCard result={tc.result} chatId={conversation?.id || ''} theme={theme} toolCallId={tc.tool_call_id} messageId={msg.message_id} chatbotId={selectedChatbot?.id} modelId={selectedModel?.id} disabled={!loading && !respondedClarifyIds.has(tc.tool_call_id)} onResponded={handleClarifyResponded} />
+                  </div>
+                )}
+                {!isClarify && expandedToolCalls.has(tcId) && (
                   <div className="tool-call-content">
                     {/* 思考过程 - 直接展示内容，不显示标题文字 */}
                     {tc.reasoning_content && (
@@ -3067,7 +3188,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -3086,19 +3208,22 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 </div>
               </div>
             )}
-            {msg.tool_calls && msg.tool_calls.length > 0 && msg.tool_calls.map((tc, tcIndex) => (
-              <div key={tc.tool_call_id || `tc-${tcIndex}`} className={`tool-call-card tool-call-${tc.status}${tc.name === 'web_search' ? ' tool-call-web-search' : ''}${tc.name === 'generate_ppt' ? ' tool-call-generate-ppt' : ''}`}>
-                <div className="tool-call-header" onClick={() => toggleToolCall(tc.tool_call_id || `tc-${tcIndex}`)}>
+            {msg.tool_calls && msg.tool_calls.length > 0 && msg.tool_calls.map((tc, tcIndex) => {
+              const tcId = tc.tool_call_id || `tc-${tcIndex}`;
+              const isClarify = tc.name === 'clarify';
+              return (
+              <div key={tcId} className={`tool-call-card tool-call-${tc.status}${tc.name === 'web_search' ? ' tool-call-web-search' : ''}${tc.name === 'generate_ppt' ? ' tool-call-generate-ppt' : ''}${isClarify ? ' tool-call-clarify' : ''}`}>
+                <div className="tool-call-header" onClick={() => !isClarify && toggleToolCall(tcId)}>
                   <div className="tool-call-header-left">
                     {tc.status === 'start' && <LoadingOutlined spin className="tool-call-icon-start" />}
                     {tc.status === 'running' && <LoadingOutlined spin className="tool-call-icon-running" />}
                     {tc.status === 'success' && <span className="tool-call-icon-success">✓</span>}
                     {tc.status === 'error' && <span className="tool-call-icon-error">✗</span>}
-                    {expandedToolCalls.has(tc.tool_call_id || `tc-${tcIndex}`) ? (
+                    {!isClarify && (expandedToolCalls.has(tcId) ? (
                       <DownOutlined style={{ fontSize: 10 }} />
                     ) : (
                       <RightOutlined style={{ fontSize: 10 }} />
-                    )}
+                    ))}
                     {tc.task_name && <span className="tool-call-task-name">{tc.task_name}</span>}
                   </div>
                   <div className="tool-call-header-right">
@@ -3109,7 +3234,13 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                     )}
                   </div>
                 </div>
-                {expandedToolCalls.has(tc.tool_call_id || `tc-${tcIndex}`) && (
+                {/* clarify 工具：在卡片外部直接渲染交互组件，无需展开 */}
+                {isClarify && tc.result && (
+                  <div className="tool-call-content tool-call-clarify-content">
+                    <ClarifyCard result={tc.result} chatId={conversation?.id || ''} theme={theme} toolCallId={tc.tool_call_id} messageId={msg.message_id} chatbotId={selectedChatbot?.id} modelId={selectedModel?.id} disabled={!loading && !respondedClarifyIds.has(tc.tool_call_id)} onResponded={handleClarifyResponded} />
+                  </div>
+                )}
+                {!isClarify && expandedToolCalls.has(tcId) && (
                   <div className="tool-call-content">
                     {/* web_search/generate_ppt不显示原始消息 */}
                     {tc.message && tc.name !== 'web_search' && tc.name !== 'generate_ppt' && (
@@ -3137,7 +3268,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -3224,6 +3356,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           </div>
           <div className="message-content">
             {group.messages.map((msg, msgIndex) => (
+              hasAssistantVisibleContent(msg) && (
               <div 
                 key={msgIndex}
                 id={msg.step_id || undefined}
@@ -3231,6 +3364,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               >
                 {msg.role === 'tool' ? renderToolMessage(msg) : renderAssistantMessageContent(msg)}
               </div>
+              )
             ))}
             <div className="message-footer">
               <span className="message-time">
@@ -3247,9 +3381,17 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               <div className="message-actions">
                 {group.assistantId && (
                   <>
-                    {/* 检查group中是否有消息还在运行中（status不是done或stop） */}
+                    {/* 检查group中是否有消息还在运行中（status不是done或stop）或存在未回复的澄清问题 */}
                     {group.messages.some(m => m.status && m.status !== 'done' && m.status !== 'stop') ? (
                       <Tooltip title="正在生成中">
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<LoadingOutlined spin />}
+                        />
+                      </Tooltip>
+                    ) : hasPendingClarify(group.messages) ? (
+                      <Tooltip title="等待澄清回复">
                         <Button
                           type="text"
                           size="small"
@@ -3299,20 +3441,21 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     const hasMessage = msg.content;
     const isWebSearch = toolCall?.name === 'web_search';
     const isGeneratePpt = toolCall?.name === 'generate_ppt';
+    const isClarify = toolCall?.name === 'clarify';
 
     return (
-      <div className={`tool-call-card tool-call-${toolCall?.status || 'success'}${isWebSearch ? ' tool-call-web-search' : ''}${isGeneratePpt ? ' tool-call-generate-ppt' : ''}`}>
-        <div className="tool-call-header" onClick={() => toggleToolCall(toolCallId)}>
+      <div className={`tool-call-card tool-call-${toolCall?.status || 'success'}${isWebSearch ? ' tool-call-web-search' : ''}${isGeneratePpt ? ' tool-call-generate-ppt' : ''}${isClarify ? ' tool-call-clarify' : ''}`}>
+        <div className="tool-call-header" onClick={() => !isClarify && toggleToolCall(toolCallId)}>
           <div className="tool-call-header-left">
             {toolCall?.status === 'start' && <LoadingOutlined spin className="tool-call-icon-start" />}
             {toolCall?.status === 'running' && <LoadingOutlined spin className="tool-call-icon-running" />}
             {toolCall?.status === 'success' && <span className="tool-call-icon-success">✓</span>}
             {toolCall?.status === 'error' && <span className="tool-call-icon-error">✗</span>}
-            {expandedToolCalls.has(toolCallId) ? (
+            {!isClarify && (expandedToolCalls.has(toolCallId) ? (
               <DownOutlined style={{ fontSize: 10 }} />
             ) : (
               <RightOutlined style={{ fontSize: 10 }} />
-            )}
+            ))}
             <span className="tool-call-task-name">{toolCall?.task_name || toolCall?.name || '工具调用'}</span>
           </div>
           <div className="tool-call-header-right">
@@ -3323,7 +3466,13 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             )}
           </div>
         </div>
-        {expandedToolCalls.has(toolCallId) && (
+        {/* clarify 工具：在卡片外部直接渲染交互组件，无需展开 */}
+        {isClarify && hasResult && (
+          <div className="tool-call-content tool-call-clarify-content">
+            <ClarifyCard result={toolCall.result} chatId={conversation?.id || ''} theme={theme} toolCallId={toolCallId} messageId={msg.message_id} chatbotId={selectedChatbot?.id} modelId={selectedModel?.id} disabled={!loading && !respondedClarifyIds.has(toolCallId)} onResponded={handleClarifyResponded} />
+          </div>
+        )}
+        {!isClarify && expandedToolCalls.has(toolCallId) && (
           <div className="tool-call-content">
             {hasReasoning && (
               <div className={`tool-call-reasoning-text ${theme === 'dark' ? 'dark' : 'light'}`}>
@@ -3453,7 +3602,12 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                   )}
                   {msg.status === 'running' && msg.reasoning_content && !msg.reasoning_end && (
                     <div className="message-reasoning">
-                      <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
+                      <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id, true)}>
+                        {collapsedReasoning.has(msg.step_id || msg.id) ? (
+                          <RightOutlined />
+                        ) : (
+                          <DownOutlined />
+                        )}
                         <LoadingOutlined spin />
                         <BulbOutlined />
                         <span>分析问题中</span>
@@ -3463,7 +3617,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                           </span>
                         )}
                       </div>
-                      {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
+                      {!collapsedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
                         <div className="reasoning-text">
                           <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
                             <ChatMarkdown
@@ -3558,7 +3712,12 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                   )}
                   {msg.status === 'running' && msg.reasoning_content && !msg.reasoning_end && (
                     <div className="message-reasoning">
-                      <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
+                      <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id, true)}>
+                        {collapsedReasoning.has(msg.step_id || msg.id) ? (
+                          <RightOutlined />
+                        ) : (
+                          <DownOutlined />
+                        )}
                         <LoadingOutlined spin />
                         <BulbOutlined />
                         <span>任务规划中</span>
@@ -3568,7 +3727,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                           </span>
                         )}
                       </div>
-                      {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
+                      {!collapsedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
                         <div className="reasoning-text">
                           <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
                             <ChatMarkdown
@@ -3667,7 +3826,12 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                   )}
                   {msg.status === 'running' && msg.reasoning_content && !msg.reasoning_end && (
                     <div className="message-reasoning">
-                      <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id)}>
+                      <div className="reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id, true)}>
+                        {collapsedReasoning.has(msg.step_id || msg.id) ? (
+                          <RightOutlined />
+                        ) : (
+                          <DownOutlined />
+                        )}
                         <LoadingOutlined spin />
                         <BulbOutlined />
                         <span>正在思考中</span>
@@ -3677,7 +3841,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                           </span>
                         )}
                       </div>
-                      {expandedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
+                      {!collapsedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
                         <div className="reasoning-text">
                           <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
                             <ChatMarkdown
@@ -4194,6 +4358,9 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     </div>
   );
 
+  // 是否存在未回复的澄清问题（用于禁用输入区）
+  const clarifyPending = hasAnyPendingClarify();
+
   return (
     <div className={`chat-conversation ${theme === 'dark' ? 'dark' : 'light'}`}>
       <div className="chat-header">
@@ -4369,9 +4536,10 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               onPaste={handlePaste}
               onDrop={handleDrop}
               onDragOver={handleDragOver}
-              placeholder="输入消息... (Ctrl/Shift+Enter换行，Enter发送)"
+              placeholder={clarifyPending ? '请先回复上方的澄清问题...' : '输入消息... (Ctrl/Shift+Enter换行，Enter发送)'}
               autoSize={{ minRows: 5, maxRows: 12 }}
               className={`chat-input ${theme === 'dark' ? 'dark' : 'light'}`}
+              disabled={clarifyPending}
             />
           </div>
           <div className="chat-input-inner-footer">
@@ -4465,6 +4633,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             type="primary"
             icon={loading ? <StopOutlined /> : <SendOutlined />}
             onClick={loading ? handleStop : handleSend}
+            disabled={clarifyPending && !loading}
             className="input-send-button"
           />
         </div>

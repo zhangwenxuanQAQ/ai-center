@@ -365,16 +365,33 @@ class ChatMessageService:
         Returns:
             ChatMessageListResponse: 消息列表响应
         """
-        # 按创建时间升序排序，同一时间内用户消息排在助手消息前面
+        # 按创建时间升序排序，同一时间内按 user → assistant → tool 排序（tool 紧跟 assistant）
         messages = ChatMessage.select().where(
-            (ChatMessage.chat_id == chat_id) & 
+            (ChatMessage.chat_id == chat_id) &
             (ChatMessage.deleted == False)
-        ).order_by(ChatMessage.created_at.asc(), ChatMessage.role.desc())
+        ).order_by(ChatMessage.created_at.asc(), ChatMessage.role.asc())
         
         total = messages.count()
         items = [ChatMessageDTO.model_validate(msg) for msg in messages]
         
         return ChatMessageListResponse(items=items, total=total)
+
+    @staticmethod
+    def get_latest_message(chat_id: str):
+        """
+        获取对话的最新一条消息
+
+        Args:
+            chat_id: 对话ID
+
+        Returns:
+            ChatMessage: 最新消息模型实例，无消息时返回 None
+        """
+        messages = ChatMessage.select().where(
+            (ChatMessage.chat_id == chat_id) &
+            (ChatMessage.deleted == False)
+        ).order_by(ChatMessage.created_at.desc(), ChatMessage.role.desc()).limit(1)
+        return messages.first() if messages else None
     
     @staticmethod
     @handle_transaction
@@ -467,7 +484,8 @@ class ChatMessageService:
         chatbot_id: Optional[str] = None,
         config: Optional[str] = None,
         message_id: Optional[str] = None,
-        extra_content: Optional[Any] = None
+        extra_content: Optional[Any] = None,
+        is_clarify: bool = False
     ) -> ChatMessage:
         """
         创建用户消息
@@ -480,12 +498,13 @@ class ChatMessageService:
             config: 配置JSON
             message_id: 消息ID，用于标识重新回答或编辑问题
             extra_content: 额外内容，如上传的文件信息
+            is_clarify: 是否为澄清问题的回复，为True时跳过旧消息清理
 
         Returns:
             ChatMessage: 用户消息对象
         """
-        # 如果提供了message_id，使用message_id进行清理
-        if message_id:
+        # 如果提供了message_id且不是澄清回复，使用message_id进行清理
+        if message_id and not is_clarify:
             # 先尝试通过message_id清理
             ChatMessageService.cleanup_old_messages_by_message_id(chat_id, message_id)
         else:
@@ -510,7 +529,7 @@ class ChatMessageService:
                 config_str = str(config)
 
         user_message = ChatMessage(
-            message_id=uuid.uuid4().hex,
+            message_id=message_id or uuid.uuid4().hex,
             chat_id=chat_id,
             config=config_str,
             role='user',
@@ -828,10 +847,12 @@ class ChatMessageService:
             extra_content_dict['step'] = step
         if step_id is not None:
             extra_content_dict['step_id'] = step_id
-        extra_content_dict['step_status'] = 'running'
-        
+        # 如果extra_content中没有step_status，默认设置为done
+        if 'step_status' not in extra_content_dict:
+            extra_content_dict['step_status'] = 'done'
+
         extra_content_str = json.dumps(extra_content_dict, ensure_ascii=False) if extra_content_dict else None
-        
+
         try:
             import logging
             import json
@@ -1031,7 +1052,7 @@ class ChatMessageService:
             (ChatMessage.chat_id == chat_id) &
             (ChatMessage.deleted == False) &
             (ChatMessage.role << ['assistant', 'tool'])
-        ).order_by(ChatMessage.created_at.desc())
+        ).order_by(ChatMessage.created_at.desc(), ChatMessage.role.desc())
         
         updated_count = 0
         for msg in messages:
@@ -1045,6 +1066,17 @@ class ChatMessageService:
             step_status = extra_data.get('step_status', '')
             
             if step_status in ('running', 'start') or (not step_status and msg.content):
+                # clarify 工具消息停止时设为 done，不追加"已停止"
+                tool_call = extra_data.get('tool_call', {})
+                is_clarify = isinstance(tool_call, dict) and tool_call.get('name') == 'clarify'
+                if is_clarify:
+                    extra_data['step_status'] = 'done'
+                    msg.extra_content = json.dumps(extra_data, ensure_ascii=False)
+                    msg.updated_at = datetime.now().astimezone()
+                    msg.save()
+                    updated_count += 1
+                    continue
+
                 extra_data['step_status'] = 'stop'
                 msg.extra_content = json.dumps(extra_data, ensure_ascii=False)
                 

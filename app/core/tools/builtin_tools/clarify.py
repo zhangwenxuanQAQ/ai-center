@@ -52,7 +52,7 @@ class clarify(BaseTool):
     name = "clarify"
     title = "澄清问题"
     description = (
-        f"当你需要澄清、反馈或决策时，向用户提出问题。支持三种模式：\n\n"
+        f"当你需要澄清、反馈或决策时，向用户提出问题，获取用户的选择或回答时优先使用该工具。支持三种模式：\n\n"
         f"1. **单选题** — 提供最多 {MAX_CHOICES} 个选项，用户选择一个或通过第 {MAX_CHOICES + 1} 个'其他'选项自行输入。\n"
         "2. **多选题** — 设置 multi_select=true，用户可多选，user_response 将返回选中的选项列表。\n"
         "3. **开放式问题** — 不提供 choices，用户自由输入文本回答。\n\n"

@@ -8,7 +8,7 @@ import base64
 import asyncio
 from fastapi import APIRouter, Request, Query, Depends
 from fastapi.responses import StreamingResponse, Response
-from typing import Optional
+from typing import Optional, Any
 from pydantic import BaseModel, Field
 
 from app.services.chat.dto import (
@@ -17,7 +17,7 @@ from app.services.chat.dto import (
     ChatMessageExtraContentUpdate
 )
 from app.services.chat.service import ChatService, ChatMessageService
-from app.core.chat.chat_service import ChatCoreService, ChatStopManager
+from app.core.chat.chat_service import ChatCoreService, ChatStopManager, ChatInputManager
 from app.database.models import Chat
 from app.utils.response import ResponseUtil, ApiResponse
 from app.core.exceptions import ResourceNotFoundError
@@ -314,8 +314,27 @@ async def chat_completions(
     
     if not chat_request.query:
         return ResponseUtil.error(message="query参数不能为空")
-    
+
     try:
+        # 检查是否为澄清问题的回复：最新消息是 clarify 工具结果，且入参 message_id 与之匹配时，才将用户输入传递给等待中的对话循环
+        if chat_request.chat_id:
+            latest_msg = ChatMessageService.get_latest_message(chat_request.chat_id)
+            if latest_msg and latest_msg.role == 'tool' and latest_msg.extra_content:
+                try:
+                    ec = json.loads(latest_msg.extra_content) if isinstance(latest_msg.extra_content, str) else latest_msg.extra_content
+                    tool_call = ec.get('tool_call', {}) if isinstance(ec, dict) else {}
+                    if tool_call.get('name') == 'clarify' and chat_request.message_id and chat_request.message_id == latest_msg.message_id:
+                        # 提取用户回复文本，传递给等待中的对话循环（Service 层负责保存用户消息）
+                        user_response = ''
+                        for item in chat_request.query:
+                            if item.type == 'text' and item.content:
+                                user_response = item.content
+                                break
+                        ChatInputManager().set_input(latest_msg.message_id, user_response)
+                        return ResponseUtil.success(message="已提交回复")
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
         # 更新chat表数据，将对话的model_id, chatbot_id, config, system_prompt更新成最新的
         if chat_request.chat_id:
             update_fields = {}

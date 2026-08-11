@@ -79,7 +79,8 @@ class ToolCallInfo:
     result: Optional[Any] = None
     message: Optional[str] = None
     reasoning_content: Optional[str] = None
-    
+    parameters: Optional[Dict[str, Any]] = None
+
     def to_dict(self) -> Dict[str, Any]:
         """
         转换为字典格式
@@ -100,6 +101,8 @@ class ToolCallInfo:
             data['message'] = self.message
         if self.reasoning_content is not None:
             data['reasoning_content'] = self.reasoning_content
+        if self.parameters is not None:
+            data['parameters'] = self.parameters
         return data
 
 

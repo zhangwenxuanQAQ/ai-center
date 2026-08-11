@@ -18,6 +18,7 @@
 import json
 import uuid
 import time
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -27,7 +28,7 @@ from app.database.models import (
     ChatbotIntegration, ChatbotChat, ChatbotChatMessage, Chatbot, ChatbotModel
 )
 from app.services.chat.dto import QueryItem
-from app.core.chat.chat_service import ChatCoreService, ChatStopManager
+from app.core.chat.chat_service import ChatCoreService, ChatStopManager, ChatInputManager
 from app.core.chat.dto import (
     ChatStreamResponse, ToolCallInfo, MessageStatus, MessageStep
 )
@@ -820,6 +821,86 @@ class IntegrationChatCoreService:
         return tool_message
 
     @staticmethod
+    async def _wait_for_clarify_input(
+        chat_id: str,
+        tool_call_id: str,
+        message_id: str,
+        chatbot_id: str,
+        model_id: Optional[str] = None,
+        temporary: bool = False,
+        integration_id: Optional[Any] = None,
+        scope_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        等待用户通过 API 提交澄清问题的回复
+
+        暂停对话循环，轮询 ChatInputManager 获取用户输入，
+        收到输入后保存用户消息记录并返回工具结果消息。
+        支持超时（1小时）和手动停止。
+
+        Args:
+            chat_id: 对话ID
+            tool_call_id: 工具调用ID
+            message_id: 助手消息ID，作为 ChatInputManager 的 key
+            chatbot_id: 机器人ID
+            model_id: 模型ID
+            temporary: 是否临时会话
+            integration_id: 集成配置ID（临时会话保存消息时需要）
+            scope_id: 临时会话数据隔离scope
+
+        Returns:
+            Dict: 工具结果消息（role='tool'），包含 user_response 或 [用户未响应]
+        """
+        ChatInputManager().clear_input(message_id)
+        wait_start = time.time()
+        CLARIFY_TIMEOUT = 86400  # 24 小时超时
+        user_input = None
+        while time.time() - wait_start < CLARIFY_TIMEOUT:
+            if ChatStopManager().is_stop_requested(chat_id):
+                break
+            user_input = ChatInputManager().get_input(message_id)
+            if user_input is not None:
+                break
+            await asyncio.sleep(0.5)
+        ChatInputManager().clear_input(message_id)
+
+        # 无论有没有用户回答都保存用户消息记录
+        save_content = user_input if user_input is not None else '[用户未响应]'
+        if temporary and integration_id is not None:
+            user_msg_data = {
+                "id": message_id,
+                "message_id": message_id,
+                "chat_id": chat_id,
+                "chatbot_id": chatbot_id,
+                "role": "user",
+                "content": save_content,
+                "extra_content": None,
+                "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            TempChatStore.add_message(integration_id, chat_id, user_msg_data, scope_id=scope_id)
+        else:
+            IntegrationChatCoreService._save_user_message(
+                chatbot_id=chatbot_id,
+                chat_id=chat_id,
+                message_id=message_id,
+                content=save_content,
+                model_id=model_id,
+            )
+        if user_input is not None:
+            return {
+                'role': 'tool',
+                'tool_call_id': tool_call_id,
+                'content': json.dumps({"user_response": user_input}, ensure_ascii=False)
+            }
+        else:
+            return {
+                'role': 'tool',
+                'tool_call_id': tool_call_id,
+                'content': json.dumps({"user_response": "[用户未响应]"}, ensure_ascii=False)
+            }
+
+    @staticmethod
     def _stop_chat_messages(chat_id: str) -> int:
         """
         停止对话中正在运行的消息
@@ -836,7 +917,7 @@ class IntegrationChatCoreService:
         messages = ChatbotChatMessage.select().where(
             (ChatbotChatMessage.chat_id == chat_id) &
             (ChatbotChatMessage.role << ['assistant', 'tool'])
-        ).order_by(ChatbotChatMessage.created_at.desc())
+        ).order_by(ChatbotChatMessage.created_at.desc(), ChatbotChatMessage.role.desc())
 
         updated_count = 0
         for msg in messages:
@@ -849,6 +930,16 @@ class IntegrationChatCoreService:
 
             step_status = extra_data.get('step_status', '')
             if step_status in ('running', 'start') or (not step_status and msg.content):
+                # clarify 工具消息停止时设为 done，不追加"已停止"
+                tool_call = extra_data.get('tool_call', {})
+                is_clarify = isinstance(tool_call, dict) and tool_call.get('name') == 'clarify'
+                if is_clarify:
+                    extra_data['step_status'] = 'done'
+                    msg.extra_content = json.dumps(extra_data, ensure_ascii=False)
+                    msg.save()
+                    updated_count += 1
+                    continue
+
                 extra_data['step_status'] = 'stop'
                 msg.extra_content = json.dumps(extra_data, ensure_ascii=False)
 
@@ -914,7 +1005,7 @@ class IntegrationChatCoreService:
         """
         messages = ChatbotChatMessage.select().where(
             ChatbotChatMessage.chat_id == chat_id
-        ).order_by(ChatbotChatMessage.created_at.asc())
+        ).order_by(ChatbotChatMessage.created_at.asc(), ChatbotChatMessage.role.asc())
 
         history = []
         for msg in messages:
@@ -952,7 +1043,7 @@ class IntegrationChatCoreService:
         try:
             messages = list(ChatbotChatMessage.select().where(
                 ChatbotChatMessage.chat_id == chat_id
-            ).order_by(ChatbotChatMessage.created_at))
+            ).order_by(ChatbotChatMessage.created_at.asc(), ChatbotChatMessage.role.asc()))
 
             messages_summary = []
             for msg in messages:
@@ -996,6 +1087,8 @@ class IntegrationChatCoreService:
         avatar = ctx.avatar
         model_id = ctx.model_id
         chatbot_id = ctx.chatbot_id
+        # 保存消息记录时，如果使用了 chatbot_id 则 model_id 置空
+        msg_model_id = model_id if not chatbot_id else None
         model_params = ctx.model_params
         temporary = ctx.temporary
         planning_messages_history = ctx.history_messages.copy()
@@ -1015,18 +1108,6 @@ class IntegrationChatCoreService:
                 step_id=model_answer_step_id,
                 avatar=avatar
             ).to_dict()
-
-            # 创建助手消息记录
-            if not temporary:
-                IntegrationChatCoreService._create_assistant_message(
-                    chatbot_id=chatbot_id,
-                    chat_id=chat_id,
-                    message_id=assistant_message_id,
-                    content='',
-                    model_id=model_id,
-                    step=MessageStep.MODEL_ANSWER,
-                    step_id=model_answer_step_id
-                )
 
             full_response_chunk = ''
             reasoning_content_chunk = ''
@@ -1056,7 +1137,7 @@ class IntegrationChatCoreService:
                             message_id=assistant_message_id,
                             step_id=model_answer_step_id,
                             content=f"抱歉，发送消息时出现错误：{chunk['error']}",
-                            model_id=model_id,
+                            model_id=msg_model_id,
                             step=MessageStep.MODEL_ANSWER
                         )
                     yield ChatStreamResponse.error_response(
@@ -1124,7 +1205,7 @@ class IntegrationChatCoreService:
                     message_id=assistant_message_id,
                     step_id=model_answer_step_id,
                     content=full_response_chunk,
-                    model_id=model_id,
+                    model_id=msg_model_id,
                     reasoning_content=reasoning_content_chunk if reasoning_content_chunk else None,
                     reasoning_time=reasoning_time,
                     step=MessageStep.MODEL_ANSWER
@@ -1187,7 +1268,7 @@ class IntegrationChatCoreService:
                                 chat_id=chat_id,
                                 message_id=assistant_message_id,
                                 content='',
-                                model_id=model_id,
+                                model_id=msg_model_id,
                                 step=MessageStep.TOOL_CALL,
                                 step_id=tool_step_id,
                                 reasoning_content=tool_reasoning_content,
@@ -1251,7 +1332,7 @@ class IntegrationChatCoreService:
                                 message_id=assistant_message_id,
                                 step_id=tool_step_id,
                                 content=tool_message_content,
-                                model_id=model_id,
+                                model_id=msg_model_id,
                                 step=MessageStep.TOOL_CALL,
                                 reasoning_content=tool_reasoning_content,
                                 extra_content=json.dumps({"tool_call": tool_call_info.to_dict()}, ensure_ascii=False)
@@ -1286,16 +1367,44 @@ class IntegrationChatCoreService:
                                 message_id=assistant_message_id,
                                 step_id=tool_step_id,
                                 content=tool_message_content,
-                                model_id=model_id,
+                                model_id=msg_model_id,
                                 step=MessageStep.TOOL_CALL,
                                 reasoning_content=tool_reasoning_content,
                                 extra_content=json.dumps({"tool_call": tool_call_info.to_dict()}, ensure_ascii=False)
                             )
-                        messages.append({
-                            'role': 'tool',
-                            'tool_call_id': tool_call_id,
-                            'content': tool_message_content
-                        })
+
+                        # clarify 工具：暂停对话循环，等待用户通过 API 提交输入
+                        if isinstance(result_data, dict) and result_data.get('type') == 'clarify':
+                            tool_msg = await IntegrationChatCoreService._wait_for_clarify_input(
+                                chat_id=chat_id,
+                                tool_call_id=tool_call_id,
+                                message_id=assistant_message_id,
+                                chatbot_id=chatbot_id,
+                                model_id=msg_model_id,
+                                temporary=temporary,
+                                integration_id=ctx.integration_id,
+                                scope_id=ctx.scope_id
+                            )
+                            # 用户回答后，更新工具消息 step_status 为 done
+                            if not temporary:
+                                IntegrationChatCoreService._upsert_tool_message(
+                                    chatbot_id=chatbot_id,
+                                    chat_id=chat_id,
+                                    message_id=assistant_message_id,
+                                    step_id=tool_step_id,
+                                    content=tool_message_content,
+                                    model_id=msg_model_id,
+                                    step=MessageStep.TOOL_CALL,
+                                    reasoning_content=tool_reasoning_content,
+                                    extra_content=json.dumps({"tool_call": tool_call_info.to_dict(), "step_status": "done"}, ensure_ascii=False)
+                                )
+                            messages.append(tool_msg)
+                        else:
+                            messages.append({
+                                'role': 'tool',
+                                'tool_call_id': tool_call_id,
+                                'content': tool_message_content
+                            })
 
                 # 工具调用完成，继续下一轮让模型基于工具结果回答
                 continue
@@ -1536,7 +1645,7 @@ class IntegrationChatCoreService:
         # 查询消息列表
         messages = ChatbotChatMessage.select().where(
             ChatbotChatMessage.chat_id == chat_id
-        ).order_by(ChatbotChatMessage.created_at)
+        ).order_by(ChatbotChatMessage.created_at.asc(), ChatbotChatMessage.role.asc())
 
         items = []
         for msg in messages:

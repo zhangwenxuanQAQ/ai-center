@@ -1592,6 +1592,16 @@
   background: none;
 }
 
+.int-tool-call-card.int-tool-call-clarify {
+  border-color: rgba(102, 126, 234, 0.3);
+  background: rgba(102, 126, 234, 0.05);
+}
+
+.int-tool-call-clarify-content {
+  padding: 12px;
+  border-top: none !important;
+}
+
 .int-tool-call-header {
   display: flex;
   align-items: center;

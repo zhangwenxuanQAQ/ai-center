@@ -1471,6 +1471,16 @@
   &.tool-call-error {
     border-color: rgba(255, 77, 79, 0.25);
   }
+
+  &.tool-call-clarify {
+    border-color: rgba(102, 126, 234, 0.3);
+    background: rgba(102, 126, 234, 0.05);
+  }
+}
+
+.tool-call-clarify-content {
+  padding: 12px;
+  border-top: none !important;
 }
 
 .tool-call-header {
@@ -2363,4 +2373,171 @@
   opacity: 0.7;
   line-height: 1.4;
   word-break: break-word;
+}
+
+// ===================== ClarifyCard 澄清工具卡片 =====================
+.clarify-card {
+  border-radius: 8px;
+  padding: 12px 16px;
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  background: rgba(102, 126, 234, 0.03);
+
+  &.clarify-card-dark {
+    background: rgba(102, 126, 234, 0.08);
+    border-color: rgba(102, 126, 234, 0.3);
+  }
+
+  &.clarify-card-light {
+    background: rgba(102, 126, 234, 0.04);
+  }
+}
+
+.clarify-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 12px;
+
+  .clarify-card-icon {
+    color: #667eea;
+    font-size: 16px;
+    margin-top: 2px;
+    flex-shrink: 0;
+  }
+
+  .clarify-card-question {
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.5;
+    word-break: break-word;
+
+    .dark & {
+      color: rgba(255, 255, 255, 0.95);
+    }
+    .light & {
+      color: rgba(0, 0, 0, 0.85);
+    }
+  }
+}
+
+.clarify-card-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.clarify-card-choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+  user-select: none;
+
+  .dark & {
+    background: rgba(255, 255, 255, 0.04);
+    &:hover {
+      background: rgba(255, 255, 255, 0.08);
+    }
+  }
+  .light & {
+    background: rgba(0, 0, 0, 0.02);
+    &:hover {
+      background: rgba(0, 0, 0, 0.05);
+    }
+  }
+
+  &.clarify-card-choice-selected {
+    border-color: #667eea;
+    background: rgba(102, 126, 234, 0.12);
+  }
+
+  &.clarify-card-choice-disabled {
+    cursor: default;
+    opacity: 0.6;
+    &:hover {
+      background: rgba(102, 126, 234, 0.12);
+    }
+  }
+}
+
+.clarify-card-choice-marker {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(128, 128, 128, 0.4);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+
+  &.radio {
+    border-radius: 50%;
+  }
+
+  &.checkbox {
+    border-radius: 3px;
+  }
+
+  &.checked {
+    border-color: #667eea;
+    background: #667eea;
+
+    &::after {
+      content: '';
+      width: 4px;
+      height: 8px;
+      border: solid white;
+      border-width: 0 2px 2px 0;
+      transform: rotate(45deg);
+      margin-top: -2px;
+    }
+  }
+}
+
+.clarify-card-choice-text {
+  flex: 1;
+  font-size: 13px;
+  line-height: 1.4;
+  word-break: break-word;
+
+  .dark & {
+    color: rgba(255, 255, 255, 0.85);
+  }
+  .light & {
+    color: rgba(0, 0, 0, 0.75);
+  }
+}
+
+.clarify-card-choice-check {
+  color: #667eea;
+  font-size: 12px;
+}
+
+.clarify-card-input-area {
+  margin-bottom: 12px;
+}
+
+.clarify-card-submitted {
+  display: flex;
+  align-items: center;
+  padding: 8px 0;
+  font-size: 13px;
+
+  .dark & {
+    color: rgba(255, 255, 255, 0.65);
+  }
+  .light & {
+    color: rgba(0, 0, 0, 0.55);
+  }
+}
+
+.clarify-card-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
 }

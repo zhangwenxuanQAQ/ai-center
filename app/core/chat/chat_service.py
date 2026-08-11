@@ -15,6 +15,7 @@
 import json
 import uuid
 import time
+import asyncio
 import threading
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Generator, AsyncGenerator, Tuple, Union
@@ -62,6 +63,72 @@ class ChatStopManager:
         """清除停止标记"""
         with self._flags_lock:
             self._stop_flags.pop(chat_id, None)
+
+
+class ChatInputManager:
+    """
+    聊天用户输入管理器
+
+    用于 clarify 等需要用户交互的工具：工具执行后暂停对话循环，
+    等待前端通过 API 提交用户输入，再恢复对话。
+
+    使用 message_id 作为 key，确保同一对话中多次澄清不会互相干扰。
+    使用 Redis 存储用户输入，支持多进程场景。
+    回退到内存字典（Redis 不可用时）。
+    """
+    _instance = None
+    _lock = threading.Lock()
+
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._inputs = {}
+                    cls._instance._inputs_lock = threading.Lock()
+        return cls._instance
+
+    @staticmethod
+    def _redis_key(message_id: str) -> str:
+        return f"chat:input:{message_id}"
+
+    def set_input(self, message_id: str, input_data: Any):
+        """设置用户输入"""
+        try:
+            from app.database.redis_utils import redis_utils
+            if redis_utils.is_available:
+                redis_utils.set_obj(self._redis_key(message_id), input_data, exp=3600)
+                return
+        except Exception:
+            pass
+        # 回退到内存
+        with self._inputs_lock:
+            self._inputs[message_id] = input_data
+
+    def get_input(self, message_id: str) -> Optional[Any]:
+        """获取用户输入（不删除）"""
+        try:
+            from app.database.redis_utils import redis_utils
+            if redis_utils.is_available:
+                return redis_utils.get_obj(self._redis_key(message_id))
+        except Exception:
+            pass
+        # 回退到内存
+        with self._inputs_lock:
+            return self._inputs.get(message_id)
+
+    def clear_input(self, message_id: str):
+        """清除用户输入"""
+        try:
+            from app.database.redis_utils import redis_utils
+            if redis_utils.is_available:
+                redis_utils.delete(self._redis_key(message_id))
+                return
+        except Exception:
+            pass
+        # 回退到内存
+        with self._inputs_lock:
+            self._inputs.pop(message_id, None)
 
 
 @dataclass
@@ -732,6 +799,8 @@ class ChatCoreService:
         avatar = ctx.avatar
         model_id = ctx.model_id
         chatbot_id = ctx.chatbot_id
+        # 保存消息记录时，如果使用了 chatbot_id 则 model_id 置空
+        msg_model_id = model_id if not chatbot_id else None
         config = ctx.config
         model_params = ctx.model_params
         planning_messages_history = ctx.history_messages.copy()
@@ -750,19 +819,6 @@ class ChatCoreService:
                 step_id=model_answer_step_id,
                 avatar=avatar
             ).to_dict()
-            
-            ChatMessageService.create_assistant_message(
-                chat_id=chat_id,
-                assistant_content='',
-                model_id=model_id,
-                chatbot_id=chatbot_id,
-                config=config,
-                reasoning_content=None,
-                step=MessageStep.MODEL_ANSWER,
-                step_id=model_answer_step_id,
-                message_id=assistant_message_id,
-                avatar=avatar
-            )
             
             full_response_chunk = ''
             reasoning_content_chunk = ''
@@ -788,7 +844,7 @@ class ChatCoreService:
                         chat_id=chat_id,
                         assistant_content=f"抱歉，发送消息时出现错误：{chunk['error']}",
                         step_id=model_answer_step_id,
-                        model_id=model_id,
+                        model_id=msg_model_id,
                         chatbot_id=chatbot_id,
                         config=config,
                         step=MessageStep.MODEL_ANSWER,
@@ -856,13 +912,14 @@ class ChatCoreService:
                     chat_id=chat_id,
                     assistant_content=full_response_chunk,
                     step_id=model_answer_step_id,
-                    model_id=model_id,
+                    model_id=msg_model_id,
                     chatbot_id=chatbot_id,
                     config=config,
                     reasoning_content=reasoning_content_chunk if reasoning_content_chunk else None,
                     reasoning_time=reasoning_time,
                     avatar=avatar,
-                    step=MessageStep.MODEL_ANSWER
+                    step=MessageStep.MODEL_ANSWER,
+                    message_id=assistant_message_id
                 )
         
             if tool_calls_list:
@@ -892,6 +949,7 @@ class ChatCoreService:
                     tool_status = tool_result.get('status', '')
                     elapsed_ms = tool_result.get('elapsed_ms', 0)
                     reasoning_content = tool_result.get('reasoning_content', '')
+                    tool_parameters = tool_result.get('parameters')
                     
                     tool_step_id = f"tool_{tool_call_id}"
 
@@ -902,7 +960,8 @@ class ChatCoreService:
                             task_name=task_name,
                             status='start',
                             elapsed_ms=0,
-                            reasoning_content=reasoning_content
+                            reasoning_content=reasoning_content,
+                            parameters=tool_parameters
                         )
                         yield ChatStreamResponse.tool_call_response(
                             tool_call=tool_call_info,
@@ -918,7 +977,7 @@ class ChatCoreService:
                         ChatMessageService.create_tool_message(
                             chat_id=chat_id,
                             tool_content='',
-                            model_id=model_id,
+                            model_id=msg_model_id,
                             chatbot_id=chatbot_id,
                             config=config,
                             step=MessageStep.TOOL_CALL,
@@ -937,7 +996,8 @@ class ChatCoreService:
                             task_name=task_name,
                             status='running',
                             elapsed_ms=elapsed_ms,
-                            reasoning_content=reasoning_content
+                            reasoning_content=reasoning_content,
+                            parameters=tool_parameters
                         )
                         yield ChatStreamResponse.tool_call_response(
                             tool_call=tool_call_info,
@@ -961,7 +1021,8 @@ class ChatCoreService:
                             status='error',
                             message=tool_message_content,
                             elapsed_ms=elapsed_ms,
-                            reasoning_content=reasoning_content
+                            reasoning_content=reasoning_content,
+                            parameters=tool_parameters
                         )
                         yield ChatStreamResponse.tool_call_response(
                             tool_call=tool_call_info,
@@ -978,12 +1039,12 @@ class ChatCoreService:
                             'tool_call_id': tool_call_id,
                             'content': tool_message_content
                         })
-                        
+
                         ChatMessageService.upsert_tool_message(
                             chat_id=chat_id,
                             tool_content=tool_message_content,
                             step_id=tool_step_id,
-                            model_id=model_id,
+                            model_id=msg_model_id,
                             chatbot_id=chatbot_id,
                             config=config,
                             step=MessageStep.TOOL_CALL,
@@ -1002,7 +1063,8 @@ class ChatCoreService:
                             status='success',
                             result=result_data,
                             elapsed_ms=elapsed_ms,
-                            reasoning_content=reasoning_content
+                            reasoning_content=reasoning_content,
+                            parameters=tool_parameters
                         )
                         yield ChatStreamResponse.tool_call_response(
                             tool_call=tool_call_info,
@@ -1015,24 +1077,55 @@ class ChatCoreService:
                             avatar=avatar
                         ).to_dict()
                         
+                        # clarify 工具的 step_status 设为 running，等待用户回答后再更新为 done
+                        is_clarify = isinstance(result_data, dict) and result_data.get('type') == 'clarify'
+                        tool_extra_content = {"tool_call": tool_call_info.to_dict()}
+                        if is_clarify:
+                            tool_extra_content['step_status'] = 'running'
                         ChatMessageService.upsert_tool_message(
                             chat_id=chat_id,
                             tool_content=tool_message_content,
                             step_id=tool_step_id,
-                            model_id=model_id,
+                            model_id=msg_model_id,
                             chatbot_id=chatbot_id,
                             config=config,
                             step=MessageStep.TOOL_CALL,
                             message_id=assistant_message_id,
                             reasoning_content=reasoning_content,
-                            extra_content=json.dumps({"tool_call": tool_call_info.to_dict()}, ensure_ascii=False),
+                            extra_content=json.dumps(tool_extra_content, ensure_ascii=False),
                             avatar=avatar
                         )
-                        messages.append({
-                            'role': 'tool',
-                            'tool_call_id': tool_call_id,
-                            'content': tool_message_content
-                        })
+
+                        # clarify 工具：暂停对话循环，等待用户通过 API 提交输入
+                        if is_clarify:
+                            tool_msg = await ChatCoreService._wait_for_clarify_input(
+                                chat_id=chat_id,
+                                tool_call_id=tool_call_id,
+                                message_id=assistant_message_id,
+                                chatbot_id=chatbot_id,
+                                model_id=msg_model_id
+                            )
+                            # 用户回答后，更新工具消息 step_status 为 done
+                            ChatMessageService.upsert_tool_message(
+                                chat_id=chat_id,
+                                tool_content=tool_message_content,
+                                step_id=tool_step_id,
+                                model_id=msg_model_id,
+                                chatbot_id=chatbot_id,
+                                config=config,
+                                step=MessageStep.TOOL_CALL,
+                                message_id=assistant_message_id,
+                                reasoning_content=reasoning_content,
+                                extra_content=json.dumps({"tool_call": tool_call_info.to_dict(), "step_status": "done"}, ensure_ascii=False),
+                                avatar=avatar
+                            )
+                            messages.append(tool_msg)
+                        else:
+                            messages.append({
+                                'role': 'tool',
+                                'tool_call_id': tool_call_id,
+                                'content': tool_message_content
+                            })
         
                 continue
             else:
@@ -1045,6 +1138,68 @@ class ChatCoreService:
                 break
         
         yield (None, messages, planning_messages_history)
+
+    @staticmethod
+    async def _wait_for_clarify_input(
+        chat_id: str,
+        tool_call_id: str,
+        message_id: str,
+        chatbot_id: Optional[str] = None,
+        model_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        等待用户通过 API 提交澄清问题的回复
+
+        暂停对话循环，轮询 ChatInputManager 获取用户输入，
+        收到输入后保存用户消息记录并返回工具结果消息。
+        支持超时（1小时）和手动停止。
+
+        Args:
+            chat_id: 对话ID
+            tool_call_id: 工具调用ID
+            message_id: 助手消息ID，作为 ChatInputManager 的 key
+            chatbot_id: 机器人ID
+            model_id: 模型ID
+
+        Returns:
+            Dict: 工具结果消息（role='tool'），包含 user_response 或 [用户未响应]
+        """
+        ChatInputManager().clear_input(message_id)
+        wait_start = time.time()
+        CLARIFY_TIMEOUT = 86400  # 24 小时超时
+        user_input = None
+        while time.time() - wait_start < CLARIFY_TIMEOUT:
+            if ChatStopManager().is_stop_requested(chat_id):
+                break
+            user_input = ChatInputManager().get_input(message_id)
+            if user_input is not None:
+                break
+            await asyncio.sleep(0.5)
+        ChatInputManager().clear_input(message_id)
+
+        # 无论有没有用户回答都保存用户消息记录
+        save_content = user_input if user_input is not None else '[用户未响应]'
+        save_model_id = model_id if not chatbot_id else None
+        ChatMessageService.create_user_message(
+            chat_id=chat_id,
+            user_content=save_content,
+            model_id=save_model_id,
+            chatbot_id=chatbot_id,
+            message_id=message_id,
+            is_clarify=True
+        )
+        if user_input is not None:
+            return {
+                'role': 'tool',
+                'tool_call_id': tool_call_id,
+                'content': json.dumps({"user_response": user_input}, ensure_ascii=False)
+            }
+        else:
+            return {
+                'role': 'tool',
+                'tool_call_id': tool_call_id,
+                'content': json.dumps({"user_response": "[用户未响应]"}, ensure_ascii=False)
+            }
 
     @staticmethod
     def _postprocess(ctx: ChatContext) -> None:
@@ -1231,8 +1386,8 @@ class ChatCoreService:
                 return {'error': str(e), 'chat_id': chat_id}
         
         # 注入内置工具（网络搜索和PPT生成等）
-        from app.core.tools.tool_convert import inject_builtin_tools
-        tools, tool_map = inject_builtin_tools(
+        from app.core.tools.tool_convert import ToolConvert
+        tools, tool_map = ToolConvert.inject_builtin_tools(
             tools=tools,
             tool_map=tool_map,
             web_search_enabled=web_search_enabled

@@ -5,6 +5,7 @@ import MDEditor from '@uiw/react-md-editor';
 import ChatMarkdown from '../../components/ChatMarkdown';
 import WebSearchResult from '../../components/WebSearchResult';
 import PPTDownloadCard from '../../components/PPTDownloadCard';
+import IntegrationClarifyCard from './IntegrationClarifyCard';
 import ChatScrollNavigator, { UserMessageAnchor } from '../../components/ChatScrollNavigator';
 import { integrationChatService, IntegrationMessage, IntegrationQueryItem } from '../services/integrationChat';
 import { usePanelDrag } from './PanelDragContext';
@@ -102,8 +103,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   const [editingContent, setEditingContent] = useState('');
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [expandedReasoning, setExpandedReasoning] = useState<Set<string>>(new Set());
+  const [collapsedReasoning, setCollapsedReasoning] = useState<Set<string>>(new Set());
   const [expandedToolCalls, setExpandedToolCalls] = useState<Set<string>>(new Set());
   const [expandedToolCallResults, setExpandedToolCallResults] = useState<Set<string>>(new Set());
+  // 记录已回复的澄清问题 tool_call_id，避免用户在等待澄清回复时发送新消息
+  const [respondedClarifyIds, setRespondedClarifyIds] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -319,33 +323,70 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     }
   }, [messages, isAtBottom, scrollToBottom]);
 
+  /**
+   * 将后端 IntegrationMessage 映射为前端 DisplayMessage
+   * - 解析 extra_content（字符串 -> 对象）
+   * - 过滤 clarify 工具的独立 tool 消息（避免与 assistant 消息中的 tool_calls 重复渲染）
+   * - 从 extra_content.tool_call 恢复 tool_calls 数组
+   * 返回 null 表示该消息应被过滤掉
+   */
+  const mapIntegrationMessage = (m: IntegrationMessage): DisplayMessage | null => {
+    let parsedExtraContent = m.extra_content;
+    if (typeof m.extra_content === 'string' && m.extra_content) {
+      try {
+        parsedExtraContent = JSON.parse(m.extra_content);
+      } catch (e) {
+        console.error('Failed to parse extra_content:', e);
+      }
+    }
+    // 过滤掉 clarify 工具的独立 tool 消息，避免与 assistant 消息中的 tool_calls 重复渲染
+    if (m.role === 'tool' && parsedExtraContent?.tool_call?.name === 'clarify') {
+      return null;
+    }
+    // 从 extra_content.tool_call 恢复 tool_calls
+    let tool_calls: ToolCallStep[] | undefined;
+    let step_id: string | undefined;
+    let step: DisplayMessage['step'] | undefined;
+    if (parsedExtraContent && typeof parsedExtraContent === 'object') {
+      if (parsedExtraContent.step_id) step_id = parsedExtraContent.step_id;
+      if (parsedExtraContent.step) step = parsedExtraContent.step;
+      if (parsedExtraContent.step === 'tool_call' && parsedExtraContent.tool_call) {
+        const tc = parsedExtraContent.tool_call;
+        tool_calls = [{
+          tool_call_id: tc.tool_call_id,
+          name: tc.name,
+          task_name: tc.task_name,
+          status: tc.status,
+          result: tc.result,
+          message: tc.message,
+          elapsed_ms: tc.elapsed_ms,
+        }];
+      }
+    }
+    return {
+      id: step_id || m.id,
+      message_id: m.message_id || m.id,
+      role: m.role as 'user' | 'assistant',
+      content: m.content,
+      reasoning_content: m.reasoning_content,
+      reasoning_time: m.reasoning_time,
+      reasoning_end: !!m.reasoning_content,
+      status: 'done',
+      created_at: m.created_at,
+      extra_content: parsedExtraContent,
+      files: parsedExtraContent?.files || undefined,
+      tool_calls,
+      step_id,
+      step,
+    };
+  };
+
   const loadMessages = async (id: string) => {
     try {
       const result = await integrationChatService.getMessages(apiKey, id, previewToken);
-      const displayMsgs: DisplayMessage[] = (result.items || []).map((m: IntegrationMessage) => {
-        // 解析 extra_content（可能是字符串或对象）
-        let parsedExtraContent = m.extra_content;
-        if (typeof m.extra_content === 'string' && m.extra_content) {
-          try {
-            parsedExtraContent = JSON.parse(m.extra_content);
-          } catch (e) {
-            console.error('Failed to parse extra_content:', e);
-          }
-        }
-        return {
-          id: m.id,
-          message_id: m.message_id || m.id,
-          role: m.role as 'user' | 'assistant',
-          content: m.content,
-          reasoning_content: m.reasoning_content,
-          reasoning_time: m.reasoning_time,
-          reasoning_end: !!m.reasoning_content,
-          status: 'done',
-          created_at: m.created_at,
-          extra_content: parsedExtraContent,
-          files: parsedExtraContent?.files || undefined,
-        };
-      });
+      const displayMsgs: DisplayMessage[] = (result.items || [])
+        .map(mapIntegrationMessage)
+        .filter((m): m is DisplayMessage => m !== null);
       setMessages(displayMsgs);
       // 同步到ref，用于后续切换对话时恢复
       streamingMessagesRef.current[id] = displayMsgs;
@@ -377,30 +418,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     try {
       // 加载历史消息
       const result = await integrationChatService.getMessages(apiKey, reconnectChatId, previewToken);
-      const displayMsgs: DisplayMessage[] = (result.items || []).map((m: IntegrationMessage) => {
-        // 解析 extra_content（可能是字符串或对象）
-        let parsedExtraContent = m.extra_content;
-        if (typeof m.extra_content === 'string' && m.extra_content) {
-          try {
-            parsedExtraContent = JSON.parse(m.extra_content);
-          } catch (e) {
-            console.error('Failed to parse extra_content:', e);
-          }
-        }
-        return {
-          id: m.id,
-          message_id: m.message_id || m.id,
-          role: m.role as 'user' | 'assistant',
-          content: m.content,
-          reasoning_content: m.reasoning_content,
-          reasoning_time: m.reasoning_time,
-          reasoning_end: !!m.reasoning_content,
-          status: 'done' as const,
-          created_at: m.created_at,
-          extra_content: parsedExtraContent,
-          files: parsedExtraContent?.files || undefined,
-        };
-      });
+      const displayMsgs: DisplayMessage[] = (result.items || [])
+        .map(mapIntegrationMessage)
+        .filter((m): m is DisplayMessage => m !== null);
       setMessages(displayMsgs);
       streamingMessagesRef.current[reconnectChatId] = displayMsgs;
       setTimeout(() => { scrollToBottomInstant(); }, 100);
@@ -1401,16 +1421,28 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   };
 
   // 切换思考过程展开/收起
-  const toggleReasoning = (messageId: string) => {
-    setExpandedReasoning(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(messageId)) {
-        newSet.delete(messageId);
-      } else {
-        newSet.add(messageId);
-      }
-      return newSet;
-    });
+  const toggleReasoning = (messageId: string, isRunning: boolean = false) => {
+    if (isRunning) {
+      setCollapsedReasoning(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(messageId)) {
+          newSet.delete(messageId);
+        } else {
+          newSet.add(messageId);
+        }
+        return newSet;
+      });
+    } else {
+      setExpandedReasoning(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(messageId)) {
+          newSet.delete(messageId);
+        } else {
+          newSet.add(messageId);
+        }
+        return newSet;
+      });
+    }
   };
 
   // 切换工具调用展开/收起
@@ -1473,6 +1505,63 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     return groups;
   };
 
+  // 检查消息组中是否存在未回复的澄清问题
+  const hasPendingClarify = (groupMessages: DisplayMessage[]): boolean => {
+    for (const msg of groupMessages) {
+      const toolCalls = msg.tool_calls || [];
+      for (const tc of toolCalls) {
+        if (tc.name === 'clarify' && tc.result && !respondedClarifyIds.has(tc.tool_call_id)) {
+          return true;
+        }
+      }
+      const tc = msg.extra_content?.tool_call;
+      if (tc?.name === 'clarify' && tc.result && !respondedClarifyIds.has(tc.tool_call_id)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // 检查全局是否存在任何未回复的澄清问题（用于禁用输入区）
+  const hasAnyPendingClarify = (): boolean => {
+    for (const msg of messages) {
+      const toolCalls = msg.tool_calls || [];
+      for (const tc of toolCalls) {
+        if (tc.name === 'clarify' && tc.result && !respondedClarifyIds.has(tc.tool_call_id)) {
+          return true;
+        }
+      }
+      const tc = msg.extra_content?.tool_call;
+      if (tc?.name === 'clarify' && tc.result && !respondedClarifyIds.has(tc.tool_call_id)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // 标记某个澄清问题已回复
+  const handleClarifyResponded = (toolCallId: string) => {
+    setRespondedClarifyIds(prev => {
+      const next = new Set(prev);
+      next.add(toolCallId);
+      return next;
+    });
+  };
+
+  // 判断助手消息是否有可见内容（避免渲染空的 step-container）
+  const hasAssistantVisibleContent = (msg: DisplayMessage): boolean => {
+    if (msg.role !== 'assistant') return true;
+    // 有文本内容
+    if (msg.content) return true;
+    // 有思考过程内容
+    if (msg.reasoning_content) return true;
+    // 有工具调用
+    if (msg.tool_calls && msg.tool_calls.length > 0) return true;
+    // start 状态总会显示加载提示
+    if (msg.status === 'start' || (!msg.reasoning_content && !msg.content && msg.status !== 'done' && msg.status !== 'stop')) return true;
+    return false;
+  };
+
   const renderAssistantMessageContent = (msg: DisplayMessage) => {
     return (
       <div className="int-step-container">
@@ -1490,12 +1579,17 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
             {msg.status !== 'start' && msg.status !== 'done' && msg.status !== 'stop' && !msg.reasoning_end && msg.reasoning_content && (
               <div className="int-message-reasoning">
-                <div className="int-reasoning-header">
+                <div className="int-reasoning-header" onClick={() => toggleReasoning(msg.step_id || msg.id, true)}>
+                  {collapsedReasoning.has(msg.step_id || msg.id) ? (
+                    <RightOutlined />
+                  ) : (
+                    <DownOutlined />
+                  )}
                   <LoadingOutlined spin />
                   <BulbOutlined />
                   <span>正在思考中...</span>
                 </div>
-                {msg.reasoning_content && (
+                {!collapsedReasoning.has(msg.step_id || msg.id) && msg.reasoning_content && (
                   <div className="int-reasoning-text">
                     <ChatMarkdown source={msg.reasoning_content} />
                   </div>
@@ -1529,19 +1623,22 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
             {msg.tool_calls && msg.tool_calls.length > 0 && (
               <div className="int-tool-calls-container">
-                {msg.tool_calls.map((tc, tcIndex) => (
-                  <div key={tc.tool_call_id || `tc-${tcIndex}`} className={`int-tool-call-card int-tool-call-${tc.status}${tc.name === 'web_search' ? ' int-tool-call-web-search' : ''}${tc.name === 'generate_ppt' ? ' int-tool-call-generate-ppt' : ''}`}>
-                    <div className="int-tool-call-header" onClick={() => toggleToolCall(tc.tool_call_id || `tc-${tcIndex}`)}>
+                {msg.tool_calls.map((tc, tcIndex) => {
+                  const tcId = tc.tool_call_id || `tc-${tcIndex}`;
+                  const isClarify = tc.name === 'clarify';
+                  return (
+                  <div key={tcId} className={`int-tool-call-card int-tool-call-${tc.status}${tc.name === 'web_search' ? ' int-tool-call-web-search' : ''}${tc.name === 'generate_ppt' ? ' int-tool-call-generate-ppt' : ''}${isClarify ? ' int-tool-call-clarify' : ''}`}>
+                    <div className="int-tool-call-header" onClick={() => !isClarify && toggleToolCall(tcId)}>
                       <div className="int-tool-call-header-left">
                         {tc.status === 'start' && <LoadingOutlined spin className="int-tool-call-icon-start" />}
                         {tc.status === 'running' && <LoadingOutlined spin className="int-tool-call-icon-running" />}
                         {tc.status === 'success' && <span className="int-tool-call-icon-success">✓</span>}
                         {tc.status === 'error' && <span className="int-tool-call-icon-error">✗</span>}
-                        {expandedToolCalls.has(tc.tool_call_id || `tc-${tcIndex}`) ? (
+                        {!isClarify && (expandedToolCalls.has(tcId) ? (
                           <DownOutlined style={{ fontSize: 10 }} />
                         ) : (
                           <RightOutlined style={{ fontSize: 10 }} />
-                        )}
+                        ))}
                         {tc.task_name && <span className="int-tool-call-task-name">{tc.task_name}</span>}
                       </div>
                       <div className="int-tool-call-header-right">
@@ -1552,7 +1649,22 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                         )}
                       </div>
                     </div>
-                    {expandedToolCalls.has(tc.tool_call_id || `tc-${tcIndex}`) && (
+                    {/* clarify 工具：在卡片外部直接渲染交互组件，无需展开 */}
+                    {isClarify && tc.result && (
+                      <div className="int-tool-call-content int-tool-call-clarify-content">
+                        <IntegrationClarifyCard
+                          result={tc.result}
+                          chatId={currentChatId || ''}
+                          apiKey={apiKey}
+                          theme={themeMode === 'dark' ? 'dark' : 'light'}
+                          toolCallId={tc.tool_call_id}
+                          messageId={msg.message_id}
+                          disabled={!loading && !respondedClarifyIds.has(tc.tool_call_id)}
+                          onResponded={handleClarifyResponded}
+                        />
+                      </div>
+                    )}
+                    {!isClarify && expandedToolCalls.has(tcId) && (
                       <div className="int-tool-call-content">
                         {/* web_search/generate_ppt不显示原始消息 */}
                         {tc.message && tc.name !== 'web_search' && tc.name !== 'generate_ppt' && (
@@ -1595,7 +1707,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                       </div>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -1640,6 +1753,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           </div>
           <div className="int-msg-content">
             {group.messages.map((msg, msgIndex) => (
+              hasAssistantVisibleContent(msg) && (
               <div
                 key={msgIndex}
                 id={msg.step_id || undefined}
@@ -1647,6 +1761,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
               >
                 {renderAssistantMessageContent(msg)}
               </div>
+              )
             ))}
             <div className="int-msg-footer">
               <span className="int-msg-time">
@@ -1663,6 +1778,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({
               <div className="int-msg-actions">
                 {isRunning ? (
                   <Tooltip title="正在生成中">
+                    <button className="int-msg-action-btn" disabled>
+                      <LoadingOutlined spin />
+                    </button>
+                  </Tooltip>
+                ) : hasPendingClarify(group.messages) ? (
+                  <Tooltip title="等待澄清回复">
                     <button className="int-msg-action-btn" disabled>
                       <LoadingOutlined spin />
                     </button>
@@ -1822,6 +1943,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   const panelMinimize = usePanelMinimize();
   const minimized = panelMinimize?.isMinimized ?? false;
 
+  // 是否存在未回复的澄清问题（用于禁用输入区）
+  const clarifyPending = hasAnyPendingClarify();
+
   return (
     <div className="int-chat-area" data-theme={themeMode} data-color-theme={colorTheme}>
       {/* Header（支持拖拽移动面板） */}
@@ -1894,8 +2018,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             value={inputValue}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            placeholder={`${inputPlaceholder}（Ctrl/Shift+Enter换行，Enter发送）`}
+            placeholder={clarifyPending ? '请先回复上方的澄清问题...' : `${inputPlaceholder}（Ctrl/Shift+Enter换行，Enter发送）`}
             rows={1}
+            disabled={clarifyPending}
           />
           {/* 输入框底部工具栏 */}
           <div className="int-input-toolbar">
@@ -1945,7 +2070,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
               <button
                 className="int-send-btn"
                 onClick={handleSend}
-                disabled={selectedFiles.length === 0 && !inputValue.trim()}
+                disabled={clarifyPending || (selectedFiles.length === 0 && !inputValue.trim())}
                 title="发送"
               >
                 ➤
