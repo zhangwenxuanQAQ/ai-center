@@ -26,6 +26,7 @@ from mcp.types import (
 from app.configs.config import config
 from app.database.models import MCPTool, MCPServer
 from app.core.mcp.server.tools import ToolRegistry, execute_tool
+from app.core.exceptions import extract_actual_exception
 
 logger = logging.getLogger(__name__)
 
@@ -86,19 +87,27 @@ class MCPClientBase:
     async def call_tool(self, name: str, arguments: Dict[str, Any] = None) -> CallToolResult:
         """
         调用工具
-        
+
         Args:
             name: 工具名称
             arguments: 工具参数
-            
+
         Returns:
             CallToolResult: 工具调用结果
         """
         if not self.session or not self._initialized:
             raise MCPClientError("客户端未初始化")
-        
-        result = await self.session.call_tool(name, arguments or {})
-        return result
+
+        try:
+            result = await self.session.call_tool(name, arguments or {})
+            return result
+        except Exception as e:
+            actual_error = extract_actual_exception(e)
+            logger.error(
+                f"调用MCP工具失败, 工具名称: {name}, 参数: {arguments}, 错误类型: {type(actual_error).__name__}, 错误信息: {str(actual_error)}",
+                exc_info=True
+            )
+            raise MCPClientError(f"调用工具'{name}'失败: {str(actual_error)}") from e
 
 
 class SSEClient(MCPClientBase):
@@ -479,22 +488,34 @@ async def call_mcp_tool(
         env=env,
         cwd=cwd
     )
-    
+
     result = None
-    
-    if isinstance(client, (SSEClient, StreamableHttpClient)):
-        async with client.connect():
-            call_result = await client.call_tool(tool_name, arguments)
-            result = {
-                "content": [content.model_dump() for content in call_result.content],
-                "isError": call_result.isError if hasattr(call_result, 'isError') else False
-            }
-    elif isinstance(client, StdioClient):
-        async with client.connect():
-            call_result = await client.call_tool(tool_name, arguments)
-            result = {
-                "content": [content.model_dump() for content in call_result.content],
-                "isError": call_result.isError if hasattr(call_result, 'isError') else False
-            }
-    
+
+    try:
+        if isinstance(client, (SSEClient, StreamableHttpClient)):
+            async with client.connect():
+                call_result = await client.call_tool(tool_name, arguments)
+                result = {
+                    "content": [content.model_dump() for content in call_result.content],
+                    "isError": call_result.isError if hasattr(call_result, 'isError') else False
+                }
+        elif isinstance(client, StdioClient):
+            async with client.connect():
+                call_result = await client.call_tool(tool_name, arguments)
+                result = {
+                    "content": [content.model_dump() for content in call_result.content],
+                    "isError": call_result.isError if hasattr(call_result, 'isError') else False
+                }
+    except MCPClientError:
+        raise
+    except Exception as e:
+        actual_error = extract_actual_exception(e)
+        if isinstance(actual_error, MCPClientError):
+            raise actual_error
+        logger.error(
+            f"调用MCP工具异常, 工具名称: {tool_name}, 参数: {arguments}, 错误类型: {type(actual_error).__name__}, 错误信息: {str(actual_error)}",
+            exc_info=True
+        )
+        raise MCPClientError(f"调用工具'{tool_name}'失败: {str(actual_error)}") from e
+
     return result

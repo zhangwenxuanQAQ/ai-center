@@ -3,15 +3,18 @@ MCP控制器，提供MCP相关的API接口
 """
 
 import json
+import logging
 from fastapi import APIRouter, Body, Query, Request
 from app.services.mcp.service import MCPCategoryService, MCPServerService, MCPToolService
 from app.services.mcp.dto import (
-    MCPCategoryCreate, MCPCategoryUpdate, MCPCategory, 
-    MCPServerCreate, MCPServerUpdate, MCPServer, 
+    MCPCategoryCreate, MCPCategoryUpdate, MCPCategory,
+    MCPServerCreate, MCPServerUpdate, MCPServer,
     MCPToolCreate, MCPToolUpdate, MCPTool,
     MCPConnectionTest, MCPConnectionTestResult
 )
 from app.utils.response import ResponseUtil, ApiResponse
+
+logger = logging.getLogger(__name__)
 
 # 动态导入，避免触发fastmcp依赖
 def get_swagger_converter():
@@ -533,4 +536,5 @@ async def test_mcp_tool(tool_id: str, params: dict = Body(..., description="工�
         result = await MCPToolService.test_tool(tool_id, params)
         return ResponseUtil.success(data=result, message="工具测试成功")
     except Exception as e:
+        logger.error(f"工具测试失败, 工具ID: {tool_id}, 错误类型: {type(e).__name__}, 错误信息: {str(e)}", exc_info=True)
         return ResponseUtil.error(message=f"工具测试失败: {str(e)}")
