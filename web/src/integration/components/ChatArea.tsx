@@ -326,7 +326,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   /**
    * 将后端 IntegrationMessage 映射为前端 DisplayMessage
    * - 解析 extra_content（字符串 -> 对象）
-   * - 过滤 clarify 工具的独立 tool 消息（避免与 assistant 消息中的 tool_calls 重复渲染）
    * - 从 extra_content.tool_call 恢复 tool_calls 数组
    * 返回 null 表示该消息应被过滤掉
    */
@@ -338,10 +337,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       } catch (e) {
         console.error('Failed to parse extra_content:', e);
       }
-    }
-    // 过滤掉 clarify 工具的独立 tool 消息，避免与 assistant 消息中的 tool_calls 重复渲染
-    if (m.role === 'tool' && parsedExtraContent?.tool_call?.name === 'clarify') {
-      return null;
     }
     // 从 extra_content.tool_call 恢复 tool_calls
     let tool_calls: ToolCallStep[] | undefined;
@@ -1495,6 +1490,14 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           groupCounter++;
           currentGroup = { assistantId, stableId: `assistant-${groupCounter}`, messages: [msg] };
         }
+      } else if (msg.role === 'tool' || msg.role === 'tool_response') {
+        // tool 和 tool_response 消息归入当前 assistant 组
+        if (currentGroup) {
+          currentGroup.messages.push(msg);
+        } else {
+          groupCounter++;
+          groups.push({ assistantId: '', stableId: `${msg.role}-${groupCounter}`, messages: [msg] });
+        }
       }
     });
 
@@ -1508,6 +1511,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   // 检查消息组中是否存在未回复的澄清问题
   const hasPendingClarify = (groupMessages: DisplayMessage[]): boolean => {
     for (const msg of groupMessages) {
+      const isStepDone = msg.extra_content?.step_status === 'done';
+      if (isStepDone) continue;
       const toolCalls = msg.tool_calls || [];
       for (const tc of toolCalls) {
         if (tc.name === 'clarify' && tc.result && !respondedClarifyIds.has(tc.tool_call_id)) {
@@ -1525,6 +1530,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   // 检查全局是否存在任何未回复的澄清问题（用于禁用输入区）
   const hasAnyPendingClarify = (): boolean => {
     for (const msg of messages) {
+      const isStepDone = msg.extra_content?.step_status === 'done';
+      if (isStepDone) continue;
       const toolCalls = msg.tool_calls || [];
       for (const tc of toolCalls) {
         if (tc.name === 'clarify' && tc.result && !respondedClarifyIds.has(tc.tool_call_id)) {
@@ -1562,7 +1569,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     return false;
   };
 
-  const renderAssistantMessageContent = (msg: DisplayMessage) => {
+  const renderAssistantMessageContent = (msg: DisplayMessage, groupMessages?: DisplayMessage[]) => {
     return (
       <div className="int-step-container">
         <div className="int-md-editor-container">
@@ -1626,13 +1633,19 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                 {msg.tool_calls.map((tc, tcIndex) => {
                   const tcId = tc.tool_call_id || `tc-${tcIndex}`;
                   const isClarify = tc.name === 'clarify';
+                  const stepStatus = msg.extra_content?.step_status;
+                  const isStepDone = stepStatus === 'done';
+                  // 从 groupMessages 中查找匹配的 tool_response 消息（通过 tool_call_id 匹配）
+                  const toolResponse = groupMessages?.find(
+                    (m) => m.role === 'tool_response' && m.extra_content?.tool_call?.tool_call_id === tcId
+                  );
                   return (
                   <div key={tcId} className={`int-tool-call-card int-tool-call-${tc.status}${tc.name === 'web_search' ? ' int-tool-call-web-search' : ''}${tc.name === 'generate_ppt' ? ' int-tool-call-generate-ppt' : ''}${isClarify ? ' int-tool-call-clarify' : ''}`}>
                     <div className="int-tool-call-header" onClick={() => !isClarify && toggleToolCall(tcId)}>
                       <div className="int-tool-call-header-left">
-                        {tc.status === 'start' && <LoadingOutlined spin className="int-tool-call-icon-start" />}
-                        {tc.status === 'running' && <LoadingOutlined spin className="int-tool-call-icon-running" />}
-                        {tc.status === 'success' && <span className="int-tool-call-icon-success">✓</span>}
+                        {tc.status === 'start' && !isStepDone && <LoadingOutlined spin className="int-tool-call-icon-start" />}
+                        {tc.status === 'running' && !isStepDone && <LoadingOutlined spin className="int-tool-call-icon-running" />}
+                        {((tc.status === 'success') || isStepDone) && <span className="int-tool-call-icon-success">✓</span>}
                         {tc.status === 'error' && <span className="int-tool-call-icon-error">✗</span>}
                         {!isClarify && (expandedToolCalls.has(tcId) ? (
                           <DownOutlined style={{ fontSize: 10 }} />
@@ -1659,8 +1672,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                           theme={themeMode === 'dark' ? 'dark' : 'light'}
                           toolCallId={tc.tool_call_id}
                           messageId={msg.message_id}
-                          disabled={!loading && !respondedClarifyIds.has(tc.tool_call_id)}
+                          disabled={!loading && !respondedClarifyIds.has(tc.tool_call_id) || isStepDone || !!toolResponse}
                           onResponded={handleClarifyResponded}
+                          userResponse={toolResponse?.content}
                         />
                       </div>
                     )}
@@ -1753,13 +1767,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           </div>
           <div className="int-msg-content">
             {group.messages.map((msg, msgIndex) => (
-              hasAssistantVisibleContent(msg) && (
+              hasAssistantVisibleContent(msg) && msg.role !== 'tool_response' && (
               <div
                 key={msgIndex}
                 id={msg.step_id || undefined}
                 className="int-step-wrapper"
               >
-                {renderAssistantMessageContent(msg)}
+                {renderAssistantMessageContent(msg, group.messages)}
               </div>
               )
             ))}

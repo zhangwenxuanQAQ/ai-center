@@ -520,6 +520,28 @@ class IntegrationChatCoreService:
         return user_message
 
     @staticmethod
+    def _save_tool_response_message(
+        chatbot_id: str,
+        chat_id: str,
+        message_id: str,
+        content: str,
+        model_id: Optional[str] = None,
+        extra_content: Optional[str] = None
+    ) -> ChatbotChatMessage:
+        """保存 tool_response 消息到 ChatbotChatMessage 表"""
+        tool_response_message = ChatbotChatMessage(
+            chatbot_id=chatbot_id,
+            chat_id=chat_id,
+            message_id=message_id or uuid.uuid4().hex,
+            role='tool_response',
+            content=content,
+            model_id=model_id,
+            extra_content=extra_content
+        )
+        tool_response_message.save(force_insert=True)
+        return tool_response_message
+
+    @staticmethod
     def _create_assistant_message(
         chatbot_id: str,
         chat_id: str,
@@ -864,40 +886,42 @@ class IntegrationChatCoreService:
             await asyncio.sleep(0.5)
         ChatInputManager().clear_input(message_id)
 
-        # 无论有没有用户回答都保存用户消息记录
+        # 无论有没有用户回答都保存 tool_response 消息记录
         save_content = user_input if user_input is not None else '[用户未响应]'
+        tool_response_extra = json.dumps({"tool_call": {"tool_call_id": tool_call_id, "name": "clarify"}}, ensure_ascii=False)
         if temporary and integration_id is not None:
             user_msg_data = {
                 "id": message_id,
                 "message_id": message_id,
                 "chat_id": chat_id,
                 "chatbot_id": chatbot_id,
-                "role": "user",
+                "role": "tool_response",
                 "content": save_content,
-                "extra_content": None,
+                "extra_content": tool_response_extra,
                 "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             }
             TempChatStore.add_message(integration_id, chat_id, user_msg_data, scope_id=scope_id)
         else:
-            IntegrationChatCoreService._save_user_message(
+            IntegrationChatCoreService._save_tool_response_message(
                 chatbot_id=chatbot_id,
                 chat_id=chat_id,
                 message_id=message_id,
                 content=save_content,
                 model_id=model_id,
+                extra_content=tool_response_extra,
             )
         if user_input is not None:
             return {
                 'role': 'tool',
                 'tool_call_id': tool_call_id,
-                'content': json.dumps({"user_response": user_input}, ensure_ascii=False)
+                'content': user_input
             }
         else:
             return {
                 'role': 'tool',
                 'tool_call_id': tool_call_id,
-                'content': json.dumps({"user_response": "[用户未响应]"}, ensure_ascii=False)
+                'content': '[用户未响应]'
             }
 
     @staticmethod
@@ -1027,6 +1051,21 @@ class IntegrationChatCoreService:
                 history.append({
                     'role': 'tool',
                     'tool_call_id': msg.message_id,
+                    'content': msg.content
+                })
+            elif msg.role == 'tool_response':
+                # tool_response 转为 tool 消息发送给大模型
+                tool_call_id = msg.message_id
+                if msg.extra_content:
+                    try:
+                        ec = json.loads(msg.extra_content) if isinstance(msg.extra_content, str) else msg.extra_content
+                        tc = ec.get('tool_call', {}) if isinstance(ec, dict) else {}
+                        tool_call_id = tc.get('tool_call_id', msg.message_id)
+                    except Exception:
+                        pass
+                history.append({
+                    'role': 'tool',
+                    'tool_call_id': tool_call_id,
                     'content': msg.content
                 })
         return history

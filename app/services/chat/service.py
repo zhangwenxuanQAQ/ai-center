@@ -541,6 +541,43 @@ class ChatMessageService:
         )
         user_message.save(force_insert=True)
         return user_message
+
+    @staticmethod
+    @handle_transaction
+    def create_tool_response_message(
+        chat_id: str,
+        content: str,
+        model_id: Optional[str] = None,
+        chatbot_id: Optional[str] = None,
+        message_id: Optional[str] = None,
+        extra_content: Optional[str] = None
+    ) -> ChatMessage:
+        """
+        创建 tool_response 消息（澄清工具的用户回复）
+
+        Args:
+            chat_id: 对话ID
+            content: 回复内容
+            model_id: 模型ID
+            chatbot_id: 机器人ID
+            message_id: 消息ID
+            extra_content: 额外内容JSON，如 tool_call_id、name
+
+        Returns:
+            ChatMessage: 消息对象
+        """
+        tool_response_message = ChatMessage(
+            message_id=message_id or uuid.uuid4().hex,
+            chat_id=chat_id,
+            role='tool_response',
+            content=content,
+            model_id=model_id,
+            chatbot_id=chatbot_id,
+            extra_content=extra_content,
+            created_at=datetime.now().astimezone()
+        )
+        tool_response_message.save(force_insert=True)
+        return tool_response_message
     
     @staticmethod
     @handle_transaction

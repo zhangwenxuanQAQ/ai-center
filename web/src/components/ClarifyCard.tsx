@@ -13,9 +13,10 @@ interface ClarifyCardProps {
   modelId?: string;
   disabled?: boolean;
   onResponded?: (toolCallId: string) => void;
+  userResponse?: string;
 }
 
-const ClarifyCard: React.FC<ClarifyCardProps> = ({ result, chatId, theme, toolCallId, messageId, chatbotId, modelId, disabled, onResponded }) => {
+const ClarifyCard: React.FC<ClarifyCardProps> = ({ result, chatId, theme, toolCallId, messageId, chatbotId, modelId, disabled, onResponded, userResponse }) => {
   const [selectedChoices, setSelectedChoices] = useState<string[]>([]);
   const [customInput, setCustomInput] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
@@ -26,6 +27,8 @@ const ClarifyCard: React.FC<ClarifyCardProps> = ({ result, chatId, theme, toolCa
   const choices: string[] = result?.choices || [];
   const multiSelect: boolean = result?.multi_select || false;
   const hasChoices = choices.length > 0;
+  // 历史回填：有 userResponse 时视为已提交
+  const isPrefilled = !!userResponse;
 
   const handleToggleChoice = (choice: string) => {
     if (submitted) return;
@@ -83,7 +86,7 @@ const ClarifyCard: React.FC<ClarifyCardProps> = ({ result, chatId, theme, toolCa
         <span className="clarify-card-question">{question}</span>
       </div>
 
-      {hasChoices && (
+      {hasChoices && !isPrefilled && (
         <div className="clarify-card-choices">
           {choices.map((choice, idx) => {
             const isSelected = selectedChoices.includes(choice);
@@ -114,7 +117,7 @@ const ClarifyCard: React.FC<ClarifyCardProps> = ({ result, chatId, theme, toolCa
       )}
 
       {/* 自定义输入框（有选项时选择"其他"显示，无选项时始终显示） */}
-      {(showCustomInput || !hasChoices) && !submitted && !disabled && (
+      {(showCustomInput || !hasChoices) && !submitted && !disabled && !isPrefilled && (
         <div className="clarify-card-input-area">
           <Input.TextArea
             value={customInput}
@@ -133,20 +136,22 @@ const ClarifyCard: React.FC<ClarifyCardProps> = ({ result, chatId, theme, toolCa
       )}
 
       {/* 已提交状态 */}
-      {submitted && (
+      {(submitted || isPrefilled) && (
         <div className="clarify-card-submitted">
           <CheckOutlined style={{ marginRight: 6, color: '#52c41a' }} />
           <span>已回复：</span>
           <Tag color="blue" style={{ marginLeft: 4 }}>
-            {Array.isArray(selectedChoices) && selectedChoices.length > 0
-              ? selectedChoices.join('、')
-              : customInput || '已提交'}
+            {isPrefilled
+              ? userResponse
+              : (Array.isArray(selectedChoices) && selectedChoices.length > 0
+                ? selectedChoices.join('、')
+                : customInput || '已提交')}
           </Tag>
         </div>
       )}
 
       {/* 提交按钮 */}
-      {!submitted && !disabled && (
+      {!submitted && !disabled && !isPrefilled && (
         <div className="clarify-card-footer">
           <Space>
             <Button

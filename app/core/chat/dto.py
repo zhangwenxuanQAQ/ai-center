@@ -37,6 +37,19 @@ class MessageStep:
     TOOL_CALL = 'tool_call'
 
 
+class MessageRole:
+    """
+    消息角色常量
+    
+    用于标识消息的角色类型
+    """
+    USER = 'user'
+    ASSISTANT = 'assistant'
+    SYSTEM = 'system'
+    TOOL = 'tool'
+    TOOL_RESPONSE = 'tool_response'
+
+
 @dataclass
 class TaskInfo:
     """

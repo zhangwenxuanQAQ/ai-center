@@ -1177,28 +1177,28 @@ class ChatCoreService:
             await asyncio.sleep(0.5)
         ChatInputManager().clear_input(message_id)
 
-        # 无论有没有用户回答都保存用户消息记录
+        # 无论有没有用户回答都保存 tool_response 消息记录
         save_content = user_input if user_input is not None else '[用户未响应]'
         save_model_id = model_id if not chatbot_id else None
-        ChatMessageService.create_user_message(
+        ChatMessageService.create_tool_response_message(
             chat_id=chat_id,
-            user_content=save_content,
+            content=save_content,
             model_id=save_model_id,
             chatbot_id=chatbot_id,
             message_id=message_id,
-            is_clarify=True
+            extra_content=json.dumps({"tool_call": {"tool_call_id": tool_call_id, "name": "clarify"}}, ensure_ascii=False),
         )
         if user_input is not None:
             return {
                 'role': 'tool',
                 'tool_call_id': tool_call_id,
-                'content': json.dumps({"user_response": user_input}, ensure_ascii=False)
+                'content': user_input
             }
         else:
             return {
                 'role': 'tool',
                 'tool_call_id': tool_call_id,
-                'content': json.dumps({"user_response": "[用户未响应]"}, ensure_ascii=False)
+                'content': '[用户未响应]'
             }
 
     @staticmethod
