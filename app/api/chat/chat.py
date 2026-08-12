@@ -22,7 +22,9 @@ from app.database.models import Chat
 from app.utils.response import ResponseUtil, ApiResponse
 from app.core.exceptions import ResourceNotFoundError
 from app.services.chat.file_utils import get_file_from_datasource
-from app.core.chat.stream_manager import ChatStreamManager
+from app.core.chat.event.publisher import ChatEventPublisher
+from app.core.chat.event.chat_result_stream import ChatResultStream
+from app.core.chat.event.event_bus import EventBus
 from app.database.redis_utils import redis_utils
 
 router = APIRouter()
@@ -359,42 +361,49 @@ async def chat_completions(
                     logger.error(f"更新chat表失败: {e}")
         
         if chat_request.stream:
-            # 使用后台任务+Redis模式：后台任务持续运行chat_stream并将chunks存入Redis，
-            # HTTP响应从Redis读取chunks发送给客户端。
-            # 这样即使客户端断开连接（如F5刷新），后台任务仍继续运行，
+            # 事件总线模式：将聊天请求封装为事件发送到 Redis Stream 请求队列，
+            # 后台消费者处理聊天逻辑并将流式 chunk 发布到结果队列，
+            # HTTP 响应从结果队列读取 chunk 发送给客户端（SSE）。
+            # 即使客户端断开连接（如 F5 刷新），后台任务仍继续运行，
             # 客户端可通过重连端点接着获取剩余输出。
             stream_chat_id = chat_request.chat_id
 
             if stream_chat_id and redis_utils.is_available:
-                # 启动后台流式任务
-                chat_stream_gen = ChatCoreService.chat_stream(
+                # 序列化 query 为字典列表
+                query_list = [item.model_dump() for item in chat_request.query]
+
+                # 发布聊天请求事件到事件总线
+                success = await ChatEventPublisher.publish_chat_request(
+                    chat_id=stream_chat_id,
                     user_id=user_id,
-                    query=chat_request.query,
+                    query=query_list,
                     model_id=chat_request.model_id,
                     chatbot_id=chat_request.chatbot_id,
-                    chat_id=chat_request.chat_id,
                     config=chat_request.config,
                     message_id=chat_request.message_id,
-                    system_prompt=chat_request.system_prompt
+                    system_prompt=chat_request.system_prompt,
                 )
-                await ChatStreamManager.start_background_stream(stream_chat_id, chat_stream_gen)
 
-                async def generate_from_redis():
-                    """从Redis读取流式数据并发送给客户端"""
+                if not success:
+                    return ResponseUtil.error(message="发送聊天请求失败，请检查Redis连接")
+
+                # 从结果队列读取流式数据并发送给客户端
+                async def generate_from_event_bus():
+                    """从事件总线结果队列读取流式数据"""
                     try:
-                        async for sse_data in ChatStreamManager.stream_from_redis(stream_chat_id, 0):
+                        async for sse_data in ChatResultStream.stream(stream_chat_id, '0'):
                             yield sse_data
                             await asyncio.sleep(0)
                     except GeneratorExit:
                         # 客户端断开连接，正常退出（后台任务仍继续运行）
                         raise
                     except Exception as e:
-                        print(f"Error in generate_from_redis: {e}")
+                        print(f"Error in generate_from_event_bus: {e}")
                         yield "data: [DONE]\n\n"
                         raise
 
                 return StreamingResponse(
-                    generate_from_redis(),
+                    generate_from_event_bus(),
                     media_type="text/event-stream",
                     headers={
                         "Cache-Control": "no-cache",
@@ -409,6 +418,8 @@ async def chat_completions(
                     current_chat_id = None
                     has_error = False
                     try:
+                        # 清除上一次的停止标记
+                        ChatStopManager().clear_stop(chat_request.chat_id)
                         async for chunk in ChatCoreService.chat_stream(
                             user_id=user_id,
                             query=chat_request.query,
@@ -501,10 +512,21 @@ async def stop_chat(
     except Chat.DoesNotExist:
         return ResponseUtil.not_found(message="对话不存在")
     
-    updated_count = ChatMessageService.stop_chat_messages(stop_request.chat_id)
-    
     ChatStopManager().request_stop(stop_request.chat_id)
     
+    # 发布停止事件到事件总线，并立即通知前端停止
+    if redis_utils.is_available:
+        await ChatEventPublisher.publish_chat_stop(stop_request.chat_id)
+        # 直接向结果队列发布完成事件，让前端 SSE 立即收到 [DONE]
+        from app.core.chat.event.event import ChatDoneEvent
+        EventBus.set_streaming_status(stop_request.chat_id, 'stop')
+        done_event = ChatDoneEvent.create(stop_request.chat_id, status='stop')
+        await EventBus.publish(done_event)
+
+    # 停止聊天并保存消息（整合原有停止逻辑和Redis上下文恢复）
+    ctx_data = EventBus.get_chat_context(stop_request.chat_id)
+    updated_count = ChatMessageService.stop_chat_with_context(stop_request.chat_id, ctx_data)
+
     return ResponseUtil.success(data={"updated_count": updated_count}, message="已停止回答")
 
 
@@ -565,14 +587,9 @@ async def get_streaming_status(
     Returns:
         ApiResponse: 包含is_streaming、status和chunks_count字段
     """
-    status = ChatStreamManager.get_status(chat_id)
-    chunks_count = ChatStreamManager.get_chunks_count(chat_id)
+    status_info = ChatEventPublisher.get_streaming_status(chat_id)
 
-    return ResponseUtil.success(data={
-        "is_streaming": status == "streaming",
-        "status": status,
-        "chunks_count": chunks_count
-    })
+    return ResponseUtil.success(data=status_info)
 
 
 @router.get("/reconnect_stream/{chat_id}", summary="重连流式输出")
@@ -584,8 +601,8 @@ async def reconnect_stream(
     重连流式输出
 
     在F5刷新后，前端通过此端点重新获取流式数据。
-    从Redis list的开头读取所有已存储的chunks（包含历史输出），
-    然后继续读取新产生的chunks，直到收到[DONE]标记。
+    从事件总线结果队列的头部读取所有已存储的事件（包含历史输出），
+    然后继续读取新产生的事件，直到收到完成事件。
 
     Args:
         request: 请求对象
@@ -594,17 +611,17 @@ async def reconnect_stream(
     Returns:
         StreamingResponse: SSE流式响应
     """
-    status = ChatStreamManager.get_status(chat_id)
+    status = EventBus.get_streaming_status(chat_id)
 
     # 如果没有流式记录，返回空响应
     if not status:
         return ResponseUtil.error(message="没有找到流式记录")
 
     async def generate_reconnect():
-        """从Redis读取所有历史chunks + 新chunks，发送给客户端"""
+        """从事件总线结果队列读取所有历史事件 + 新事件，发送给客户端"""
         try:
-            # 从索引0开始读取，获取所有已存储的chunks + 继续读取新chunks
-            async for sse_data in ChatStreamManager.stream_from_redis(chat_id, 0):
+            # 从队列头部开始读取，获取所有已存储的事件 + 继续读取新事件
+            async for sse_data in ChatResultStream.stream(chat_id, '0'):
                 yield sse_data
                 await asyncio.sleep(0)
         except GeneratorExit:

@@ -29,6 +29,7 @@ from app.core.exceptions import ResourceNotFoundError
 from app.core.utils.resource_utils import get_provider_avatar_url
 from app.core.chat.dto import ChatStreamResponse, ToolCallInfo, MessageStatus, MessageStep
 from app.core.prompt.utils.system_prompt_builder import build_system_prompt
+from app.core.chat.event.event_bus import EventBus
 
 
 class ChatStopManager:
@@ -160,10 +161,6 @@ class ChatContext:
         tool_map: 工具名称到工具实例的映射
         model_params: 传给大模型的参数
         avatar: 头像URL
-        start_time: 聊天开始时间戳
-        reasoning_end_time: 推理结束时间戳
-        full_response: 累积的完整响应文本
-        reasoning_content: 累积的推理内容
     """
     chat_id: str = ''
     user_id: str = ''
@@ -185,10 +182,6 @@ class ChatContext:
     tool_map: Optional[Dict[str, Any]] = None
     model_params: Dict[str, Any] = field(default_factory=dict)
     avatar: Optional[str] = None
-    start_time: float = 0.0
-    reasoning_end_time: Optional[float] = None
-    full_response: str = ''
-    reasoning_content: str = ''
 
 
 class ChatPreprocessor:
@@ -462,7 +455,11 @@ class ChatPreprocessor:
         ChatPreprocessor._handle_rerun(ctx)
         # 5. 补充机器人系统提示词（未通过配置加载时）
         if ctx.chatbot_id and ctx.system_prompt is None:
-            ctx.system_prompt = ChatCoreService.get_chatbot_system_prompt(ctx.chatbot_id)
+            try:
+                chatbot = Chatbot.get(Chatbot.id == ctx.chatbot_id)
+                ctx.system_prompt = chatbot.greeting
+            except Chatbot.DoesNotExist:
+                pass
         # 6. 校验并创建模型实例
         ChatPreprocessor._resolve_model(ctx)
         # 7. 构建消息列表
@@ -480,8 +477,6 @@ class ChatPreprocessor:
         ChatPreprocessor._persist_user_message(ctx, query)
         # 11. 解析头像
         ctx.avatar = ChatPreprocessor._resolve_avatar(ctx.chatbot_id, ctx.model_id)
-        # 12. 初始化计时
-        ctx.start_time = time.time()
 
         return ctx
 
@@ -562,24 +557,7 @@ class ChatCoreService:
                 pass
         
         return config, llm_config, model.model_type
-    
-    @staticmethod
-    def get_chatbot_system_prompt(chatbot_id: str) -> Optional[str]:
-        """
-        获取机器人的系统提示词
-        
-        Args:
-            chatbot_id: 机器人ID
-            
-        Returns:
-            Optional[str]: 系统提示词
-        """
-        try:
-            chatbot = Chatbot.get(Chatbot.id == chatbot_id)
-            return chatbot.greeting
-        except Chatbot.DoesNotExist:
-            return None
-    
+
     @staticmethod
     def get_chatbot_config(chatbot_id: str) -> Dict[str, Any]:
         """
@@ -776,7 +754,7 @@ class ChatCoreService:
     @staticmethod
     async def _run_conversation_loop(
         ctx: ChatContext
-    ) -> AsyncGenerator[Union[Dict[str, Any], Tuple[None, List[Dict[str, Any]], List[Dict[str, Any]]]], None]:
+    ) -> AsyncGenerator[Union[Dict[str, Any], Tuple[None, List[Dict[str, Any]]]], None]:
         """
         执行聊天主循环（模型流式生成 + 工具调用循环）
 
@@ -788,7 +766,7 @@ class ChatCoreService:
 
         Yields:
             Dict: 流式响应数据
-            Tuple[None, List, List]: 循环结束时的最终消息列表（供后置处理使用）
+            Tuple[None, List]: 循环结束时的最终消息列表（供后置处理使用）
         """
         chat_id = ctx.chat_id
         user_message_id = ctx.user_message_id
@@ -803,7 +781,6 @@ class ChatCoreService:
         msg_model_id = model_id if not chatbot_id else None
         config = ctx.config
         model_params = ctx.model_params
-        planning_messages_history = ctx.history_messages.copy()
 
         while True:
             model_answer_step_id = f"step_{uuid.uuid4().hex[:8]}"
@@ -825,9 +802,20 @@ class ChatCoreService:
             tool_calls_list = []
             round_finished = False
 
+            # 每轮开始时保存初始上下文到Redis（用户可能在模型开始前就停止）
+            ChatCoreService._save_stop_context(
+                chat_id=chat_id,
+                assistant_message_id=assistant_message_id,
+                model_answer_step_id=model_answer_step_id,
+                msg_model_id=msg_model_id,
+                chatbot_id=chatbot_id,
+                config=config,
+                avatar=avatar
+            )
+
             # 在流式生成前检查是否已停止（用户在模型开始回答前就点了停止）
             if ChatStopManager().is_stop_requested(chat_id):
-                ChatCoreService._save_stop_response(
+                ChatCoreService._save_stop_context(
                     chat_id=chat_id,
                     assistant_message_id=assistant_message_id,
                     model_answer_step_id=model_answer_step_id,
@@ -850,7 +838,7 @@ class ChatCoreService:
 
             for chunk in model.stream_generate_with_messages(messages, **model_params):
                 if ChatStopManager().is_stop_requested(chat_id):
-                    ChatCoreService._save_stop_response(
+                    ChatCoreService._save_stop_context(
                         chat_id=chat_id,
                         assistant_message_id=assistant_message_id,
                         model_answer_step_id=model_answer_step_id,
@@ -887,6 +875,7 @@ class ChatCoreService:
                         message_id=assistant_message_id,
                         avatar=avatar
                     )
+                    EventBus.clear_chat_context(chat_id)
                     yield ChatStreamResponse.error_response(
                         error=chunk['error'],
                         chat_id=chat_id,
@@ -903,14 +892,27 @@ class ChatCoreService:
                     if round_reasoning_end_time is None and reasoning_content_chunk:
                         round_reasoning_end_time = time.time()
                     full_response_chunk += chunk['text']
-                    ctx.full_response += chunk['text']
-                
+
                 if chunk.get('reasoning_content'):
                     reasoning_content_chunk += chunk['reasoning_content']
-                    ctx.reasoning_content += chunk['reasoning_content']
-                
+
                 if chunk.get('tool_calls'):
                     tool_calls_list = chunk.get('tool_calls')
+
+                # 实时保存停止上下文到Redis（每个chunk更新一次）
+                ChatCoreService._save_stop_context(
+                    chat_id=chat_id,
+                    assistant_message_id=assistant_message_id,
+                    model_answer_step_id=model_answer_step_id,
+                    msg_model_id=msg_model_id,
+                    chatbot_id=chatbot_id,
+                    config=config,
+                    avatar=avatar,
+                    full_response_chunk=full_response_chunk,
+                    reasoning_content_chunk=reasoning_content_chunk,
+                    round_reasoning_end_time=round_reasoning_end_time,
+                    round_start_time=round_start_time
+                )
                 
                 reasoning_end = False
                 if chunk.get('usage') and reasoning_content_chunk and round_reasoning_end_time is not None:
@@ -957,6 +959,7 @@ class ChatCoreService:
                     step=MessageStep.MODEL_ANSWER,
                     message_id=assistant_message_id
                 )
+                EventBus.clear_chat_context(chat_id)
         
             if tool_calls_list:
                 messages.append({
@@ -1139,7 +1142,8 @@ class ChatCoreService:
                                 tool_call_id=tool_call_id,
                                 message_id=assistant_message_id,
                                 chatbot_id=chatbot_id,
-                                model_id=msg_model_id
+                                model_id=msg_model_id,
+                                tool_message_content=tool_message_content
                             )
                             # 用户回答后，更新工具消息 step_status 为 done
                             ChatMessageService.upsert_tool_message(
@@ -1172,8 +1176,8 @@ class ChatCoreService:
                         'content': full_response_chunk
                     })
                 break
-        
-        yield (None, messages, planning_messages_history)
+
+        yield (None, messages)
 
     @staticmethod
     async def _wait_for_clarify_input(
@@ -1181,7 +1185,8 @@ class ChatCoreService:
         tool_call_id: str,
         message_id: str,
         chatbot_id: Optional[str] = None,
-        model_id: Optional[str] = None
+        model_id: Optional[str] = None,
+        tool_message_content: str = ''
     ) -> Dict[str, Any]:
         """
         等待用户通过 API 提交澄清问题的回复
@@ -1196,6 +1201,7 @@ class ChatCoreService:
             message_id: 助手消息ID，作为 ChatInputManager 的 key
             chatbot_id: 机器人ID
             model_id: 模型ID
+            tool_message_content: clarify 工具返回的内容（JSON字符串），包含问题和选项
 
         Returns:
             Dict: 工具结果消息（role='tool'），包含 user_response 或 [用户未响应]
@@ -1258,7 +1264,7 @@ class ChatCoreService:
         ChatService.update_messages(ctx.chat_id, updated_messages)
     
     @staticmethod
-    def _save_stop_response(
+    def _save_stop_context(
         chat_id: str,
         assistant_message_id: str,
         model_answer_step_id: str,
@@ -1271,28 +1277,19 @@ class ChatCoreService:
         round_reasoning_end_time=None,
         round_start_time=None
     ):
-        """停止聊天时保存助理消息，在已有内容后追加停止标记"""
-        stop_content = full_response_chunk
-        if stop_content:
-            stop_content += '\n\n[用户停止回答]'
-        else:
-            stop_content = '[用户停止回答]'
-        reasoning_time = None
-        if reasoning_content_chunk and round_reasoning_end_time:
-            reasoning_time = int((round_reasoning_end_time - round_start_time) * 1000)
-        ChatMessageService.upsert_assistant_message(
-            chat_id=chat_id,
-            assistant_content=stop_content,
-            step_id=model_answer_step_id,
-            model_id=msg_model_id,
-            chatbot_id=chatbot_id,
-            config=config,
-            reasoning_content=reasoning_content_chunk if reasoning_content_chunk else None,
-            reasoning_time=reasoning_time,
-            step=MessageStep.MODEL_ANSWER,
-            message_id=assistant_message_id,
-            avatar=avatar
-        )
+        """将停止聊天所需参数实时保存到 Redis，供停止接口读取"""
+        EventBus.save_chat_context(chat_id, {
+            'assistant_message_id': assistant_message_id,
+            'model_answer_step_id': model_answer_step_id,
+            'msg_model_id': msg_model_id,
+            'chatbot_id': chatbot_id,
+            'config': config,
+            'avatar': avatar,
+            'full_response_chunk': full_response_chunk,
+            'reasoning_content_chunk': reasoning_content_chunk,
+            'round_reasoning_end_time': round_reasoning_end_time,
+            'round_start_time': round_start_time,
+        })
 
     @staticmethod
     async def chat_stream(
@@ -1350,6 +1347,7 @@ class ChatCoreService:
                 message_id=assistant_message_id,
                 avatar=ChatPreprocessor._resolve_avatar(chatbot_id, model_id)
             )
+            EventBus.clear_chat_context(e.chat_id)
             yield ChatStreamResponse.error_response(
                 error=e.message,
                 chat_id=e.chat_id,
@@ -1363,12 +1361,11 @@ class ChatCoreService:
 
         # 2. 聊天执行
         try:
-            ChatStopManager().clear_stop(ctx.chat_id)
             async for result in ChatCoreService._run_conversation_loop(ctx):
                 if isinstance(result, dict):
                     yield result
-                elif isinstance(result, tuple) and len(result) == 3:
-                    _, ctx.messages, _ = result
+                elif isinstance(result, tuple) and len(result) == 2:
+                    _, ctx.messages = result
         except GeneratorExit:
             ChatStopManager().request_stop(ctx.chat_id)
         except Exception as e:
@@ -1514,7 +1511,10 @@ class ChatCoreService:
                 pass
 
         if chatbot_id and not chatbot_config:
-            system_prompt = ChatCoreService.get_chatbot_system_prompt(chatbot_id)
+            try:
+                system_prompt = Chatbot.get(Chatbot.id == chatbot_id).greeting
+            except Chatbot.DoesNotExist:
+                pass
         
         if not model_id:
             if chat.model_id:
@@ -1565,10 +1565,9 @@ class ChatCoreService:
         # 如果前端已传入assistant_message_id，则使用它，否则生成新的ID
         if not assistant_message_id:
             assistant_message_id = uuid.uuid4().hex
-        
-        import time
+
         start_time = time.time()
-        reasoning_end_time = None
+        avatar = ChatPreprocessor._resolve_avatar(chatbot_id, model_id)
         
         # 主循环：处理模型调用和工具调用
         while True:
@@ -1698,10 +1697,6 @@ class ChatCoreService:
                     messages[i]['reasoning_content'] = chat_messages.items[msg_idx].reasoning_content
                 msg_idx += 1
             updated_messages.append(messages[i])
-        # updated_messages = [{"role": msg.role, "content": msg.content , "reasoning_content": msg.reasoning_content , "message_id": msg.message_id} for msg in chat_messages.items if not msg.role != 'system']
-        # system_message = messages[0] if messages else None
-        # if system_message:
-        #     updated_messages.insert(0, system_message)
         updated_messages.append(assistant_message_dict)
         ChatService.update_messages(chat_id, updated_messages)
 

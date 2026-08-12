@@ -792,6 +792,15 @@ class ChatMessageService:
 
             existing_message = found_matching_message
 
+            # 如果消息已被停止接口标记为 stop，不覆盖 step_status
+            try:
+                existing_extra = json.loads(existing_message.extra_content) if existing_message.extra_content else {}
+                if isinstance(existing_extra, dict) and existing_extra.get('step_status') == 'stop':
+                    extra_content_dict['step_status'] = 'stop'
+                    extra_content_str = json.dumps(extra_content_dict, ensure_ascii=False) if extra_content_dict else None
+            except (json.JSONDecodeError, TypeError):
+                pass
+
             # 更新字段：用户传的参数不为空则覆盖原值，否则保留原值
             if assistant_content is not None:
                 existing_message.content = assistant_content
@@ -1131,6 +1140,175 @@ class ChatMessageService:
         msg.updated_at = datetime.now().astimezone()
         msg.save()
         return 1
+
+    @staticmethod
+    @handle_transaction
+    def stop_chat_with_context(chat_id: str, ctx_data: Optional[dict] = None) -> int:
+        """
+        停止聊天并保存消息（整合 stop_chat_messages 和 _save_stop_response 逻辑）
+
+        1. 执行原有停止逻辑：更新正在运行的 assistant/tool 消息为停止状态，
+           处理 clarify 工具消息的停止
+        2. 如果提供了 Redis 上下文且最后一条消息不是 assistant（模型未完成回答），
+           用已生成的流式内容更新助手消息
+
+        Args:
+            chat_id: 对话ID
+            ctx_data: Redis 中的聊天上下文（_save_stop_response 所需参数），可选
+
+        Returns:
+            int: 更新的消息数量
+        """
+        import json
+
+        # 1. 查找最新一条 assistant/tool 消息
+        msg = ChatMessage.select().where(
+            (ChatMessage.chat_id == chat_id) &
+            (ChatMessage.deleted == False) &
+            (ChatMessage.role << ['assistant', 'tool'])
+        ).order_by(ChatMessage.created_at.desc(), ChatMessage.role.desc()).first()
+
+        updated_count = 0
+
+        if msg:
+            extra_data = {}
+            if msg.extra_content:
+                try:
+                    extra_data = json.loads(msg.extra_content)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            step_status = extra_data.get('step_status', '')
+
+            if step_status in ('running', 'start') or (not step_status and msg.content):
+                # clarify 工具消息停止时设为 done，不追加停止标记
+                tool_call = extra_data.get('tool_call', {})
+                is_clarify = isinstance(tool_call, dict) and tool_call.get('name') == 'clarify'
+                if is_clarify:
+                    extra_data['step_status'] = 'done'
+                else:
+                    extra_data['step_status'] = 'stop'
+                    if msg.content:
+                        msg.content += '\n\n[用户停止回答]'
+                    else:
+                        msg.content = '[用户停止回答]'
+
+                msg.extra_content = json.dumps(extra_data, ensure_ascii=False)
+                msg.updated_at = datetime.now().astimezone()
+                msg.save()
+                updated_count = 1
+
+        # 2. 从 Redis 上下文恢复流式内容并保存助手消息
+        #    仅当最后一条消息不是 assistant（模型未完成回答）时执行
+        if ctx_data:
+            if not msg or msg.role != 'assistant':
+                from app.core.chat.dto import MessageStep
+                full_response_chunk = ctx_data.get('full_response_chunk', '')
+                stop_content = full_response_chunk
+                if stop_content:
+                    stop_content += '\n\n[用户停止回答]'
+                else:
+                    stop_content = '[用户停止回答]'
+
+                reasoning_content_chunk = ctx_data.get('reasoning_content_chunk', '')
+                round_reasoning_end_time = ctx_data.get('round_reasoning_end_time')
+                round_start_time = ctx_data.get('round_start_time')
+                reasoning_time = None
+                if reasoning_content_chunk and round_reasoning_end_time and round_start_time:
+                    reasoning_time = int((round_reasoning_end_time - round_start_time) * 1000)
+
+                ChatMessageService.upsert_assistant_message(
+                    chat_id=chat_id,
+                    assistant_content=stop_content,
+                    step_id=ctx_data.get('model_answer_step_id', ''),
+                    model_id=ctx_data.get('msg_model_id'),
+                    chatbot_id=ctx_data.get('chatbot_id'),
+                    config=ctx_data.get('config'),
+                    reasoning_content=reasoning_content_chunk if reasoning_content_chunk else None,
+                    reasoning_time=reasoning_time,
+                    step=MessageStep.MODEL_ANSWER,
+                    message_id=ctx_data.get('assistant_message_id', ''),
+                    avatar=ctx_data.get('avatar'),
+                )
+                if updated_count == 0:
+                    updated_count = 1
+
+        return updated_count
+
+    @staticmethod
+    @handle_transaction
+    def recover_pending_clarify_messages() -> int:
+        """
+        恢复服务重启前处于等待澄清状态的消息
+
+        查找所有 step_status='running' 且 tool_call.name='clarify' 的 tool 消息，
+        如果该消息没有对应的 tool_response 消息，则创建一条 "[用户未响应]" 的
+        tool_response 消息，并将 tool 消息的 step_status 更新为 'done'。
+
+        Returns:
+            int: 恢复的消息数量
+        """
+        import json
+
+        # 查找所有待澄清的 tool 消息
+        pending_msgs = list(ChatMessage.select().where(
+            (ChatMessage.deleted == False) &
+            (ChatMessage.role == 'tool')
+        ))
+
+        recovered = 0
+        for msg in pending_msgs:
+            extra_data = {}
+            if msg.extra_content:
+                try:
+                    extra_data = json.loads(msg.extra_content)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+
+            if extra_data.get('step_status') != 'running':
+                continue
+
+            tool_call = extra_data.get('tool_call', {})
+            if not (isinstance(tool_call, dict) and tool_call.get('name') == 'clarify'):
+                continue
+
+            # 检查是否已有对应的 tool_response 消息
+            tool_call_id = tool_call.get('tool_call_id', '')
+            existing_response = ChatMessage.select().where(
+                (ChatMessage.chat_id == msg.chat_id) &
+                (ChatMessage.message_id == msg.message_id) &
+                (ChatMessage.role == 'tool_response') &
+                (ChatMessage.deleted == False)
+            ).first()
+
+            if existing_response:
+                # 已有 tool_response，将 step_status 更新为 done
+                extra_data['step_status'] = 'done'
+                msg.extra_content = json.dumps(extra_data, ensure_ascii=False)
+                msg.updated_at = datetime.now().astimezone()
+                msg.save()
+                continue
+
+            # 创建 "[用户未响应]" 的 tool_response 消息
+            save_model_id = msg.model_id if not msg.chatbot_id else None
+            ChatMessageService.create_tool_response_message(
+                chat_id=msg.chat_id,
+                content='[用户未响应]',
+                model_id=save_model_id,
+                chatbot_id=msg.chatbot_id,
+                message_id=msg.message_id,
+                extra_content=json.dumps({"tool_call": {"tool_call_id": tool_call_id, "name": "clarify"}}, ensure_ascii=False),
+            )
+
+            # 将 tool 消息的 step_status 更新为 done
+            extra_data['step_status'] = 'done'
+            msg.extra_content = json.dumps(extra_data, ensure_ascii=False)
+            msg.updated_at = datetime.now().astimezone()
+            msg.save()
+
+            recovered += 1
+
+        return recovered
 
     @staticmethod
     @handle_transaction

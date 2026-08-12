@@ -137,16 +137,35 @@ const ClarifyCard: React.FC<ClarifyCardProps> = ({ result, chatId, theme, toolCa
 
       {/* 已提交状态 */}
       {(submitted || isPrefilled) && (
-        <div className="clarify-card-submitted">
-          <CheckOutlined style={{ marginRight: 6, color: '#52c41a' }} />
-          <span>已回复：</span>
-          <Tag color="blue" style={{ marginLeft: 4 }}>
-            {isPrefilled
-              ? userResponse
-              : (Array.isArray(selectedChoices) && selectedChoices.length > 0
-                ? selectedChoices.join('、')
-                : customInput || '已提交')}
-          </Tag>
+        <div className="clarify-card-submitted" style={{ textAlign: 'left' }}>
+          {isPrefilled && userResponse ? (
+            <div className="clarify-card-submitted-content">
+              {hasChoices && (
+                <>
+                  <div className="clarify-card-submitted-label">选项：</div>
+                  {choices.map((choice, idx) => (
+                    <div key={idx} className="clarify-card-submitted-choice">{choice}</div>
+                  ))}
+                  <div style={{ height: 8 }} />
+                </>
+              )}
+              <div className="clarify-card-submitted-reply">
+                <span className="clarify-card-submitted-label">用户回复：</span>
+                <Tag color="blue" style={{ marginLeft: 4 }}>
+                  {userResponse}
+                </Tag>
+              </div>
+            </div>
+          ) : (
+            <>
+              <span>已回复：</span>
+              <Tag color="blue" style={{ marginLeft: 4 }}>
+                {Array.isArray(selectedChoices) && selectedChoices.length > 0
+                  ? selectedChoices.join('、')
+                  : customInput || '已提交'}
+              </Tag>
+            </>
+          )}
         </div>
       )}
 

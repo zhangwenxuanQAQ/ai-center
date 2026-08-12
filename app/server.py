@@ -1703,13 +1703,48 @@ try:
 except Exception as e:
     logger.warning(f"无法打印Banner: {e}")
 
+# 聊天事件消费者生命周期管理
+@asynccontextmanager
+async def chat_event_lifespan(app: FastAPI):
+    """
+    聊天事件消费者生命周期管理
+
+    应用启动时启动事件消费者，应用关闭时停止消费者。
+    """
+    from app.core.chat.event.consumer import ChatEventConsumer
+    from app.database.redis_utils import redis_utils
+    from app.services.chat.service import ChatMessageService
+
+    # 恢复服务重启前处于等待澄清状态的消息
+    try:
+        recovered = ChatMessageService.recover_pending_clarify_messages()
+        if recovered > 0:
+            logger.info(f"[EVENT] 恢复了 {recovered} 条待澄清消息")
+    except Exception as e:
+        logger.warning(f"[EVENT] 恢复待澄清消息失败: {e}")
+
+    if redis_utils.is_available:
+        logger.info("[EVENT] 正在启动聊天事件消费者...")
+        ChatEventConsumer.start()
+        logger.info("[EVENT] ✅ 聊天事件消费者已启动")
+    else:
+        logger.warning("[EVENT] ⚠️ Redis不可用，聊天事件消费者未启动")
+
+    yield
+
+    logger.info("[EVENT] 正在停止聊天事件消费者...")
+    await ChatEventConsumer.stop()
+    logger.info("[EVENT] ✅ 聊天事件消费者已停止")
+
+
 # 创建FastAPI应用，禁用默认的docs以使用本地静态资源
 app = FastAPI(
     title="AI Center API",
     description="AI服务中心后端API",
     version="1.0.0",
     docs_url=None,  # 禁用默认docs，使用本地静态资源
-    redoc_url=None  # 禁用默认redoc，使用本地静态资源
+    redoc_url=None,  # 禁用默认redoc，使用本地静态资源
+    lifespan=chat_event_lifespan,
 )
 
 # 配置静态文件目录，用于提供Swagger UI和ReDoc的静态资源
