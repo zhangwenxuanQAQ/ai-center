@@ -216,8 +216,23 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         } else {
           // 流式已结束：从后端重新加载历史消息，获取最新的持久化数据（含 tool_response 等）
           fetchMessages(conversation.id);
-          setLoading(false);
-          setThinkingMessageId(null);
+          // 检查后端是否仍有正在进行的流式任务（如等待澄清输入），如有则重连并显示停止按钮
+          chatService.getStreamingStatus(conversation.id).then((statusResult) => {
+            const statusData = (statusResult as any)?.data || statusResult;
+            if (statusData?.is_streaming) {
+              setLoading(true);
+              if (streamingCache?.assistantMessageId) {
+                setThinkingMessageId(streamingCache.assistantMessageId);
+              }
+              checkAndReconnectStream(conversation.id);
+            } else {
+              setLoading(false);
+              setThinkingMessageId(null);
+            }
+          }).catch(() => {
+            setLoading(false);
+            setThinkingMessageId(null);
+          });
         }
       } else if (streamingCache && streamingCache.messages.length > 0) {
         // 有缓存但无ref：兼容旧逻辑，从后端加载历史消息
@@ -765,7 +780,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                     return msg;
                   });
                 }
-                const existingStepMsg = updatedMessages.find(msg => msg.step_id === stepId && msg.role === 'assistant');
+                const existingStepMsg = updatedMessages.find(msg => msg.step_id === stepId && (msg.role === 'assistant' || msg.role === 'tool'));
                 if (existingStepMsg) {
                   return updatedMessages.map(msg => {
                     if (msg.role === 'user') return processSSEMessageUpdate(msg, data, idTracker);
@@ -866,7 +881,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       }
     }
 
-    // 更新当前正在运行的消息状态为stop（同时更新ref和state）
+    // 更新当前正在运行的消息状态为stop，同时标记澄清工具步骤为done（同时更新ref和state）
     const stopChatId = conversation?.id;
     const stopUpdater = (prev: Message[]) => prev.map(msg => {
       if (msg.role === 'assistant' && (msg.status === 'start' || msg.status === 'running')) {
@@ -874,6 +889,13 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           ...msg,
           status: 'stop',
           content: msg.content ? (msg.content.endsWith('\n') ? msg.content + '已停止' : msg.content + '\n已停止') : '已停止'
+        };
+      }
+      // 标记工具消息 step_status 为 done，使澄清等待状态解除
+      if (msg.role === 'tool' && msg.extra_content && msg.extra_content.step_status !== 'done') {
+        return {
+          ...msg,
+          extra_content: { ...msg.extra_content, step_status: 'done' }
         };
       }
       return msg;
@@ -1350,6 +1372,10 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             if (msg.role === 'assistant' && msg.status && msg.status !== 'done' && msg.status !== 'stop') {
               return { ...msg, status: 'done' };
             }
+            // 标记工具消息 step_status 为 done，使澄清等待状态解除
+            if (msg.role === 'tool' && msg.extra_content && msg.extra_content.step_status !== 'done') {
+              return { ...msg, extra_content: { ...msg.extra_content, step_status: 'done' } };
+            }
             return msg;
           }));
           if (currentChatIdRef.current === streamingChatId) {
@@ -1369,6 +1395,10 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           updateStreamingMessages(streamingChatId, prev => prev.map(msg => {
             if (msg.role === 'assistant' && msg.status && msg.status !== 'done' && msg.status !== 'stop') {
               return { ...msg, status: 'done' };
+            }
+            // 标记工具消息 step_status 为 done，使澄清等待状态解除
+            if (msg.role === 'tool' && msg.extra_content && msg.extra_content.step_status !== 'done') {
+              return { ...msg, extra_content: { ...msg.extra_content, step_status: 'done' } };
             }
             return msg;
           }));
@@ -1436,7 +1466,9 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       } else {
         // 纯Enter：阻止默认行为并发送消息
         e.preventDefault();
-        handleSend();
+        if (!loading && !clarifyPending) {
+          handleSend();
+        }
       }
     }
   };
@@ -1967,6 +1999,10 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               if (msg.role === 'assistant' && msg.status && msg.status !== 'done' && msg.status !== 'stop') {
                 return { ...msg, status: 'done' };
               }
+              // 标记工具消息 step_status 为 done，使澄清等待状态解除
+              if (msg.role === 'tool' && msg.extra_content && msg.extra_content.step_status !== 'done') {
+                return { ...msg, extra_content: { ...msg.extra_content, step_status: 'done' } };
+              }
               return msg;
             }));
             if (currentChatIdRef.current === streamingChatId) {
@@ -1986,6 +2022,10 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             updateStreamingMessages(streamingChatId, prev => prev.map(msg => {
               if (msg.role === 'assistant' && msg.status && msg.status !== 'done' && msg.status !== 'stop') {
                 return { ...msg, status: 'done' };
+              }
+              // 标记工具消息 step_status 为 done，使澄清等待状态解除
+              if (msg.role === 'tool' && msg.extra_content && msg.extra_content.step_status !== 'done') {
+                return { ...msg, extra_content: { ...msg.extra_content, step_status: 'done' } };
               }
               return msg;
             }));
@@ -2171,6 +2211,10 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               if (msg.role === 'assistant' && msg.status && msg.status !== 'done' && msg.status !== 'stop') {
                 return { ...msg, status: 'done' };
               }
+              // 标记工具消息 step_status 为 done，使澄清等待状态解除
+              if (msg.role === 'tool' && msg.extra_content && msg.extra_content.step_status !== 'done') {
+                return { ...msg, extra_content: { ...msg.extra_content, step_status: 'done' } };
+              }
               return msg;
             }));
             if (currentChatIdRef.current === streamingChatId) {
@@ -2190,6 +2234,10 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             updateStreamingMessages(streamingChatId, prev => prev.map(msg => {
               if (msg.role === 'assistant' && msg.status && msg.status !== 'done' && msg.status !== 'stop') {
                 return { ...msg, status: 'done' };
+              }
+              // 标记工具消息 step_status 为 done，使澄清等待状态解除
+              if (msg.role === 'tool' && msg.extra_content && msg.extra_content.step_status !== 'done') {
+                return { ...msg, extra_content: { ...msg.extra_content, step_status: 'done' } };
               }
               return msg;
             }));
@@ -2742,7 +2790,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     return false;
   };
 
-  const renderAssistantMessageContent = (msg: Message) => {
+  const renderAssistantMessageContent = (msg: Message, groupMessages?: Message[]) => {
     if (msg.role !== 'assistant') return null;
 
     return (
@@ -3099,6 +3147,9 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             {msg.tool_calls && msg.tool_calls.length > 0 && msg.tool_calls.map((tc, tcIndex) => {
               const tcId = tc.tool_call_id || `tc-${tcIndex}`;
               const isClarify = tc.name === 'clarify';
+              const tcToolResponse = groupMessages?.find(
+                (m) => m.role === 'tool_response' && m.extra_content?.tool_call?.tool_call_id === tc.tool_call_id
+              );
               return (
               <div key={tcId} className={`tool-call-card tool-call-${tc.status}${tc.name === 'web_search' ? ' tool-call-web-search' : ''}${tc.name === 'generate_ppt' ? ' tool-call-generate-ppt' : ''}${isClarify ? ' tool-call-clarify' : ''}`}>
                 <div className="tool-call-header" onClick={() => !isClarify && toggleToolCall(tcId)}>
@@ -3125,7 +3176,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 {/* clarify 工具：在卡片外部直接渲染交互组件，无需展开 */}
                 {isClarify && tc.result && (
                   <div className="tool-call-content tool-call-clarify-content">
-                    <ClarifyCard result={tc.result} chatId={conversation?.id || ''} theme={theme} toolCallId={tc.tool_call_id} messageId={msg.message_id} chatbotId={selectedChatbot?.id} modelId={selectedModel?.id} disabled={!loading && !respondedClarifyIds.has(tc.tool_call_id)} onResponded={handleClarifyResponded} />
+                    <ClarifyCard result={tc.result} chatId={conversation?.id || ''} theme={theme} toolCallId={tc.tool_call_id} messageId={msg.message_id} chatbotId={selectedChatbot?.id} modelId={selectedModel?.id} disabled={!!tcToolResponse} onResponded={handleClarifyResponded} userResponse={tcToolResponse?.content} />
                   </div>
                 )}
                 {!isClarify && expandedToolCalls.has(tcId) && (
@@ -3216,6 +3267,9 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
             {msg.tool_calls && msg.tool_calls.length > 0 && msg.tool_calls.map((tc, tcIndex) => {
               const tcId = tc.tool_call_id || `tc-${tcIndex}`;
               const isClarify = tc.name === 'clarify';
+              const tcToolResponse = groupMessages?.find(
+                (m) => m.role === 'tool_response' && m.extra_content?.tool_call?.tool_call_id === tc.tool_call_id
+              );
               return (
               <div key={tcId} className={`tool-call-card tool-call-${tc.status}${tc.name === 'web_search' ? ' tool-call-web-search' : ''}${tc.name === 'generate_ppt' ? ' tool-call-generate-ppt' : ''}${isClarify ? ' tool-call-clarify' : ''}`}>
                 <div className="tool-call-header" onClick={() => !isClarify && toggleToolCall(tcId)}>
@@ -3242,7 +3296,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 {/* clarify 工具：在卡片外部直接渲染交互组件，无需展开 */}
                 {isClarify && tc.result && (
                   <div className="tool-call-content tool-call-clarify-content">
-                    <ClarifyCard result={tc.result} chatId={conversation?.id || ''} theme={theme} toolCallId={tc.tool_call_id} messageId={msg.message_id} chatbotId={selectedChatbot?.id} modelId={selectedModel?.id} disabled={!loading && !respondedClarifyIds.has(tc.tool_call_id)} onResponded={handleClarifyResponded} />
+                    <ClarifyCard result={tc.result} chatId={conversation?.id || ''} theme={theme} toolCallId={tc.tool_call_id} messageId={msg.message_id} chatbotId={selectedChatbot?.id} modelId={selectedModel?.id} disabled={!!tcToolResponse} onResponded={handleClarifyResponded} userResponse={tcToolResponse?.content} />
                   </div>
                 )}
                 {!isClarify && expandedToolCalls.has(tcId) && (
@@ -3367,7 +3421,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
                 id={msg.step_id || undefined}
                 className="step-container"
               >
-                {msg.role === 'tool' ? renderToolMessage(msg, group.messages) : renderAssistantMessageContent(msg)}
+                {msg.role === 'tool' ? renderToolMessage(msg, group.messages) : renderAssistantMessageContent(msg, group.messages)}
               </div>
               )
             ))}
@@ -3481,7 +3535,7 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
         {/* clarify 工具：在卡片外部直接渲染交互组件，无需展开 */}
         {isClarify && hasResult && (
           <div className="tool-call-content tool-call-clarify-content">
-            <ClarifyCard result={toolCall.result} chatId={conversation?.id || ''} theme={theme} toolCallId={toolCallId} messageId={msg.message_id} chatbotId={selectedChatbot?.id} modelId={selectedModel?.id} disabled={!loading && !respondedClarifyIds.has(toolCallId) || isStepDone || !!toolResponse} onResponded={handleClarifyResponded} userResponse={toolResponse?.content} />
+            <ClarifyCard result={toolCall.result} chatId={conversation?.id || ''} theme={theme} toolCallId={toolCallId} messageId={msg.message_id} chatbotId={selectedChatbot?.id} modelId={selectedModel?.id} disabled={isStepDone || !!toolResponse} onResponded={handleClarifyResponded} userResponse={toolResponse?.content} />
           </div>
         )}
         {!isClarify && expandedToolCalls.has(toolCallId) && (
@@ -4548,10 +4602,9 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
               onPaste={handlePaste}
               onDrop={handleDrop}
               onDragOver={handleDragOver}
-              placeholder={clarifyPending ? '请先回复上方的澄清问题...' : '输入消息... (Ctrl/Shift+Enter换行，Enter发送)'}
+              placeholder='输入消息... (Ctrl/Shift+Enter换行，Enter发送)'
               autoSize={{ minRows: 5, maxRows: 12 }}
               className={`chat-input ${theme === 'dark' ? 'dark' : 'light'}`}
-              disabled={clarifyPending}
             />
           </div>
           <div className="chat-input-inner-footer">
@@ -4643,9 +4696,9 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
           </div>
           <Button
             type="primary"
-            icon={loading ? <StopOutlined /> : <SendOutlined />}
-            onClick={loading ? handleStop : handleSend}
-            disabled={clarifyPending && !loading}
+            icon={(loading || clarifyPending) ? <StopOutlined /> : <SendOutlined />}
+            onClick={(loading || clarifyPending) ? handleStop : handleSend}
+            disabled={false}
             className="input-send-button"
           />
         </div>

@@ -239,7 +239,18 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         if (streamingCache && streamingCache.isStreaming) {
           setLoading(true);
         } else {
-          setLoading(false);
+          // 检查后端是否仍有正在进行的流式任务（如等待澄清输入），如有则重连并显示停止按钮
+          integrationChatService.getStreamingStatus(apiKey, chatId).then((statusResult) => {
+            const statusData = (statusResult as any)?.data || statusResult;
+            if (statusData?.is_streaming) {
+              setLoading(true);
+              checkAndReconnectStream(chatId);
+            } else {
+              setLoading(false);
+            }
+          }).catch(() => {
+            setLoading(false);
+          });
         }
         setTimeout(() => { scrollToBottomInstant(); }, 100);
       } else if (streamingCache && streamingCache.isStreaming) {
@@ -492,7 +503,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                     return msg;
                   });
                 }
-                const existingStepMsg = updated.find(msg => msg.step_id === stepId && msg.role === 'assistant');
+                const existingStepMsg = updated.find(msg => msg.step_id === stepId && (msg.role === 'assistant' || msg.role === 'tool'));
                 if (existingStepMsg) {
                   return updated.map(msg => {
                     if (msg.role === 'user') return processReconnectSSEUpdate(msg, data, idTracker);
@@ -1090,6 +1101,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             if (msg.role === 'assistant' && msg.status && msg.status !== 'done' && msg.status !== 'stop') {
               return { ...msg, content: msg.content || errorMessage, status: 'done' };
             }
+            // 标记工具消息 step_status 为 done，使澄清等待状态解除
+            if (msg.role === 'tool' && msg.extra_content && msg.extra_content.step_status !== 'done') {
+              return { ...msg, extra_content: { ...msg.extra_content, step_status: 'done' } };
+            }
             return msg;
           }));
           if (currentChatIdRef.current === streamingChatId) {
@@ -1103,6 +1118,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           updateStreamingMessages(streamingChatId, (prev) => prev.map(msg => {
             if (msg.role === 'assistant' && msg.status !== 'done' && msg.status !== 'stop') {
               return { ...msg, status: 'done' };
+            }
+            // 标记工具消息 step_status 为 done，使澄清等待状态解除
+            if (msg.role === 'tool' && msg.extra_content && msg.extra_content.step_status !== 'done') {
+              return { ...msg, extra_content: { ...msg.extra_content, step_status: 'done' } };
             }
             return msg;
           }));
@@ -1146,6 +1165,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       const last = updated[updated.length - 1];
       if (last && last.role === 'assistant') {
         updated[updated.length - 1] = { ...last, status: 'done' };
+      }
+      // 标记工具消息 step_status 为 done，使澄清等待状态解除
+      for (let i = 0; i < updated.length; i++) {
+        if (updated[i].role === 'tool' && updated[i].extra_content && updated[i].extra_content.step_status !== 'done') {
+          updated[i] = { ...updated[i], extra_content: { ...updated[i].extra_content, step_status: 'done' } };
+        }
       }
       return updated;
     };
@@ -1238,11 +1263,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({
       // 默认行为就是换行，不需要处理
       return;
     }
-    // 仅 Enter 发送（如果正在回答则不发送）
+    // 仅 Enter 发送（如果正在回答或等待澄清则不发送）
     if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) {
       e.preventDefault();
-      // 正在回答时不能发送，但可以输入
-      if (!loading) {
+      if (!loading && !clarifyPending) {
         handleSend();
       }
     }
@@ -1672,7 +1696,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                           theme={themeMode === 'dark' ? 'dark' : 'light'}
                           toolCallId={tc.tool_call_id}
                           messageId={msg.message_id}
-                          disabled={!loading && !respondedClarifyIds.has(tc.tool_call_id) || isStepDone || !!toolResponse}
+                          disabled={isStepDone || !!toolResponse}
                           onResponded={handleClarifyResponded}
                           userResponse={toolResponse?.content}
                         />
@@ -2032,9 +2056,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             value={inputValue}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            placeholder={clarifyPending ? '请先回复上方的澄清问题...' : `${inputPlaceholder}（Ctrl/Shift+Enter换行，Enter发送）`}
+            placeholder={`${inputPlaceholder}（Ctrl/Shift+Enter换行，Enter发送）`}
             rows={1}
-            disabled={clarifyPending}
           />
           {/* 输入框底部工具栏 */}
           <div className="int-input-toolbar">
@@ -2076,7 +2099,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
               </button>
             </div>
             {/* 发送/停止按钮 */}
-            {loading ? (
+            {(loading || clarifyPending) ? (
               <button className="int-send-btn stop" onClick={handleStop} title="停止">
                 ■
               </button>
@@ -2084,7 +2107,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
               <button
                 className="int-send-btn"
                 onClick={handleSend}
-                disabled={clarifyPending || (selectedFiles.length === 0 && !inputValue.trim())}
+                disabled={selectedFiles.length === 0 && !inputValue.trim()}
                 title="发送"
               >
                 ➤

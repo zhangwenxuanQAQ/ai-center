@@ -408,7 +408,7 @@ class ChatPreprocessor:
         user_msg = ChatMessageService.create_user_message(
             chat_id=ctx.chat_id,
             user_content=ctx.user_text,
-            model_id=ctx.model_id,
+            model_id=ctx.model_id if not ctx.chatbot_id else None,
             chatbot_id=ctx.chatbot_id,
             config=ctx.config,
             message_id=ctx.message_id,
@@ -824,7 +824,20 @@ class ChatCoreService:
             reasoning_content_chunk = ''
             tool_calls_list = []
             round_finished = False
-            
+
+            # 在流式生成前创建空的助理消息，确保消息记录存在
+            ChatMessageService.upsert_assistant_message(
+                chat_id=chat_id,
+                assistant_content='',
+                step_id=model_answer_step_id,
+                model_id=msg_model_id,
+                chatbot_id=chatbot_id,
+                config=config,
+                step=MessageStep.MODEL_ANSWER,
+                message_id=assistant_message_id,
+                avatar=avatar
+            )
+
             for chunk in model.stream_generate_with_messages(messages, **model_params):
                 if ChatStopManager().is_stop_requested(chat_id):
                     yield ChatStreamResponse.text_response(
@@ -1482,7 +1495,7 @@ class ChatCoreService:
         user_msg = ChatMessageService.create_user_message(
             chat_id=chat_id,
             user_content=user_text,
-            model_id=model_id,
+            model_id=model_id if not chatbot_id else None,
             chatbot_id=chatbot_id,
             config=config,
             message_id=message_id,

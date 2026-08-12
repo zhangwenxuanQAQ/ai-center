@@ -6,7 +6,7 @@ import uuid
 import json
 from datetime import datetime
 from typing import List, Optional, Tuple, Any
-from peewee import fn
+from peewee import fn, Case
 
 from app.database.models import Chat, ChatMessage
 from app.services.chat.dto import (
@@ -365,11 +365,20 @@ class ChatMessageService:
         Returns:
             ChatMessageListResponse: 消息列表响应
         """
-        # 按创建时间升序排序，同一时间内按 user → assistant → tool 排序（tool 紧跟 assistant）
+        # 按创建时间升序排序，同一时间内按 user → assistant → tool → tool_response 排序
+        role_order = Case(
+            ChatMessage.role, [
+                ('user', 0),
+                ('assistant', 1),
+                ('tool', 2),
+                ('tool_response', 3),
+            ],
+            4
+        )
         messages = ChatMessage.select().where(
             (ChatMessage.chat_id == chat_id) &
             (ChatMessage.deleted == False)
-        ).order_by(ChatMessage.created_at.asc(), ChatMessage.role.asc())
+        ).order_by(ChatMessage.created_at.asc(), role_order.asc())
         
         total = messages.count()
         items = [ChatMessageDTO.model_validate(msg) for msg in messages]
@@ -1072,63 +1081,58 @@ class ChatMessageService:
     @handle_transaction
     def stop_chat_messages(chat_id: str) -> int:
         """
-        停止对话中正在运行的消息
-        
-        将所有正在运行的消息更新为stop状态，
-        保留思考内容和正文内容，在content末尾拼接"已停止"
-        
+        停止对话中正在运行的最新一条消息
+
+        获取最新的一条 assistant/tool 消息，更新为 stop 状态，
+        保留思考内容和正文内容，在 content 末尾拼接"已停止"
+
         Args:
             chat_id: 对话ID
-            
+
         Returns:
             int: 更新的消息数量
         """
         import json
-        
-        messages = ChatMessage.select().where(
+
+        msg = ChatMessage.select().where(
             (ChatMessage.chat_id == chat_id) &
             (ChatMessage.deleted == False) &
             (ChatMessage.role << ['assistant', 'tool'])
-        ).order_by(ChatMessage.created_at.desc(), ChatMessage.role.desc())
-        
-        updated_count = 0
-        for msg in messages:
-            extra_data = {}
-            if msg.extra_content:
-                try:
-                    extra_data = json.loads(msg.extra_content)
-                except (json.JSONDecodeError, TypeError):
-                    pass
-            
-            step_status = extra_data.get('step_status', '')
-            
-            if step_status in ('running', 'start') or (not step_status and msg.content):
-                # clarify 工具消息停止时设为 done，不追加"已停止"
-                tool_call = extra_data.get('tool_call', {})
-                is_clarify = isinstance(tool_call, dict) and tool_call.get('name') == 'clarify'
-                if is_clarify:
-                    extra_data['step_status'] = 'done'
-                    msg.extra_content = json.dumps(extra_data, ensure_ascii=False)
-                    msg.updated_at = datetime.now().astimezone()
-                    msg.save()
-                    updated_count += 1
-                    continue
+        ).order_by(ChatMessage.created_at.desc(), ChatMessage.role.desc()).first()
 
-                extra_data['step_status'] = 'stop'
-                msg.extra_content = json.dumps(extra_data, ensure_ascii=False)
-                
-                if msg.content:
-                    if not msg.content.endswith('\n'):
-                        msg.content += '\n'
-                    msg.content += '已停止'
-                else:
-                    msg.content = '已停止'
-                
-                msg.updated_at = datetime.now().astimezone()
-                msg.save()
-                updated_count += 1
-        
-        return updated_count
+        if not msg:
+            return 0
+
+        extra_data = {}
+        if msg.extra_content:
+            try:
+                extra_data = json.loads(msg.extra_content)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        step_status = extra_data.get('step_status', '')
+
+        if step_status not in ('running', 'start') and (step_status or not msg.content):
+            return 0
+
+        # clarify 工具消息停止时设为 done，不追加"已停止"
+        tool_call = extra_data.get('tool_call', {})
+        is_clarify = isinstance(tool_call, dict) and tool_call.get('name') == 'clarify'
+        if is_clarify:
+            extra_data['step_status'] = 'done'
+        else:
+            extra_data['step_status'] = 'stop'
+            if msg.content:
+                if not msg.content.endswith('\n'):
+                    msg.content += '\n'
+                msg.content += '已停止'
+            else:
+                msg.content = '已停止'
+
+        msg.extra_content = json.dumps(extra_data, ensure_ascii=False)
+        msg.updated_at = datetime.now().astimezone()
+        msg.save()
+        return 1
 
     @staticmethod
     @handle_transaction
