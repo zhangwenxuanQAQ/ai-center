@@ -825,19 +825,6 @@ class ChatCoreService:
             tool_calls_list = []
             round_finished = False
 
-            # 在流式生成前创建空的助理消息，确保消息记录存在
-            ChatMessageService.upsert_assistant_message(
-                chat_id=chat_id,
-                assistant_content='',
-                step_id=model_answer_step_id,
-                model_id=msg_model_id,
-                chatbot_id=chatbot_id,
-                config=config,
-                step=MessageStep.MODEL_ANSWER,
-                message_id=assistant_message_id,
-                avatar=avatar
-            )
-
             for chunk in model.stream_generate_with_messages(messages, **model_params):
                 if ChatStopManager().is_stop_requested(chat_id):
                     yield ChatStreamResponse.text_response(

@@ -870,19 +870,23 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
   };
 
   const handleStop = async () => {
+    // 优先中断指定对话的流式请求，同时中断全局请求
+    const stopChatId = conversation?.id;
+    if (stopChatId) {
+      chatService.abortConversation(stopChatId);
+    }
     chatService.stopCurrentRequest();
 
     // 调用后端停止接口，更新消息状态
-    if (conversation?.id) {
+    if (stopChatId) {
       try {
-        await chatService.stopChat(conversation.id);
+        await chatService.stopChat(stopChatId);
       } catch (e) {
         console.error('停止聊天失败:', e);
       }
     }
 
     // 更新当前正在运行的消息状态为stop，同时标记澄清工具步骤为done（同时更新ref和state）
-    const stopChatId = conversation?.id;
     const stopUpdater = (prev: Message[]) => prev.map(msg => {
       if (msg.role === 'assistant' && (msg.status === 'start' || msg.status === 'running')) {
         return {
@@ -901,7 +905,8 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
       return msg;
     });
     if (stopChatId) {
-      updateStreamingMessages(stopChatId, stopUpdater);
+      // 停止成功后重新查询消息记录，确保 UI 与后端状态一致
+      await fetchMessages(stopChatId);
     } else {
       setMessages(stopUpdater);
     }

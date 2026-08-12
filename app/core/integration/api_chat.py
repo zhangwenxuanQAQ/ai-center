@@ -1153,17 +1153,6 @@ class IntegrationChatCoreService:
             tool_calls_list = []
             round_finished = False
 
-            # 在流式生成前创建空的助理消息，确保消息记录存在
-            IntegrationChatCoreService._upsert_assistant_message(
-                chatbot_id=chatbot_id,
-                chat_id=chat_id,
-                message_id=assistant_message_id,
-                step_id=model_answer_step_id,
-                content='',
-                model_id=msg_model_id,
-                step=MessageStep.MODEL_ANSWER
-            )
-
             # 流式生成模型回复
             for chunk in model.stream_generate_with_messages(messages, **model_params):
                 if ChatStopManager().is_stop_requested(chat_id):

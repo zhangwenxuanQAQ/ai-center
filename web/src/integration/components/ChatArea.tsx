@@ -1157,28 +1157,29 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   };
 
   // Stop streaming
-  const handleStop = () => {
+  const handleStop = async () => {
     abortControllerRef.current?.abort();
     setLoading(false);
-    const stopUpdater = (prev: DisplayMessage[]) => {
-      const updated = [...prev];
-      const last = updated[updated.length - 1];
-      if (last && last.role === 'assistant') {
-        updated[updated.length - 1] = { ...last, status: 'done' };
-      }
-      // 标记工具消息 step_status 为 done，使澄清等待状态解除
-      for (let i = 0; i < updated.length; i++) {
-        if (updated[i].role === 'tool' && updated[i].extra_content && updated[i].extra_content.step_status !== 'done') {
-          updated[i] = { ...updated[i], extra_content: { ...updated[i].extra_content, step_status: 'done' } };
-        }
-      }
-      return updated;
-    };
-    setMessages(stopUpdater);
-    // 同步更新ref中的消息状态
     const chatId = currentChatIdRef.current;
-    if (chatId && streamingMessagesRef.current[chatId]) {
-      streamingMessagesRef.current[chatId] = stopUpdater(streamingMessagesRef.current[chatId]);
+    // 停止后重新查询消息记录，确保 UI 与后端状态一致
+    if (chatId) {
+      await loadMessages(chatId);
+    } else {
+      const stopUpdater = (prev: DisplayMessage[]) => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last && last.role === 'assistant') {
+          updated[updated.length - 1] = { ...last, status: 'done' };
+        }
+        // 标记工具消息 step_status 为 done，使澄清等待状态解除
+        for (let i = 0; i < updated.length; i++) {
+          if (updated[i].role === 'tool' && updated[i].extra_content && updated[i].extra_content.step_status !== 'done') {
+            updated[i] = { ...updated[i], extra_content: { ...updated[i].extra_content, step_status: 'done' } };
+          }
+        }
+        return updated;
+      };
+      setMessages(stopUpdater);
     }
   };
 
