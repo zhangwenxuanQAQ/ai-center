@@ -592,6 +592,42 @@ class IntegrationChatCoreService:
         return assistant_message
 
     @staticmethod
+    def _save_stop_response(
+        chatbot_id: str,
+        chat_id: str,
+        assistant_message_id: str,
+        model_answer_step_id: str,
+        msg_model_id: Optional[str],
+        temporary: bool = False,
+        full_response_chunk: str = '',
+        reasoning_content_chunk: str = '',
+        round_reasoning_end_time=None,
+        round_start_time=None
+    ):
+        """停止聊天时保存助理消息，在已有内容后追加停止标记"""
+        if temporary:
+            return
+        stop_content = full_response_chunk
+        if stop_content:
+            stop_content += '\n\n[用户停止回答]'
+        else:
+            stop_content = '[用户停止回答]'
+        reasoning_time = None
+        if reasoning_content_chunk and round_reasoning_end_time:
+            reasoning_time = int((round_reasoning_end_time - round_start_time) * 1000)
+        IntegrationChatCoreService._upsert_assistant_message(
+            chatbot_id=chatbot_id,
+            chat_id=chat_id,
+            message_id=assistant_message_id,
+            step_id=model_answer_step_id,
+            content=stop_content,
+            model_id=msg_model_id,
+            reasoning_content=reasoning_content_chunk if reasoning_content_chunk else None,
+            reasoning_time=reasoning_time,
+            step=MessageStep.MODEL_ANSWER
+        )
+
+    @staticmethod
     def _upsert_assistant_message(
         chatbot_id: str,
         chat_id: str,
@@ -1153,9 +1189,43 @@ class IntegrationChatCoreService:
             tool_calls_list = []
             round_finished = False
 
+            # 在流式生成前检查是否已停止（用户在模型开始回答前就点了停止）
+            if ChatStopManager().is_stop_requested(chat_id):
+                IntegrationChatCoreService._save_stop_response(
+                    chatbot_id=chatbot_id,
+                    chat_id=chat_id,
+                    assistant_message_id=assistant_message_id,
+                    model_answer_step_id=model_answer_step_id,
+                    msg_model_id=msg_model_id,
+                    temporary=temporary
+                )
+                yield ChatStreamResponse.text_response(
+                    text='',
+                    chat_id=chat_id,
+                    user_message_id=user_message_id,
+                    assistant_message_id=assistant_message_id,
+                    status=MessageStatus.STOP,
+                    step_id=model_answer_step_id,
+                    step=MessageStep.MODEL_ANSWER,
+                    avatar=avatar
+                ).to_dict()
+                return
+
             # 流式生成模型回复
             for chunk in model.stream_generate_with_messages(messages, **model_params):
                 if ChatStopManager().is_stop_requested(chat_id):
+                    IntegrationChatCoreService._save_stop_response(
+                        chatbot_id=chatbot_id,
+                        chat_id=chat_id,
+                        assistant_message_id=assistant_message_id,
+                        model_answer_step_id=model_answer_step_id,
+                        msg_model_id=msg_model_id,
+                        temporary=temporary,
+                        full_response_chunk=full_response_chunk,
+                        reasoning_content_chunk=reasoning_content_chunk,
+                        round_reasoning_end_time=round_reasoning_end_time,
+                        round_start_time=round_start_time
+                    )
                     yield ChatStreamResponse.text_response(
                         text='',
                         chat_id=chat_id,

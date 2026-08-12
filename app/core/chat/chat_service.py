@@ -825,8 +825,44 @@ class ChatCoreService:
             tool_calls_list = []
             round_finished = False
 
+            # 在流式生成前检查是否已停止（用户在模型开始回答前就点了停止）
+            if ChatStopManager().is_stop_requested(chat_id):
+                ChatCoreService._save_stop_response(
+                    chat_id=chat_id,
+                    assistant_message_id=assistant_message_id,
+                    model_answer_step_id=model_answer_step_id,
+                    msg_model_id=msg_model_id,
+                    chatbot_id=chatbot_id,
+                    config=config,
+                    avatar=avatar
+                )
+                yield ChatStreamResponse.text_response(
+                    text='',
+                    chat_id=chat_id,
+                    user_message_id=user_message_id,
+                    assistant_message_id=assistant_message_id,
+                    status=MessageStatus.STOP,
+                    step_id=model_answer_step_id,
+                    step=MessageStep.MODEL_ANSWER,
+                    avatar=avatar
+                ).to_dict()
+                return
+
             for chunk in model.stream_generate_with_messages(messages, **model_params):
                 if ChatStopManager().is_stop_requested(chat_id):
+                    ChatCoreService._save_stop_response(
+                        chat_id=chat_id,
+                        assistant_message_id=assistant_message_id,
+                        model_answer_step_id=model_answer_step_id,
+                        msg_model_id=msg_model_id,
+                        chatbot_id=chatbot_id,
+                        config=config,
+                        avatar=avatar,
+                        full_response_chunk=full_response_chunk,
+                        reasoning_content_chunk=reasoning_content_chunk,
+                        round_reasoning_end_time=round_reasoning_end_time,
+                        round_start_time=round_start_time
+                    )
                     yield ChatStreamResponse.text_response(
                         text='',
                         chat_id=chat_id,
@@ -1221,6 +1257,43 @@ class ChatCoreService:
             updated_messages.append(ctx.messages[i])
         ChatService.update_messages(ctx.chat_id, updated_messages)
     
+    @staticmethod
+    def _save_stop_response(
+        chat_id: str,
+        assistant_message_id: str,
+        model_answer_step_id: str,
+        msg_model_id: Optional[str],
+        chatbot_id: Optional[str],
+        config,
+        avatar: Optional[str],
+        full_response_chunk: str = '',
+        reasoning_content_chunk: str = '',
+        round_reasoning_end_time=None,
+        round_start_time=None
+    ):
+        """停止聊天时保存助理消息，在已有内容后追加停止标记"""
+        stop_content = full_response_chunk
+        if stop_content:
+            stop_content += '\n\n[用户停止回答]'
+        else:
+            stop_content = '[用户停止回答]'
+        reasoning_time = None
+        if reasoning_content_chunk and round_reasoning_end_time:
+            reasoning_time = int((round_reasoning_end_time - round_start_time) * 1000)
+        ChatMessageService.upsert_assistant_message(
+            chat_id=chat_id,
+            assistant_content=stop_content,
+            step_id=model_answer_step_id,
+            model_id=msg_model_id,
+            chatbot_id=chatbot_id,
+            config=config,
+            reasoning_content=reasoning_content_chunk if reasoning_content_chunk else None,
+            reasoning_time=reasoning_time,
+            step=MessageStep.MODEL_ANSWER,
+            message_id=assistant_message_id,
+            avatar=avatar
+        )
+
     @staticmethod
     async def chat_stream(
         user_id: str,

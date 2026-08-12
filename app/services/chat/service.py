@@ -1115,7 +1115,7 @@ class ChatMessageService:
         if step_status not in ('running', 'start') and (step_status or not msg.content):
             return 0
 
-        # clarify 工具消息停止时设为 done，不追加"已停止"
+        # clarify 工具消息停止时设为 done，不追加停止标记
         tool_call = extra_data.get('tool_call', {})
         is_clarify = isinstance(tool_call, dict) and tool_call.get('name') == 'clarify'
         if is_clarify:
@@ -1123,11 +1123,9 @@ class ChatMessageService:
         else:
             extra_data['step_status'] = 'stop'
             if msg.content:
-                if not msg.content.endswith('\n'):
-                    msg.content += '\n'
-                msg.content += '已停止'
+                msg.content += '\n\n[用户停止回答]'
             else:
-                msg.content = '已停止'
+                msg.content = '[用户停止回答]'
 
         msg.extra_content = json.dumps(extra_data, ensure_ascii=False)
         msg.updated_at = datetime.now().astimezone()
