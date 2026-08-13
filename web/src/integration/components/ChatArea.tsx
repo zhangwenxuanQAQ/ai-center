@@ -47,7 +47,7 @@ interface ToolCallStep {
 interface DisplayMessage {
   id: string;
   message_id?: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'tool' | 'tool_response';
   content: string;
   created_at?: string;
   reasoning_content?: string;
@@ -372,7 +372,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     return {
       id: step_id || m.id,
       message_id: m.message_id || m.id,
-      role: m.role as 'user' | 'assistant',
+      role: m.role as DisplayMessage['role'],
       content: m.content,
       reasoning_content: m.reasoning_content,
       reasoning_time: m.reasoning_time,
@@ -1158,9 +1158,14 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
   // Stop streaming
   const handleStop = async () => {
+    const chatId = currentChatIdRef.current;
+    // 调用后端停止接口，让后端保存停止状态
+    if (chatId) {
+      await integrationChatService.stopChat(apiKey, chatId);
+    }
+    // 同时中断前端流式请求
     abortControllerRef.current?.abort();
     setLoading(false);
-    const chatId = currentChatIdRef.current;
     // 停止后重新查询消息记录，确保 UI 与后端状态一致
     if (chatId) {
       await loadMessages(chatId);
@@ -1520,8 +1525,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         if (currentGroup) {
           currentGroup.messages.push(msg);
         } else {
+          // 没有 assistant 父组时，创建一个虚拟 assistant 组（而非 user 组）
           groupCounter++;
-          groups.push({ assistantId: '', stableId: `${msg.role}-${groupCounter}`, messages: [msg] });
+          currentGroup = { assistantId: msg.message_id || msg.id, stableId: `${msg.role}-${groupCounter}`, messages: [msg] };
         }
       }
     });
@@ -1658,8 +1664,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                 {msg.tool_calls.map((tc, tcIndex) => {
                   const tcId = tc.tool_call_id || `tc-${tcIndex}`;
                   const isClarify = tc.name === 'clarify';
-                  const stepStatus = msg.extra_content?.step_status;
-                  const isStepDone = stepStatus === 'done';
                   // 从 groupMessages 中查找匹配的 tool_response 消息（通过 tool_call_id 匹配）
                   const toolResponse = groupMessages?.find(
                     (m) => m.role === 'tool_response' && m.extra_content?.tool_call?.tool_call_id === tcId
@@ -1668,9 +1672,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                   <div key={tcId} className={`int-tool-call-card int-tool-call-${tc.status}${tc.name === 'web_search' ? ' int-tool-call-web-search' : ''}${tc.name === 'generate_ppt' ? ' int-tool-call-generate-ppt' : ''}${isClarify ? ' int-tool-call-clarify' : ''}`}>
                     <div className="int-tool-call-header" onClick={() => !isClarify && toggleToolCall(tcId)}>
                       <div className="int-tool-call-header-left">
-                        {tc.status === 'start' && !isStepDone && <LoadingOutlined spin className="int-tool-call-icon-start" />}
-                        {tc.status === 'running' && !isStepDone && <LoadingOutlined spin className="int-tool-call-icon-running" />}
-                        {((tc.status === 'success') || isStepDone) && <span className="int-tool-call-icon-success">✓</span>}
+                        {tc.status === 'start' && <LoadingOutlined spin className="int-tool-call-icon-start" />}
+                        {tc.status === 'running' && <LoadingOutlined spin className="int-tool-call-icon-running" />}
+                        {tc.status === 'success' && <span className="int-tool-call-icon-success">✓</span>}
                         {tc.status === 'error' && <span className="int-tool-call-icon-error">✗</span>}
                         {!isClarify && (expandedToolCalls.has(tcId) ? (
                           <DownOutlined style={{ fontSize: 10 }} />
@@ -1697,7 +1701,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                           theme={themeMode === 'dark' ? 'dark' : 'light'}
                           toolCallId={tc.tool_call_id}
                           messageId={msg.message_id}
-                          disabled={isStepDone || !!toolResponse}
+                          disabled={!!toolResponse}
                           onResponded={handleClarifyResponded}
                           userResponse={toolResponse?.content}
                         />

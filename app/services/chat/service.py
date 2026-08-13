@@ -1161,12 +1161,11 @@ class ChatMessageService:
         """
         import json
 
-        # 1. 查找最新一条 assistant/tool 消息
+        # 1. 查找最新一条消息
         msg = ChatMessage.select().where(
             (ChatMessage.chat_id == chat_id) &
-            (ChatMessage.deleted == False) &
-            (ChatMessage.role << ['assistant', 'tool'])
-        ).order_by(ChatMessage.created_at.desc(), ChatMessage.role.desc()).first()
+            (ChatMessage.deleted == False)
+        ).order_by(ChatMessage.created_at.desc()).first()
 
         updated_count = 0
 
@@ -1180,7 +1179,10 @@ class ChatMessageService:
 
             step_status = extra_data.get('step_status', '')
 
-            if step_status in ('running', 'start') or (not step_status and msg.content):
+            # 仅处理 assistant/tool 角色消息，跳过 user 等其他角色
+            if msg.role not in ('assistant', 'tool'):
+                pass
+            elif step_status in ('running', 'start') or (not step_status and msg.content):
                 # clarify 工具消息停止时设为 done，不追加停止标记
                 tool_call = extra_data.get('tool_call', {})
                 is_clarify = isinstance(tool_call, dict) and tool_call.get('name') == 'clarify'

@@ -204,6 +204,27 @@ export const integrationChatService = {
   },
 
   /**
+   * 停止聊天（调用后端停止接口）
+   */
+  stopChat: async (apiKey: string, chatId: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/aicenter/api/v1/chat/stop`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({ chat_id: chatId }),
+      });
+      const data = await res.json();
+      return data.code === 200;
+    } catch (err) {
+      console.error('停止聊天失败:', err);
+      return false;
+    }
+  },
+
+  /**
    * 停止聊天（客户端中断）
    */
   createAbortController: (): AbortController => {

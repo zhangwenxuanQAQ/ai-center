@@ -18,7 +18,7 @@ import logging
 from typing import Optional
 
 from app.core.chat.event.event_bus import EventBus
-from app.core.chat.event.event import BaseEvent, ChatRequestEvent, ChatStopEvent, ChatStreamEvent, ChatDoneEvent
+from app.core.chat.event.event import BaseEvent, ChatRequestEvent, ChatStopEvent, ChatStreamEvent, ChatDoneEvent, IntegrationChatRequestEvent
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +95,8 @@ class ChatEventConsumer:
 
                 if event.event_type == 'chat_request':
                     await cls._handle_chat_request(event)
+                elif event.event_type == 'integration_chat_request':
+                    await cls._handle_integration_chat_request(event)
                 elif event.event_type == 'chat_stop':
                     await cls._handle_chat_stop(event)
                 else:
@@ -149,6 +151,115 @@ class ChatEventConsumer:
         from app.core.chat.chat_service import ChatStopManager
         ChatStopManager().request_stop(chat_id)
         logger.info(f"已设置停止标记: chat_id={chat_id}")
+
+    @classmethod
+    async def _handle_integration_chat_request(cls, event: IntegrationChatRequestEvent):
+        """
+        处理插件集成聊天请求事件
+
+        为每个聊天请求创建独立的 asyncio Task 执行聊天逻辑，
+        不阻塞消费循环继续处理其他事件。
+
+        Args:
+            event: 插件集成聊天请求事件
+        """
+        chat_id = event.chat_id
+
+        # 如果该对话已有正在运行的任务，先取消
+        existing_task = cls._active_chat_tasks.get(chat_id)
+        if existing_task and not existing_task.done():
+            existing_task.cancel()
+            try:
+                await existing_task
+            except asyncio.CancelledError:
+                pass
+
+        # 创建新的聊天任务
+        task = asyncio.create_task(cls._execute_integration_chat(event))
+        cls._active_chat_tasks[chat_id] = task
+
+    @classmethod
+    async def _execute_integration_chat(cls, event: IntegrationChatRequestEvent):
+        """
+        执行插件集成聊天逻辑
+
+        调用 IntegrationChatCoreService.chat_stream 执行聊天，将每个流式 chunk
+        发布为 ChatStreamEvent 到结果队列，结束后发布 ChatDoneEvent。
+
+        Args:
+            event: 插件集成聊天请求事件
+        """
+        chat_id = event.chat_id
+        data = event.data
+
+        try:
+            from app.core.chat.chat_service import ChatStopManager
+            from app.services.chat.dto import QueryItem
+            from app.core.integration.api_chat import IntegrationChatCoreService
+            from app.services.integration.service import ChatbotIntegrationService
+
+            # 通过 api_key 重新加载 integration 对象
+            api_key = data.get('integration_api_key', '')
+            integration = ChatbotIntegrationService.get_by_api_key(api_key)
+            if not integration:
+                EventBus.set_streaming_status(chat_id, 'error')
+                done_event = ChatDoneEvent.create(chat_id, status='error', error='API密钥无效')
+                await EventBus.publish(done_event)
+                return
+
+            # 将 query 字典列表还原为 QueryItem 对象
+            query_items = [QueryItem(**q) for q in data.get('query', [])]
+
+            # 调用 chat_stream 并将每个 chunk 发布为事件
+            async for chunk in IntegrationChatCoreService.chat_stream(
+                query=query_items,
+                chat_id=chat_id,
+                integration=integration,
+                stream=True,
+                temporary=data.get('temporary', False),
+                config=data.get('config'),
+                edit_message_id=data.get('edit_message_id'),
+                preview_token=data.get('preview_token'),
+            ):
+                # 检查停止状态
+                if ChatStopManager().is_stop_requested(chat_id):
+                    stop_event = ChatStreamEvent.create(chat_id, {
+                        'text': '',
+                        'chat_id': chat_id,
+                        'status': 'stop',
+                    })
+                    await EventBus.publish(stop_event)
+                    break
+
+                # 发布流式事件
+                stream_event = ChatStreamEvent.create(chat_id, chunk)
+                await EventBus.publish(stream_event)
+
+            # 发布完成事件
+            if ChatStopManager().is_stop_requested(chat_id):
+                EventBus.set_streaming_status(chat_id, 'stop')
+                done_event = ChatDoneEvent.create(chat_id, status='stop')
+            else:
+                EventBus.set_streaming_status(chat_id, 'done')
+                done_event = ChatDoneEvent.create(chat_id, status='done')
+
+            await EventBus.publish(done_event)
+
+        except asyncio.CancelledError:
+            logger.info(f"插件聊天任务被取消: chat_id={chat_id}")
+            EventBus.set_streaming_status(chat_id, 'stop')
+            done_event = ChatDoneEvent.create(chat_id, status='stop')
+            await EventBus.publish(done_event)
+            raise
+
+        except Exception as e:
+            logger.error(f"插件聊天任务异常: chat_id={chat_id}, error={e}", exc_info=True)
+            EventBus.set_streaming_status(chat_id, 'error')
+            done_event = ChatDoneEvent.create(chat_id, status='error', error=str(e))
+            await EventBus.publish(done_event)
+
+        finally:
+            cls._active_chat_tasks.pop(chat_id, None)
 
     @classmethod
     async def _execute_chat(cls, event: ChatRequestEvent):

@@ -17,7 +17,7 @@ import asyncio
 from typing import Optional, Dict, Any, List, AsyncGenerator
 
 from app.database.redis_utils import redis_utils
-from app.core.chat.event.event import BaseEvent, ChatRequestEvent, ChatStopEvent, ChatStreamEvent, ChatDoneEvent
+from app.core.chat.event.event import BaseEvent, ChatRequestEvent, ChatStopEvent, ChatStreamEvent, ChatDoneEvent, IntegrationChatRequestEvent
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +116,7 @@ class EventBus:
     @classmethod
     def _resolve_queue(cls, event: BaseEvent) -> str:
         """根据事件类型自动选择目标队列"""
-        if event.event_type in ('chat_request', 'chat_stop'):
+        if event.event_type in ('chat_request', 'integration_chat_request', 'chat_stop'):
             return cls.REQUEST_QUEUE
         else:
             # 流式事件和完成事件发送到对应 chat_id 的结果队列
@@ -195,6 +195,7 @@ class EventBus:
         """根据 event_type 字段还原为具体的事件子类"""
         type_map = {
             'chat_request': ChatRequestEvent,
+            'integration_chat_request': IntegrationChatRequestEvent,
             'chat_stop': ChatStopEvent,
         }
         target_cls = type_map.get(event.event_type, BaseEvent)

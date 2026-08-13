@@ -1723,6 +1723,15 @@ async def chat_event_lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"[EVENT] 恢复待澄清消息失败: {e}")
 
+    # 恢复插件集成待澄清消息
+    try:
+        from app.core.integration.api_chat import IntegrationChatCoreService
+        integration_recovered = IntegrationChatCoreService.recover_pending_clarify_messages()
+        if integration_recovered > 0:
+            logger.info(f"[EVENT] 恢复了 {integration_recovered} 条插件待澄清消息")
+    except Exception as e:
+        logger.warning(f"[EVENT] 恢复插件待澄清消息失败: {e}")
+
     if redis_utils.is_available:
         logger.info("[EVENT] 正在启动聊天事件消费者...")
         ChatEventConsumer.start()

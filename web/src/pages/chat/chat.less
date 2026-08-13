@@ -2524,7 +2524,8 @@
 
 .clarify-card-submitted {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  flex-direction: column;
   padding: 8px 0;
   font-size: 13px;
 
@@ -2534,6 +2535,45 @@
   .light & {
     color: rgba(0, 0, 0, 0.55);
   }
+}
+
+.clarify-card-submitted-content {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.clarify-card-submitted-label {
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 4px;
+
+  .dark & {
+    color: rgba(255, 255, 255, 0.65);
+  }
+  .light & {
+    color: rgba(0, 0, 0, 0.55);
+  }
+}
+
+.clarify-card-submitted-choice {
+  font-size: 13px;
+  line-height: 1.6;
+  padding-left: 8px;
+
+  .dark & {
+    color: rgba(255, 255, 255, 0.85);
+  }
+  .light & {
+    color: rgba(0, 0, 0, 0.75);
+  }
+}
+
+.clarify-card-submitted-reply {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .clarify-card-footer {

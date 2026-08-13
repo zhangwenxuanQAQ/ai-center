@@ -161,6 +161,51 @@ class ChatStreamEvent(BaseEvent):
 
 
 @dataclass
+class IntegrationChatRequestEvent(BaseEvent):
+    """
+    插件集成聊天请求事件
+
+    携带插件集成聊天所需的全部参数，消费者收到后执行 IntegrationChatCoreService.chat_stream。
+
+    data 字段结构：
+        - query: 查询数组（List[QueryItem] 序列化后的列表）
+        - chat_id: 对话ID（空则创建新对话）
+        - integration_id: 集成配置ID
+        - integration_api_key: 集成配置API Key（用于重新加载 integration 对象）
+        - temporary: 是否临时会话
+        - config: 配置
+        - edit_message_id: 编辑消息ID
+        - preview_token: 预览token
+    """
+    event_type: str = 'integration_chat_request'
+
+    @classmethod
+    def create(
+        cls,
+        chat_id: str,
+        query: List[Dict[str, Any]],
+        integration_id: Any,
+        integration_api_key: str,
+        temporary: bool = False,
+        config: Optional[Any] = None,
+        edit_message_id: Optional[str] = None,
+        preview_token: Optional[str] = None,
+    ) -> 'IntegrationChatRequestEvent':
+        return cls(
+            chat_id=chat_id,
+            data={
+                'query': query,
+                'integration_id': str(integration_id),
+                'integration_api_key': integration_api_key,
+                'temporary': temporary,
+                'config': config,
+                'edit_message_id': edit_message_id,
+                'preview_token': preview_token,
+            },
+        )
+
+
+@dataclass
 class ChatStopEvent(BaseEvent):
     """
     聊天停止事件

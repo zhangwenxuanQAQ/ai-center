@@ -11,7 +11,7 @@ import logging
 from typing import Optional, Any, List, Dict
 
 from app.core.chat.event.event_bus import EventBus
-from app.core.chat.event.event import ChatRequestEvent, ChatStopEvent
+from app.core.chat.event.event import ChatRequestEvent, ChatStopEvent, IntegrationChatRequestEvent
 from app.database.redis_utils import redis_utils
 
 logger = logging.getLogger(__name__)
@@ -80,6 +80,62 @@ class ChatEventPublisher:
             logger.info(f"聊天请求事件已发布: chat_id={chat_id}")
         else:
             logger.error(f"聊天请求事件发布失败: chat_id={chat_id}")
+            EventBus.set_streaming_status(chat_id, 'error')
+        return success
+
+    @staticmethod
+    async def publish_integration_chat_request(
+        chat_id: str,
+        query: List[Dict[str, Any]],
+        integration_id: Any,
+        integration_api_key: str,
+        temporary: bool = False,
+        config: Optional[Any] = None,
+        edit_message_id: Optional[str] = None,
+        preview_token: Optional[str] = None,
+    ) -> bool:
+        """
+        发布插件集成聊天请求事件
+
+        Args:
+            chat_id: 对话ID
+            query: 查询数组（已序列化为字典列表）
+            integration_id: 集成配置ID
+            integration_api_key: 集成配置API Key（用于消费者重新加载 integration 对象）
+            temporary: 是否临时会话
+            config: 配置
+            edit_message_id: 编辑消息ID
+            preview_token: 预览token
+
+        Returns:
+            bool: 是否发布成功
+        """
+        # 清理旧的结果队列数据
+        EventBus.cleanup(chat_id)
+
+        # 清除上一次的停止标记
+        from app.core.chat.chat_service import ChatStopManager
+        ChatStopManager().clear_stop(chat_id)
+
+        # 设置流式状态为 streaming
+        EventBus.set_streaming_status(chat_id, 'streaming')
+
+        event = IntegrationChatRequestEvent.create(
+            chat_id=chat_id,
+            query=query,
+            integration_id=integration_id,
+            integration_api_key=integration_api_key,
+            temporary=temporary,
+            config=config,
+            edit_message_id=edit_message_id,
+            preview_token=preview_token,
+        )
+
+        success = await EventBus.publish(event)
+        if success:
+            logger.info(f"插件聊天请求事件已发布: chat_id={chat_id}")
+        else:
+            logger.error(f"插件聊天请求事件发布失败: chat_id={chat_id}")
             EventBus.set_streaming_status(chat_id, 'error')
         return success
 

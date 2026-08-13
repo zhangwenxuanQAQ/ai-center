@@ -1735,3 +1735,190 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* ========== Clarify Card 澄清卡片 ========== */
+.clarify-card {
+  border-radius: 8px;
+  padding: 12px 16px;
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  background: rgba(102, 126, 234, 0.03);
+}
+
+.integration-page[data-theme="dark"] .clarify-card.clarify-card-dark,
+.int-chat-area[data-theme="dark"] .clarify-card.clarify-card-dark {
+  background: rgba(102, 126, 234, 0.08);
+  border-color: rgba(102, 126, 234, 0.3);
+}
+
+.integration-page[data-theme="dark"] .clarify-card.clarify-card-light,
+.int-chat-area[data-theme="dark"] .clarify-card.clarify-card-light {
+  background: rgba(102, 126, 234, 0.08);
+  border-color: rgba(102, 126, 234, 0.3);
+}
+
+.clarify-card.clarify-card-light {
+  background: rgba(102, 126, 234, 0.04);
+}
+
+.clarify-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.clarify-card-header .clarify-card-icon {
+  color: var(--int-primary, #667eea);
+  font-size: 16px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.clarify-card-header .clarify-card-question {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
+  word-break: break-word;
+  color: var(--int-text, #1f1f1f);
+}
+
+.clarify-card-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.clarify-card-choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+  user-select: none;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.integration-page[data-theme="dark"] .clarify-card-choice,
+.int-chat-area[data-theme="dark"] .clarify-card-choice {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.clarify-card-choice:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.integration-page[data-theme="dark"] .clarify-card-choice:hover,
+.int-chat-area[data-theme="dark"] .clarify-card-choice:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.clarify-card-choice.clarify-card-choice-selected {
+  border-color: var(--int-primary, #667eea);
+  background: rgba(102, 126, 234, 0.12);
+}
+
+.clarify-card-choice.clarify-card-choice-disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.clarify-card-choice.clarify-card-choice-disabled:hover {
+  background: rgba(102, 126, 234, 0.12);
+}
+
+.clarify-card-choice-marker {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(128, 128, 128, 0.4);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.clarify-card-choice-marker.radio {
+  border-radius: 50%;
+}
+
+.clarify-card-choice-marker.checkbox {
+  border-radius: 3px;
+}
+
+.clarify-card-choice-marker.checked {
+  border-color: var(--int-primary, #667eea);
+  background: var(--int-primary, #667eea);
+}
+
+.clarify-card-choice-marker.checked::after {
+  content: '';
+  width: 4px;
+  height: 8px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  margin-top: -2px;
+}
+
+.clarify-card-choice-text {
+  flex: 1;
+  font-size: 13px;
+  line-height: 1.4;
+  word-break: break-word;
+  color: var(--int-text, #1f1f1f);
+}
+
+.clarify-card-choice-check {
+  color: var(--int-primary, #667eea);
+  font-size: 12px;
+}
+
+.clarify-card-input-area {
+  margin-bottom: 12px;
+}
+
+.clarify-card-submitted {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  padding: 8px 0;
+  font-size: 13px;
+  color: var(--int-text-secondary, #666666);
+}
+
+.clarify-card-submitted-content {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.clarify-card-submitted-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--int-text-secondary, #666666);
+  margin-bottom: 4px;
+}
+
+.clarify-card-submitted-choice {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--int-text, #1f1f1f);
+  padding-left: 8px;
+}
+
+.clarify-card-submitted-reply {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.clarify-card-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
