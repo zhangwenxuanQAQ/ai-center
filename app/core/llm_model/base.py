@@ -5,7 +5,8 @@
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, Generator
+from typing import Dict, Any, Optional, Generator, AsyncGenerator
+import asyncio
 
 
 class BaseLLM(ABC):
@@ -72,15 +73,30 @@ class BaseLLM(ABC):
     def stream_generate_with_messages(self, messages: list, **kwargs) -> Generator[Dict[str, Any], None, None]:
         """
         使用消息列表流式生成文本
-        
+
         Args:
             messages: 消息列表，格式为[{'role': 'user'/'assistant', 'content': '...'}]
             **kwargs: 其他参数
-            
+
         Yields:
             流式生成的结果
         """
         pass
+
+    @abstractmethod
+    async def astream_generate_with_messages(self, messages: list, **kwargs) -> AsyncGenerator[Dict[str, Any], None]:
+        """
+        使用消息列表异步流式生成文本
+
+        Args:
+            messages: 消息列表，格式为[{'role': 'user'/'assistant', 'content': '...'}]
+            **kwargs: 其他参数
+
+        Yields:
+            流式生成的结果
+        """
+        pass
+        yield  # pylint: disable=unreachable
     
     @abstractmethod
     def get_model_info(self) -> Dict[str, Any]:
@@ -91,6 +107,19 @@ class BaseLLM(ABC):
             模型信息
         """
         pass
+
+    @staticmethod
+    async def _async_wrap_stream(gen) -> AsyncGenerator[Dict[str, Any], None]:
+        """
+        将同步生成器包装为异步生成器，
+        通过 asyncio.to_thread 在线程池中执行 next() 调用，避免阻塞事件循环。
+        """
+        while True:
+            try:
+                chunk = await asyncio.to_thread(next, gen)
+                yield chunk
+            except StopIteration:
+                break
     
     def _validate_config(self) -> bool:
         """

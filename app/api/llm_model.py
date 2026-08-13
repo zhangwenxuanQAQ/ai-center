@@ -651,10 +651,10 @@ async def chat_with_model(llm_model_id: str, request: dict = Body(...)):
         config.pop('web_search', None)
         config.pop('deep_thinking', None)
 
-        def generate():
+        async def generate():
             try:
                 logger.info("Starting stream generation")
-                for chunk in model_instance.stream_generate_with_messages(messages, **config):
+                async for chunk in model_instance.astream_generate_with_messages(messages, **config):
                     if 'error' in chunk:
                         logger.error(f"Error in chunk: {chunk['error']}")
                         yield f"data: {json.dumps({'error': chunk['error']})}\n\n"

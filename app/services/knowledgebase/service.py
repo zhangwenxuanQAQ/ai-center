@@ -2162,7 +2162,7 @@ class KnowledgebaseDocumentService:
             full_text = ""
             full_reasoning = ""
             
-            for chunk in llm_instance.stream_generate_with_messages(messages, max_tokens=32000, temperature=0.5, deep_thinking=deep_thinking):
+            async for chunk in llm_instance.astream_generate_with_messages(messages, max_tokens=32000, temperature=0.5, deep_thinking=deep_thinking):
                 if 'error' in chunk:
                     yield {
                         'error': chunk['error'],

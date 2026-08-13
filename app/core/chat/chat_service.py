@@ -508,20 +508,6 @@ class ChatCoreService:
     """
 
     @staticmethod
-    async def _async_stream_generate(model, messages, **kwargs):
-        """
-        将同步的 stream_generate_with_messages 包装为异步生成器，
-        通过 asyncio.to_thread 在线程池中执行 next() 调用，避免阻塞事件循环。
-        """
-        gen = model.stream_generate_with_messages(messages, **kwargs)
-        while True:
-            try:
-                chunk = await asyncio.to_thread(next, gen)
-                yield chunk
-            except StopIteration:
-                break
-    
-    @staticmethod
     def convert_query_to_message(query: List[QueryItem], model_type: Optional[str] = None, model_id: Optional[str] = None) -> Dict[str, Any]:
         """
         将query数组转换为OpenAI格式的用户消息
@@ -850,7 +836,7 @@ class ChatCoreService:
                 ).to_dict()
                 return
 
-            async for chunk in ChatCoreService._async_stream_generate(model, messages, **model_params):
+            async for chunk in model.astream_generate_with_messages(messages, **model_params):
                 if ChatStopManager().is_stop_requested(chat_id):
                     ChatCoreService._save_stop_context(
                         chat_id=chat_id,

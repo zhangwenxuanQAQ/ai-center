@@ -5,7 +5,7 @@ Rerank模型实现
 """
 
 import logging
-from typing import Dict, Any, List, Tuple, Generator
+from typing import Dict, Any, List, Tuple, Generator, AsyncGenerator
 import numpy as np
 from openai import OpenAI
 from app.core.llm_model.base import BaseLLM
@@ -218,13 +218,19 @@ class RerankModel(BaseLLM):
     def stream_generate_with_messages(self, messages: list, **kwargs) -> Any:
         """
         使用消息列表流式生成（重排序模型不支持）
-        
+
         Args:
             messages: 消息列表
             **kwargs: 其他参数
-            
+
         Yields:
             错误信息
+        """
+        yield {'error': 'Rerank model does not support chat messages'}
+
+    async def astream_generate_with_messages(self, messages: list, **kwargs) -> AsyncGenerator[Dict[str, Any], None]:
+        """
+        使用消息列表异步流式生成（重排序模型不支持）
         """
         yield {'error': 'Rerank model does not support chat messages'}
     

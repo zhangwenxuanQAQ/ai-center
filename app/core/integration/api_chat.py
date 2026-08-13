@@ -389,20 +389,6 @@ class IntegrationChatCoreService:
         preprocess（IntegrationChatPreprocessor） -> execute（_run_conversation_loop） -> postprocess（_postprocess）
     """
 
-    @staticmethod
-    async def _async_stream_generate(model, messages, **kwargs):
-        """
-        将同步的 stream_generate_with_messages 包装为异步生成器，
-        通过 asyncio.to_thread 在线程池中执行 next() 调用，避免阻塞事件循环。
-        """
-        gen = model.stream_generate_with_messages(messages, **kwargs)
-        while True:
-            try:
-                chunk = await asyncio.to_thread(next, gen)
-                yield chunk
-            except StopIteration:
-                break
-
     # ==================== 数据持久化辅助方法 ====================
 
     @staticmethod
@@ -1463,7 +1449,7 @@ class IntegrationChatCoreService:
                 return
 
             # 流式生成模型回复
-            async for chunk in IntegrationChatCoreService._async_stream_generate(model, messages, **model_params):
+            async for chunk in model.astream_generate_with_messages(messages, **model_params):
                 if ChatStopManager().is_stop_requested(chat_id):
                     IntegrationChatCoreService._save_stop_context(
                         chat_id=chat_id,

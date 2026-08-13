@@ -4,7 +4,7 @@
 使用OpenAI SDK实现视觉接口
 """
 
-from typing import Dict, Any, Generator
+from typing import Dict, Any, Generator, AsyncGenerator
 from openai import OpenAI
 from app.core.llm_model.base import BaseLLM
 
@@ -333,6 +333,23 @@ class VisionModel(BaseLLM):
                     }
         except Exception as e:
             yield {'error': str(e)}
+
+    async def astream_generate_with_messages(self, messages: list, **kwargs) -> AsyncGenerator[Dict[str, Any], None]:
+        """
+        使用消息列表异步流式生成文本
+
+        通过线程池包装同步的 stream_generate_with_messages，避免阻塞事件循环。
+
+        Args:
+            messages: 消息列表
+            **kwargs: 其他参数
+
+        Yields:
+            流式生成的结果
+        """
+        gen = self.stream_generate_with_messages(messages, **kwargs)
+        async for chunk in BaseLLM._async_wrap_stream(gen):
+            yield chunk
 
     def get_model_info(self) -> Dict[str, Any]:
         """
