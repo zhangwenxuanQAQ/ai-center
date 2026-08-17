@@ -114,12 +114,12 @@ class BaseLLM(ABC):
         将同步生成器包装为异步生成器，
         通过 asyncio.to_thread 在线程池中执行 next() 调用，避免阻塞事件循环。
         """
+        _sentinel = object()
         while True:
-            try:
-                chunk = await asyncio.to_thread(next, gen)
-                yield chunk
-            except StopIteration:
+            chunk = await asyncio.to_thread(lambda: next(gen, _sentinel))
+            if chunk is _sentinel:
                 break
+            yield chunk
     
     def _validate_config(self) -> bool:
         """

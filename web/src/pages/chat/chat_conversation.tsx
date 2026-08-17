@@ -907,6 +907,16 @@ const ChatConversation: React.FC<ChatConversationProps> = ({
     if (stopChatId) {
       // 停止成功后重新查询消息记录，确保 UI 与后端状态一致
       await fetchMessages(stopChatId);
+      // 额外保障：确保澄清工具消息 step_status 为 done（防止 DB 时序问题）
+      setMessages(prev => prev.map(msg => {
+        if (msg.role === 'tool' && msg.extra_content && msg.extra_content.step_status !== 'done') {
+          const tc = msg.extra_content.tool_call;
+          if (tc && tc.name === 'clarify') {
+            return { ...msg, extra_content: { ...msg.extra_content, step_status: 'done' } };
+          }
+        }
+        return msg;
+      }));
     } else {
       setMessages(stopUpdater);
     }

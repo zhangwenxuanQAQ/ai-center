@@ -10,6 +10,7 @@ import logging
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
+import redis
 from app.database.redis_utils import redis_utils
 
 logger = logging.getLogger(__name__)
@@ -195,28 +196,47 @@ class TempChatStore:
         try:
             sid = cls._get_scope_id(integration_id, scope_id)
             messages_key = cls._get_messages_key(sid, chat_id)
-            raw_messages = redis_utils.client.lrange(messages_key, 0, -1) or []
 
-            updated = False
-            new_messages = []
-            for raw in raw_messages:
+            # 使用 Redis WATCH 实现乐观锁，防止并发 add_message/update_message 导致数据丢失
+            max_retries = 3
+            for attempt in range(max_retries):
                 try:
-                    msg = json.loads(raw)
-                    if msg.get("id") == message_id or msg.get("message_id") == message_id:
-                        msg.update(kwargs)
-                        updated = True
-                    new_messages.append(json.dumps(msg, ensure_ascii=False))
-                except:
-                    new_messages.append(raw)
+                    with redis_utils.client.pipeline() as pipe:
+                        pipe.watch(messages_key)
+                        raw_messages = pipe.lrange(messages_key, 0, -1) or []
 
-            if updated:
-                redis_utils.client.delete(messages_key)
-                if new_messages:
-                    redis_utils.client.rpush(messages_key, *new_messages)
-                redis_utils.client.expire(messages_key, cls.EXPIRE_SECONDS)
-                cls.update_chat(integration_id, chat_id, scope_id=scope_id)
+                        updated = False
+                        new_messages = []
+                        for raw in raw_messages:
+                            try:
+                                msg = json.loads(raw)
+                                if msg.get("id") == message_id or msg.get("message_id") == message_id:
+                                    msg.update(kwargs)
+                                    updated = True
+                                new_messages.append(json.dumps(msg, ensure_ascii=False))
+                            except:
+                                new_messages.append(raw)
 
-            return updated
+                        if not updated:
+                            pipe.unwatch()
+                            return False
+
+                        # MULTI 保证 delete + rpush 原子执行
+                        pipe.multi()
+                        pipe.delete(messages_key)
+                        if new_messages:
+                            pipe.rpush(messages_key, *new_messages)
+                        pipe.expire(messages_key, cls.EXPIRE_SECONDS)
+                        pipe.execute()
+                        cls.update_chat(integration_id, chat_id, scope_id=scope_id)
+                        return True
+                except redis.WatchError:
+                    if attempt < max_retries - 1:
+                        continue
+                    logger.warning(f"更新临时消息乐观锁重试耗尽: {message_id}")
+                    return False
+
+            return False
         except Exception as e:
             logger.error(f"更新临时消息失败: {e}")
             return False
@@ -235,10 +255,12 @@ class TempChatStore:
                 return False
 
             remaining = raw_messages[:message_index]
-            redis_utils.client.delete(messages_key)
+            pipe = redis_utils.client.pipeline()
+            pipe.delete(messages_key)
             if remaining:
-                redis_utils.client.rpush(messages_key, *remaining)
-            redis_utils.client.expire(messages_key, cls.EXPIRE_SECONDS)
+                pipe.rpush(messages_key, *remaining)
+            pipe.expire(messages_key, cls.EXPIRE_SECONDS)
+            pipe.execute()
             cls.update_chat(integration_id, chat_id, scope_id=scope_id)
 
             return True

@@ -359,10 +359,13 @@ export const integrationChatService = {
     onComplete?: () => void,
     abortSignal?: AbortSignal
   ): Promise<void> => {
-    const res = await fetch(`${API_BASE_URL}/aicenter/api/v1/chat/reconnect_stream/${chatId}`, {
+    const res = await fetch(`${API_BASE_URL}/aicenter/api/v1/chat/reconnect`, {
+      method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({ chat_id: chatId }),
       signal: abortSignal,
     });
 

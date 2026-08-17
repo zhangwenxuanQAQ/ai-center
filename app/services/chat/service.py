@@ -575,6 +575,14 @@ class ChatMessageService:
         Returns:
             ChatMessage: 消息对象
         """
+        # 去重检查：如果已存在相同 message_id 的 tool_response 消息则不重复创建
+        existing = ChatMessage.select().where(
+            (ChatMessage.chat_id == chat_id) &
+            (ChatMessage.role == 'tool_response') &
+            (ChatMessage.message_id == message_id)
+        ).first()
+        if existing:
+            return existing
         tool_response_message = ChatMessage(
             message_id=message_id or uuid.uuid4().hex,
             chat_id=chat_id,

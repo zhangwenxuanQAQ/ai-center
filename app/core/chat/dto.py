@@ -1,7 +1,10 @@
 """
 聊天响应数据传输对象
 
-封装聊天接口SSE返回的数据结构
+封装聊天接口SSE返回的数据结构。
+ChatStreamResponse 只定义两种响应：
+    1. error_response —— 错误信息
+    2. message_response —— 正常消息（文本流、工具调用、任务规划等）
 """
 
 from dataclasses import dataclass, field, asdict
@@ -123,8 +126,10 @@ class ToolCallInfo:
 class ChatStreamResponse:
     """
     聊天流式响应
-    
-    封装SSE返回的完整数据结构
+
+    只定义两种响应类型：
+        - error_response: 错误信息（status=ERROR）
+        - message_response: 正常消息（文本流、工具调用、任务规划等）
     """
     text: str = ''
     reasoning_content: Optional[str] = None
@@ -202,6 +207,8 @@ class ChatStreamResponse:
         
         return data
     
+    # ==================== 错误响应 ====================
+
     @classmethod
     def error_response(
         cls,
@@ -216,7 +223,7 @@ class ChatStreamResponse:
     ) -> 'ChatStreamResponse':
         """
         创建错误响应
-        
+
         Args:
             error: 错误信息
             chat_id: 对话ID
@@ -242,78 +249,53 @@ class ChatStreamResponse:
             avatar=avatar
         )
     
+    # ==================== 正常消息响应 ====================
+
     @classmethod
-    def start_response(
+    def message_response(
         cls,
-        chat_id: str,
-        user_message_id: str,
-        assistant_message_id: str,
-        step: Optional[str] = None,
-        step_id: str = '',
-        avatar: Optional[str] = None
-    ) -> 'ChatStreamResponse':
-        """
-        创建消息开始响应
-        
-        Args:
-            chat_id: 对话ID
-            user_message_id: 用户消息ID
-            assistant_message_id: 助手消息ID
-            step: 阶段标识（task_planning/model_answer/task_execution/result_summary）
-            step_id: 阶段ID
-            avatar: 头像URL
-            
-        Returns:
-            ChatStreamResponse: 开始响应对象
-        """
-        return cls(
-            text='',
-            chat_id=chat_id,
-            user_message_id=user_message_id,
-            assistant_message_id=assistant_message_id,
-            status=MessageStatus.START,
-            step=step,
-            step_id=step_id,
-            avatar=avatar
-        )
-    
-    @classmethod
-    def text_response(
-        cls,
-        text: str,
-        chat_id: str,
-        user_message_id: str,
-        assistant_message_id: str,
+        chat_id: str = '',
+        user_message_id: str = '',
+        assistant_message_id: str = '',
+        text: str = '',
         reasoning_content: Optional[str] = None,
         reasoning_end: bool = False,
         finish_reason: Optional[str] = None,
         usage: Optional[Dict[str, int]] = None,
+        tool_call: Optional[ToolCallInfo] = None,
+        task_plan: Optional[List[TaskInfo]] = None,
         status: str = MessageStatus.RUNNING,
-        step_id: str = '',
         step: Optional[str] = None,
+        step_id: str = '',
+        parent_step_id: Optional[str] = None,
         reasoning_time: Optional[int] = None,
         avatar: Optional[str] = None
     ) -> 'ChatStreamResponse':
         """
-        创建文本流响应
-        
+        创建正常消息响应
+
+        统一的正常消息工厂方法，覆盖文本流、工具调用、任务规划等场景。
+
         Args:
-            text: 文本内容
             chat_id: 对话ID
             user_message_id: 用户消息ID
             assistant_message_id: 助手消息ID
+            text: 文本内容
             reasoning_content: 推理内容
             reasoning_end: 推理是否结束
             finish_reason: 结束原因
             usage: 使用统计
+            tool_call: 工具调用信息
+            task_plan: 任务规划列表
             status: 消息状态
-            step_id: 阶段ID
             step: 阶段标识
+            step_id: 阶段ID
+            parent_step_id: 父阶段ID
             reasoning_time: 推理耗时
             avatar: 头像URL
-            
+
         Returns:
-            ChatStreamResponse: 文本响应对象
+            ChatStreamResponse: 正常消息响应对象
         """
         return cls(
             text=text,
@@ -321,93 +303,15 @@ class ChatStreamResponse:
             reasoning_end=reasoning_end,
             finish_reason=finish_reason,
             usage=usage,
-            chat_id=chat_id,
-            user_message_id=user_message_id,
-            assistant_message_id=assistant_message_id,
-            status=status,
-            step_id=step_id,
-            step=step,
-            reasoning_time=reasoning_time,
-            avatar=avatar
-        )
-    
-    @classmethod
-    def tool_call_response(
-        cls,
-        tool_call: ToolCallInfo,
-        chat_id: str,
-        user_message_id: str,
-        assistant_message_id: str,
-        status: str = MessageStatus.RUNNING,
-        step_id: str = '',
-        step: Optional[str] = None,
-        reasoning_content: Optional[str] = None,
-        avatar: Optional[str] = None
-    ) -> 'ChatStreamResponse':
-        """
-        创建工具调用响应
-        
-        Args:
-            tool_call: 工具调用信息
-            chat_id: 对话ID
-            user_message_id: 用户消息ID
-            assistant_message_id: 助手消息ID
-            status: 消息状态
-            step_id: 阶段ID
-            step: 阶段标识
-            reasoning_content: 思考过程
-            avatar: 头像URL
-            
-        Returns:
-            ChatStreamResponse: 工具调用响应对象
-        """
-        return cls(
-            text='',
             tool_call=tool_call,
-            chat_id=chat_id,
-            user_message_id=user_message_id,
-            assistant_message_id=assistant_message_id,
-            status=status,
-            step_id=step_id,
-            step=step,
-            reasoning_content=reasoning_content,
-            avatar=avatar
-        )
-    
-    @classmethod
-    def task_plan_response(
-        cls,
-        task_plan: List[TaskInfo],
-        chat_id: str,
-        user_message_id: str,
-        assistant_message_id: str,
-        step_id: str = '',
-        step: Optional[str] = None,
-        avatar: Optional[str] = None
-    ) -> 'ChatStreamResponse':
-        """
-        创建任务规划响应
-        
-        Args:
-            task_plan: 任务列表
-            chat_id: 对话ID
-            user_message_id: 用户消息ID
-            assistant_message_id: 助手消息ID
-            step_id: 阶段ID
-            step: 阶段标识
-            avatar: 头像URL
-            
-        Returns:
-            ChatStreamResponse: 任务规划响应对象
-        """
-        return cls(
-            text='',
             task_plan=task_plan,
             chat_id=chat_id,
             user_message_id=user_message_id,
             assistant_message_id=assistant_message_id,
-            status=MessageStatus.RUNNING,
-            step_id=step_id,
+            status=status,
             step=step,
+            step_id=step_id,
+            parent_step_id=parent_step_id,
+            reasoning_time=reasoning_time,
             avatar=avatar
         )

@@ -12,6 +12,8 @@ interface IntegrationClarifyCardProps {
   disabled?: boolean;
   onResponded?: (toolCallId: string) => void;
   userResponse?: string;
+  temporary?: boolean;
+  previewToken?: string;
 }
 
 /**
@@ -38,6 +40,8 @@ const IntegrationClarifyCard: React.FC<IntegrationClarifyCardProps> = ({
   disabled,
   onResponded,
   userResponse,
+  temporary,
+  previewToken,
 }) => {
   const [selectedChoices, setSelectedChoices] = useState<string[]>([]);
   const [customInput, setCustomInput] = useState('');
@@ -80,18 +84,21 @@ const IntegrationClarifyCard: React.FC<IntegrationClarifyCardProps> = ({
     setSubmitting(true);
     try {
       // 通过集成聊天接口提交，后端检测到最新消息为 clarify 工具时会走澄清回复逻辑
+      const body: Record<string, any> = {
+        query: [{ type: 'text', content: responseText }],
+        chat_id: chatId,
+        message_id: messageId,
+        stream: true,
+      };
+      if (temporary) body.temporary = true;
+      if (previewToken) body.preview_token = previewToken;
       const res = await fetch(`${API_BASE_URL}/aicenter/api/v1/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey}`,
         },
-        body: JSON.stringify({
-          query: [{ type: 'text', content: responseText }],
-          chat_id: chatId,
-          message_id: messageId,
-          stream: true,
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
       if (data.code !== 200) throw new Error(data.message || '提交回复失败');

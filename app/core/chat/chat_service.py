@@ -17,8 +17,11 @@ import uuid
 import time
 import asyncio
 import threading
+import logging
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Generator, AsyncGenerator, Tuple, Union
+
+logger = logging.getLogger(__name__)
 
 from app.database.models import Chat, ChatMessage, LLMModel, Chatbot, ChatbotPrompt, ChatbotTool, MCPTool
 from app.services.chat.dto import QueryItem
@@ -29,7 +32,7 @@ from app.core.exceptions import ResourceNotFoundError
 from app.core.utils.resource_utils import get_provider_avatar_url
 from app.core.chat.dto import ChatStreamResponse, ToolCallInfo, MessageStatus, MessageStep
 from app.core.prompt.utils.system_prompt_builder import build_system_prompt
-from app.core.chat.event.event_bus import EventBus
+from app.core.chat.chat_context_store import ChatContextStore
 
 
 class ChatStopManager:
@@ -294,6 +297,12 @@ class ChatPreprocessor:
         """
         创建或加载对话，并加载历史消息
 
+        当有 chat_id 时，从 chat_message 表组装历史消息（OpenAI 消息规范）：
+        - user → {"role": "user", "content": ...}
+        - assistant → {"role": "assistant", "content": ..., "tool_calls": [...]}（从 extra_content 获取 tool_calls）
+        - tool → {"role": "tool", "tool_call_id": ..., "content": ...}（从 extra_content 获取 tool_call_id）
+        - tool_response → {"role": "user", "content": ...}
+
         Raises:
             ResourceNotFoundError: 指定的对话不存在
         """
@@ -316,13 +325,77 @@ class ChatPreprocessor:
             if not chat:
                 raise ResourceNotFoundError(message=f"对话 {ctx.chat_id} 不存在")
 
-            try:
-                ctx.history_messages = json.loads(chat.messages) if chat.messages else []
-            except json.JSONDecodeError:
-                ctx.history_messages = []
+            # 从 chat_message 表组装历史消息
+            ctx.history_messages = ChatPreprocessor._build_history_from_messages(ctx.chat_id)
 
             if not ctx.chatbot_id:
                 ctx.system_prompt = chat.system_prompt
+
+    @staticmethod
+    def _build_history_from_messages(chat_id: str) -> list:
+        """
+        从 chat_message 表组装历史消息（OpenAI 消息规范）
+
+        使用 ChatMessageService.get_messages_by_chat 获取消息列表，
+        消息按 created_at 升序排列，同一时间按 user → assistant → tool → tool_response 排序。
+
+        组装规则：
+        - user → {"role": "user", "content": ...}
+        - assistant → {"role": "assistant", "content": ..., "tool_calls": [...]}（tool_calls 从 extra_content 获取）
+        - tool（function 名称为 clarify 时跳过，不转为 tool 消息）
+        - tool（非 clarify）→ {"role": "tool", "tool_call_id": ..., "content": ...}（tool_call_id 从 extra_content.tool_call.tool_call_id 获取）
+        - tool_response → {"role": "tool", "tool_call_id": ..., "content": ...}（tool_call_id 从 extra_content 获取）
+        """
+        from app.services.chat.service import ChatMessageService
+
+        msg_list = ChatMessageService.get_messages_by_chat(chat_id)
+
+        history = []
+        for msg in msg_list.items:
+            # extra_content 已由 DTO 的 field_validator 自动解析为 dict
+            ec = msg.extra_content if isinstance(msg.extra_content, dict) else {}
+
+            if msg.role == 'user':
+                history.append({
+                    'role': 'user',
+                    'content': msg.content or ''
+                })
+
+            elif msg.role == 'assistant':
+                entry = {
+                    'role': 'assistant',
+                    'content': msg.content or ''
+                }
+                # 从 extra_content 获取 tool_calls
+                tool_calls = ec.get('tool_calls')
+                if tool_calls:
+                    entry['tool_calls'] = tool_calls
+                history.append(entry)
+
+            elif msg.role == 'tool':
+                # clarify 工具消息跳过，不转为 tool 消息
+                tool_call_info = ec.get('tool_call', {})
+                if tool_call_info.get('name') == 'clarify':
+                    continue
+                # 从 extra_content.tool_call 获取 tool_call_id
+                tool_call_id = tool_call_info.get('tool_call_id', '')
+                history.append({
+                    'role': 'tool',
+                    'tool_call_id': tool_call_id,
+                    'content': msg.content or ''
+                })
+
+            elif msg.role == 'tool_response':
+                # tool_response 组装成 tool 消息，tool_call_id 从 extra_content.tool_call 获取
+                tool_call_info = ec.get('tool_call', {})
+                tool_call_id = tool_call_info.get('tool_call_id', '')
+                history.append({
+                    'role': 'tool',
+                    'tool_call_id': tool_call_id,
+                    'content': msg.content or ''
+                })
+
+        return history
 
     @staticmethod
     def _handle_rerun(ctx: ChatContext) -> None:
@@ -335,12 +408,6 @@ class ChatPreprocessor:
                 (ChatMessage.chat_id == ctx.chat_id) &
                 (ChatMessage.deleted == False)
             )
-            # 查找历史消息中对应的消息 - 只根据 message_id 匹配，不比较 content
-            for i in reversed(range(len(ctx.history_messages))):
-                msg = ctx.history_messages[i]
-                if msg.get('role') == 'user' and msg.get('message_id') == ctx.message_id:
-                    ctx.history_messages = ctx.history_messages[:i]
-                    break
 
             # 删除聊天消息表中本条消息以及之后的消息记录
             target_created_at = target_message.created_at
@@ -349,6 +416,9 @@ class ChatPreprocessor:
                 (ChatMessage.created_at >= target_created_at) &
                 (ChatMessage.deleted == False)
             ).execute()
+
+            # 重新从 chat_message 表组装历史消息（已删除目标及后续消息）
+            ctx.history_messages = ChatPreprocessor._build_history_from_messages(ctx.chat_id)
         except ChatMessage.DoesNotExist:
             pass
 
@@ -788,10 +858,12 @@ class ChatCoreService:
             round_start_time = time.time()
             round_reasoning_end_time = None
             
-            yield ChatStreamResponse.start_response(
+            yield ChatStreamResponse.message_response(
+                text='',
                 chat_id=chat_id,
                 user_message_id=user_message_id,
                 assistant_message_id=assistant_message_id,
+                status=MessageStatus.START,
                 step=MessageStep.MODEL_ANSWER,
                 step_id=model_answer_step_id,
                 avatar=avatar
@@ -824,7 +896,7 @@ class ChatCoreService:
                     config=config,
                     avatar=avatar
                 )
-                yield ChatStreamResponse.text_response(
+                yield ChatStreamResponse.message_response(
                     text='',
                     chat_id=chat_id,
                     user_message_id=user_message_id,
@@ -851,7 +923,7 @@ class ChatCoreService:
                         round_reasoning_end_time=round_reasoning_end_time,
                         round_start_time=round_start_time
                     )
-                    yield ChatStreamResponse.text_response(
+                    yield ChatStreamResponse.message_response(
                         text='',
                         chat_id=chat_id,
                         user_message_id=user_message_id,
@@ -875,7 +947,7 @@ class ChatCoreService:
                         message_id=assistant_message_id,
                         avatar=avatar
                     )
-                    EventBus.clear_chat_context(chat_id)
+                    ChatContextStore.clear_chat_context(chat_id)
                     yield ChatStreamResponse.error_response(
                         error=chunk['error'],
                         chat_id=chat_id,
@@ -925,7 +997,7 @@ class ChatCoreService:
                 
                 reasoning_time = int((time.time() - round_start_time) * 1000)
                 
-                yield ChatStreamResponse.text_response(
+                yield ChatStreamResponse.message_response(
                     text=chunk.get('text', ''),
                     chat_id=chat_id,
                     user_message_id=user_message_id,
@@ -941,11 +1013,16 @@ class ChatCoreService:
                     avatar=avatar
                 ).to_dict()
         
-            if round_finished and (full_response_chunk or reasoning_content_chunk):
+            if round_finished and (full_response_chunk or reasoning_content_chunk or tool_calls_list):
                 reasoning_time = None
                 if reasoning_content_chunk and round_reasoning_end_time:
                     reasoning_time = int((round_reasoning_end_time - round_start_time) * 1000)
                 
+                # 构建 extra_content，包含 tool_calls 以便历史消息组装
+                assistant_extra = {}
+                if tool_calls_list:
+                    assistant_extra['tool_calls'] = tool_calls_list
+
                 ChatMessageService.upsert_assistant_message(
                     chat_id=chat_id,
                     assistant_content=full_response_chunk,
@@ -957,10 +1034,11 @@ class ChatCoreService:
                     reasoning_time=reasoning_time,
                     avatar=avatar,
                     step=MessageStep.MODEL_ANSWER,
-                    message_id=assistant_message_id
+                    message_id=assistant_message_id,
+                    extra_content=json.dumps(assistant_extra, ensure_ascii=False) if assistant_extra else None
                 )
-                EventBus.clear_chat_context(chat_id)
-        
+                ChatContextStore.clear_chat_context(chat_id)
+
             if tool_calls_list:
                 messages.append({
                     'role': 'assistant',
@@ -970,7 +1048,7 @@ class ChatCoreService:
 
                 async for tool_result in process_tool_calls(tool_calls_list, tool_map, chat_id):
                     if ChatStopManager().is_stop_requested(chat_id):
-                        yield ChatStreamResponse.text_response(
+                        yield ChatStreamResponse.message_response(
                             text='',
                             chat_id=chat_id,
                             user_message_id=user_message_id,
@@ -1002,7 +1080,8 @@ class ChatCoreService:
                             reasoning_content=reasoning_content,
                             parameters=tool_parameters
                         )
-                        yield ChatStreamResponse.tool_call_response(
+                        yield ChatStreamResponse.message_response(
+                            text='',
                             tool_call=tool_call_info,
                             chat_id=chat_id,
                             user_message_id=user_message_id,
@@ -1038,7 +1117,8 @@ class ChatCoreService:
                             reasoning_content=reasoning_content,
                             parameters=tool_parameters
                         )
-                        yield ChatStreamResponse.tool_call_response(
+                        yield ChatStreamResponse.message_response(
+                            text='',
                             tool_call=tool_call_info,
                             chat_id=chat_id,
                             user_message_id=user_message_id,
@@ -1063,7 +1143,8 @@ class ChatCoreService:
                             reasoning_content=reasoning_content,
                             parameters=tool_parameters
                         )
-                        yield ChatStreamResponse.tool_call_response(
+                        yield ChatStreamResponse.message_response(
+                            text='',
                             tool_call=tool_call_info,
                             chat_id=chat_id,
                             user_message_id=user_message_id,
@@ -1105,7 +1186,8 @@ class ChatCoreService:
                             reasoning_content=reasoning_content,
                             parameters=tool_parameters
                         )
-                        yield ChatStreamResponse.tool_call_response(
+                        yield ChatStreamResponse.message_response(
+                            text='',
                             tool_call=tool_call_info,
                             chat_id=chat_id,
                             user_message_id=user_message_id,
@@ -1246,21 +1328,26 @@ class ChatCoreService:
     @staticmethod
     def _postprocess(ctx: ChatContext) -> None:
         """
-        聊天后置处理：将最终消息列表持久化到对话记录
+        聊天后置处理：从系统提示词、用户提示词消息和消息记录表组装完整的 messages 字段，更新到 chat 表
 
-        从数据库读取已持久化的消息，回填 message_id 与 reasoning_content，
-        再更新对话的 messages 字段。
+        组装顺序：system（build_system_prompt） → user_prompt_messages → 历史消息（从 chat_message 表组装）
         """
-        chat_messages = ChatMessageService.get_messages_by_chat(ctx.chat_id)
-        updated_messages = []
-        msg_idx = 0
-        for i in range(len(ctx.messages)):
-            if ctx.messages[i]['role'] != 'system':
-                if msg_idx < len(chat_messages.items):
-                    ctx.messages[i]['message_id'] = chat_messages.items[msg_idx].message_id
-                    ctx.messages[i]['reasoning_content'] = chat_messages.items[msg_idx].reasoning_content
-                msg_idx += 1
-            updated_messages.append(ctx.messages[i])
+        # 如果循环提前退出（停止/取消），ctx.messages 可能未更新（不包含本轮新消息）
+        # 此时不应覆盖 Chat.messages，否则会丢失已保存的消息
+        if not ctx.messages or ctx.messages[-1].get('role') == 'user':
+            logger.info(f"[POSTPROCESS] 跳过保存：消息列表未更新或最后一条为 user 消息, chat_id={ctx.chat_id}")
+            return
+
+        # 从 chat_message 表组装历史消息（含本轮 user / assistant / tool / tool_response）
+        history_messages = ChatPreprocessor._build_history_from_messages(ctx.chat_id)
+
+        # 组装完整的 messages：系统提示词 → 用户提示词消息 → 历史消息
+        from app.core.prompt.utils.system_prompt_builder import build_system_prompt
+        updated_messages = [{'role': 'system', 'content': build_system_prompt(ctx.system_prompt)}]
+        if ctx.user_prompt_messages:
+            updated_messages.extend(ctx.user_prompt_messages)
+        updated_messages.extend(history_messages)
+
         ChatService.update_messages(ctx.chat_id, updated_messages)
     
     @staticmethod
@@ -1278,7 +1365,7 @@ class ChatCoreService:
         round_start_time=None
     ):
         """将停止聊天所需参数实时保存到 Redis，供停止接口读取"""
-        EventBus.save_chat_context(chat_id, {
+        ChatContextStore.save_chat_context(chat_id, {
             'assistant_message_id': assistant_message_id,
             'model_answer_step_id': model_answer_step_id,
             'msg_model_id': msg_model_id,
@@ -1347,7 +1434,7 @@ class ChatCoreService:
                 message_id=assistant_message_id,
                 avatar=ChatPreprocessor._resolve_avatar(chatbot_id, model_id)
             )
-            EventBus.clear_chat_context(e.chat_id)
+            ChatContextStore.clear_chat_context(e.chat_id)
             yield ChatStreamResponse.error_response(
                 error=e.message,
                 chat_id=e.chat_id,
@@ -1366,13 +1453,17 @@ class ChatCoreService:
                     yield result
                 elif isinstance(result, tuple) and len(result) == 2:
                     _, ctx.messages = result
-        except GeneratorExit:
+        except (GeneratorExit, asyncio.CancelledError):
             ChatStopManager().request_stop(ctx.chat_id)
+            raise
         except Exception as e:
-            print(f"Error in stream_chat: {e}")
+            logger.error(f"Error in stream_chat: {e}", exc_info=True)
         # 3. 聊天后置处理
         finally:
-            ChatCoreService._postprocess(ctx)
+            try:
+                ChatCoreService._postprocess(ctx)
+            except Exception as e:
+                logger.error(f"Error in _postprocess: {e}", exc_info=True)
     
     @staticmethod
     def chat(

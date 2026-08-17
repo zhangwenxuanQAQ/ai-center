@@ -700,14 +700,16 @@ export const chatService = {
     });
 
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-    const url = `${API_BASE_URL}/aicenter/v1/chat/reconnect_stream/${chatId}`;
+    const url = `${API_BASE_URL}/aicenter/v1/chat/reconnect`;
 
     try {
       const response = await fetch(url, {
-        method: 'GET',
+        method: 'POST',
         headers: {
           'Accept': 'text/event-stream',
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({ chat_id: chatId }),
         signal: abortController.signal
       });
 

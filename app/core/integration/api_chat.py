@@ -36,7 +36,7 @@ from app.core.llm_model.factory import LLMFactory
 from app.core.tools.tool_util import process_tool_calls
 from app.core.exceptions import ResourceNotFoundError
 from app.core.integration.temp_chat_store import TempChatStore
-from app.core.chat.event.event_bus import EventBus
+from app.core.chat.chat_context_store import ChatContextStore
 
 logger = logging.getLogger(__name__)
 
@@ -428,7 +428,8 @@ class IntegrationChatCoreService:
             extra_content_dict['step'] = step
         if step_id is not None:
             extra_content_dict['step_id'] = step_id
-        if step_status is not None:
+        # 仅在 extra_content 中未指定 step_status 时使用默认值
+        if step_status is not None and 'step_status' not in extra_content_dict:
             extra_content_dict['step_status'] = step_status
 
         return json.dumps(extra_content_dict, ensure_ascii=False) if extra_content_dict else None
@@ -520,6 +521,14 @@ class IntegrationChatCoreService:
         extra_content: Optional[str] = None
     ) -> ChatbotChatMessage:
         """保存 tool_response 消息到 ChatbotChatMessage 表"""
+        # 去重检查：如果已存在相同 message_id 的 tool_response 消息则不重复创建
+        existing = ChatbotChatMessage.select().where(
+            (ChatbotChatMessage.chat_id == chat_id) &
+            (ChatbotChatMessage.role == 'tool_response') &
+            (ChatbotChatMessage.message_id == message_id)
+        ).first()
+        if existing:
+            return existing
         tool_response_message = ChatbotChatMessage(
             chatbot_id=chatbot_id,
             chat_id=chat_id,
@@ -882,8 +891,8 @@ class IntegrationChatCoreService:
         tool_response_extra = json.dumps({"tool_call": {"tool_call_id": tool_call_id, "name": "clarify"}}, ensure_ascii=False)
         if temporary and integration_id is not None:
             user_msg_data = {
-                "id": message_id,
-                "message_id": message_id,
+                "id": f"{message_id}_resp",
+                "message_id": f"{message_id}_resp",
                 "chat_id": chat_id,
                 "chatbot_id": chatbot_id,
                 "role": "tool_response",
@@ -990,6 +999,31 @@ class IntegrationChatCoreService:
         # 临时会话：从Redis上下文恢复部分助手回复，保存到 TempChatStore
         if is_temporary:
             updated_count = 0
+            # 先将临时会话中所有 running 状态的 clarify 工具消息设为 done
+            if ctx_data:
+                integration_id = ctx_data.get('integration_id')
+                scope_id = ctx_data.get('scope_id')
+                if integration_id:
+                    temp_msgs = TempChatStore.get_messages(integration_id, chat_id, scope_id=scope_id)
+                    for m in temp_msgs:
+                        if m.get('role') == 'tool':
+                            ec = m.get('extra_content')
+                            if isinstance(ec, str):
+                                try:
+                                    ec = json.loads(ec)
+                                except (json.JSONDecodeError, TypeError):
+                                    ec = {}
+                            if isinstance(ec, dict) and ec.get('step_status') in ('running', 'start'):
+                                tc = ec.get('tool_call', {})
+                                if isinstance(tc, dict) and tc.get('name') == 'clarify':
+                                    ec['step_status'] = 'done'
+                                    TempChatStore.update_message(
+                                        integration_id, chat_id, m.get('id') or m.get('message_id', ''),
+                                        scope_id=scope_id,
+                                        extra_content=json.dumps(ec, ensure_ascii=False),
+                                    )
+                                    updated_count += 1
+
             if ctx_data:
                 full_response_chunk = ctx_data.get('full_response_chunk', '')
                 integration_id = ctx_data.get('integration_id')
@@ -1343,7 +1377,7 @@ class IntegrationChatCoreService:
         scope_id: Optional[str] = None
     ):
         """保存停止上下文到Redis，供停止接口恢复使用"""
-        EventBus.save_chat_context(chat_id, {
+        ChatContextStore.save_chat_context(chat_id, {
             'assistant_message_id': assistant_message_id,
             'model_answer_step_id': model_answer_step_id,
             'msg_model_id': msg_model_id,
@@ -1396,7 +1430,9 @@ class IntegrationChatCoreService:
             round_reasoning_end_time = None
 
             # 步骤开始
-            yield ChatStreamResponse.start_response(
+            yield ChatStreamResponse.message_response(
+                text='',
+                status=MessageStatus.START,
                 chat_id=chat_id,
                 user_message_id=user_message_id,
                 assistant_message_id=assistant_message_id,
@@ -1436,7 +1472,7 @@ class IntegrationChatCoreService:
                     integration_id=ctx.integration_id,
                     scope_id=ctx.scope_id,
                 )
-                yield ChatStreamResponse.text_response(
+                yield ChatStreamResponse.message_response(
                     text='',
                     chat_id=chat_id,
                     user_message_id=user_message_id,
@@ -1466,7 +1502,7 @@ class IntegrationChatCoreService:
                         integration_id=ctx.integration_id,
                         scope_id=ctx.scope_id,
                     )
-                    yield ChatStreamResponse.text_response(
+                    yield ChatStreamResponse.message_response(
                         text='',
                         chat_id=chat_id,
                         user_message_id=user_message_id,
@@ -1489,7 +1525,7 @@ class IntegrationChatCoreService:
                             model_id=msg_model_id,
                             step=MessageStep.MODEL_ANSWER
                         )
-                        EventBus.clear_chat_context(chat_id)
+                        ChatContextStore.clear_chat_context(chat_id)
                     yield ChatStreamResponse.error_response(
                         error=chunk['error'],
                         chat_id=chat_id,
@@ -1542,7 +1578,7 @@ class IntegrationChatCoreService:
 
                 reasoning_time = int((time.time() - round_start_time) * 1000)
 
-                yield ChatStreamResponse.text_response(
+                yield ChatStreamResponse.message_response(
                     text=chunk.get('text', ''),
                     chat_id=chat_id,
                     user_message_id=user_message_id,
@@ -1576,7 +1612,7 @@ class IntegrationChatCoreService:
                         reasoning_time=reasoning_time,
                         step=MessageStep.MODEL_ANSWER
                     )
-                    EventBus.clear_chat_context(chat_id)
+                    ChatContextStore.clear_chat_context(chat_id)
                 else:
                     # 临时会话：保存或更新助手消息到 TempChatStore
                     # 检查是否已存在该助手消息（多轮对话时第一轮已保存）
@@ -1619,7 +1655,7 @@ class IntegrationChatCoreService:
                             "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         }
                         TempChatStore.add_message(ctx.integration_id, chat_id, assistant_msg_data, scope_id=ctx.scope_id)
-                    EventBus.clear_chat_context(chat_id)
+                    ChatContextStore.clear_chat_context(chat_id)
 
             # 处理工具调用
             if tool_calls_list:
@@ -1631,7 +1667,7 @@ class IntegrationChatCoreService:
 
                 async for tool_result in process_tool_calls(tool_calls_list, tool_map, chat_id):
                     if ChatStopManager().is_stop_requested(chat_id):
-                        yield ChatStreamResponse.text_response(
+                        yield ChatStreamResponse.message_response(
                             text='',
                             chat_id=chat_id,
                             user_message_id=user_message_id,
@@ -1661,7 +1697,8 @@ class IntegrationChatCoreService:
                             elapsed_ms=0,
                             reasoning_content=tool_reasoning_content
                         )
-                        yield ChatStreamResponse.tool_call_response(
+                        yield ChatStreamResponse.message_response(
+                            text='',
                             tool_call=tool_call_info,
                             chat_id=chat_id,
                             user_message_id=user_message_id,
@@ -1687,8 +1724,8 @@ class IntegrationChatCoreService:
                         else:
                             # 临时会话：保存工具开始消息到 TempChatStore
                             tool_msg_data = {
-                                "id": assistant_message_id,
-                                "message_id": assistant_message_id,
+                                "id": tool_step_id,
+                                "message_id": tool_step_id,
                                 "chat_id": chat_id,
                                 "chatbot_id": chatbot_id,
                                 "role": "tool",
@@ -1696,7 +1733,7 @@ class IntegrationChatCoreService:
                                 "reasoning_content": tool_reasoning_content or None,
                                 "reasoning_time": None,
                                 "model_id": msg_model_id,
-                                "extra_content": json.dumps({"tool_call": tool_call_info.to_dict(), "step": MessageStep.TOOL_CALL, "step_id": tool_step_id, "step_status": "running"}, ensure_ascii=False),
+                                "extra_content": json.dumps({"tool_call": tool_call_info.to_dict(), "step": MessageStep.TOOL_CALL, "step_id": tool_step_id, "step_status": "running", "assistant_message_id": assistant_message_id}, ensure_ascii=False),
                                 "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                                 "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                             }
@@ -1712,7 +1749,8 @@ class IntegrationChatCoreService:
                             elapsed_ms=elapsed_ms,
                             reasoning_content=tool_reasoning_content
                         )
-                        yield ChatStreamResponse.tool_call_response(
+                        yield ChatStreamResponse.message_response(
+                            text='',
                             tool_call=tool_call_info,
                             chat_id=chat_id,
                             user_message_id=user_message_id,
@@ -1736,7 +1774,8 @@ class IntegrationChatCoreService:
                             elapsed_ms=elapsed_ms,
                             reasoning_content=tool_reasoning_content
                         )
-                        yield ChatStreamResponse.tool_call_response(
+                        yield ChatStreamResponse.message_response(
+                            text='',
                             tool_call=tool_call_info,
                             chat_id=chat_id,
                             user_message_id=user_message_id,
@@ -1776,7 +1815,8 @@ class IntegrationChatCoreService:
                             elapsed_ms=elapsed_ms,
                             reasoning_content=tool_reasoning_content
                         )
-                        yield ChatStreamResponse.tool_call_response(
+                        yield ChatStreamResponse.message_response(
+                            text='',
                             tool_call=tool_call_info,
                             chat_id=chat_id,
                             user_message_id=user_message_id,
@@ -1802,11 +1842,11 @@ class IntegrationChatCoreService:
                         else:
                             # 临时会话：更新工具消息为成功状态
                             TempChatStore.update_message(
-                                ctx.integration_id, chat_id, assistant_message_id,
+                                ctx.integration_id, chat_id, tool_step_id,
                                 scope_id=ctx.scope_id,
                                 content=tool_message_content,
                                 reasoning_content=tool_reasoning_content or None,
-                                extra_content=json.dumps({"tool_call": tool_call_info.to_dict(), "step": MessageStep.TOOL_CALL, "step_id": tool_step_id, "step_status": "running"}, ensure_ascii=False),
+                                extra_content=json.dumps({"tool_call": tool_call_info.to_dict(), "step": MessageStep.TOOL_CALL, "step_id": tool_step_id, "step_status": "running", "assistant_message_id": assistant_message_id}, ensure_ascii=False),
                             )
 
                         # clarify 工具：暂停对话循环，等待用户通过 API 提交输入
@@ -1837,9 +1877,9 @@ class IntegrationChatCoreService:
                             else:
                                 # 临时会话：更新工具消息为 done
                                 TempChatStore.update_message(
-                                    ctx.integration_id, chat_id, assistant_message_id,
+                                    ctx.integration_id, chat_id, tool_step_id,
                                     scope_id=ctx.scope_id,
-                                    extra_content=json.dumps({"tool_call": tool_call_info.to_dict(), "step": MessageStep.TOOL_CALL, "step_id": tool_step_id, "step_status": "done"}, ensure_ascii=False),
+                                    extra_content=json.dumps({"tool_call": tool_call_info.to_dict(), "step": MessageStep.TOOL_CALL, "step_id": tool_step_id, "step_status": "done", "assistant_message_id": assistant_message_id}, ensure_ascii=False),
                                 )
                             messages.append(tool_msg)
                         else:
@@ -1870,6 +1910,12 @@ class IntegrationChatCoreService:
         - 临时会话：从消息列表中提取助手最终消息保存或更新到 Redis
         - 正式会话：更新 ChatbotChat 的 messages 摘要
         """
+        # 如果循环提前退出（停止/取消），ctx.messages 可能未更新（不包含本轮新消息）
+        # 此时不应创建/更新助手消息，否则会覆盖停止接口已保存的内容或创建重复消息
+        if not ctx.messages or ctx.messages[-1].get('role') == 'user':
+            logger.info(f"[POSTPROCESS] 跳过保存：消息列表未更新或最后一条为 user 消息, chat_id={ctx.chat_id}")
+            return
+
         if ctx.temporary:
             # 临时会话：从 messages 中提取助手最终消息保存到 Redis
             assistant_content = ''
@@ -1996,13 +2042,16 @@ class IntegrationChatCoreService:
             async for result in IntegrationChatCoreService._run_conversation_loop(ctx):
                 if isinstance(result, dict):
                     if result.get('status') == MessageStatus.STOP:
+                        result['chat_id'] = ctx.chat_id
+                        yield result
                         return
                     result['chat_id'] = ctx.chat_id
                     yield result
                 elif isinstance(result, tuple) and len(result) == 2:
                     _, ctx.messages = result
-        except GeneratorExit:
+        except (GeneratorExit, asyncio.CancelledError):
             ChatStopManager().request_stop(ctx.chat_id)
+            raise
         except Exception as e:
             logger.error(f"集成聊天流式输出异常: {e}", exc_info=True)
             yield ChatStreamResponse.error_response(
@@ -2014,7 +2063,10 @@ class IntegrationChatCoreService:
             ).to_dict()
         # 3. 聊天后置处理
         finally:
-            IntegrationChatCoreService._postprocess(ctx)
+            try:
+                IntegrationChatCoreService._postprocess(ctx)
+            except Exception as e:
+                logger.error(f"Error in integration _postprocess: {e}", exc_info=True)
 
     @staticmethod
     async def chat(

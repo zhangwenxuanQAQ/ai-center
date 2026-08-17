@@ -1169,6 +1169,16 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     // 停止后重新查询消息记录，确保 UI 与后端状态一致
     if (chatId) {
       await loadMessages(chatId);
+      // 额外保障：确保澄清工具消息 step_status 为 done（防止 DB 时序问题）
+      setMessages(prev => prev.map(msg => {
+        if (msg.role === 'tool' && msg.extra_content && msg.extra_content.step_status !== 'done') {
+          const tc = msg.extra_content.tool_call;
+          if (tc && tc.name === 'clarify') {
+            return { ...msg, extra_content: { ...msg.extra_content, step_status: 'done' } };
+          }
+        }
+        return msg;
+      }));
     } else {
       const stopUpdater = (prev: DisplayMessage[]) => {
         const updated = [...prev];
@@ -1701,9 +1711,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                           theme={themeMode === 'dark' ? 'dark' : 'light'}
                           toolCallId={tc.tool_call_id}
                           messageId={msg.message_id}
-                          disabled={!!toolResponse}
+                          disabled={!!toolResponse || msg.extra_content?.step_status === 'done'}
                           onResponded={handleClarifyResponded}
                           userResponse={toolResponse?.content}
+                          temporary={temporary}
+                          previewToken={previewToken}
                         />
                       </div>
                     )}
@@ -1755,7 +1767,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
               </div>
             )}
 
-            {msg.content && (
+            {msg.content && !(msg.role === 'tool' && msg.tool_calls) && (
               (() => {
                 const widgetEvent = msg.role === 'user' ? tryParseWidgetEvent(msg.content) : null;
                 const displaySource = widgetEvent
