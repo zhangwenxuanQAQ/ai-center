@@ -490,6 +490,23 @@ class ChatbotIntegrationService:
         return integration
 
     @staticmethod
+    def get_latest_message(chat_id: str):
+        """
+        获取对话的最新一条消息
+
+        Args:
+            chat_id: 对话ID
+
+        Returns:
+            ChatbotChatMessage: 最新消息模型实例，无消息时返回 None
+        """
+        messages = ChatbotChatMessage.select().where(
+            (ChatbotChatMessage.chat_id == chat_id) &
+            (ChatbotChatMessage.deleted == False)
+        ).order_by(ChatbotChatMessage.created_at.desc(), ChatbotChatMessage.role.desc()).limit(1)
+        return messages.first() if messages else None
+
+    @staticmethod
     def list_chats(api_key_or_integration, keyword: Optional[str] = None, preview_token: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         获取该API密钥下的所有对话列表
@@ -515,7 +532,8 @@ class ChatbotIntegrationService:
         # 预览模式下只返回预览token隔离的临时对话，不返回数据库中的正式对话
         if not preview_token:
             query = ChatbotChat.select().where(
-                ChatbotChat.integration_id == integration.id
+                (ChatbotChat.integration_id == integration.id) &
+                (ChatbotChat.deleted == False)
             )
 
             if keyword and keyword.strip():
@@ -612,7 +630,8 @@ class ChatbotIntegrationService:
         try:
             chat = ChatbotChat.get(
                 (ChatbotChat.id == chat_id) &
-                (ChatbotChat.integration_id == integration.id)
+                (ChatbotChat.integration_id == integration.id) &
+                (ChatbotChat.deleted == False)
             )
             chat.title = title
             chat.save()
@@ -668,12 +687,20 @@ class ChatbotIntegrationService:
         try:
             chat = ChatbotChat.get(
                 (ChatbotChat.id == chat_id) &
-                (ChatbotChat.integration_id == integration.id)
+                (ChatbotChat.integration_id == integration.id) &
+                (ChatbotChat.deleted == False)
             )
-            ChatbotChatMessage.delete().where(
-                ChatbotChatMessage.chat_id == chat_id
+            # 软删除消息
+            ChatbotChatMessage.update(
+                deleted=True, deleted_at=datetime.now()
+            ).where(
+                (ChatbotChatMessage.chat_id == chat_id) &
+                (ChatbotChatMessage.deleted == False)
             ).execute()
-            chat.delete_instance()
+            # 软删除对话
+            chat.deleted = True
+            chat.deleted_at = datetime.now()
+            chat.save()
             return True
         except ChatbotChat.DoesNotExist:
             raise ResourceNotFoundError(message='对话不存在')

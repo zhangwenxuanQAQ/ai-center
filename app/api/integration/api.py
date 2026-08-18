@@ -23,7 +23,7 @@ from app.core.integration.temp_chat_store import TempChatStore
 from app.core.chat.chat_service import ChatInputManager, ChatStopManager
 from app.core.chat.stream_buffer import ChatStreamBuffer
 from app.core.chat.chat_context_store import ChatContextStore
-from app.database.models import ChatbotChat, ChatbotChatMessage
+from app.database.models import ChatbotChat
 from app.database.redis_utils import redis_utils
 from app.utils.response import ResponseUtil, ApiResponse
 from app.services.chat.file_utils import get_file_from_datasource
@@ -158,9 +158,7 @@ async def chat_completions(
                     latest_msg = temp_msgs[-1]
                     logger.info(f"澄清检测: latest_msg role={_get_field(latest_msg, 'role', '')}, message_id={_get_field(latest_msg, 'message_id', '')}, extra_content={_get_field(latest_msg, 'extra_content', '')}")
             else:
-                latest_msg = ChatbotChatMessage.select().where(
-                    ChatbotChatMessage.chat_id == chat_request.chat_id
-                ).order_by(ChatbotChatMessage.created_at.desc()).first()
+                latest_msg = ChatbotIntegrationService.get_latest_message(chat_request.chat_id)
 
             if latest_msg and _get_field(latest_msg, 'role', '') == 'tool' and _get_field(latest_msg, 'extra_content', None):
                 try:

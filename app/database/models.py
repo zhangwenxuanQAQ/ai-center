@@ -403,7 +403,7 @@ class MCPTool(SoftDeleteModel):
         table_name = 'mcp_tool'
 
 
-class ChatbotMCP(BaseModel):
+class ChatbotMCP(SoftDeleteModel):
     """
     机器人MCP关联模型
     
@@ -419,7 +419,7 @@ class ChatbotMCP(BaseModel):
         table_name = 'chatbot_mcp'
 
 
-class ChatbotModel(BaseModel):
+class ChatbotModel(SoftDeleteModel):
     """
     机器人模型关联模型
     
@@ -440,7 +440,7 @@ class ChatbotModel(BaseModel):
         )
 
 
-class ChatbotPrompt(BaseModel):
+class ChatbotPrompt(SoftDeleteModel):
     """
     机器人提示词关联模型
     
@@ -464,7 +464,7 @@ class ChatbotPrompt(BaseModel):
         )
 
 
-class ChatbotTool(BaseModel):
+class ChatbotTool(SoftDeleteModel):
     """
     机器人工具关联模型
     
@@ -484,7 +484,7 @@ class ChatbotTool(BaseModel):
         )
 
 
-class ChatbotKnowledgebase(BaseModel):
+class ChatbotKnowledgebase(SoftDeleteModel):
     """
     机器人知识库关联模型
     
@@ -539,7 +539,7 @@ class Datasource(SoftDeleteModel):
         table_name = 'datasource'
 
 
-class ChatbotIntegration(BaseModel):
+class ChatbotIntegration(SoftDeleteModel):
     """
     机器人插件集成模型
     
@@ -560,7 +560,7 @@ class ChatbotIntegration(BaseModel):
         )
 
 
-class ChatbotChat(BaseModel):
+class ChatbotChat(SoftDeleteModel):
     """
     机器人聊天模型
     
@@ -575,7 +575,7 @@ class ChatbotChat(BaseModel):
         table_name = 'chatbot_chat'
 
 
-class ChatbotChatMessage(BaseModel):
+class ChatbotChatMessage(SoftDeleteModel):
     """
     机器人聊天消息模型
     

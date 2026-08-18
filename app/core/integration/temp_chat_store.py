@@ -242,6 +242,133 @@ class TempChatStore:
             return False
 
     @classmethod
+    def upsert_message(
+        cls,
+        integration_id: str,
+        chat_id: str,
+        message_id: str,
+        step_id: Optional[str] = None,
+        scope_id: Optional[str] = None,
+        **kwargs
+    ) -> bool:
+        """
+        新增或更新临时会话消息（upsert 语义，与 IntegrationChatCoreService 的 upsert 方法对齐）
+
+        查找逻辑（按优先级匹配）：
+        1. 如果传了 step_id：匹配 role + message_id + extra_content.step_id == step_id 的消息
+        2. 如果未传 step_id：匹配 message_id 或 id == message_id 的消息
+
+        - 找到则更新 kwargs 中的字段
+        - 未找到则新增消息（kwargs 中必须包含 role 等必要字段）
+
+        Args:
+            integration_id: 集成ID
+            chat_id: 临时会话ID
+            message_id: 消息ID
+            step_id: 步骤ID（可选），用于精确匹配
+            scope_id: 作用域ID
+            **kwargs: 要更新的字段（如 content, reasoning_content, extra_content 等）
+
+        Returns:
+            bool: 是否成功
+        """
+        if not cls.is_available():
+            return False
+
+        try:
+            sid = cls._get_scope_id(integration_id, scope_id)
+            messages_key = cls._get_messages_key(sid, chat_id)
+
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    with redis_utils.client.pipeline() as pipe:
+                        pipe.watch(messages_key)
+                        raw_messages = pipe.lrange(messages_key, 0, -1) or []
+
+                        found_index = -1
+                        new_messages = []
+                        for i, raw in enumerate(raw_messages):
+                            try:
+                                msg = json.loads(raw)
+                                if step_id is not None:
+                                    # 精确匹配：message_id + extra_content.step_id
+                                    msg_id_match = msg.get("message_id") == message_id or msg.get("id") == message_id
+                                    if msg_id_match:
+                                        ec = msg.get("extra_content")
+                                        if ec:
+                                            try:
+                                                ec_dict = json.loads(ec) if isinstance(ec, str) else ec
+                                                if isinstance(ec_dict, dict) and ec_dict.get("step_id") == step_id:
+                                                    found_index = i
+                                                    break
+                                            except (json.JSONDecodeError, TypeError):
+                                                pass
+                                    # 不匹配，保留原消息
+                                    new_messages.append(raw)
+                                else:
+                                    # 简单匹配：message_id 或 id
+                                    if msg.get("id") == message_id or msg.get("message_id") == message_id:
+                                        found_index = i
+                                        break
+                                    new_messages.append(raw)
+                            except:
+                                new_messages.append(raw)
+
+                        if found_index >= 0:
+                            # 更新已找到的消息
+                            raw_messages_copy = list(raw_messages)
+                            found_raw = raw_messages_copy[found_index]
+                            try:
+                                found_msg = json.loads(found_raw)
+                            except:
+                                found_msg = {}
+
+                            # 构建新消息字段
+                            new_msg = dict(found_msg)
+                            new_msg["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            new_msg.update(kwargs)
+
+                            new_messages = list(raw_messages_copy)
+                            new_messages[found_index] = json.dumps(new_msg, ensure_ascii=False)
+                        else:
+                            # 未找到，新增消息
+                            new_msg = {
+                                "id": message_id,
+                                "message_id": message_id,
+                                "chat_id": chat_id,
+                                "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            }
+                            new_msg.update(kwargs)
+                            # 如果 kwargs 中没有 role，使用默认值
+                            if "role" not in new_msg:
+                                new_msg["role"] = "assistant"
+
+                            new_messages = list(raw_messages)
+                            new_messages.append(json.dumps(new_msg, ensure_ascii=False))
+
+                        # MULTI 保证 delete + rpush 原子执行
+                        pipe.multi()
+                        pipe.delete(messages_key)
+                        if new_messages:
+                            pipe.rpush(messages_key, *new_messages)
+                        pipe.expire(messages_key, cls.EXPIRE_SECONDS)
+                        pipe.execute()
+                        cls.update_chat(integration_id, chat_id, scope_id=scope_id)
+                        return True
+                except redis.WatchError:
+                    if attempt < max_retries - 1:
+                        continue
+                    logger.warning(f"upsert临时消息乐观锁重试耗尽: message_id={message_id}, step_id={step_id}")
+                    return False
+
+            return False
+        except Exception as e:
+            logger.error(f"upsert临时消息失败: {e}")
+            return False
+
+    @classmethod
     def clear_messages_after(cls, integration_id: str, chat_id: str, message_index: int, scope_id: Optional[str] = None) -> bool:
         if not cls.is_available():
             return False

@@ -42,6 +42,7 @@ interface ToolCallStep {
   result?: any;
   message?: string;
   elapsed_ms?: number;
+  reasoning_content?: string;
 }
 
 interface DisplayMessage {
@@ -366,6 +367,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           result: tc.result,
           message: tc.message,
           elapsed_ms: tc.elapsed_ms,
+          reasoning_content: tc.reasoning_content || m.reasoning_content,
         }];
       }
     }
@@ -1611,9 +1613,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   };
 
   const renderAssistantMessageContent = (msg: DisplayMessage, groupMessages?: DisplayMessage[]) => {
+    const isToolCallStep = msg.step === 'tool_call';
     return (
       <div className="int-step-container">
         <div className="int-md-editor-container">
+          {!isToolCallStep && (
           <>
             {(msg.status === 'start' || (!msg.reasoning_content && !msg.content && msg.status !== 'done' && msg.status !== 'stop')) && (
               <div className="int-message-reasoning">
@@ -1668,6 +1672,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                 )}
               </div>
             )}
+          </>
+          )}
 
             {msg.tool_calls && msg.tool_calls.length > 0 && (
               <div className="int-tool-calls-container">
@@ -1721,11 +1727,26 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                     )}
                     {!isClarify && expandedToolCalls.has(tcId) && (
                       <div className="int-tool-call-content">
+                        {/* 思考过程 */}
+                        {tc.reasoning_content && (
+                          <div className={`int-tool-call-reasoning-text ${theme === 'dark' ? 'dark' : 'light'}`}>
+                            <ChatMarkdown
+                              source={tc.reasoning_content}
+                              className={`md-editor small-text ${theme === 'dark' ? 'dark' : 'light'}`}
+                            />
+                          </div>
+                        )}
                         {/* web_search/generate_ppt不显示原始消息 */}
                         {tc.message && tc.name !== 'web_search' && tc.name !== 'generate_ppt' && (
-                          <div className="int-tool-call-message">
-                            <ChatMarkdown source={tc.message} />
-                          </div>
+                          <>
+                            {tc.reasoning_content && <div className="int-tool-call-divider" />}
+                            <div className="int-tool-call-message">
+                              <ChatMarkdown source={tc.message} />
+                            </div>
+                          </>
+                        )}
+                        {tc.result && !tc.message && tc.reasoning_content && (
+                          <div className="int-tool-call-divider" />
                         )}
                         {tc.result && (
                           <>
@@ -1776,7 +1797,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                 return <ChatMarkdown source={displaySource} onWidgetEvent={handleWidgetEvent} widgetValues={(msg.extra_content as any)?.widgetValues} />;
               })()
             )}
-          </>
         </div>
       </div>
     );

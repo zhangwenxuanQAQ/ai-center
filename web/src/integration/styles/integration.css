@@ -1675,6 +1675,24 @@
   line-height: 1.5;
 }
 
+.int-tool-call-reasoning-text {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.int-tool-call-reasoning-text .w-md-editor {
+  background: transparent !important;
+}
+
+.int-tool-call-reasoning-text .w-md-editor .w-md-editor-preview {
+  background: transparent !important;
+  padding: 0;
+}
+
+.int-tool-call-reasoning-text .w-md-editor .w-md-editor-preview .w-md-editor-preview-content {
+  padding: 0;
+}
+
 .int-tool-call-message .wmde-markdown {
   background: transparent !important;
   font-size: 12px;
