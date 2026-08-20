@@ -1,4 +1,4 @@
-﻿/* 机器人管理页面样式 - 参考聊天界面设计 */
+/* 机器人管理页面样式 - 参考聊天界面设计 */
 
 .chatbot-page-container {
   height: 100%;
@@ -351,148 +351,154 @@ body.dark-mode .no-border-input .ant-input-affix-wrapper-focused {
         display: none;
       }
 
-      :global {
-        .ant-tree {
-          background: transparent !important;
-          border: none !important;
-          font-size: 13px;
-          color: #333;
-          padding-left: 0 !important;
-        }
+      &.dark {
+        :global {
+          .ant-tree {
+            color: #e0e0e0;
+            background: transparent !important;
+          }
+          .ant-tree-node-content-wrapper {
+            color: #e0e0e0;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            font-size: 14px;
+            font-weight: 400;
+            box-sizing: border-box;
+            cursor: pointer;
 
-        .ant-tree-list {
-          background: transparent !important;
-          padding-left: 0 !important;
-        }
+            &::before {
+              content: '';
+              position: absolute;
+              left: 0;
+              top: 0;
+              bottom: 0;
+              width: 3px;
+              background: transparent;
+              border-radius: 8px 0 0 8px;
+              transition: all 0.3s ease;
+            }
 
-        .ant-tree-list-holder {
-          padding-left: 0 !important;
-        }
+            &:hover {
+              color: #fff;
+              background: transparent;
+              transform: translateX(4px);
 
-        .ant-tree-list-item {
-          padding-left: 0 !important;
-        }
+              &::before {
+                background: linear-gradient(180deg, ~"var(--primary-color)", #6b7fe6);
+              }
+            }
+          }
 
-        .ant-tree-list-item-expand-icon {
-          display: none !important;
-          width: 0 !important;
-          margin: 0 !important;
-          padding: 0 !important;
-        }
+          .ant-tree-node-selected {
+            color: #ffffff !important;
+            background: transparent !important;
+            font-weight: 600;
 
-        .ant-tree-treenode {
-          padding: 0 !important;
-          margin: 0 !important;
-          background: transparent !important;
-          min-height: auto !important;
-          padding-left: 0 !important;
-        }
+            &::before {
+              background: linear-gradient(180deg, ~"var(--primary-color)", #6b7fe6);
+              box-shadow: 0 0 12px rgba(90, 111, 214, 0.8);
+            }
+          }
 
-        .ant-tree-node-content-wrapper {
-          background: transparent !important;
-          padding: 0 !important;
-          margin: 0 !important;
-          width: 100%;
-          border: none !important;
-          height: auto !important;
-          display: block !important;
-          padding-left: 0 !important;
-        }
+          .ant-tree-switcher {
+            color: #a0a0b0;
+            transition: all 0.3s ease;
+            background: transparent;
+            border-radius: 8px 0 0 8px;
+          }
 
-        .ant-tree-node-content-wrapper:hover {
-          background: transparent !important;
-        }
+          .ant-tree-indent {
+            background: transparent;
+            border-radius: 8px 0 0 8px;
+            transition: background 0.3s ease;
+          }
 
-        .ant-tree-switcher {
-          display: none !important;
-          width: 0 !important;
-          margin: 0 !important;
-          padding: 0 !important;
-        }
+          .ant-tree-treenode:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
 
-        .ant-tree-indent {
-          display: none !important;
-          width: 0 !important;
-          margin: 0 !important;
-          padding: 0 !important;
-        }
+            .ant-tree-switcher,
+            .ant-tree-indent {
+              background: rgba(255, 255, 255, 0.05);
+            }
+          }
 
-        .ant-tree-indent-unit {
-          display: none !important;
-          width: 0 !important;
-          margin: 0 !important;
-          padding: 0 !important;
-        }
-
-        .ant-tree-title {
-          width: 100%;
-          height: auto !important;
-        }
-
-        .ant-tree-iconEle {
-          display: none !important;
-        }
-      }
-
-      body.dark-mode & :global(.ant-tree) {
-        color: #a0a0b0;
-      }
-
-      body.dark-mode & :global(.ant-tree-title) {
-        color: #a0a0b0;
-      }
-
-      .tree-item {
-        padding: 0;
-        cursor: pointer;
-        font-size: 13px;
-        color: #333;
-        position: relative;
-        width: 100%;
-        box-sizing: border-box;
-
-        &.dark {
-          color: #a0a0b0;
-        }
-
-        & > .tree-row {
-          display: flex;
-          align-items: center;
-          padding: 7px 16px;
-          transition: background 0.2s;
-          width: 100%;
-          box-sizing: border-box;
-
-          &:hover {
-            background: #f5f7fa;
+          .ant-tree-treenode-selected {
+            background: linear-gradient(90deg, rgba(90, 111, 214, 0.2), rgba(90, 111, 214, 0.1)) !important;
+            border-radius: 8px;
           }
         }
+      }
 
-        &.dark > .tree-row:hover {
-          background: rgba(90, 111, 214, 0.1);
-        }
+      &.light {
+        :global {
+          .ant-tree-node-content-wrapper {
+            color: rgba(0, 0, 0, 0.75);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            font-size: 14px;
+            box-sizing: border-box;
+            cursor: pointer;
 
-        &.selected > .tree-row {
-          background: #eef2ff;
-          color: #5a6fd6;
-        }
+            &::before {
+              content: '';
+              position: absolute;
+              left: 0;
+              top: 0;
+              bottom: 0;
+              width: 3px;
+              background: transparent;
+              border-radius: 8px 0 0 8px;
+              transition: all 0.3s ease;
+            }
 
-        &.dark.selected > .tree-row {
-          background: rgba(90, 111, 214, 0.2);
-          color: #fff;
-        }
+            &:hover {
+              color: #000;
+              background: transparent;
+              transform: translateX(4px);
 
-        .tree-content {
-          flex: 1;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
+              &::before {
+                background: linear-gradient(180deg, ~"var(--primary-color)", #6b7fe6);
+              }
+            }
+          }
 
-        .tree-actions {
-          display: flex;
-          gap: 8px;
-          margin-left: auto;
+          .ant-tree-node-selected {
+            color: ~"var(--primary-color)" !important;
+            background: transparent !important;
+            font-weight: 500;
+
+            &::before {
+              background: linear-gradient(180deg, ~"var(--primary-color)", #6b7fe6);
+            }
+          }
+
+          .ant-tree-switcher {
+            color: rgba(0, 0, 0, 0.4);
+            transition: all 0.3s ease;
+            background: transparent;
+            border-radius: 8px 0 0 8px;
+          }
+
+          .ant-tree-indent {
+            background: transparent;
+            border-radius: 8px 0 0 8px;
+            transition: background 0.3s ease;
+          }
+
+          .ant-tree-treenode:hover {
+            background: rgba(0, 0, 0, 0.06);
+            border-radius: 8px;
+
+            .ant-tree-switcher,
+            .ant-tree-indent {
+              background: rgba(0, 0, 0, 0.06);
+            }
+          }
+
+          .ant-tree-treenode-selected {
+            border-radius: 8px;
+          }
         }
       }
 

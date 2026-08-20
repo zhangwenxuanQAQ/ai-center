@@ -1,7 +1,7 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Layout, Tree, Card, Row, Col, Avatar, Tag, Empty, Spin, Button, Modal, Form, Input, Select, TreeSelect, Upload, message, Dropdown, Popconfirm, Pagination } from 'antd';
 const { TextArea } = Input;
-import { RobotOutlined, HomeOutlined, PlusOutlined, UploadOutlined, MoreOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UpOutlined, DownOutlined, FolderOutlined, FolderOpenOutlined } from '@ant-design/icons';
+import { RobotOutlined, HomeOutlined, PlusOutlined, UploadOutlined, MoreOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UpOutlined, DownOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import type { TreeDataNode, TreeProps, UploadProps } from 'antd';
 import { chatbotService, Chatbot, ChatbotCategory } from '../../services/chatbot';
@@ -264,13 +264,8 @@ const ChatbotManagement: React.FC = () => {
   const buildTreeData = (): TreeDataNode[] => {
     const allNode: TreeDataNode = {
       title: (
-        <div className={`tree-item ${theme === 'dark' ? 'dark' : 'light'} ${selectedKeys.includes('all') ? 'selected' : ''}`}>
-          <div className="tree-row">
-            <div className="tree-content">
-              <FolderOutlined />
-              <span>全部</span>
-            </div>
-          </div>
+        <div className="category-tree-node" style={{ cursor: 'pointer' }}>
+          <div className="category-name">全部</div>
         </div>
       ),
       key: 'all',
@@ -283,64 +278,59 @@ const ChatbotManagement: React.FC = () => {
     const buildCategoryNode = (category: ChatbotCategory): TreeDataNode => {
       const node: TreeDataNode = {
         title: (
-          <div className={`tree-item ${theme === 'dark' ? 'dark' : 'light'} ${selectedKeys.includes(`category-${category.id}`) ? 'selected' : ''}`}>
-            <div className="tree-row">
-              <div className="tree-content">
-                {category.children && category.children.length > 0 ? <FolderOpenOutlined /> : <FolderOutlined />}
-                <span>{category.name}</span>
-              </div>
-              <div className="tree-actions">
+          <div className="category-tree-node" style={{ cursor: 'pointer' }}>
+            <div className="category-name" title={category.name}>{category.name}</div>
+            <div className="category-actions">
+              <Button
+                type="text"
+                icon={<UpOutlined />}
+                size="small"
+                title="上移"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCategorySort(category, 'up');
+                }}
+              />
+              <Button
+                type="text"
+                icon={<DownOutlined />}
+                size="small"
+                title="下移"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCategorySort(category, 'down');
+                }}
+              />
+              <Button
+                type="text"
+                icon={<EditOutlined />}
+                size="small"
+                title="编辑"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleEditCategory(category);
+                }}
+              />
+              <Popconfirm
+                title="确认删除"
+                description="确定要删除这个分类吗？"
+                onConfirm={(e) => {
+                  e.stopPropagation();
+                  handleDeleteCategory(category);
+                }}
+                okText="确认"
+                cancelText="取消"
+              >
                 <Button
                   type="text"
-                  icon={<UpOutlined />}
+                  icon={<DeleteOutlined />}
                   size="small"
-                  title="上移"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleCategorySort(category, 'up');
-                  }}
+                  danger
+                  title="删除"
+                  className="delete-category-btn"
+                  onClick={(e) => e.stopPropagation()}
                 />
-                <Button
-                  type="text"
-                  icon={<DownOutlined />}
-                  size="small"
-                  title="下移"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleCategorySort(category, 'down');
-                  }}
-                />
-                <Button
-                  type="text"
-                  icon={<EditOutlined />}
-                  size="small"
-                  title="编辑"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleEditCategory(category);
-                  }}
-                />
-                <Popconfirm
-                  title="确认删除"
-                  description="确定要删除这个分类吗？"
-                  onConfirm={(e) => {
-                    e.stopPropagation();
-                    handleDeleteCategory(category);
-                  }}
-                  okText="确认"
-                  cancelText="取消"
-                >
-                  <Button
-                    type="text"
-                    icon={<DeleteOutlined />}
-                    size="small"
-                    danger
-                    title="删除"
-                    className="delete-category-btn"
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                </Popconfirm>
-              </div>
+              </Popconfirm>
             </div>
           </div>
         ),
@@ -360,13 +350,8 @@ const ChatbotManagement: React.FC = () => {
     defaultCategories.forEach(category => {
       categoryNodes.push({
         title: (
-          <div className={`tree-item ${theme === 'dark' ? 'dark' : 'light'} ${selectedKeys.includes(`category-${category.id}`) ? 'selected' : ''}`}>
-            <div className="tree-row">
-              <div className="tree-content">
-                {category.children && category.children.length > 0 ? <FolderOpenOutlined /> : <FolderOutlined />}
-                <span>{category.name}</span>
-              </div>
-            </div>
+          <div className="category-tree-node" style={{ cursor: 'pointer' }}>
+            <div className="category-name">{category.name}</div>
           </div>
         ),
         key: `category-${category.id}`,
@@ -845,7 +830,7 @@ const ChatbotManagement: React.FC = () => {
       <Layout className={`chatbot-layout ${theme === 'dark' ? 'dark' : 'light'}`}>
         <LeftSider
           width={260}
-          className={`chatbot-sider ${theme === 'dark' ? 'dark' : 'light'}`}
+          className={`category-sider ${theme === 'dark' ? 'dark' : 'light'}`}
         >
           <div className={`sider-header ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>分类</span>
@@ -861,13 +846,12 @@ const ChatbotManagement: React.FC = () => {
             </Button>
           </div>
           <Tree
-            showIcon
             selectedKeys={selectedKeys}
             expandedKeys={expandedKeys}
             onSelect={handleTreeSelect}
             onExpand={handleTreeExpand}
             treeData={buildTreeData()}
-            // className={`category-tree ${theme === 'dark' ? 'dark' : 'light'}`}
+            className={`category-tree ${theme === 'dark' ? 'dark' : 'light'}`}
           />
         </LeftSider>
 
