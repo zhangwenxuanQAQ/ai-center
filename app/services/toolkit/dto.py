@@ -14,14 +14,14 @@ class ToolkitCategoryBase(BaseModel):
     Attributes:
         name: 分类名称
         description: 分类描述
-        type: 工具类型：mcp/api/code_script/builtin_tool
+        type: 工具类型：mcp/api/code_script/builtin_tool/skill
         parent_id: 父分类ID
         sort_order: 排序顺序
         is_default: 是否默认分类
     """
     name: str = Field(..., min_length=1, max_length=100, description="分类名称，长度1-100个字符")
     description: Optional[str] = Field(None, max_length=500, description="分类描述，最大长度500个字符")
-    type: Optional[str] = Field(None, max_length=50, description="工具类型：mcp/api/code_script/builtin_tool")
+    type: Optional[str] = Field(None, max_length=50, description="工具类型：mcp/api/code_script/builtin_tool/skill")
     parent_id: Optional[str] = Field(None, description="父分类ID，UUID格式")
     sort_order: int = Field(default=0, description="排序顺序")
     is_default: Optional[bool] = Field(default=False, description="是否默认分类")
@@ -47,7 +47,7 @@ class ToolkitCategoryUpdate(BaseModel):
     """
     name: Optional[str] = Field(None, min_length=1, max_length=100, description="分类名称，长度1-100个字符")
     description: Optional[str] = Field(None, max_length=500, description="分类描述，最大长度500个字符")
-    type: Optional[str] = Field(None, max_length=50, description="工具类型：mcp/api/code_script/builtin_tool")
+    type: Optional[str] = Field(None, max_length=50, description="工具类型：mcp/api/code_script/builtin_tool/skill")
     parent_id: Optional[str] = Field(None, description="父分类ID，UUID格式")
     sort_order: Optional[int] = Field(None, description="排序顺序")
 

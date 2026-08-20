@@ -23,14 +23,18 @@ class ToolkitCategoryService:
         """
         初始化默认顶级分类。
 
-        如果 toolkit_category 表中不存在任何记录，则根据常量
-        DEFAULT_TOOLKIT_CATEGORIES 创建默认顶级分类。
+        根据 DEFAULT_TOOLKIT_CATEGORIES 创建缺失的默认顶级分类。
+        已存在的默认分类不会重复创建。
         """
-        existing_count = ToolkitCategory.select().where(ToolkitCategory.deleted == False).count()
-        if existing_count > 0:
-            return
-
         for item in DEFAULT_TOOLKIT_CATEGORIES:
+            existing = ToolkitCategory.select().where(
+                (ToolkitCategory.type == item["type"]) &
+                (ToolkitCategory.is_default == True) &
+                (ToolkitCategory.deleted == False)
+            ).first()
+            if existing:
+                continue
+
             category = ToolkitCategory(
                 name=item["name"],
                 type=item["type"],

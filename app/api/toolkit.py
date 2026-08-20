@@ -2,11 +2,13 @@
 工具箱控制器，提供工具箱分类相关的API接口
 """
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
+from pydantic import BaseModel
 from app.services.toolkit.service import ToolkitCategoryService
 from app.services.toolkit.dto import ToolkitCategoryCreate, ToolkitCategoryUpdate, ToolkitCategory
 from app.constants.toolkit_constants import TOOL_TYPE, TOOL_TYPE_NAME
 from app.utils.response import ResponseUtil, ApiResponse
+from app.core.tools.tool_registry import ToolRegistry
 
 router = APIRouter()
 
@@ -127,3 +129,107 @@ def get_tool_types():
         ApiResponse: 统一格式的响应对象，包含工具类型及显示名称
     """
     return ResponseUtil.success(data=TOOL_TYPE_NAME, message="获取工具类型成功")
+
+
+# 内置工具相关接口
+def _tool_to_dict(tool) -> dict:
+    """将BaseTool实例转换为字典"""
+    return {
+        "name": tool.name,
+        "title": tool.title,
+        "description": tool.description,
+        "created_at": getattr(tool, 'created_at', None),
+        "params": [
+            {
+                "name": p.name,
+                "type": p.type,
+                "description": p.description,
+                "required": p.required,
+                "default": p.default,
+                "enum": p.enum,
+            }
+            for p in tool.params
+        ],
+    }
+
+
+@router.get("/builtin_tools", response_model=ApiResponse)
+def get_builtin_tools(
+    page: int = Query(1, ge=1, description="页码，从1开始"),
+    page_size: int = Query(12, ge=1, le=100, description="每页数量"),
+    name: str = Query(None, description="工具名称（模糊查询）"),
+):
+    """
+    分页获取内置工具列表
+
+    内置工具来自所有注册到ToolRegistry的工具（继承BaseTool）。
+
+    Args:
+        page: 页码，默认1
+        page_size: 每页数量，默认12
+        name: 工具名称（模糊查询，可选）
+
+    Returns:
+        ApiResponse: 统一格式的响应对象，包含data和total
+    """
+    all_tools = ToolRegistry.get_all_tools()
+    tool_list = list(all_tools.values())
+
+    if name:
+        tool_list = [t for t in tool_list if name.lower() in t.name.lower() or name.lower() in (t.title or "").lower()]
+
+    tool_list.sort(key=lambda t: t.name)
+    total = len(tool_list)
+
+    start = (page - 1) * page_size
+    end = start + page_size
+    page_tools = tool_list[start:end]
+
+    data = [_tool_to_dict(t) for t in page_tools]
+    return ResponseUtil.success(data={"data": data, "total": total}, message="获取内置工具列表成功")
+
+
+@router.get("/builtin_tools/{tool_name}", response_model=ApiResponse)
+def get_builtin_tool(tool_name: str):
+    """
+    获取单个内置工具详情
+
+    Args:
+        tool_name: 工具名称
+
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    tool = ToolRegistry.get_tool(tool_name)
+    if tool is None:
+        return ResponseUtil.not_found(message=f"内置工具 {tool_name} 不存在")
+    return ResponseUtil.success(data=_tool_to_dict(tool), message="获取内置工具成功")
+
+
+@router.post("/builtin_tools/{tool_name}/run", response_model=ApiResponse)
+async def run_builtin_tool(tool_name: str, request: Request):
+    """
+    执行内置工具
+
+    Args:
+        tool_name: 工具名称
+        request: 包含工具参数的请求体
+
+    Returns:
+        ApiResponse: 统一格式的响应对象
+    """
+    tool = ToolRegistry.get_tool(tool_name)
+    if tool is None:
+        return ResponseUtil.not_found(message=f"内置工具 {tool_name} 不存在")
+
+    body = await request.json()
+    # 校验必填参数
+    error = tool.validate_params(**body)
+    if error:
+        return ResponseUtil.error(message=error)
+
+    try:
+        result = tool.run(**body)
+        return ResponseUtil.success(data=result, message="工具执行成功")
+    except Exception as e:
+        return ResponseUtil.error(message=f"工具执行失败: {str(e)}")

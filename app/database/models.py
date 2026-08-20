@@ -663,11 +663,11 @@ class ToolkitCategory(SoftDeleteModel):
     工具箱分类模型
 
     存储工具箱分类信息，支持树形结构。
-    顶级分类按工具类型（mcp/api/code_script/builtin_tool）划分。
+    顶级分类按工具类型（mcp/api/code_script/builtin_tool/skill）划分。
     """
     name = CharField(max_length=255, index=True, verbose_name="分类名称")
     description = TextField(null=True, verbose_name="分类描述")
-    type = CharField(max_length=50, index=True, verbose_name="工具类型：mcp/api/code_script/builtin_tool")
+    type = CharField(max_length=50, index=True, verbose_name="工具类型：mcp/api/code_script/builtin_tool/skill")
     parent_id = CharField(max_length=40, null=True, index=True, verbose_name="父分类ID")
     sort_order = IntegerField(default=0, verbose_name="排序序号")
     is_default = BooleanField(default=False, verbose_name="是否默认分类")

@@ -1,4 +1,4 @@
-﻿﻿﻿﻿import React, { useState, useEffect, useRef } from 'react';
+﻿﻿﻿import React, { useState, useEffect, useRef } from 'react';
 import { Layout, Tree, Card, Row, Col, Avatar, Tag, Empty, Spin, Button, Modal, Form, Input, Select, TreeSelect, Popconfirm, Pagination, Switch, message, Tabs, Table, Badge, InputNumber, Dropdown } from 'antd';
 const { TextArea, Password } = Input;
 import { CloudServerOutlined, PlusOutlined, MoreOutlined, EditOutlined, DeleteOutlined, SearchOutlined, CheckCircleOutlined, CloseCircleOutlined, DatabaseOutlined, LinkOutlined, LoadingOutlined, ChevronRightOutlined, ChevronDownOutlined, FolderOutlined, FolderOpenOutlined } from '@ant-design/icons';
@@ -850,7 +850,7 @@ const DatasourceManagement: React.FC = () => {
                   style={{
                     flex: 1,
                     background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
-                    border: 'none',
+                    border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8eaed',
                     borderRadius: '8px',
                     color: theme === 'dark' ? '#ffffff' : '#000000'
                   }}
@@ -865,7 +865,7 @@ const DatasourceManagement: React.FC = () => {
                   style={{
                     flex: 1,
                     background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
-                    border: 'none',
+                    border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8eaed',
                     borderRadius: '8px',
                     color: theme === 'dark' ? '#ffffff' : '#000000'
                   }}
@@ -1048,7 +1048,7 @@ const DatasourceManagement: React.FC = () => {
                           </div>
                           <div className={`ds-meta ${theme === 'dark' ? 'dark' : ''}`}>
                             <span className="meta-item">
-                              <span>最近更新: {formatDate(datasource.created_at)}</span>
+                              <span>创建时间: {formatDate(datasource.created_at)}</span>
                             </span>
                           </div>
                           <div className="ds-actions">

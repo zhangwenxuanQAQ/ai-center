@@ -986,7 +986,7 @@ const LLMModelManagement: React.FC = () => {
                               gap: '4px'
                             }}>
                               <ClockCircleOutlined />
-                              最近更新: {formatDate(model.created_at)}
+                              创建时间: {formatDate(model.created_at)}
                             </div>
                             <div style={{ display: 'flex', gap: '12px' }}>
                               <button 

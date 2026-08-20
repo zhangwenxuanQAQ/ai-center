@@ -19,6 +19,23 @@ export interface ToolkitCategory {
   children?: ToolkitCategory[];
 }
 
+export interface BuiltinToolParam {
+  name: string;
+  type: string;
+  description: string;
+  required: boolean;
+  default?: any;
+  enum?: any[];
+}
+
+export interface BuiltinTool {
+  name: string;
+  title: string;
+  description: string;
+  created_at?: string;
+  params: BuiltinToolParam[];
+}
+
 export const toolkitService = {
   /**
    * 获取工具箱分类列表
@@ -64,5 +81,21 @@ export const toolkitService = {
    */
   getToolTypes: async (): Promise<Record<string, string>> => {
     return http.get<Record<string, string>>('/aicenter/v1/toolkit/tool_types');
+  },
+
+  /**
+   * 分页获取内置工具列表
+   */
+  getBuiltinTools: async (page: number = 1, pageSize: number = 12, name?: string): Promise<{ data: BuiltinTool[], total: number }> => {
+    let params = [`page=${page}`, `page_size=${pageSize}`];
+    if (name) params.push(`name=${encodeURIComponent(name)}`);
+    return http.get<{ data: BuiltinTool[], total: number }>(`/aicenter/v1/toolkit/builtin_tools?${params.join('&')}`);
+  },
+
+  /**
+   * 获取单个内置工具详情
+   */
+  getBuiltinTool: async (toolName: string): Promise<BuiltinTool> => {
+    return http.get<BuiltinTool>(`/aicenter/v1/toolkit/builtin_tools/${toolName}`);
   },
 };

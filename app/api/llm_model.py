@@ -342,16 +342,30 @@ async def chat_with_model(llm_model_id: str, request: dict = Body(...)):
         messages = request.get('messages', [])
         query = request.get('query', [])
         config = request.get('config', {})
+        tool_names = request.get('tool_names', [])
 
         logger.info(f"Messages: {messages}")
         logger.info(f"Query: {query}")
         logger.info(f"Config: {config}")
+        logger.info(f"Tool names: {tool_names}")
 
         if not messages:
             logger.error("Messages is empty")
             raise HTTPException(status_code=400, detail="消息不能为空")
 
         from app.core.prompt.utils.system_prompt_builder import build_system_prompt
+
+        # 如果传入了工具名称列表，则将其转换为tools
+        tools = []
+        tool_map = {}
+        if tool_names:
+            from app.core.tools.tool_registry import ToolRegistry
+            for tool_name in tool_names:
+                tool = ToolRegistry.get_tool(tool_name)
+                if tool:
+                    tools.append(tool.to_openai_tool())
+                    tool_map[tool.name] = tool
+            logger.info(f"Loaded {len(tools)} tools from tool_names: {tool_names}")
 
         # 获取模型类型
         model_type = db_llm_model.model_type or 'text'
@@ -363,7 +377,7 @@ async def chat_with_model(llm_model_id: str, request: dict = Body(...)):
             if msg.get('role') == 'system':
                 from app.core.llm_model.utils.llm_util import resolve_prompt_references
                 system_content = resolve_prompt_references(msg.get('content', ''))
-                built_system_prompt = build_system_prompt(system_content)
+                built_system_prompt = build_system_prompt(system_content, include_react_prompt=False)
                 processed_messages.append({
                     'role': 'system',
                     'content': built_system_prompt
@@ -553,7 +567,7 @@ async def chat_with_model(llm_model_id: str, request: dict = Body(...)):
                     processed_messages.append(msg)
 
         if not has_system_message:
-            built_system_prompt = build_system_prompt(None)
+            built_system_prompt = build_system_prompt(None, include_react_prompt=False)
             processed_messages.insert(0, {
                 'role': 'system',
                 'content': built_system_prompt
@@ -650,16 +664,80 @@ async def chat_with_model(llm_model_id: str, request: dict = Body(...)):
         # 移除前端专用参数，不传给大模型
         config.pop('web_search', None)
         config.pop('deep_thinking', None)
+        config.pop('system_prompt', None)
+
+        # 如果有tools，传入模型
+        if tools:
+            config['tools'] = tools
 
         async def generate():
             try:
                 logger.info("Starting stream generation")
-                async for chunk in model_instance.astream_generate_with_messages(messages, **config):
-                    if 'error' in chunk:
-                        logger.error(f"Error in chunk: {chunk['error']}")
-                        yield f"data: {json.dumps({'error': chunk['error']})}\n\n"
+                # 工具调用循环
+                while True:
+                    full_response_chunk = ''
+                    reasoning_content_chunk = ''
+                    tool_calls_list = []
+
+                    async for chunk in model_instance.astream_generate_with_messages(messages, **config):
+                        if 'error' in chunk:
+                            logger.error(f"Error in chunk: {chunk['error']}")
+                            yield f"data: {json.dumps({'error': chunk['error']})}\n\n"
+                            return
+
+                        if chunk.get('text'):
+                            full_response_chunk += chunk['text']
+                        if chunk.get('reasoning_content'):
+                            reasoning_content_chunk += chunk['reasoning_content']
+                        if chunk.get('tool_calls'):
+                            tool_calls_list = chunk.get('tool_calls')
+
+                        yield f"data: {json.dumps(chunk)}\n\n"
+
+                    # 如果没有工具调用，退出循环
+                    if not tool_calls_list or not tool_map:
                         break
-                    yield f"data: {json.dumps(chunk)}\n\n"
+
+                    # 有工具调用，执行工具并将结果回填
+                    # 1. 添加assistant消息（含tool_calls）
+                    messages.append({
+                        'role': 'assistant',
+                        'content': full_response_chunk,
+                        'tool_calls': tool_calls_list
+                    })
+
+                    # 2. 执行每个工具调用
+                    from app.core.tools.tool_util import process_tool_calls
+                    async for tool_result in process_tool_calls(tool_calls_list, tool_map):
+                        tool_call_id = tool_result.get('tool_call_id', '')
+                        tool_name = tool_result.get('tool_name', '')
+                        tool_status = tool_result.get('status', '')
+                        tool_reasoning = tool_result.get('reasoning_content', '')
+
+                        if tool_status in ('start', 'running'):
+                            # 通知前端工具状态
+                            yield f"data: {json.dumps({'tool_call': {'id': tool_call_id, 'name': tool_name, 'status': tool_status, 'task_name': tool_result.get('task_name', ''), 'parameters': tool_result.get('parameters', {}), 'reasoning_content': tool_reasoning}})}\n\n"
+                            continue
+
+                        if 'error' in tool_result:
+                            error_msg = tool_result['error']
+                            tool_message_content = f"工具 {tool_name} 调用失败: {error_msg}"
+                            yield f"data: {json.dumps({'tool_call': {'id': tool_call_id, 'name': tool_name, 'status': 'error', 'message': error_msg, 'reasoning_content': tool_reasoning, 'elapsed_ms': tool_result.get('elapsed_ms', 0)}})}\n\n"
+                        else:
+                            result_data = tool_result.get('result', '')
+                            tool_message_content = result_data if isinstance(result_data, str) else json.dumps(result_data, ensure_ascii=False)
+                            yield f"data: {json.dumps({'tool_call': {'id': tool_call_id, 'name': tool_name, 'status': 'success', 'result': result_data, 'elapsed_ms': tool_result.get('elapsed_ms', 0), 'reasoning_content': tool_reasoning}})}\n\n"
+
+                        # 将工具结果作为tool消息追加到messages
+                        messages.append({
+                            'role': 'tool',
+                            'tool_call_id': tool_call_id,
+                            'content': tool_message_content
+                        })
+
+                    # 继续循环，让模型基于工具结果再次生成
+                    logger.info("Tool calls processed, continuing conversation loop")
+
                 yield "data: [DONE]\n\n"
                 logger.info("Stream generation completed")
             except Exception as e:

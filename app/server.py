@@ -1657,6 +1657,21 @@ try:
     except Exception as e:
         logger.error(f"[MIGRATION]   初始化工具箱默认分类失败: {e}")
 
+    # 删除 skill 表（不再使用数据库存储SKILL技能）
+    logger.info("\n[MIGRATION] 删除 skill 表...")
+    try:
+        cursor = db.execute_sql("SHOW TABLES;")
+        tables = cursor.fetchall()
+        table_names = [table[0] for table in tables]
+
+        if 'skill' in table_names:
+            db.execute_sql("DROP TABLE IF EXISTS skill;")
+            logger.info("[MIGRATION]   成功删除 skill 表")
+        else:
+            logger.info("[MIGRATION]   skill 表不存在，跳过")
+    except Exception as e:
+        logger.error(f"[MIGRATION]   删除 skill 表失败: {e}")
+
     # 清空 mcp_server 表中的 category_id 字段（弃用 mcp_category 分类）
     logger.info("\n[MIGRATION] 清空 mcp_server 表的 category_id 字段...")
     try:

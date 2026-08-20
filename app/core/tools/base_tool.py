@@ -34,6 +34,10 @@ class BaseTool(ABC):
     params: List[BaseToolParam] = []
     hooks: List["BaseHook"] = []
 
+    def __init__(self):
+        from datetime import datetime
+        self.created_at = datetime.now().isoformat()
+
     def run(self, **kwargs) -> Any:
         """
         执行工具（模板方法）
