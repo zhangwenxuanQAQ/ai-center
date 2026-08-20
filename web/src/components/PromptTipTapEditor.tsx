@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle, useRef } from 'react';
 import { useEditor, EditorContent, ReactRenderer } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -109,6 +109,7 @@ const PromptTipTapEditor = forwardRef<PromptTipTapEditorRef, PromptTipTapEditorP
     const [prompts, setPrompts] = useState<Prompt[]>([]);
     const [promptCategories, setPromptCategories] = useState<Map<string, string>>(new Map());
     const [loadingPrompts, setLoadingPrompts] = useState<boolean>(false);
+    const fetchedIdsRef = useRef<Set<string>>(new Set());
 
     useEffect(() => {
       const currentTheme = document.body.getAttribute('data-theme') || 'dark';
@@ -347,8 +348,20 @@ const PromptTipTapEditor = forwardRef<PromptTipTapEditorRef, PromptTipTapEditorP
               }, 10);
             };
             dom.appendChild(deleteBtn);
-            
-            return { dom };
+
+            return {
+              dom,
+              update: (updatedNode: any) => {
+                if (updatedNode.type !== node.type) {
+                  return false;
+                }
+                const newLabel = updatedNode.attrs.label || updatedNode.attrs.id;
+                if (labelText.textContent !== newLabel) {
+                  labelText.textContent = newLabel;
+                }
+                return true;
+              }
+            };
           },
           renderText: ({ node }) => {
             // 将 Mention 节点转换为 {{prompt@prompt_id}} 格式
@@ -509,23 +522,60 @@ const PromptTipTapEditor = forwardRef<PromptTipTapEditorRef, PromptTipTapEditorP
       }
     }, [editor]);
     
+    // 编辑时加载被引用的提示词名称，确保标签显示名称而非 ID
     useEffect(() => {
-      if (editor && prompts.length > 0 && value && value.includes('{{prompt@')) {
-        const currentMarkdown = editor.storage.markdown.getMarkdown();
-        if (currentMarkdown !== value) {
-          let contentToSet = value;
-          const promptPlaceholderRegex = /\{\{prompt@([^}]+)\}\}/g;
-          
-          contentToSet = contentToSet.replace(promptPlaceholderRegex, (match, promptId) => {
-            const prompt = prompts.find(p => p.id === promptId);
-            const label = prompt?.name || promptId;
-            return `<span data-type="mention" data-id="${promptId}" data-label="${label}">${label}</span>`;
-          });
-          
-          editor.commands.setContent(contentToSet, false);
+      if (!value || !value.includes('{{prompt@')) {
+        return;
+      }
+      const promptPlaceholderRegex = /\{\{prompt@([^}]+)\}\}/g;
+      const newIds: string[] = [];
+      let match: RegExpExecArray | null;
+      while ((match = promptPlaceholderRegex.exec(value)) !== null) {
+        const id = match[1];
+        if (!fetchedIdsRef.current.has(id)) {
+          fetchedIdsRef.current.add(id);
+          newIds.push(id);
         }
       }
-    }, [editor, prompts]);
+      if (newIds.length === 0) {
+        return;
+      }
+      Promise.all(
+        newIds.map(id => promptService.getPrompt(id).catch(() => null))
+      ).then(results => {
+        const validPrompts = results.filter((p): p is Prompt => p !== null);
+        if (validPrompts.length > 0) {
+          setPrompts(prev => {
+            const existingIds = new Set(prev.map(p => p.id));
+            const toAdd = validPrompts.filter(p => !existingIds.has(p.id));
+            return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
+          });
+        }
+      });
+    }, [value]);
+
+    // 提示词加载后更新编辑器中引用标签的显示名称
+    useEffect(() => {
+      if (!editor || prompts.length === 0 || !value || !value.includes('{{prompt@')) {
+        return;
+      }
+      const tr = editor.state.tr;
+      let modified = false;
+      editor.state.doc.descendants((node: any, pos: number) => {
+        if (node.type.name === 'mention') {
+          const promptId = node.attrs.id;
+          const prompt = prompts.find(p => p.id === promptId);
+          if (prompt && prompt.name && node.attrs.label !== prompt.name) {
+            tr.setNodeMarkup(pos, undefined, { ...node.attrs, label: prompt.name });
+            modified = true;
+          }
+        }
+        return true;
+      });
+      if (modified) {
+        editor.view.dispatch(tr);
+      }
+    }, [editor, prompts, value]);
 
     useImperativeHandle(ref, () => ({
       insertPromptReference: () => {
