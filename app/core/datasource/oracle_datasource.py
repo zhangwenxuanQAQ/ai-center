@@ -164,9 +164,9 @@ class OracleDatasource(DatasourceBase):
         except Exception as e:
             return {"success": False, "message": f"获取表列表失败: {str(e)}"}
 
-    def get_table_columns(self, table_name: str) -> Dict[str, Any]:
+    def get_table_columns(self, table_name: str, database: Optional[str] = None) -> Dict[str, Any]:
         """
-        获取Oracle数据库表字段信息
+        获取Oracle数据库表字段信息（含外键关系）
         """
         try:
             import oracledb
@@ -177,20 +177,44 @@ class OracleDatasource(DatasourceBase):
                 dsn=dsn,
             )
             cursor = connection.cursor()
+            tbl = table_name.upper()
             cursor.execute(
                 "SELECT COLUMN_NAME, DATA_TYPE, NULLABLE, DATA_DEFAULT "
-                "FROM USER_TAB_COLUMNS WHERE TABLE_NAME = :table_name ORDER BY COLUMN_ID",
-                {"table_name": table_name.upper()}
+                "FROM USER_TAB_COLUMNS WHERE TABLE_NAME = :tbl ORDER BY COLUMN_ID",
+                {"tbl": tbl}
             )
             columns = cursor.fetchall()
+
+            # 查询外键关系
+            cursor.execute(
+                "SELECT a.COLUMN_NAME, c.TABLE_NAME AS REFERENCED_TABLE, c.COLUMN_NAME AS REFERENCED_COLUMN "
+                "FROM USER_CONSTRAINTS a "
+                "JOIN USER_CONS_COLUMNS b ON a.CONSTRAINT_NAME = b.CONSTRAINT_NAME "
+                "JOIN USER_CONS_COLUMNS c ON a.R_CONSTRAINT_NAME = c.CONSTRAINT_NAME "
+                "WHERE a.CONSTRAINT_TYPE = 'R' AND b.TABLE_NAME = :tbl",
+                {"tbl": tbl}
+            )
+            fk_rows = cursor.fetchall()
+            fk_map = {}
+            for fk in fk_rows:
+                col_name = fk[0] if fk[0] else ''
+                if col_name:
+                    fk_map[col_name] = {
+                        'referenced_table': fk[1] if fk[1] else '',
+                        'referenced_column': fk[2] if fk[2] else '',
+                    }
+
             column_list = []
             for col in columns:
+                col_name = col[0]
                 column_list.append({
-                    "column_name": col[0],
+                    "column_name": col_name,
                     "column_type": col[1],
+                    "data_type": col[1],
                     "is_nullable": "YES" if col[2] == "Y" else "NO",
                     "column_default": str(col[3]) if col[3] else None,
-                    "column_comment": ""
+                    "column_comment": "",
+                    "foreign_key": fk_map.get(col_name),
                 })
             connection.close()
             return {

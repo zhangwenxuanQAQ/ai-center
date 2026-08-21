@@ -330,12 +330,12 @@ class MySQLDatasource(DatasourceBase):
 
     def get_table_columns(self, table_name: str, database: Optional[str] = None) -> Dict[str, Any]:
         """
-        获取表的字段信息
-        
+        获取表的字段信息（含外键关系）
+
         Args:
             table_name: 表名称
             database: 数据库名称（可选，不指定则使用配置中的数据库）
-            
+
         Returns:
             Dict[str, Any]: 包含字段信息的字典
         """
@@ -347,9 +347,10 @@ class MySQLDatasource(DatasourceBase):
                 return {"success": False, "message": "数据库名称不能为空", "data": None}
             if not table_name:
                 return {"success": False, "message": "表名称不能为空", "data": None}
-            
+
             connection = self._get_pooled_connection()
             with connection.cursor(pymysql.cursors.DictCursor) as cursor:
+                # 查询字段信息
                 cursor.execute(
                     "SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_DEFAULT, IS_NULLABLE, "
                     "COLUMN_KEY, EXTRA, COLUMN_COMMENT, ORDINAL_POSITION "
@@ -359,17 +360,40 @@ class MySQLDatasource(DatasourceBase):
                     (target_database, table_name)
                 )
                 columns = cursor.fetchall()
+
+                # 查询外键关系
+                cursor.execute(
+                    "SELECT COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME "
+                    "FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE "
+                    "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s "
+                    "AND REFERENCED_TABLE_NAME IS NOT NULL",
+                    (target_database, table_name)
+                )
+                fk_rows = cursor.fetchall()
+                fk_map = {}
+                for fk in fk_rows:
+                    col_name = fk.get('COLUMN_NAME', '')
+                    if col_name:
+                        fk_map[col_name] = {
+                            'referenced_table': fk.get('REFERENCED_TABLE_NAME', ''),
+                            'referenced_column': fk.get('REFERENCED_COLUMN_NAME', ''),
+                        }
+
                 column_list = []
                 for col in columns:
+                    col_name = col.get('COLUMN_NAME', '')
                     column_list.append({
-                        "column_name": col.get('COLUMN_NAME', ''),
+                        "column_name": col_name,
                         "column_type": col.get('COLUMN_TYPE', ''),
+                        "data_type": col.get('COLUMN_TYPE', ''),
                         "column_default": col.get('COLUMN_DEFAULT', ''),
                         "is_nullable": col.get('IS_NULLABLE', ''),
                         "column_key": col.get('COLUMN_KEY', ''),
+                        "is_primary_key": col.get('COLUMN_KEY') == 'PRI',
                         "extra": col.get('EXTRA', ''),
                         "column_comment": col.get('COLUMN_COMMENT', ''),
                         "ordinal_position": col.get('ORDINAL_POSITION', 0),
+                        "foreign_key": fk_map.get(col_name),
                     })
                 return {
                     "success": True,

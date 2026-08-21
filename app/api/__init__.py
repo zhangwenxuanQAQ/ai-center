@@ -14,6 +14,7 @@ from .mcp import router as mcp_router
 from .toolkit import router as toolkit_router
 from .integration.management import router as integration_management_router
 from .integration.api import router as integration_api_router
+from .ontology import router as ontology_router
 
 router = APIRouter()
 
@@ -32,6 +33,7 @@ router.include_router(datasource_category_router, prefix="/datasource_category",
 router.include_router(system_monitor_router, prefix="/system", tags=["system"])
 router.include_router(agent_router, prefix="/agent", tags=["agent"])
 router.include_router(integration_management_router, prefix="/integration", tags=["integration"])
+router.include_router(ontology_router, prefix="/ontology", tags=["ontology"])
 
 # 导出integration_api_router，在server_run.py中单独注册，使用/aicenter/api前缀
 __all__ = ['router', 'integration_api_router']

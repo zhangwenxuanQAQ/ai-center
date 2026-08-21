@@ -60,6 +60,7 @@ dependencies = [
     "pygtrie",
     "vscode-icons>=1.0.0",
     "tavily>=0.3.0",
+    "sqlparse",
 ]
 
 [tool.setuptools.packages.find]

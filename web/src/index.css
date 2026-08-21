@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
@@ -67,4 +67,13 @@ body[data-theme="light"] {
 h1 {
   font-size: 1.5em;
   line-height: 1.1;
+}
+
+/* 隐藏滚动条但允许滚动 */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
 }

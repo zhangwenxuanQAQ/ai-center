@@ -679,6 +679,42 @@ class ToolkitCategory(SoftDeleteModel):
         )
 
 
+class OntologyObject(SoftDeleteModel):
+    """
+    本体对象模型
+
+    存储本体对象信息，包含表的元数据及字段元数据
+    """
+    datasource_id = CharField(max_length=40, index=True, verbose_name="数据源ID")
+    name = CharField(max_length=255, index=True, verbose_name="表名")
+    title = CharField(max_length=255, null=True, verbose_name="表中文名称")
+    description = TextField(null=True, verbose_name="表描述")
+    content = TextField(null=True, verbose_name="本体对象内容JSON（包含字段元数据）")
+
+    class Meta:
+        table_name = 'ontology_object'
+
+
+class OntologyTask(SoftDeleteModel):
+    """
+    数据抽取任务模型
+
+    存储数据抽取任务信息
+    """
+    name = CharField(max_length=255, index=True, verbose_name="任务名称")
+    datasource_id = CharField(max_length=40, index=True, verbose_name="数据源ID")
+    configs = TextField(null=True, verbose_name="任务配置JSON（包含本体对象ID/自定义SQL/导出格式等）")
+    status = CharField(max_length=20, default="pending", index=True, verbose_name="任务状态")
+    task_progress = FloatField(default=0, verbose_name="任务进度(0-1)")
+    task_progress_message = TextField(null=True, verbose_name="任务进度消息")
+    task_begin_at = DateTimeField(null=True, verbose_name="任务开始时间")
+    task_end_at = DateTimeField(null=True, verbose_name="任务结束时间")
+    task_duration = IntegerField(default=0, verbose_name="任务耗时(毫秒)")
+
+    class Meta:
+        table_name = 'ontology_task'
+
+
 def create_tables():
     """
     创建所有数据表
@@ -715,6 +751,8 @@ def create_tables():
         ChatbotIntegration,
         ChatbotChat,
         ChatbotChatMessage,
+        OntologyObject,
+        OntologyTask,
     ]
     
     for table in tables:

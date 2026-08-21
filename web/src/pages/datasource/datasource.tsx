@@ -1,4 +1,4 @@
-﻿﻿﻿import React, { useState, useEffect, useRef } from 'react';
+﻿﻿﻿﻿﻿import React, { useState, useEffect, useRef } from 'react';
 import { Layout, Tree, Card, Row, Col, Avatar, Tag, Empty, Spin, Button, Modal, Form, Input, Select, TreeSelect, Popconfirm, Pagination, Switch, message, Tabs, Table, Badge, InputNumber, Dropdown } from 'antd';
 const { TextArea, Password } = Input;
 import { CloudServerOutlined, PlusOutlined, MoreOutlined, EditOutlined, DeleteOutlined, SearchOutlined, CheckCircleOutlined, CloseCircleOutlined, DatabaseOutlined, LinkOutlined, LoadingOutlined, ChevronRightOutlined, ChevronDownOutlined, FolderOutlined, FolderOpenOutlined } from '@ant-design/icons';
@@ -1071,7 +1071,7 @@ const DatasourceManagement: React.FC = () => {
                             </Button>
                             <Popconfirm
                               title="确认删除"
-                              description="确定要删除这个数据源吗？"
+                              description="确定要删除这个数据源吗？删除后关联的本体对象也会被一并删除。"
                               onConfirm={(e) => { e.stopPropagation(); handleDeleteDatasource(datasource.id); }}
                               okText="确认"
                               cancelText="取消"

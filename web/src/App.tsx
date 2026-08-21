@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { Layout, Menu, Button, Card, Breadcrumb, ConfigProvider, theme as antTheme } from 'antd';
-import { HomeOutlined, MessageOutlined, SettingOutlined, LogoutOutlined, RobotOutlined, BookOutlined, DatabaseOutlined, CommentOutlined, MoonOutlined, SunOutlined, MenuFoldOutlined, MenuUnfoldOutlined, HistoryOutlined, TeamOutlined, ToolOutlined, FileTextOutlined, CloudServerOutlined, DashboardOutlined, DesktopOutlined, ApartmentOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import { HomeOutlined, MessageOutlined, SettingOutlined, LogoutOutlined, RobotOutlined, BookOutlined, DatabaseOutlined, CommentOutlined, MoonOutlined, SunOutlined, MenuFoldOutlined, MenuUnfoldOutlined, HistoryOutlined, TeamOutlined, ToolOutlined, FileTextOutlined, CloudServerOutlined, DashboardOutlined, DesktopOutlined, ApartmentOutlined, ArrowLeftOutlined, PartitionOutlined } from '@ant-design/icons';
 import { useState, useEffect } from 'react';
 import './styles/index.css';
 import './styles/common.css';
@@ -30,6 +30,8 @@ import AgentSetting from './pages/agent/agent_setting.tsx';
 import IntegrationChatPage from './integration/chat/index.tsx';
 import IntegrationSidebarPage from './integration/sidebar/index.tsx';
 import IntegrationPreviewPage from './integration/preview/index.tsx';
+import OntologyObject from './pages/ontology/ontology_object.tsx';
+import OntologyTask from './pages/ontology/ontology_task.tsx';
 
 const { Header, Content, Sider } = Layout;
 
@@ -53,6 +55,8 @@ const breadcrumbMap: Record<string, { title: string; path?: string }[]> = {
   '/system/monitor': [{ title: '首页', path: '/' }, { title: '系统监控' }],
   '/agents': [{ title: '首页', path: '/' }, { title: '智能体' }],
   '/agent/setting/:id': [{ title: '首页', path: '/' }, { title: '智能体', path: '/agents' }, { title: '智能体配置' }],
+  '/ontology/objects': [{ title: '首页', path: '/' }, { title: '本体工作台', path: '/ontology/objects' }, { title: '本体对象' }],
+  '/ontology/tasks': [{ title: '首页', path: '/' }, { title: '本体工作台', path: '/ontology/objects' }, { title: '数据抽取' }],
 };
 
 const getBreadcrumbItems = (path: string) => {
@@ -113,9 +117,10 @@ function AppContent({ theme, toggleTheme }: AppContentProps) {
           </div>
           <Menu
             mode="inline"
-            style={{ flex: 1, borderRight: 0, textAlign: 'left' }}
+            className="hide-scrollbar"
+            style={{ flex: 1, borderRight: 0, textAlign: 'left', overflowY: 'auto' }}
             defaultSelectedKeys={['1']}
-            defaultOpenKeys={['sub1', 'sub2', 'sub3', 'sub4']}
+            defaultOpenKeys={['sub1', 'sub2', 'sub3', 'sub4', 'sub5']}
           >
             <Menu.Item key="1" icon={<HomeOutlined />}>
               <Link to="/">首页</Link>
@@ -123,6 +128,14 @@ function AppContent({ theme, toggleTheme }: AppContentProps) {
             <Menu.SubMenu key="sub1" title="聊天" icon={<TeamOutlined />}>
               <Menu.Item key="2" icon={<MessageOutlined />}>
                 <Link to="/chats">聊天</Link>
+              </Menu.Item>
+            </Menu.SubMenu>
+            <Menu.SubMenu key="sub5" title="本体工作台" icon={<PartitionOutlined />}>
+              <Menu.Item key="ontology-objects" icon={<DatabaseOutlined />}>
+                <Link to="/ontology/objects">本体对象</Link>
+              </Menu.Item>
+              <Menu.Item key="ontology-tasks" icon={<CloudServerOutlined />}>
+                <Link to="/ontology/tasks">数据抽取</Link>
               </Menu.Item>
             </Menu.SubMenu>
             <Menu.SubMenu key="sub2" title="配置" icon={<ToolOutlined />}>
@@ -154,12 +167,12 @@ function AppContent({ theme, toggleTheme }: AppContentProps) {
               </Menu.Item>
             </Menu.SubMenu>
             <Menu.SubMenu key="sub4" title="系统" icon={<DesktopOutlined />}>
-              <Menu.Item key="10" icon={<DashboardOutlined />}>
-                <Link to="/system/monitor">监控</Link>
-              </Menu.Item>
-            </Menu.SubMenu>
+            <Menu.Item key="10" icon={<DashboardOutlined />}>
+              <Link to="/system/monitor">监控</Link>
+            </Menu.Item>
+          </Menu.SubMenu>
           </Menu>
-          <div style={{ position: 'absolute', bottom: 0, width: '100%', padding: '12px', textAlign: 'center', background: theme === 'dark' ? '#1a1a2e' : '#ffffff', borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #e8eaed' }}>
+          <div style={{ padding: '12px', textAlign: 'center', background: theme === 'dark' ? '#1a1a2e' : '#ffffff', borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #e8eaed' }}>
             <Button 
               type="text" 
               icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} 
@@ -271,7 +284,9 @@ function AppContent({ theme, toggleTheme }: AppContentProps) {
                 <Route path="/datasources" element={<Datasource />} />
                 <Route path="/system/monitor" element={<SystemMonitor />} />
                 <Route path="/agents" element={<Agent />} />
-                <Route path="/agent/setting/:id" element={<AgentSetting />} />
+            <Route path="/agent/setting/:id" element={<AgentSetting />} />
+            <Route path="/ontology/objects" element={<OntologyObject />} />
+            <Route path="/ontology/tasks" element={<OntologyTask />} />
               </Routes>
             </div>
           </Content>

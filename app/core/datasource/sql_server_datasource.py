@@ -136,6 +136,87 @@ class SQLServerDatasource(DatasourceBase):
         except Exception as e:
             return {"success": False, "message": f"获取Schema信息失败: {str(e)}"}
 
+    def get_table_columns(self, table_name: str, database: Optional[str] = None) -> Dict[str, Any]:
+        """
+        获取SQL Server数据库表字段信息（含外键关系）
+        """
+        try:
+            import pymssql
+            target_database = database or self.config.get('database', '')
+            if not target_database:
+                return {"success": False, "message": "数据库名称不能为空", "data": None}
+            if not table_name:
+                return {"success": False, "message": "表名称不能为空", "data": None}
+            connection = pymssql.connect(
+                server=self.config.get('host', 'localhost'),
+                port=int(self.config.get('port', 1433)),
+                user=self.config.get('username', ''),
+                password=self.config.get('password', ''),
+                database=target_database,
+                login_timeout=10,
+            )
+            with connection.cursor(as_dict=True) as cursor:
+                # 查询字段信息
+                cursor.execute(
+                    "SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_DEFAULT, "
+                    "COLUMNPROPERTY(OBJECT_ID(%s), COLUMN_NAME, 'IsIdentity') AS IS_IDENTITY "
+                    "FROM INFORMATION_SCHEMA.COLUMNS "
+                    "WHERE TABLE_NAME = %s ORDER BY ORDINAL_POSITION",
+                    (table_name, table_name)
+                )
+                columns = cursor.fetchall()
+
+                # 查询主键
+                cursor.execute(
+                    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE "
+                    "WHERE TABLE_NAME = %s AND OBJECTPROPERTY(OBJECT_ID(CONSTRAINT_SCHEMA + '.' + CONSTRAINT_NAME), 'IsPrimaryKey') = 1",
+                    (table_name,)
+                )
+                pk_rows = cursor.fetchall()
+                pk_set = {pk.get('COLUMN_NAME', '') for pk in pk_rows}
+
+                # 查询外键关系
+                cursor.execute(
+                    "SELECT fkc.COLUMN_NAME, OBJECT_NAME(fkc.referenced_object_id) AS REFERENCED_TABLE, "
+                    "COL_NAME(fkc.referenced_object_id, fkc.referenced_column_id) AS REFERENCED_COLUMN "
+                    "FROM sys.foreign_key_columns fkc "
+                    "JOIN sys.tables t ON fkc.parent_object_id = t.object_id "
+                    "WHERE t.name = %s",
+                    (table_name,)
+                )
+                fk_rows = cursor.fetchall()
+                fk_map = {}
+                for fk in fk_rows:
+                    col_name = fk.get('COLUMN_NAME', '')
+                    if col_name:
+                        fk_map[col_name] = {
+                            'referenced_table': fk.get('REFERENCED_TABLE', ''),
+                            'referenced_column': fk.get('REFERENCED_COLUMN', ''),
+                        }
+
+                column_list = []
+                for col in columns:
+                    col_name = col.get('COLUMN_NAME', '')
+                    column_list.append({
+                        "column_name": col_name,
+                        "column_type": col.get('DATA_TYPE', ''),
+                        "data_type": col.get('DATA_TYPE', ''),
+                        "is_nullable": col.get('IS_NULLABLE', ''),
+                        "column_default": col.get('COLUMN_DEFAULT', None),
+                        "is_primary_key": col_name in pk_set,
+                        "foreign_key": fk_map.get(col_name),
+                    })
+                connection.close()
+                return {
+                    "success": True,
+                    "message": "获取表字段成功",
+                    "data": {"columns": column_list}
+                }
+        except ImportError:
+            return {"success": False, "message": "缺少pymssql依赖，请执行: pip install pymssql"}
+        except Exception as e:
+            return {"success": False, "message": f"获取表字段失败: {str(e)}"}
+
     def get_monitor_info(self) -> Dict[str, Any]:
         """
         获取SQL Server数据库监控信息

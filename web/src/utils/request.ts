@@ -34,7 +34,7 @@ const getApiBaseUrl = (): string => {
   return '';
 };
 
-const API_BASE_URL = getApiBaseUrl();
+export const API_BASE_URL = getApiBaseUrl();
 
 /**
  * 全局HTTP请求函数
@@ -74,7 +74,9 @@ export async function request<T = any>(
     // 检查业务状态码
     if (result.code !== 200 && result.code !== 201) {
       // 只抛出错误，不显示错误消息，由调用方处理
-      throw new Error(result.message || '请求失败');
+      const bizError: any = new Error(result.message || '请求失败');
+      bizError.isBusinessError = true;
+      throw bizError;
     }
 
     // 显示成功消息
@@ -84,6 +86,11 @@ export async function request<T = any>(
 
     return result.data;
   } catch (error) {
+    // 业务错误由调用方统一提示，此处不重复弹出
+    if (error instanceof Error && (error as any).isBusinessError) {
+      throw error;
+    }
+
     // 处理网络错误或其他异常
     if (error instanceof TypeError && error.message === 'Failed to fetch') {
       const errorMsg = '网络连接失败，请检查网络或后端服务是否启动';
@@ -93,7 +100,7 @@ export async function request<T = any>(
       throw new Error(errorMsg);
     }
 
-    // 处理业务错误
+    // 其他未知错误
     if (error instanceof Error) {
       if (showError) {
         message.error(error.message);
@@ -101,7 +108,6 @@ export async function request<T = any>(
       throw error;
     }
 
-    // 其他未知错误
     const errorMsg = '发生未知错误';
     if (showError) {
       message.error(errorMsg);

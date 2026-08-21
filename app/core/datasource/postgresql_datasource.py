@@ -175,9 +175,9 @@ class PostgreSQLDatasource(DatasourceBase):
         except Exception as e:
             return {"success": False, "message": f"获取表列表失败: {str(e)}"}
 
-    def get_table_columns(self, table_name: str) -> Dict[str, Any]:
+    def get_table_columns(self, table_name: str, database: Optional[str] = None) -> Dict[str, Any]:
         """
-        获取PostgreSQL数据库表字段信息
+        获取PostgreSQL数据库表字段信息（含外键关系）
         """
         try:
             import psycopg2
@@ -201,14 +201,40 @@ class PostgreSQLDatasource(DatasourceBase):
                     (schema_name, table_name)
                 )
                 columns = cursor.fetchall()
+
+                # 查询外键关系
+                cursor.execute(
+                    "SELECT kcu.column_name, ccu.table_name AS referenced_table, ccu.column_name AS referenced_column "
+                    "FROM information_schema.table_constraints tc "
+                    "JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name "
+                    "AND tc.table_schema = kcu.table_schema "
+                    "JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name = ccu.constraint_name "
+                    "AND tc.table_schema = ccu.table_schema "
+                    "WHERE tc.constraint_type = 'FOREIGN KEY' "
+                    "AND tc.table_schema = %s AND tc.table_name = %s",
+                    (schema_name, table_name)
+                )
+                fk_rows = cursor.fetchall()
+                fk_map = {}
+                for fk in fk_rows:
+                    col_name = fk.get('column_name', '')
+                    if col_name:
+                        fk_map[col_name] = {
+                            'referenced_table': fk.get('referenced_table', ''),
+                            'referenced_column': fk.get('referenced_column', ''),
+                        }
+
                 column_list = []
                 for col in columns:
+                    col_name = col['column_name']
                     column_list.append({
-                        "column_name": col['column_name'],
+                        "column_name": col_name,
                         "column_type": col['data_type'],
+                        "data_type": col['data_type'],
                         "is_nullable": col['is_nullable'],
                         "column_default": col.get('column_default', None),
-                        "column_comment": col.get('column_comment', '')
+                        "column_comment": col.get('column_comment', ''),
+                        "foreign_key": fk_map.get(col_name),
                     })
                 connection.close()
                 return {

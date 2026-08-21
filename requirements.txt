@@ -80,3 +80,6 @@ vscode-icons>=1.0.0
 
 # Tavily搜索API
 tavily>=0.3.0
+
+# SQL解析
+sqlparse

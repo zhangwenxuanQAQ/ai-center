@@ -4,7 +4,7 @@
 
 import json
 from datetime import datetime
-from app.database.models import Datasource, DatasourceCategory
+from app.database.models import Datasource, DatasourceCategory, OntologyObject
 from app.services.datasource.dto import DatasourceCreate, DatasourceUpdate
 from app.database.db_utils import handle_transaction
 from app.core.exceptions import ResourceNotFoundError, DuplicateResourceError
@@ -387,7 +387,16 @@ class DatasourceService:
             if deleted_user_id:
                 db_datasource.deleted_user_id = deleted_user_id
             db_datasource.save()
-            
+
+            # 同时逻辑删除该数据源关联的本体对象
+            OntologyObject.update(
+                deleted=True,
+                deleted_at=datetime.now()
+            ).where(
+                OntologyObject.datasource_id == datasource_id,
+                OntologyObject.deleted == False
+            ).execute()
+
             return deleted_datasource
         except Exception as e:
             raise

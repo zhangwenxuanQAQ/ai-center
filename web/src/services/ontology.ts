@@ -1,0 +1,211 @@
+/**
+ * 本体工作台服务
+ * 提供本体对象和数据抽取任务相关的API调用
+ */
+
+import http from '../utils/request';
+import { API_BASE_URL } from '../utils/request';
+
+export interface OntologyForeignKey {
+  referenced_table: string;
+  referenced_column: string;
+}
+
+export interface OntologyColumn {
+  column_name: string;
+  column_name_cn: string;
+  column_description: string;
+  data_type: string;
+  is_primary_key: boolean;
+  is_nullable: boolean;
+  foreign_key: OntologyForeignKey | null;
+}
+
+export interface OntologyContent {
+  table_name: string;
+  title?: string;
+  description?: string;
+  columns: OntologyColumn[];
+}
+
+export interface OntologyObject {
+  id: string;
+  datasource_id: string;
+  name: string;
+  title: string;
+  description: string;
+  content: OntologyContent;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OntologyObjectBatchItem {
+  name: string;
+  title?: string;
+  description?: string;
+  content?: OntologyContent;
+}
+
+export interface OntologyTask {
+  id: string;
+  name: string;
+  datasource_id: string;
+  configs: {
+    ontology_object_id?: string;
+    custom_sql?: string;
+    export_format?: string;
+    [key: string]: any;
+  };
+  status: string;
+  status_label: string;
+  task_progress: number;
+  task_progress_message: string;
+  task_begin_at: string;
+  task_end_at: string;
+  task_duration: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExportFormat {
+  value: string;
+  label: string;
+  sample: string;
+}
+
+export interface TaskResult {
+  status: string;
+  status_label: string;
+  has_result: boolean;
+  file_name?: string;
+  format?: string;
+  file_base64?: string;
+  row_count?: number;
+  executed_at?: string;
+  expire_at?: string;
+  message?: string;
+  task_progress?: number;
+  task_progress_message?: string;
+  task_begin_at?: string;
+  task_end_at?: string;
+  task_duration?: number;
+}
+
+export const ontologyService = {
+  // ==================== 本体对象 ====================
+
+  /** 获取本体对象列表 */
+  getObjects: async (datasourceId?: string, page: number = 1, pageSize: number = 20, sortBy: string = 'name', sortOrder: string = 'asc', name?: string): Promise<{ data: OntologyObject[]; total: number }> => {
+    let params = [`page=${page}`, `page_size=${pageSize}`, `sort_by=${sortBy}`, `sort_order=${sortOrder}`];
+    if (datasourceId) params.push(`datasource_id=${datasourceId}`);
+    if (name) params.push(`name=${encodeURIComponent(name)}`);
+    return http.get(`/aicenter/v1/ontology/object/list?${params.join('&')}`);
+  },
+
+  /** 获取单个本体对象 */
+  getObject: async (id: string): Promise<OntologyObject> => {
+    return http.get(`/aicenter/v1/ontology/object/${id}`);
+  },
+
+  /** 批量创建本体对象 */
+  batchCreateObjects: async (datasourceId: string, objects: OntologyObjectBatchItem[]): Promise<OntologyObject[]> => {
+    return http.post('/aicenter/v1/ontology/object/batch', { datasource_id: datasourceId, objects });
+  },
+
+  /** 更新本体对象 */
+  updateObject: async (id: string, data: { title?: string; description?: string; content?: OntologyContent }): Promise<OntologyObject> => {
+    return http.post(`/aicenter/v1/ontology/object/${id}`, data);
+  },
+
+  /** 删除本体对象 */
+  deleteObject: async (id: string): Promise<void> => {
+    return http.post(`/aicenter/v1/ontology/object/${id}/delete`);
+  },
+
+  /** 批量删除本体对象 */
+  batchDeleteObjects: async (objectIds: string[]): Promise<void> => {
+    return http.post('/aicenter/v1/ontology/object/batch_delete', { object_ids: objectIds });
+  },
+
+  /** 批量导出本体对象元数据 */
+  batchExportObjects: async (objectIds: string[], exportFormat: string): Promise<{ content: string; format: string }> => {
+    return http.post('/aicenter/v1/ontology/object/batch_export', { object_ids: objectIds, export_format: exportFormat });
+  },
+
+  /** 同步本体对象字段 */
+  syncObject: async (id: string): Promise<OntologyObject> => {
+    return http.post(`/aicenter/v1/ontology/object/${id}/sync`);
+  },
+
+  /** 查询本体对象数据 */
+  queryObjectData: async (id: string, limit: number = 10, customSql?: string): Promise<{ columns: string[]; rows: any[]; total: number }> => {
+    let params = [`limit=${limit}`];
+    if (customSql) params.push(`custom_sql=${encodeURIComponent(customSql)}`);
+    return http.get(`/aicenter/v1/ontology/object/${id}/query?${params.join('&')}`);
+  },
+
+  /** 导出本体对象元数据 */
+  exportObjectMetadata: async (id: string, format: string): Promise<{ content: string; format: string }> => {
+    return http.get(`/aicenter/v1/ontology/object/${id}/export?export_format=${format}`);
+  },
+
+  // ==================== 导出格式 ====================
+
+  /** 获取导出格式列表 */
+  getExportFormats: async (): Promise<{ formats: ExportFormat[] }> => {
+    return http.get('/aicenter/v1/ontology/export_formats');
+  },
+
+  // ==================== 数据抽取任务 ====================
+
+  /** 获取任务列表 */
+  getTasks: async (name?: string, page: number = 1, pageSize: number = 20): Promise<{ data: OntologyTask[]; total: number }> => {
+    let params = [`page=${page}`, `page_size=${pageSize}`];
+    if (name) params.push(`name=${encodeURIComponent(name)}`);
+    return http.get(`/aicenter/v1/ontology/task/list?${params.join('&')}`);
+  },
+
+  /** 创建任务 */
+  createTask: async (data: {
+    name: string;
+    datasource_id: string;
+    configs: Record<string, any>;
+  }): Promise<OntologyTask> => {
+    return http.post('/aicenter/v1/ontology/task', data);
+  },
+
+  /** SSE流式获取任务进度 */
+  getTaskStreamUrl: (id: string): string => {
+    return `${API_BASE_URL}/aicenter/v1/ontology/task/${id}/stream`;
+  },
+
+  /** 启动任务 */
+  startTask: async (id: string): Promise<void> => {
+    return http.post(`/aicenter/v1/ontology/task/${id}/start`);
+  },
+
+  /** 重新执行任务 */
+  rerunTask: async (id: string): Promise<void> => {
+    return http.post(`/aicenter/v1/ontology/task/${id}/rerun`);
+  },
+
+  /** 停止任务 */
+  stopTask: async (id: string): Promise<void> => {
+    return http.post(`/aicenter/v1/ontology/task/${id}/stop`);
+  },
+
+  /** 获取任务结果 */
+  getTaskResult: async (id: string): Promise<TaskResult> => {
+    return http.get(`/aicenter/v1/ontology/task/${id}/result`);
+  },
+
+  /** 批量删除任务 */
+  batchDeleteTasks: async (taskIds: string[]): Promise<void> => {
+    return http.post('/aicenter/v1/ontology/task/batch_delete', { task_ids: taskIds });
+  },
+
+  /** 删除单个任务 */
+  deleteTask: async (id: string): Promise<void> => {
+    return http.del(`/aicenter/v1/ontology/task/${id}`);
+  },
+};
