@@ -303,7 +303,7 @@ RUSTFS_PASSWORD=<your_password>
    
    # 构建镜像（镜像名称来自PROJECT_VERSION文件）
    # 在项目根目录执行
-   docker build -t ai-center:aihub_v2_beta_0.1 -f docker/Dockerfile .
+   docker build -t ai-center:aihub_v2_beta_0.1.2 -f docker/Dockerfile .
    
    # 或使用docker-compose构建（完整环境）
    docker-compose build
@@ -406,7 +406,7 @@ docker run -d \
   -p 8081:8081 \
   -p 8082:8082 \
   -v /opt/ai-center/config/server_config.yaml:/aicenter/configs/server_config.yaml:ro \
-  ai-center:aihub_v2_beta_0.1
+  ai-center:aihub_v2_beta_0.1.2
 ```
 
 **注意**：使用此方式时，需要确保配置文件中指定的数据库服务已部署并可访问。
@@ -448,7 +448,7 @@ docker run -d \
   -e MCP_HOST=0.0.0.0 \
   -e MCP_PORT=8082 \
   -e MCP_ENABLED=true \
-  ai-center:aihub_v2_beta_0.1
+  ai-center:aihub_v2_beta_0.1.2
 ```
 
 **支持的环境变量**：
@@ -540,7 +540,7 @@ rustfs:
 docker run -d \
   --name ai-center \
   -v /path/to/your/server_config.yaml:/aicenter/configs/server_config.yaml \
-  ai-center:aihub_v2_beta_0.1
+  ai-center:aihub_v2_beta_0.1.2
 ```
 
 #### 挂载Nginx配置文件
@@ -548,7 +548,7 @@ docker run -d \
 docker run -d \
   --name ai-center \
   -v /path/to/your/aicenter.conf:/etc/nginx/conf.d/aicenter.conf \
-  ai-center:aihub_v2_beta_0.1
+  ai-center:aihub_v2_beta_0.1.2
 ```
 
 #### 同时挂载多个配置文件
@@ -558,7 +558,7 @@ docker run -d \
   -v /path/to/your/server_config.yaml:/aicenter/configs/server_config.yaml \
   -v /path/to/your/aicenter.conf:/etc/nginx/conf.d/aicenter.conf \
   -v /path/to/your/nginx.conf:/etc/nginx/nginx.conf \
-  ai-center:aihub_v2_beta_0.1
+  ai-center:aihub_v2_beta_0.1.2
 ```
 
 #### 使用docker-compose挂载
