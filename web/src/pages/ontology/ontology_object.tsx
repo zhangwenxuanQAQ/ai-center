@@ -534,7 +534,10 @@ const OntologyObjectPage: React.FC = () => {
 
   const filteredTables = tables.filter(t => {
     const name = t.table_name || t;
-    return !tableFilter || name.toLowerCase().includes(tableFilter.toLowerCase());
+    const comment = t.table_comment || '';
+    if (!tableFilter) return true;
+    const filter = tableFilter.toLowerCase();
+    return name.toLowerCase().includes(filter) || comment.toLowerCase().includes(filter);
   });
 
   const allChecked = filteredTables.length > 0 && filteredTables.every(t => selectedTables.includes(t.table_name || t));

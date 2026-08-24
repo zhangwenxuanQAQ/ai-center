@@ -187,7 +187,7 @@ class OracleDatasource(DatasourceBase):
 
             # 查询外键关系
             cursor.execute(
-                "SELECT a.COLUMN_NAME, c.TABLE_NAME AS REFERENCED_TABLE, c.COLUMN_NAME AS REFERENCED_COLUMN "
+                "SELECT b.COLUMN_NAME, c.TABLE_NAME AS REFERENCED_TABLE, c.COLUMN_NAME AS REFERENCED_COLUMN "
                 "FROM USER_CONSTRAINTS a "
                 "JOIN USER_CONS_COLUMNS b ON a.CONSTRAINT_NAME = b.CONSTRAINT_NAME "
                 "JOIN USER_CONS_COLUMNS c ON a.R_CONSTRAINT_NAME = c.CONSTRAINT_NAME "
