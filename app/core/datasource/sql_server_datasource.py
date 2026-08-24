@@ -136,6 +136,46 @@ class SQLServerDatasource(DatasourceBase):
         except Exception as e:
             return {"success": False, "message": f"获取Schema信息失败: {str(e)}"}
 
+    def list_tables(self, database: Optional[str] = None) -> Dict[str, Any]:
+        """
+        获取SQL Server数据库表列表
+        """
+        try:
+            import pymssql
+            target_database = database or self.config.get('database', '')
+            if not target_database:
+                return {"success": False, "message": "数据库名称不能为空", "data": None}
+            connection = pymssql.connect(
+                server=self.config.get('host', 'localhost'),
+                port=int(self.config.get('port', 1433)),
+                user=self.config.get('username', ''),
+                password=self.config.get('password', ''),
+                database=target_database,
+                login_timeout=10,
+            )
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT TABLE_NAME, TABLE_TYPE FROM INFORMATION_SCHEMA.TABLES "
+                    "WHERE TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME"
+                )
+                tables = cursor.fetchall()
+                table_list = []
+                for table in tables:
+                    table_list.append({
+                        "table_name": table[0],
+                        "table_comment": '',
+                    })
+                connection.close()
+                return {
+                    "success": True,
+                    "message": "获取表列表成功",
+                    "data": {"tables": table_list}
+                }
+        except ImportError:
+            return {"success": False, "message": "缺少pymssql依赖，请执行: pip install pymssql"}
+        except Exception as e:
+            return {"success": False, "message": f"获取表列表失败: {str(e)}"}
+
     def get_table_columns(self, table_name: str, database: Optional[str] = None) -> Dict[str, Any]:
         """
         获取SQL Server数据库表字段信息（含外键关系）

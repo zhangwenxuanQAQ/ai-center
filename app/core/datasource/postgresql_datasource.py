@@ -134,7 +134,7 @@ class PostgreSQLDatasource(DatasourceBase):
         except Exception as e:
             return {"success": False, "message": f"获取Schema信息失败: {str(e)}"}
 
-    def list_tables(self) -> Dict[str, Any]:
+    def list_tables(self, database: Optional[str] = None) -> Dict[str, Any]:
         """
         获取PostgreSQL数据库表列表
         """

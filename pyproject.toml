@@ -16,6 +16,8 @@ dependencies = [
     "playhouse",
     "pymysql",
     "psycopg2-binary",
+    "oracledb",
+    "pymssql",
     "pyyaml",
     "python-dotenv",
     "pydantic",
