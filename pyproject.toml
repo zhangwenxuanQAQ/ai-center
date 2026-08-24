@@ -1,6 +1,6 @@
 [project]
 name = "ai-center"
-version = "beta_0.1.2"
+version = "0.1.2-r3"
 description = "大模型AI服务中心"
 readme = "README.md"
 keywords = ["ai", "llm", "chatbot", "knowledge-base", "mcp"]
