@@ -50,6 +50,7 @@ export interface OntologyTask {
   id: string;
   name: string;
   datasource_id: string;
+  datasource_name?: string;
   configs: {
     ontology_object_id?: string;
     custom_sql?: string;
@@ -183,6 +184,11 @@ export const ontologyService = {
     return http.post(`/aicenter/v1/ontology/task/${id}`, data);
   },
 
+  /** SSE任务事件流地址（状态实时推送） */
+  getTaskEventsUrl: (): string => {
+    return `${API_BASE_URL}/aicenter/v1/ontology/task/events`;
+  },
+
   /** SSE流式获取任务进度 */
   getTaskStreamUrl: (id: string): string => {
     return `${API_BASE_URL}/aicenter/v1/ontology/task/${id}/stream`;
@@ -211,6 +217,11 @@ export const ontologyService = {
   /** 批量删除任务 */
   batchDeleteTasks: async (taskIds: string[]): Promise<void> => {
     return http.post('/aicenter/v1/ontology/task/batch_delete', { task_ids: taskIds });
+  },
+
+  /** 批量执行任务（跳过运行中/等待执行的任务，加入队列） */
+  batchExecuteTasks: async (taskIds: string[]): Promise<{ success: string[]; skipped: { task_id: string; message: string }[]; failed: { task_id: string; message: string }[] }> => {
+    return http.post('/aicenter/v1/ontology/task/batch_execute', { task_ids: taskIds });
   },
 
   /** 删除单个任务 */

@@ -810,7 +810,7 @@ const OntologyObjectPage: React.FC = () => {
               { key: 'markdown', label: 'Markdown', onClick: () => handleExport(record, 'markdown') },
             ]
           }}>
-            <Tooltip title="导出元数据">
+            <Tooltip title="导出本体">
               <Button type="text" size="small" icon={<ExportOutlined />} />
             </Tooltip>
           </Dropdown>

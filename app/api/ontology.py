@@ -16,8 +16,9 @@ from app.core.ontology import OntologyObjectCore, OntologyTaskCore
 from app.utils.response import ResponseUtil, ApiResponse
 from app.constants.ontology_constants import (
     OntologyTaskStatus,
+    ONTOLOGY_TASK_STATUS_LABELS,
     ONTOLOGY_TASK_STREAM_PREFIX, ONTOLOGY_TASK_STATUS_PREFIX,
-    ONTOLOGY_TASK_REDIS_EXPIRE
+    ONTOLOGY_TASK_REDIS_EXPIRE, ONTOLOGY_TASK_EVENTS_CHANNEL
 )
 from app.database.redis_utils import redis_utils
 from app.database.models import OntologyTask
@@ -143,6 +144,86 @@ def get_export_formats():
 
 # ==================== 数据抽取任务 API ====================
 
+@router.get("/task/events")
+async def task_events():
+    """
+    SSE端点：推送任务状态更新事件（使用异步Redis客户端）
+
+    参考知识库 document_events 实现，前端EventSource订阅后实时更新任务状态/进度。
+
+    Returns:
+        StreamingResponse: SSE事件流
+    """
+    from redis.asyncio import Redis
+    from app.configs.config import config as app_config
+
+    async def event_generator():
+        redis_client = None
+        pubsub = None
+        channel = ONTOLOGY_TASK_EVENTS_CHANNEL
+
+        try:
+            redis_config = app_config.config.get('redis', {})
+            host = redis_config.get('host', '127.0.0.1')
+            port = redis_config.get('port', 6379)
+            db = redis_config.get('db', 1)
+            username = redis_config.get('username', '')
+            password = redis_config.get('password', '')
+
+            conn_params = {
+                'host': host,
+                'port': port,
+                'db': db,
+                'decode_responses': True,
+            }
+
+            if username:
+                conn_params['username'] = username
+            if password:
+                conn_params['password'] = password
+
+            redis_client = Redis(**conn_params)
+
+            await redis_client.ping()
+
+            pubsub = redis_client.pubsub()
+            await pubsub.subscribe(channel)
+
+            yield f"event: connected\ndata: {{\"message\": \"Connected to ontology task events\"}}\n\n"
+
+            async for message in pubsub.listen():
+                if message["type"] == "message":
+                    data = message["data"]
+                    yield f"event: update\ndata: {data}\n\n"
+
+        except asyncio.CancelledError:
+            logger.info(f"SSE连接关闭: {channel}")
+        except Exception as e:
+            logger.error(f"SSE事件流异常: {e}")
+        finally:
+            if pubsub:
+                try:
+                    await pubsub.unsubscribe(channel)
+                    await pubsub.close()
+                except Exception:
+                    pass
+            if redis_client:
+                try:
+                    await redis_client.close()
+                except Exception:
+                    pass
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
+
+
 @router.get("/task/list", response_model=ApiResponse)
 def get_tasks(
     name: str = Query(None, description="任务名称（模糊查询）"),
@@ -170,13 +251,37 @@ def create_task(dto: OntologyTaskCreate):
     return ResponseUtil.success(data=task, message="任务创建成功")
 
 
-@router.post("/task/{task_id}", response_model=ApiResponse)
-def update_task(task_id: str, dto: OntologyTaskUpdate):
-    """更新数据抽取任务"""
-    task = OntologyService.update_task(task_id, dto)
-    if not task:
-        return ResponseUtil.error(code=400, message="任务不存在或当前状态不可编辑")
-    return ResponseUtil.success(data=task, message="任务更新成功")
+@router.post("/task/batch_execute", response_model=ApiResponse)
+def batch_execute_tasks(data: dict):
+    """批量执行任务（跳过运行中/等待执行的任务，加入队列调度）"""
+    task_ids = data.get('task_ids', [])
+    if not task_ids:
+        return ResponseUtil.bad_request(message="请选择要执行的任务")
+
+    success_ids = []
+    skipped = []
+    failed = []
+    for task_id in task_ids:
+        task = OntologyTask.select().where(
+            OntologyTask.id == task_id,
+            OntologyTask.deleted == False
+        ).first()
+        if not task:
+            failed.append({'task_id': task_id, 'message': '任务不存在'})
+            continue
+        if task.status in (OntologyTaskStatus.RUNNING, OntologyTaskStatus.WAITING):
+            skipped.append({'task_id': task_id, 'message': f"任务{ONTOLOGY_TASK_STATUS_LABELS.get(task.status, task.status)}，已跳过"})
+            continue
+        if OntologyTaskCore.execute_task(task_id):
+            success_ids.append(task_id)
+        else:
+            failed.append({'task_id': task_id, 'message': '加入队列失败'})
+
+    return ResponseUtil.success(data={
+        'success': success_ids,
+        'skipped': skipped,
+        'failed': failed,
+    }, message=f"批量执行完成：成功{len(success_ids)}个，跳过{len(skipped)}个，失败{len(failed)}个")
 
 
 @router.post("/task/batch_delete", response_model=ApiResponse)
@@ -187,6 +292,15 @@ def batch_delete_tasks(data: dict):
         return ResponseUtil.bad_request(message="请选择要删除的任务")
     deleted_count = OntologyService.batch_delete_tasks(task_ids)
     return ResponseUtil.success(message=f"成功删除{deleted_count}个任务")
+
+
+@router.post("/task/{task_id}", response_model=ApiResponse)
+def update_task(task_id: str, dto: OntologyTaskUpdate):
+    """更新数据抽取任务"""
+    task = OntologyService.update_task(task_id, dto)
+    if not task:
+        return ResponseUtil.error(code=400, message="任务不存在或当前状态不可编辑")
+    return ResponseUtil.success(data=task, message="任务更新成功")
 
 
 @router.post("/task/{task_id}/start")
@@ -206,7 +320,7 @@ async def start_task(task_id: str):
     if not success:
         return ResponseUtil.error(code=400, message="启动任务失败")
 
-    return ResponseUtil.success(message="任务已启动")
+    return ResponseUtil.success(message="任务提交成功")
 
 
 @router.post("/task/{task_id}/stop")

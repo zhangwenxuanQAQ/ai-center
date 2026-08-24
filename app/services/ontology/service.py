@@ -171,6 +171,29 @@ class OntologyService:
     # ==================== 数据抽取任务 CRUD ====================
 
     @staticmethod
+    def _fill_datasource_names(tasks: List[dict]) -> List[dict]:
+        """为任务列表批量填充数据源名称"""
+        ds_ids = {t['datasource_id'] for t in tasks if t.get('datasource_id')}
+        if not ds_ids:
+            return tasks
+        ds_names = {
+            ds.id: ds.name
+            for ds in OntologyService._select_datasources(ds_ids)
+        }
+        for t in tasks:
+            t['datasource_name'] = ds_names.get(t.get('datasource_id'), '')
+        return tasks
+
+    @staticmethod
+    def _select_datasources(ds_ids: set):
+        """查询数据源（软删除过滤）"""
+        from app.database.models import Datasource
+        return Datasource.select().where(
+            Datasource.id.in_(list(ds_ids)),
+            Datasource.deleted == False
+        )
+
+    @staticmethod
     def get_tasks(name: str = None, page: int = 1, page_size: int = 20) -> Tuple[List[dict], int]:
         """获取任务列表"""
         query = OntologyTask.select().where(OntologyTask.deleted == False)
@@ -178,7 +201,8 @@ class OntologyService:
             query = query.where(OntologyTask.name.contains(name))
         total = query.count()
         tasks = query.order_by(OntologyTask.created_at.desc()).paginate(page, page_size)
-        return [task_to_dict(t) for t in tasks], total
+        task_dicts = [task_to_dict(t) for t in tasks]
+        return OntologyService._fill_datasource_names(task_dicts), total
 
     @staticmethod
     def get_task(task_id: str) -> Optional[dict]:
@@ -207,15 +231,14 @@ class OntologyService:
     @staticmethod
     @handle_transaction
     def update_task(task_id: str, dto: OntologyTaskUpdate) -> Optional[dict]:
-        """更新任务（仅未运行/未结束的任务可编辑）"""
+        """更新任务（运行中的任务不可编辑）"""
         task = OntologyTask.select().where(
             OntologyTask.id == task_id,
             OntologyTask.deleted == False
         ).first()
         if not task:
             return None
-        if task.status in (OntologyTaskStatus.RUNNING, OntologyTaskStatus.DONE,
-                           OntologyTaskStatus.FAIL, OntologyTaskStatus.CANCEL):
+        if task.status == OntologyTaskStatus.RUNNING:
             return None
         if dto.name is not None:
             task.name = dto.name

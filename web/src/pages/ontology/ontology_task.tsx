@@ -1,21 +1,34 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Table, Button, Drawer, Input, message, Modal, Space, Tag, Steps,
-  Form, Select, Radio, Checkbox, Descriptions, Typography, Progress, Empty, Pagination, Tooltip
+  Form, Select, Radio, Checkbox, Descriptions, Typography, Empty, Pagination, Tooltip, Popover,
+  Dropdown
 } from 'antd';
 import {
   PlusOutlined, PlayCircleOutlined, PauseCircleOutlined, DeleteOutlined,
-  ReloadOutlined, EyeOutlined, RedoOutlined, EditOutlined
+  ReloadOutlined, EyeOutlined, RedoOutlined, EditOutlined, DownOutlined, TableOutlined
 } from '@ant-design/icons';
 import { ontologyService, OntologyTask, OntologyObject, ExportFormat, TaskResult } from '../../services/ontology';
 import { datasourceService, Datasource } from '../../services/datasource';
 
-const { Text } = Typography;
+const { Text, Link } = Typography;
+
+/** 耗时（数据库存毫秒）转为秒显示 */
+const formatDurationSeconds = (ms?: number | null): string => {
+  if (ms == null || ms < 0) return '-';
+  return `${(ms / 1000).toFixed(2)}秒`;
+};
+
 const { TextArea } = Input;
 
 const statusColorMap: Record<string, string> = {
   pending: 'default', waiting: 'warning', running: 'processing',
   cancel: 'default', done: 'success', fail: 'error', schedule: 'purple',
+};
+
+const statusLabelMap: Record<string, string> = {
+  pending: '未开始', waiting: '等待执行', running: '运行中',
+  cancel: '已取消', done: '已完成', fail: '失败', schedule: '定时调度',
 };
 
 const OntologyTaskPage: React.FC = () => {
@@ -32,6 +45,11 @@ const OntologyTaskPage: React.FC = () => {
   const [createVisible, setCreateVisible] = useState(false);
   const [createStep, setCreateStep] = useState(0);
   const [createForm] = Form.useForm();
+  // 创建模式：single(单个创建) | batch(批量创建) | null(编辑模式)
+  const [createMode, setCreateMode] = useState<'single' | 'batch' | null>(null);
+  // 批量创建时选中的本体对象列表及各自的字段配置
+  const [batchObjectIds, setBatchObjectIds] = useState<string[]>([]);
+  const [batchColumnsMap, setBatchColumnsMap] = useState<Record<string, string[]>>({});
   // 订阅导出格式字段变化，切换时联动显示对应样例
   const exportFormatValue = Form.useWatch('export_format', createForm);
   const [datasources, setDatasources] = useState<Datasource[]>([]);
@@ -74,14 +92,47 @@ const OntologyTaskPage: React.FC = () => {
     return () => observer.disconnect();
   }, []);
 
+  // SSE订阅任务事件，运行中任务状态/进度实时推送
+  useEffect(() => {
+    const eventSource = new EventSource(ontologyService.getTaskEventsUrl());
+    eventSource.addEventListener('update', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        setTasks(prevTasks => prevTasks.map(task => {
+          if (task.id === data.task_id) {
+            return {
+              ...task,
+              status: data.status,
+              status_label: statusLabelMap[data.status] || data.status,
+              task_progress: data.task_progress,
+              task_progress_message: data.task_progress_message,
+            };
+          }
+          return task;
+        }));
+      } catch (error) {
+        console.error('Failed to parse SSE event:', error);
+      }
+    });
+    eventSource.onerror = () => {
+      // EventSource 断线后浏览器会自动重连，此处仅记录
+    };
+    return () => eventSource.close();
+  }, []);
+
   // 打开创建/编辑弹窗
-  const handleOpenCreate = async (task?: OntologyTask) => {
+  const handleOpenCreate = async (mode?: 'single' | 'batch', task?: OntologyTask) => {
     setCreateStep(0);
     setSelectedObject(null);
     setSelectedColumns([]);
+    setBatchObjectIds([]);
+    setBatchColumnsMap({});
     createForm.resetFields();
-    if (task) {
+    // 防御性检查：必须是有效的任务对象（含id），而非事件对象等其他类型
+    const isEditMode = !!(task && task.id);
+    if (isEditMode) {
       // 编辑模式
+      setCreateMode(null);
       setEditingTask(task);
       const cfg = task.configs || {};
       const isSql = !!cfg.custom_sql;
@@ -114,6 +165,8 @@ const OntologyTaskPage: React.FC = () => {
         } catch (e) {}
       }
     } else {
+      // 创建模式
+      setCreateMode(mode || 'single');
       setEditingTask(null);
       setTaskType('object');
       // 加载数据源（仅关系型数据库）
@@ -135,20 +188,21 @@ const OntologyTaskPage: React.FC = () => {
     setCreateVisible(true);
   };
 
-  // 编辑任务（仅未运行/未结束状态可编辑）
+  // 编辑任务（运行中的任务不可编辑）
   const handleEditTask = (record: OntologyTask) => {
-    if (record.status === 'running' || record.status === 'done'
-      || record.status === 'fail' || record.status === 'cancel') {
-      message.warning('当前任务状态不可编辑');
+    if (record.status === 'running') {
+      message.warning('任务运行中，暂不可编辑');
       return;
     }
-    handleOpenCreate(record);
+    handleOpenCreate(undefined, record);
   };
 
   // 选择数据源后加载本体对象
   const handleDatasourceChange = async (dsId: string) => {
     setSelectedObject(null);
     setSelectedColumns([]);
+    setBatchObjectIds([]);
+    setBatchColumnsMap({});
     setObjects([]);
     if (!dsId) return;
     try {
@@ -163,6 +217,55 @@ const OntologyTaskPage: React.FC = () => {
     setSelectedObject(obj);
     const cols = obj?.content?.columns || [];
     setSelectedColumns(cols.map(c => c.column_name));
+    // 需求3：单个创建模式下，任务名称为空时自动填充为对象名称
+    if (createMode === 'single' && obj) {
+      const currentName = createForm.getFieldValue('name');
+      if (!currentName || currentName.trim() === '') {
+        createForm.setFieldValue('name', obj.name);
+      }
+    }
+  };
+
+  // 批量创建：选中/取消选中本体对象时，初始化字段配置
+  const handleBatchObjectsChange = (objectIds: string[]) => {
+    setBatchObjectIds(objectIds);
+    // 为新选中的对象初始化字段配置（默认全选）
+    const newMap = { ...batchColumnsMap };
+    objectIds.forEach(id => {
+      if (!newMap[id]) {
+        const obj = objects.find(o => o.id === id);
+        const cols = obj?.content?.columns || [];
+        newMap[id] = cols.map(c => c.column_name);
+      }
+    });
+    // 移除已取消选中的对象的字段配置
+    Object.keys(newMap).forEach(id => {
+      if (!objectIds.includes(id)) {
+        delete newMap[id];
+      }
+    });
+    setBatchColumnsMap(newMap);
+  };
+
+  // 批量创建：切换某个对象的全选状态
+  const handleBatchSelectAll = (objectId: string, checked: boolean) => {
+    const obj = objects.find(o => o.id === objectId);
+    const cols = obj?.content?.columns || [];
+    const newMap = { ...batchColumnsMap };
+    newMap[objectId] = checked ? cols.map(c => c.column_name) : [];
+    setBatchColumnsMap(newMap);
+  };
+
+  // 批量创建：切换某个对象的单个字段
+  const handleBatchColumnToggle = (objectId: string, columnName: string, checked: boolean) => {
+    const newMap = { ...batchColumnsMap };
+    const current = newMap[objectId] || [];
+    if (checked) {
+      newMap[objectId] = [...current, columnName];
+    } else {
+      newMap[objectId] = current.filter(c => c !== columnName);
+    }
+    setBatchColumnsMap(newMap);
   };
 
   // 步骤条点击跳转
@@ -170,78 +273,157 @@ const OntologyTaskPage: React.FC = () => {
     setCreateStep(step);
   };
 
-  const handleNextStep = () => {
-    setCreateStep(1);
-  };
-
   // 保存时校验全部必填参数（步骤条可跳转，需跨步骤校验）
   const validateAllFields = (): boolean => {
     const values = createForm.getFieldsValue(true);
     // 第1步必填项
-    if (!values.name?.trim()) {
-      message.warning('请输入任务名称');
-      setCreateStep(0);
-      return false;
-    }
     if (!values.datasource_id) {
       message.warning('请选择数据源');
       setCreateStep(0);
       return false;
     }
-    if (taskType === 'object' && !values.ontology_object_id) {
-      message.warning('请选择本体对象');
-      setCreateStep(0);
-      return false;
+    if (createMode === 'batch') {
+      // 批量创建：任务名称（前缀）+ 本体对象列表
+      if (!values.name?.trim()) {
+        message.warning('请输入任务名称前缀');
+        setCreateStep(0);
+        return false;
+      }
+      if (batchObjectIds.length === 0) {
+        message.warning('请至少选择一个本体对象');
+        setCreateStep(0);
+        return false;
+      }
+    } else {
+      // 单个创建/编辑
+      if (!values.name?.trim()) {
+        message.warning('请输入任务名称');
+        setCreateStep(0);
+        return false;
+      }
+      if (taskType === 'object' && !values.ontology_object_id) {
+        message.warning('请选择本体对象');
+        setCreateStep(0);
+        return false;
+      }
+      if (taskType === 'sql' && !values.custom_sql?.trim()) {
+        message.warning('请输入自定义SQL');
+        setCreateStep(0);
+        return false;
+      }
     }
-    if (taskType === 'sql' && !values.custom_sql?.trim()) {
-      message.warning('请输入自定义SQL');
-      setCreateStep(0);
-      return false;
+    // 批量创建：第1.5步（字段配置）需确保每个对象至少选一个字段
+    if (createMode === 'batch' && createStep >= 1) {
+      for (const objId of batchObjectIds) {
+        const cols = batchColumnsMap[objId] || [];
+        if (cols.length === 0) {
+          const obj = objects.find(o => o.id === objId);
+          message.warning(`对象 "${obj?.name}" 至少需要选择一个抽取字段`);
+          setCreateStep(1);
+          return false;
+        }
+      }
     }
-    // 第2步必填项
-    if (!values.export_format) {
+    // 导出格式检查在对应步骤
+    const formatStep = createMode === 'batch' ? 2 : 1;
+    if (!values.export_format && createStep >= formatStep) {
       message.warning('请选择导出格式');
-      setCreateStep(1);
+      setCreateStep(formatStep);
       return false;
     }
     return true;
   };
 
+  // 获取当前模式的步骤数
+  const getStepCount = () => {
+    if (createMode === 'batch') return 3;
+    return 2;
+  };
+
+  const handleNextStep = () => {
+    const stepCount = getStepCount();
+    if (createStep < stepCount - 1) {
+      setCreateStep(createStep + 1);
+    }
+  };
+
   const handleCreateTask = async () => {
     if (!validateAllFields()) return;
     try {
-      // 步骤条可跳转，validateFields 只返回当前步骤已挂载字段，需用 getFieldsValue(true) 取全部字段值
       const values = createForm.getFieldsValue(true);
-      const configs: Record<string, any> = {
-        export_format: values.export_format,
-      };
-      if (taskType === 'object') {
-        configs.ontology_object_id = values.ontology_object_id;
-        if (selectedObject) {
-          const allCols = (selectedObject.content?.columns || []).map(c => c.column_name);
-          // 传入选中的字段，未选中任何字段时不传
-          if (selectedColumns.length > 0 && selectedColumns.length < allCols.length) {
-            configs.columns = selectedColumns;
+
+      if (createMode === 'batch') {
+        // 批量创建：每个本体对象保存为一个独立任务
+        const exportFormat = values.export_format;
+        const baseName = values.name.trim();
+        let successCount = 0;
+        let failCount = 0;
+
+        for (const objId of batchObjectIds) {
+          const obj = objects.find(o => o.id === objId);
+          if (!obj) { failCount++; continue; }
+
+          const selectedCols = batchColumnsMap[objId] || [];
+          const allCols = (obj.content?.columns || []).map(c => c.column_name);
+          const configs: Record<string, any> = {
+            export_format: exportFormat,
+            ontology_object_id: objId,
+          };
+          if (selectedCols.length > 0 && selectedCols.length < allCols.length) {
+            configs.columns = selectedCols;
+          }
+
+          const taskName = `${baseName}_${obj.name}`;
+          try {
+            await ontologyService.createTask({
+              name: taskName,
+              datasource_id: values.datasource_id,
+              configs,
+            });
+            successCount++;
+          } catch (e) {
+            console.error(`批量创建任务失败: ${taskName}, error: ${e}`);
+            failCount++;
           }
         }
+
+        if (failCount > 0) {
+          message.warning(`批量创建完成：成功${successCount}个，失败${failCount}个`);
+        } else {
+          message.success(`批量创建成功：共${successCount}个任务`);
+        }
       } else {
-        configs.custom_sql = values.custom_sql;
-        delete configs.ontology_object_id;
-      }
-      if (editingTask) {
-        await ontologyService.updateTask(editingTask.id, {
-          name: values.name,
-          datasource_id: values.datasource_id,
-          configs,
-        });
-        message.success('任务更新成功');
-      } else {
-        await ontologyService.createTask({
-          name: values.name,
-          datasource_id: values.datasource_id,
-          configs,
-        });
-        message.success('任务创建成功');
+        // 单个创建或编辑
+        const configs: Record<string, any> = {
+          export_format: values.export_format,
+        };
+        if (taskType === 'object') {
+          configs.ontology_object_id = values.ontology_object_id;
+          if (selectedObject) {
+            const allCols = (selectedObject.content?.columns || []).map(c => c.column_name);
+            if (selectedColumns.length > 0 && selectedColumns.length < allCols.length) {
+              configs.columns = selectedColumns;
+            }
+          }
+        } else {
+          configs.custom_sql = values.custom_sql;
+          delete configs.ontology_object_id;
+        }
+        if (editingTask) {
+          await ontologyService.updateTask(editingTask.id, {
+            name: values.name,
+            datasource_id: values.datasource_id,
+            configs,
+          });
+          message.success('任务更新成功');
+        } else {
+          await ontologyService.createTask({
+            name: values.name,
+            datasource_id: values.datasource_id,
+            configs,
+          });
+          message.success('任务创建成功');
+        }
       }
       setCreateVisible(false);
       loadTasks();
@@ -255,7 +437,7 @@ const OntologyTaskPage: React.FC = () => {
   const handleStart = async (record: OntologyTask) => {
     try {
       await ontologyService.startTask(record.id);
-      message.success('任务已启动');
+      message.success('任务提交成功');
       loadTasks();
     } catch (e: any) {
       message.error(e.message || '启动失败');
@@ -277,11 +459,44 @@ const OntologyTaskPage: React.FC = () => {
   const handleRerun = async (record: OntologyTask) => {
     try {
       await ontologyService.rerunTask(record.id);
-      message.success('任务已重新执行');
+      message.success('任务提交成功');
       loadTasks();
     } catch (e: any) {
       message.error(e.message || '操作失败');
     }
+  };
+
+  // 批量执行（跳过运行中/等待执行的任务，加入队列，默认同时最多执行5个）
+  const handleBatchExecute = () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning('请先勾选要执行的任务');
+      return;
+    }
+    Modal.confirm({
+      title: '批量执行',
+      okText: '确定',
+      cancelText: '取消',
+      content: `确定要执行选中的 ${selectedRowKeys.length} 个任务吗？（运行中/等待执行的任务将被跳过，同时最多执行5个，超出的排队等待）`,
+      onOk: async () => {
+        try {
+          const result = await ontologyService.batchExecuteTasks(selectedRowKeys);
+          const successCount = result.success?.length || 0;
+          const skippedCount = result.skipped?.length || 0;
+          const failedCount = result.failed?.length || 0;
+          if (failedCount > 0) {
+            message.warning(`批量执行完成：成功${successCount}个，跳过${skippedCount}个，失败${failedCount}个`);
+          } else if (skippedCount > 0) {
+            message.warning(`批量执行完成：成功${successCount}个，跳过${skippedCount}个`);
+          } else {
+            message.success(`批量执行成功：${successCount}个`);
+          }
+          setSelectedRowKeys([]);
+          loadTasks();
+        } catch (e: any) {
+          message.error(e.message || '批量执行失败');
+        }
+      },
+    });
   };
 
   // 查看结果
@@ -320,6 +535,8 @@ const OntologyTaskPage: React.FC = () => {
   const handleDelete = (record: OntologyTask) => {
     Modal.confirm({
       title: '确认删除',
+      okText: '确定',
+      cancelText: '取消',
       content: `确定要删除任务 "${record.name}" 吗？`,
       onOk: async () => {
         try {
@@ -341,6 +558,8 @@ const OntologyTaskPage: React.FC = () => {
     }
     Modal.confirm({
       title: '批量删除',
+      okText: '确定',
+      cancelText: '取消',
       content: `确定要删除选中的 ${selectedRowKeys.length} 个任务吗？（跳过正在运行的任务）`,
       onOk: async () => {
         try {
@@ -358,55 +577,102 @@ const OntologyTaskPage: React.FC = () => {
   const columns = [
     { title: '任务名称', dataIndex: 'name', key: 'name', width: 200 },
     {
+      title: '数据源', dataIndex: 'datasource_name', key: 'datasource_name', width: 150,
+      render: (text: string) => text || <Text type="secondary">-</Text>,
+    },
+    {
       title: '创建时间', dataIndex: 'created_at', key: 'created_at', width: 170,
     },
     {
-      title: '状态', dataIndex: 'status', key: 'status', width: 100,
-      render: (status: string, record: OntologyTask) => (
-        <Tag color={statusColorMap[status] || 'default'}>{record.status_label}</Tag>
-      ),
-    },
-    {
-      title: '进度', key: 'progress', width: 160,
-      render: (_: any, record: OntologyTask) => (
-        <div style={{ minWidth: 120 }}>
-          <Progress
-            percent={Math.round((record.task_progress || 0) * 100)}
-            size="small"
-            status={record.status === 'fail' ? 'exception' : record.status === 'done' ? 'success' : 'active'}
-            format={(p) => `${p}%`}
-          />
-          {record.task_progress_message && (
-            <Text type="secondary" style={{ fontSize: 11, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {record.task_progress_message}
-            </Text>
-          )}
-        </div>
-      ),
+      title: '状态', dataIndex: 'status', key: 'status', width: 140,
+      render: (status: string, record: OntologyTask) => {
+        const progress = Math.round((record.task_progress || 0) * 100);
+        const isRunning = status === 'running' || status === 'waiting';
+        const statusTag = (
+          <Tag color={statusColorMap[status] || 'default'}>
+            {isRunning ? `${record.status_label} ${progress}%` : record.status_label}
+          </Tag>
+        );
+
+        const popoverContent = (
+          <div style={{ maxHeight: '450px', overflowY: 'auto' }}>
+            <Descriptions size="small" column={1} style={{ width: '400px' }}>
+              <Descriptions.Item label="当前状态">
+                <Tag color={statusColorMap[status] || 'default'}>{record.status_label}</Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="进度">{((record.task_progress || 0) * 100).toFixed(1)}%</Descriptions.Item>
+              {record.task_progress_message && (
+                <Descriptions.Item label="日志">
+                  <div style={{ maxWidth: '360px', wordBreak: 'break-word', whiteSpace: 'pre-wrap', maxHeight: '250px', overflowY: 'auto' }}>
+                    {record.task_progress_message}
+                  </div>
+                </Descriptions.Item>
+              )}
+              {record.task_begin_at && (
+                <Descriptions.Item label="开始时间">{record.task_begin_at}</Descriptions.Item>
+              )}
+              {record.task_end_at && (
+                <Descriptions.Item label="结束时间">{record.task_end_at}</Descriptions.Item>
+              )}
+              <Descriptions.Item label="耗时">{formatDurationSeconds(record.task_duration)}</Descriptions.Item>
+            </Descriptions>
+          </div>
+        );
+
+        return (
+          <Popover
+            content={popoverContent}
+            title="任务详情"
+            placement="top"
+            trigger="hover"
+            getPopupContainer={() => document.body}
+          >
+            {statusTag}
+          </Popover>
+        );
+      },
     },
     {
       title: '操作', key: 'actions', width: 200, fixed: 'right',
       render: (_: any, record: OntologyTask) => (
         <Space size={4}>
           {(record.status === 'pending' || record.status === 'waiting') && (
-            <Tooltip title="开始">
-              <Button type="primary" size="small" icon={<PlayCircleOutlined />} onClick={() => handleStart(record)} />
+            <Tooltip title={record.status === 'waiting' ? '已在执行队列中' : '开始'}>
+              <Button
+                type="text"
+                size="small"
+                icon={<PlayCircleOutlined />}
+                style={{ color: '#52c41a' }}
+                onClick={() => handleStart(record)}
+              />
             </Tooltip>
           )}
-          {record.status === 'running' && (
+          {(record.status === 'running' || record.status === 'waiting') && (
             <Tooltip title="停止">
-              <Button type="primary" danger size="small" icon={<PauseCircleOutlined />} onClick={() => handleStop(record)} />
+              <Button
+                type="text"
+                size="small"
+                icon={<PauseCircleOutlined />}
+                style={{ color: '#1890ff' }}
+                onClick={() => handleStop(record)}
+              />
             </Tooltip>
           )}
           {(record.status === 'done' || record.status === 'fail' || record.status === 'cancel') && (
             <Tooltip title="重新执行">
-              <Button size="small" icon={<RedoOutlined />} onClick={() => handleRerun(record)} />
+              <Button
+                type="text"
+                size="small"
+                icon={<RedoOutlined />}
+                style={{ color: '#52c41a' }}
+                onClick={() => handleRerun(record)}
+              />
             </Tooltip>
           )}
           <Tooltip title="结果">
             <Button type="text" size="small" icon={<EyeOutlined />} onClick={() => handleViewResult(record)} />
           </Tooltip>
-          {(record.status === 'pending' || record.status === 'waiting') && (
+          {record.status !== 'running' && (
             <Tooltip title="编辑">
               <Button type="text" size="small" icon={<EditOutlined />} onClick={() => handleEditTask(record)} />
             </Tooltip>
@@ -448,7 +714,30 @@ const OntologyTaskPage: React.FC = () => {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative', overflow: 'hidden' }}>
       {/* 顶部操作栏 */}
       <div style={{ padding: '16px 16px 12px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenCreate}>创建任务</Button>
+        <Dropdown
+          menu={{
+            items: [
+              { key: 'single', label: '单个创建', icon: <PlusOutlined /> },
+              { key: 'batch', label: '批量创建', icon: <TableOutlined /> },
+            ],
+            onClick: ({ key }) => {
+              if (key === 'single') handleOpenCreate('single');
+              else if (key === 'batch') handleOpenCreate('batch');
+            },
+          }}
+          placement="bottomLeft"
+        >
+          <Button type="primary" icon={<PlusOutlined />}>
+            创建任务 <DownOutlined />
+          </Button>
+        </Dropdown>
+        <Button
+          icon={<PlayCircleOutlined />}
+          onClick={handleBatchExecute}
+          disabled={selectedRowKeys.length === 0}
+        >
+          批量执行 ({selectedRowKeys.length})
+        </Button>
         <Button
           danger
           icon={<DeleteOutlined />}
@@ -538,116 +827,230 @@ const OntologyTaskPage: React.FC = () => {
 
       {/* 创建/编辑任务弹窗 */}
       <Modal
-        title={editingTask ? '编辑数据抽取任务' : '创建数据抽取任务'}
+        title={
+          editingTask ? '编辑数据抽取任务' :
+          createMode === 'batch' ? '批量创建数据抽取任务' :
+          '创建数据抽取任务'
+        }
         open={createVisible}
         onCancel={() => setCreateVisible(false)}
-        width={650}
+        width={createMode === 'batch' ? 750 : 650}
         footer={[
           <Button key="cancel" onClick={() => setCreateVisible(false)}>取消</Button>,
-          createStep === 0 && <Button key="next" type="primary" onClick={handleNextStep}>下一步</Button>,
-          createStep === 1 && <Button key="back" onClick={() => setCreateStep(0)}>上一步</Button>,
-          createStep === 1 && <Button key="submit" type="primary" onClick={handleCreateTask}>{editingTask ? '保存' : '创建'}</Button>,
-        ]}
+          createStep === 0 && !editingTask && (
+            <Button key="next" type="primary" onClick={handleNextStep}>下一步</Button>
+          ),
+          createStep > 0 && !editingTask && (
+            <Button key="back" onClick={() => setCreateStep(createStep - 1)}>上一步</Button>
+          ),
+          (!editingTask && createStep === getStepCount() - 1) && (
+            <Button key="submit" type="primary" onClick={handleCreateTask}>
+              {createMode === 'batch' ? `批量创建 (${batchObjectIds.length})` : '创建'}
+            </Button>
+          ),
+          editingTask && (
+            <Button key="submit" type="primary" onClick={handleCreateTask}>保存</Button>
+          ),
+        ].filter(Boolean)}
       >
         <Steps
           current={createStep}
           size="small"
           style={{ marginBottom: 24 }}
           onChange={handleStepChange}
-          items={[
-            { title: '选择数据源与对象' },
-            { title: '选择导出格式' },
-          ]}
+          items={
+            editingTask ? [
+              { title: '选择数据源与对象' },
+              { title: '选择导出格式' },
+            ] : createMode === 'batch' ? [
+              { title: '选择数据源与对象' },
+              { title: '字段配置' },
+              { title: '选择导出格式' },
+            ] : [
+              { title: '选择数据源与对象' },
+              { title: '选择导出格式' },
+            ]
+          }
         />
 
         <Form form={createForm} layout="vertical">
           {createStep === 0 && (
-            <>
-              <Form.Item name="name" label="任务名称" rules={[{ required: true, message: '请输入任务名称' }]}>
-                <Input placeholder="请输入任务名称" />
-              </Form.Item>
-              <Form.Item name="datasource_id" label="数据源" rules={[{ required: true, message: '请选择数据源' }]}>
-                <Select
-                  placeholder="请选择数据源"
-                  allowClear
-                  onChange={handleDatasourceChange}
-                  options={datasources.map(ds => ({ label: ds.name, value: ds.id }))}
-                  notFoundContent="暂无关系型数据源"
-                />
-              </Form.Item>
-              <div style={{ marginBottom: 16 }}>
-                <Radio.Group value={taskType} onChange={e => { setTaskType(e.target.value); createForm.setFieldValue('ontology_object_id', undefined); setSelectedObject(null); setSelectedColumns([]); }}>
-                  <Radio.Button value="object">选择本体对象</Radio.Button>
-                  <Radio.Button value="sql">自定义SQL</Radio.Button>
-                </Radio.Group>
-              </div>
-              {taskType === 'object' ? (
-                <>
-                  <Form.Item name="ontology_object_id" label="本体对象" rules={[{ required: true, message: '请选择本体对象' }]}>
+            createMode === 'batch' ? (
+              /* 批量创建 - 步骤1：选择数据源与多个本体对象 */
+              <>
+                <Form.Item name="name" label="任务名称前缀" rules={[{ required: true, message: '请输入任务名称前缀' }]}>
+                  <Input placeholder="如：数据抽取_，最终任务名将为 前缀+对象名" />
+                </Form.Item>
+                <Form.Item name="datasource_id" label="数据源" rules={[{ required: true, message: '请选择数据源' }]}>
+                  <Select
+                    placeholder="请选择数据源"
+                    allowClear
+                    onChange={handleDatasourceChange}
+                    options={datasources.map(ds => ({ label: ds.name, value: ds.id }))}
+                    notFoundContent="暂无关系型数据源"
+                  />
+                </Form.Item>
+                {objects.length > 0 && (
+                  <Form.Item label="本体对象（多选）" required>
                     <Select
-                      placeholder="请选择本体对象"
-                      allowClear
-                      showSearch
+                      mode="multiple"
+                      placeholder="请选择要创建任务的本体对象（可多选）"
+                      value={batchObjectIds}
+                      onChange={handleBatchObjectsChange}
                       optionFilterProp="label"
-                      onChange={handleObjectChange}
+                      showSearch
                       notFoundContent="暂无本体对象"
                       options={objects.map(obj => ({
                         value: obj.id,
-                        label: obj.name,
+                        label: obj.title || obj.name,
                       }))}
-                      optionRender={(option) => {
-                        const obj = objects.find(o => o.id === option.value);
-                        return (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', overflow: 'hidden' }}>
-                            <span style={{ fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{obj?.name}</span>
-                            {obj?.title && (
-                              <span style={{ fontSize: 12, color: '#999', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{obj.title}</span>
-                            )}
-                          </div>
-                        );
-                      }}
+                      style={{ width: '100%' }}
                     />
+                    <div style={{ marginTop: 8, color: '#999', fontSize: 12 }}>
+                      已选择 {batchObjectIds.length} 个对象，每个对象将创建一个独立任务
+                    </div>
                   </Form.Item>
-                  {selectedObject && (
-                    <div style={{ marginBottom: 8, marginTop: -8 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                        <span style={{ fontSize: 13 }}>抽取字段</span>
-                        <Checkbox
-                          checked={allColumnsSelected}
-                          indeterminate={!allColumnsSelected && someColumnsSelected}
-                          onChange={e => {
-                            const all = (selectedObject.content?.columns || []).map(c => c.column_name);
-                            setSelectedColumns(e.target.checked ? all : []);
-                          }}
-                        >
-                          全选
-                        </Checkbox>
-                      </div>
-                      <Table
-                        dataSource={objectColumnList}
-                        columns={extractFieldColumns}
-                        rowKey="column_name"
-                        size="small"
-                        pagination={false}
-                        scroll={{ y: 200 }}
-                        locale={{ emptyText: '暂无字段' }}
-                        rowSelection={{
-                          selectedRowKeys: selectedColumns,
-                          onChange: (keys) => setSelectedColumns(keys as string[]),
+                )}
+              </>
+            ) : (
+              /* 单个创建/编辑 - 步骤1 */
+              <>
+                <Form.Item name="name" label="任务名称" rules={[{ required: true, message: '请输入任务名称' }]}>
+                  <Input placeholder="请输入任务名称" />
+                </Form.Item>
+                <Form.Item name="datasource_id" label="数据源" rules={[{ required: true, message: '请选择数据源' }]}>
+                  <Select
+                    placeholder="请选择数据源"
+                    allowClear
+                    onChange={handleDatasourceChange}
+                    options={datasources.map(ds => ({ label: ds.name, value: ds.id }))}
+                    notFoundContent="暂无关系型数据源"
+                  />
+                </Form.Item>
+                <div style={{ marginBottom: 16 }}>
+                  <Radio.Group value={taskType} onChange={e => { setTaskType(e.target.value); createForm.setFieldValue('ontology_object_id', undefined); setSelectedObject(null); setSelectedColumns([]); }}>
+                    <Radio.Button value="object">选择本体对象</Radio.Button>
+                    <Radio.Button value="sql">自定义SQL</Radio.Button>
+                  </Radio.Group>
+                </div>
+                {taskType === 'object' ? (
+                  <>
+                    <Form.Item name="ontology_object_id" label="本体对象" rules={[{ required: true, message: '请选择本体对象' }]}>
+                      <Select
+                        placeholder="请选择本体对象"
+                        allowClear
+                        showSearch
+                        optionFilterProp="label"
+                        onChange={handleObjectChange}
+                        notFoundContent="暂无本体对象"
+                        options={objects.map(obj => ({
+                          value: obj.id,
+                          label: obj.name,
+                        }))}
+                        optionRender={(option) => {
+                          const obj = objects.find(o => o.id === option.value);
+                          return (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', overflow: 'hidden' }}>
+                              <span style={{ fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{obj?.name}</span>
+                              {obj?.title && (
+                                <span style={{ fontSize: 12, color: '#999', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{obj.title}</span>
+                              )}
+                            </div>
+                          );
                         }}
                       />
-                    </div>
-                  )}
-                </>
+                    </Form.Item>
+                    {selectedObject && (
+                      <div style={{ marginBottom: 8, marginTop: -8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                          <span style={{ fontSize: 13 }}>抽取字段</span>
+                          <Checkbox
+                            checked={allColumnsSelected}
+                            indeterminate={!allColumnsSelected && someColumnsSelected}
+                            onChange={e => {
+                              const all = (selectedObject.content?.columns || []).map(c => c.column_name);
+                              setSelectedColumns(e.target.checked ? all : []);
+                            }}
+                          >
+                            全选
+                          </Checkbox>
+                        </div>
+                        <Table
+                          dataSource={objectColumnList}
+                          columns={extractFieldColumns}
+                          rowKey="column_name"
+                          size="small"
+                          pagination={false}
+                          scroll={{ y: 200 }}
+                          locale={{ emptyText: '暂无字段' }}
+                          rowSelection={{
+                            selectedRowKeys: selectedColumns,
+                            onChange: (keys) => setSelectedColumns(keys as string[]),
+                          }}
+                        />
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <Form.Item name="custom_sql" label="自定义SQL" rules={[{ required: true, message: '请输入SQL语句' }]}>
+                    <TextArea rows={4} placeholder="SELECT * FROM table_name" />
+                  </Form.Item>
+                )}
+              </>
+            )
+          )}
+
+          {/* 批量创建 - 步骤2：字段配置 */}
+          {createStep === 1 && createMode === 'batch' && (
+            <>
+              {batchObjectIds.length === 0 ? (
+                <Empty description="请先选择本体对象" />
               ) : (
-                <Form.Item name="custom_sql" label="自定义SQL" rules={[{ required: true, message: '请输入SQL语句' }]}>
-                  <TextArea rows={4} placeholder="SELECT * FROM table_name" />
-                </Form.Item>
+                <div style={{ maxHeight: 'calc(100vh - 400px)', overflow: 'auto' }}>
+                  {batchObjectIds.map(objId => {
+                    const obj = objects.find(o => o.id === objId);
+                    if (!obj) return null;
+                    const cols = obj.content?.columns || [];
+                    const selected = batchColumnsMap[objId] || [];
+                    const allSelected = selected.length === cols.length && cols.length > 0;
+                    const someSelected = selected.length > 0 && !allSelected;
+                    return (
+                      <div key={objId} style={{ marginBottom: 20, padding: 12, border: '1px solid #f0f0f0', borderRadius: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                          <span style={{ fontWeight: 600 }}>
+                            {obj.name}
+                            {obj.title && <span style={{ color: '#999', fontWeight: 400, marginLeft: 8 }}>{obj.title}</span>}
+                          </span>
+                          <Checkbox
+                            checked={allSelected}
+                            indeterminate={someSelected}
+                            onChange={e => handleBatchSelectAll(objId, e.target.checked)}
+                          >
+                            全选
+                          </Checkbox>
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 16px', maxHeight: 180, overflow: 'auto' }}>
+                          {cols.map(col => (
+                            <Checkbox
+                              key={col.column_name}
+                              checked={selected.includes(col.column_name)}
+                              onChange={e => handleBatchColumnToggle(objId, col.column_name, e.target.checked)}
+                            >
+                              {col.column_name}
+                              {col.column_name_cn && <span style={{ color: '#999', marginLeft: 4 }}>({col.column_name_cn})</span>}
+                            </Checkbox>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </>
           )}
 
-          {createStep === 1 && (
+          {/* 导出格式步骤 */}
+          {createStep === (createMode === 'batch' ? 2 : 1) && (
             <>
               <Form.Item name="export_format" label="导出格式" rules={[{ required: true, message: '请选择导出格式' }]}>
                 <Radio.Group>
@@ -691,27 +1094,21 @@ const OntologyTaskPage: React.FC = () => {
               </Descriptions.Item>
               <Descriptions.Item label="开始时间">{resultData.task_begin_at || '-'}</Descriptions.Item>
               <Descriptions.Item label="结束时间">{resultData.task_end_at || '-'}</Descriptions.Item>
-              <Descriptions.Item label="耗时(ms)">{resultData.task_duration ?? '-'}</Descriptions.Item>
+              <Descriptions.Item label="耗时">{formatDurationSeconds(resultData.task_duration)}</Descriptions.Item>
               <Descriptions.Item label="执行时间">{resultData.executed_at || '-'}</Descriptions.Item>
               <Descriptions.Item label="数据行数">{resultData.row_count ?? '-'}</Descriptions.Item>
               <Descriptions.Item label="文件格式">{resultData.format || '-'}</Descriptions.Item>
-              <Descriptions.Item label="文件名">{resultData.file_name || '-'}</Descriptions.Item>
               <Descriptions.Item label="链接过期时间">
                 <Text type="warning">{resultData.expire_at || '-'}</Text>
               </Descriptions.Item>
+              <Descriptions.Item label="结果文件">
+                {resultData.has_result ? (
+                  <Link onClick={handleDownloadResult}>{resultData.file_name || '结果文件'}</Link>
+                ) : (
+                  <Text type="secondary">{resultData.message || '暂无结果'}</Text>
+                )}
+              </Descriptions.Item>
             </Descriptions>
-            {resultData.has_result && (
-              <div style={{ marginTop: 16 }}>
-                <Button type="primary" icon={<EyeOutlined />} onClick={handleDownloadResult}>
-                  下载结果文件
-                </Button>
-              </div>
-            )}
-            {!resultData.has_result && (
-              <div style={{ marginTop: 16, color: '#999' }}>
-                {resultData.message || '暂无结果'}
-              </div>
-            )}
           </div>
         ) : (
           <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>加载中...</div>

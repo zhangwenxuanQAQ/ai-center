@@ -1751,7 +1751,29 @@ async def chat_event_lifespan(app: FastAPI):
         if integration_recovered > 0:
             logger.info(f"[CHAT] 恢复了 {integration_recovered} 条插件待澄清消息")
     except Exception as e:
-        logger.warning(f"[CHAT] 恢复插件待澄清消息失败: {e}")
+        logger.warning(f"恢复插件集成待澄清消息失败: {e}")
+
+    # 恢复本体任务队列：重启时清除Redis队列，将残留的"等待执行/运行中"任务标记为已取消（重新执行即可恢复）
+    try:
+        from app.database.redis_utils import redis_utils
+        from app.database.models import OntologyTask
+        from app.constants.ontology_constants import (
+            OntologyTaskStatus, ONTOLOGY_TASK_QUEUE_KEY
+        )
+
+        try:
+            redis_utils.client.delete(ONTOLOGY_TASK_QUEUE_KEY)
+        except Exception:
+            pass
+
+        # 重启后线程已丢失，等待执行/运行中的任务无法继续，标记为已取消（可重新执行）
+        OntologyTask.update(status=OntologyTaskStatus.CANCEL).where(
+            OntologyTask.status.in_([OntologyTaskStatus.WAITING, OntologyTaskStatus.RUNNING]),
+            OntologyTask.deleted == False
+        ).execute()
+        logger.info("[ONTOLOGY] 已清理任务执行队列并重置残留的等待/运行中任务状态")
+    except Exception as e:
+        logger.warning(f"[ONTOLOGY] 恢复任务队列状态失败: {e}")
 
     yield
 

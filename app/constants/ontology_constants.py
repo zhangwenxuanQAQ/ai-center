@@ -38,9 +38,15 @@ ONTOLOGY_EXPORT_FORMAT_LABELS = {
     OntologyExportFormat.MARKDOWN: "Markdown",
 }
 
+ONTOLOGY_EXPORT_FORMAT_FILE_EXT = {
+    OntologyExportFormat.JSON: 'json',
+    OntologyExportFormat.EXCEL: 'xlsx',
+    OntologyExportFormat.MARKDOWN: 'md',
+}
+
 ONTOLOGY_EXPORT_FORMAT_SAMPLES = {
     OntologyExportFormat.JSON: '[\n  {"id": 1, "name": "示例数据", "age": 25},\n  {"id": 2, "name": "示例数据2", "age": 30}\n]',
-    OntologyExportFormat.EXCEL: "Excel表格格式，每行一条记录，列名为字段名",
+    OntologyExportFormat.EXCEL: "Excel表格格式（.xlsx），第一行为字段名表头，后续每行为对应数据",
     OntologyExportFormat.MARKDOWN: "| id | name | age |\n|----|------|-----|\n| 1  | 示例数据 | 25  |\n| 2  | 示例数据2 | 30  |",
 }
 
@@ -48,6 +54,18 @@ ONTOLOGY_EXPORT_FORMAT_SAMPLES = {
 ONTOLOGY_TASK_STREAM_PREFIX = "ontology:task:stream:"
 ONTOLOGY_TASK_STATUS_PREFIX = "ontology:task:status:"
 ONTOLOGY_TASK_RESULT_PREFIX = "ontology:task:result:"
+
+# 任务事件推送频道（SSE实时状态）
+ONTOLOGY_TASK_EVENTS_CHANNEL = "ontology:task:events"
+
+# 任务执行队列（Redis List，先进先出）
+ONTOLOGY_TASK_QUEUE_KEY = "ontology:task:queue"
+
+# 任务并发上限（同时最多执行的任务数，超出排队等待）
+ONTOLOGY_TASK_MAX_CONCURRENT = 5
+
+# 队列调度器轮询间隔（秒）
+ONTOLOGY_TASK_QUEUE_POLL_INTERVAL = 1
 
 # Redis过期时间（24小时）
 ONTOLOGY_TASK_REDIS_EXPIRE = 86400
