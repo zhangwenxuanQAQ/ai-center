@@ -69,6 +69,13 @@ class OntologyTaskCreate(BaseModel):
     configs: Optional[Dict[str, Any]] = Field(None, description="任务配置（包含ontology_object_id/custom_sql/export_format等）")
 
 
+class OntologyTaskUpdate(BaseModel):
+    """数据抽取任务更新DTO"""
+    name: Optional[str] = Field(None, min_length=1, max_length=255, description="任务名称")
+    datasource_id: Optional[str] = Field(None, description="数据源ID")
+    configs: Optional[Dict[str, Any]] = Field(None, description="任务配置（包含ontology_object_id/custom_sql/export_format等）")
+
+
 class OntologyTaskListQuery(BaseModel):
     """任务列表查询参数"""
     name: Optional[str] = Field(None, description="任务名称（模糊查询）")

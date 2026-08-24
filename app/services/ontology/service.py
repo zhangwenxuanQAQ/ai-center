@@ -9,7 +9,7 @@ from typing import Optional, List, Tuple
 
 from app.database.models import OntologyObject, OntologyTask
 from app.services.ontology.dto import (
-    OntologyObjectUpdate, OntologyObjectBatchCreate, OntologyTaskCreate
+    OntologyObjectUpdate, OntologyObjectBatchCreate, OntologyTaskCreate, OntologyTaskUpdate
 )
 from app.constants.ontology_constants import (
     OntologyTaskStatus, OntologyExportFormat,
@@ -18,6 +18,7 @@ from app.constants.ontology_constants import (
 )
 from app.core.ontology.object_core import OntologyObjectCore
 from app.core.ontology.utils import ontology_object_to_dict, task_to_dict
+from app.database.db_utils import handle_transaction
 
 logger = logging.getLogger(__name__)
 
@@ -189,6 +190,7 @@ class OntologyService:
         return task_to_dict(task) if task else None
 
     @staticmethod
+    @handle_transaction
     def create_task(dto: OntologyTaskCreate) -> dict:
         """创建任务"""
         configs = dto.configs or {}
@@ -198,6 +200,32 @@ class OntologyService:
             configs=json.dumps(configs, ensure_ascii=False),
             status=OntologyTaskStatus.PENDING,
         )
+        # id 字段有默认值，实例化后主键非空，需 force_insert=True 否则 save 会执行 UPDATE
+        task.save(force_insert=True)
+        return task_to_dict(task)
+
+    @staticmethod
+    @handle_transaction
+    def update_task(task_id: str, dto: OntologyTaskUpdate) -> Optional[dict]:
+        """更新任务（仅未运行/未结束的任务可编辑）"""
+        task = OntologyTask.select().where(
+            OntologyTask.id == task_id,
+            OntologyTask.deleted == False
+        ).first()
+        if not task:
+            return None
+        if task.status in (OntologyTaskStatus.RUNNING, OntologyTaskStatus.DONE,
+                           OntologyTaskStatus.FAIL, OntologyTaskStatus.CANCEL):
+            return None
+        if dto.name is not None:
+            task.name = dto.name
+        if dto.datasource_id is not None:
+            task.datasource_id = dto.datasource_id
+        if dto.configs is not None:
+            task.configs = json.dumps(dto.configs, ensure_ascii=False)
+            task.status = OntologyTaskStatus.PENDING
+            task.task_progress = 0
+            task.task_progress_message = ''
         task.save()
         return task_to_dict(task)
 

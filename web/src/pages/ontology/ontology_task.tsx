@@ -1,16 +1,16 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Table, Button, Drawer, Input, message, Modal, Space, Tag, Steps,
-  Form, Select, Radio, Descriptions, Typography, Progress
+  Form, Select, Radio, Checkbox, Descriptions, Typography, Progress, Empty, Pagination, Tooltip
 } from 'antd';
 import {
   PlusOutlined, PlayCircleOutlined, PauseCircleOutlined, DeleteOutlined,
-  ReloadOutlined, EyeOutlined, RedoOutlined, SearchOutlined
+  ReloadOutlined, EyeOutlined, RedoOutlined, EditOutlined
 } from '@ant-design/icons';
-import { ontologyService, OntologyTask, ExportFormat, TaskResult } from '../../services/ontology';
+import { ontologyService, OntologyTask, OntologyObject, ExportFormat, TaskResult } from '../../services/ontology';
 import { datasourceService, Datasource } from '../../services/datasource';
 
-const { Text, Paragraph } = Typography;
+const { Text } = Typography;
 const { TextArea } = Input;
 
 const statusColorMap: Record<string, string> = {
@@ -19,23 +19,30 @@ const statusColorMap: Record<string, string> = {
 };
 
 const OntologyTaskPage: React.FC = () => {
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [tasks, setTasks] = useState<OntologyTask[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [searchName, setSearchName] = useState('');
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
-  const pageSize = 20;
+  const [pageSize, setPageSize] = useState(20);
 
   // 创建任务弹窗
   const [createVisible, setCreateVisible] = useState(false);
   const [createStep, setCreateStep] = useState(0);
   const [createForm] = Form.useForm();
+  // 订阅导出格式字段变化，切换时联动显示对应样例
+  const exportFormatValue = Form.useWatch('export_format', createForm);
   const [datasources, setDatasources] = useState<Datasource[]>([]);
-  const [objects, setObjects] = useState<any[]>([]);
+  const [objects, setObjects] = useState<OntologyObject[]>([]);
   const [exportFormats, setExportFormats] = useState<ExportFormat[]>([]);
   const [taskType, setTaskType] = useState<'object' | 'sql'>('object');
-
+  // 选中的本体对象及字段选择
+  const [selectedObject, setSelectedObject] = useState<OntologyObject | null>(null);
+  const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
+  // 编辑任务
+  const [editingTask, setEditingTask] = useState<OntologyTask | null>(null);
   // 结果查看抽屉
   const [resultVisible, setResultVisible] = useState(false);
   const [resultData, setResultData] = useState<TaskResult | null>(null);
@@ -51,78 +58,196 @@ const OntologyTaskPage: React.FC = () => {
       message.error('加载任务列表失败');
     }
     setLoading(false);
-  }, [searchName, page]);
+  }, [searchName, page, pageSize]);
 
   useEffect(() => { loadTasks(); }, [loadTasks]);
 
-  // 打开创建弹窗
-  const handleOpenCreate = async () => {
+  // 主题检测
+  useEffect(() => {
+    const currentTheme = document.body.getAttribute('data-theme') || 'dark';
+    setTheme(currentTheme as 'light' | 'dark');
+    const observer = new MutationObserver(() => {
+      const newTheme = document.body.getAttribute('data-theme') || 'dark';
+      setTheme(newTheme as 'light' | 'dark');
+    });
+    observer.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => observer.disconnect();
+  }, []);
+
+  // 打开创建/编辑弹窗
+  const handleOpenCreate = async (task?: OntologyTask) => {
     setCreateStep(0);
-    setTaskType('object');
+    setSelectedObject(null);
+    setSelectedColumns([]);
     createForm.resetFields();
-    setCreateVisible(true);
-
-    // 加载数据源
-    try {
-      const res = await datasourceService.getDatasources(undefined, 1, 100);
-      setDatasources(res.data || []);
-    } catch (e) {}
-
+    if (task) {
+      // 编辑模式
+      setEditingTask(task);
+      const cfg = task.configs || {};
+      const isSql = !!cfg.custom_sql;
+      setTaskType(isSql ? 'sql' : 'object');
+      createForm.setFieldsValue({
+        name: task.name,
+        datasource_id: task.datasource_id,
+        ontology_object_id: cfg.ontology_object_id,
+        custom_sql: cfg.custom_sql,
+        export_format: cfg.export_format,
+      });
+      // 加载数据源（仅关系型数据库）
+      try {
+        const res = await datasourceService.getDatasources(undefined, 1, 100, undefined, undefined, 'mysql,postgresql,oracle,sql_server');
+        setDatasources(res.data || []);
+      } catch (e) {}
+      // 加载本体对象
+      if (!isSql && task.datasource_id) {
+        try {
+          const res = await ontologyService.getObjects(task.datasource_id, 1, 100);
+          const objList = res.data || [];
+          setObjects(objList);
+          const obj = objList.find(o => o.id === cfg.ontology_object_id) || null;
+          setSelectedObject(obj);
+          if (obj) {
+            const cols = obj.content?.columns || [];
+            const selectedCols = cfg.columns || cols.map(c => c.column_name);
+            setSelectedColumns(selectedCols);
+          }
+        } catch (e) {}
+      }
+    } else {
+      setEditingTask(null);
+      setTaskType('object');
+      // 加载数据源（仅关系型数据库）
+      try {
+        const res = await datasourceService.getDatasources(undefined, 1, 100, undefined, undefined, 'mysql,postgresql,oracle,sql_server');
+        setDatasources(res.data || []);
+      } catch (e) {}
+    }
     // 加载导出格式
     try {
       const res = await ontologyService.getExportFormats();
-      setExportFormats(res.formats || []);
+      const formats = res.formats || [];
+      setExportFormats(formats);
+      // 默认选中第一个导出格式，保证格式样例可见
+      if (formats.length > 0 && !createForm.getFieldValue('export_format')) {
+        createForm.setFieldValue('export_format', formats[0].value);
+      }
     } catch (e) {}
+    setCreateVisible(true);
+  };
+
+  // 编辑任务（仅未运行/未结束状态可编辑）
+  const handleEditTask = (record: OntologyTask) => {
+    if (record.status === 'running' || record.status === 'done'
+      || record.status === 'fail' || record.status === 'cancel') {
+      message.warning('当前任务状态不可编辑');
+      return;
+    }
+    handleOpenCreate(record);
   };
 
   // 选择数据源后加载本体对象
   const handleDatasourceChange = async (dsId: string) => {
+    setSelectedObject(null);
+    setSelectedColumns([]);
+    setObjects([]);
+    if (!dsId) return;
     try {
       const res = await ontologyService.getObjects(dsId, 1, 100);
       setObjects(res.data || []);
     } catch (e) {}
   };
 
+  // 选择本体对象：展示字段列表并默认全选
+  const handleObjectChange = (objectId: string) => {
+    const obj = objects.find(o => o.id === objectId) || null;
+    setSelectedObject(obj);
+    const cols = obj?.content?.columns || [];
+    setSelectedColumns(cols.map(c => c.column_name));
+  };
+
+  // 步骤条点击跳转
+  const handleStepChange = (step: number) => {
+    setCreateStep(step);
+  };
+
   const handleNextStep = () => {
-    if (createStep === 0) {
-      const values = createForm.getFieldsValue();
-      if (!values.datasource_id) {
-        message.warning('请选择数据源');
-        return;
-      }
-      if (taskType === 'object' && !values.ontology_object_id) {
-        message.warning('请选择本体对象');
-        return;
-      }
-      if (taskType === 'sql' && !values.custom_sql) {
-        message.warning('请输入自定义SQL');
-        return;
-      }
-      setCreateStep(1);
+    setCreateStep(1);
+  };
+
+  // 保存时校验全部必填参数（步骤条可跳转，需跨步骤校验）
+  const validateAllFields = (): boolean => {
+    const values = createForm.getFieldsValue(true);
+    // 第1步必填项
+    if (!values.name?.trim()) {
+      message.warning('请输入任务名称');
+      setCreateStep(0);
+      return false;
     }
+    if (!values.datasource_id) {
+      message.warning('请选择数据源');
+      setCreateStep(0);
+      return false;
+    }
+    if (taskType === 'object' && !values.ontology_object_id) {
+      message.warning('请选择本体对象');
+      setCreateStep(0);
+      return false;
+    }
+    if (taskType === 'sql' && !values.custom_sql?.trim()) {
+      message.warning('请输入自定义SQL');
+      setCreateStep(0);
+      return false;
+    }
+    // 第2步必填项
+    if (!values.export_format) {
+      message.warning('请选择导出格式');
+      setCreateStep(1);
+      return false;
+    }
+    return true;
   };
 
   const handleCreateTask = async () => {
+    if (!validateAllFields()) return;
     try {
-      const values = await createForm.validateFields();
+      // 步骤条可跳转，validateFields 只返回当前步骤已挂载字段，需用 getFieldsValue(true) 取全部字段值
+      const values = createForm.getFieldsValue(true);
       const configs: Record<string, any> = {
         export_format: values.export_format,
       };
       if (taskType === 'object') {
         configs.ontology_object_id = values.ontology_object_id;
+        if (selectedObject) {
+          const allCols = (selectedObject.content?.columns || []).map(c => c.column_name);
+          // 传入选中的字段，未选中任何字段时不传
+          if (selectedColumns.length > 0 && selectedColumns.length < allCols.length) {
+            configs.columns = selectedColumns;
+          }
+        }
       } else {
         configs.custom_sql = values.custom_sql;
+        delete configs.ontology_object_id;
       }
-      await ontologyService.createTask({
-        name: values.name,
-        datasource_id: values.datasource_id,
-        configs,
-      });
-      message.success('任务创建成功');
+      if (editingTask) {
+        await ontologyService.updateTask(editingTask.id, {
+          name: values.name,
+          datasource_id: values.datasource_id,
+          configs,
+        });
+        message.success('任务更新成功');
+      } else {
+        await ontologyService.createTask({
+          name: values.name,
+          datasource_id: values.datasource_id,
+          configs,
+        });
+        message.success('任务创建成功');
+      }
       setCreateVisible(false);
       loadTasks();
     } catch (e: any) {
-      message.error(e.message || '创建失败');
+      if (e?.errorFields) return; // 表单校验失败
+      message.error(e.message || (editingTask ? '更新失败' : '创建失败'));
     }
   };
 
@@ -211,7 +336,7 @@ const OntologyTaskPage: React.FC = () => {
   // 批量删除
   const handleBatchDelete = () => {
     if (selectedRowKeys.length === 0) {
-      message.warning('请选择要删除的任务');
+      message.warning('请先勾选要删除的任务');
       return;
     }
     Modal.confirm({
@@ -260,68 +385,160 @@ const OntologyTaskPage: React.FC = () => {
       ),
     },
     {
-      title: '操作', key: 'actions', width: 280,
+      title: '操作', key: 'actions', width: 200, fixed: 'right',
       render: (_: any, record: OntologyTask) => (
-        <Space size="small">
+        <Space size={4}>
           {(record.status === 'pending' || record.status === 'waiting') && (
-            <Button type="link" size="small" icon={<PlayCircleOutlined />} onClick={() => handleStart(record)}>开始</Button>
+            <Tooltip title="开始">
+              <Button type="primary" size="small" icon={<PlayCircleOutlined />} onClick={() => handleStart(record)} />
+            </Tooltip>
           )}
           {record.status === 'running' && (
-            <Button type="link" size="small" icon={<PauseCircleOutlined />} danger onClick={() => handleStop(record)}>停止</Button>
+            <Tooltip title="停止">
+              <Button type="primary" danger size="small" icon={<PauseCircleOutlined />} onClick={() => handleStop(record)} />
+            </Tooltip>
           )}
           {(record.status === 'done' || record.status === 'fail' || record.status === 'cancel') && (
-            <Button type="link" size="small" icon={<RedoOutlined />} onClick={() => handleRerun(record)}>重新执行</Button>
+            <Tooltip title="重新执行">
+              <Button size="small" icon={<RedoOutlined />} onClick={() => handleRerun(record)} />
+            </Tooltip>
           )}
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleViewResult(record)}>结果</Button>
+          <Tooltip title="结果">
+            <Button type="text" size="small" icon={<EyeOutlined />} onClick={() => handleViewResult(record)} />
+          </Tooltip>
+          {(record.status === 'pending' || record.status === 'waiting') && (
+            <Tooltip title="编辑">
+              <Button type="text" size="small" icon={<EditOutlined />} onClick={() => handleEditTask(record)} />
+            </Tooltip>
+          )}
           {record.status !== 'running' && (
-            <Button type="link" size="small" icon={<DeleteOutlined />} danger onClick={() => handleDelete(record)}>删除</Button>
+            <Tooltip title="删除">
+              <Button type="text" danger size="small" icon={<DeleteOutlined />} onClick={() => handleDelete(record)} />
+            </Tooltip>
           )}
         </Space>
       ),
     },
   ];
 
+  // 本体对象字段列表
+  const objectColumnList = selectedObject?.content?.columns || [];
+  const allColumnsSelected = objectColumnList.length > 0
+    && objectColumnList.every(c => selectedColumns.includes(c.column_name));
+  const someColumnsSelected = objectColumnList.some(c => selectedColumns.includes(c.column_name));
+
+  // 抽取字段表格列定义
+  const extractFieldColumns = [
+    {
+      title: '字段名', dataIndex: 'column_name', key: 'column_name', width: 180,
+      render: (text: string) => <Text code>{text}</Text>,
+    },
+    {
+      title: '中文名', dataIndex: 'column_name_cn', key: 'column_name_cn', width: 160,
+      render: (text: string) => text || <Text type="secondary">-</Text>,
+    },
+    {
+      title: '描述', dataIndex: 'column_description', key: 'column_description',
+      ellipsis: true,
+      render: (text: string) => text || <Text type="secondary">-</Text>,
+    },
+  ];
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative', overflow: 'hidden' }}>
       {/* 顶部操作栏 */}
-      <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ fontSize: 16, fontWeight: 600 }}>数据抽取任务</div>
-        <Space>
-          <Input.Search
-            placeholder="搜索任务名称"
-            value={searchName}
-            onChange={e => { setSearchName(e.target.value); setPage(1); }}
-            onSearch={loadTasks}
-            style={{ width: 220 }}
-            allowClear
-          />
-          <Button icon={<ReloadOutlined />} onClick={loadTasks}>刷新</Button>
-          <Button danger onClick={handleBatchDelete} disabled={selectedRowKeys.length === 0}>批量删除</Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenCreate}>创建任务</Button>
-        </Space>
+      <div style={{ padding: '16px 16px 12px', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenCreate}>创建任务</Button>
+        <Button
+          danger
+          icon={<DeleteOutlined />}
+          onClick={handleBatchDelete}
+          disabled={selectedRowKeys.length === 0}
+        >
+          批量删除 ({selectedRowKeys.length})
+        </Button>
+        <Input
+          placeholder="搜索任务名称"
+          value={searchName}
+          onChange={e => setSearchName(e.target.value)}
+          onBlur={() => setPage(1)}
+          style={{
+            width: 200,
+            height: 36,
+            borderRadius: 18,
+            background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
+            border: 'none',
+            boxShadow: 'none',
+            outline: 'none',
+            color: theme === 'dark' ? '#ffffff' : '#000000',
+          }}
+          allowClear
+        />
+        <Button icon={<ReloadOutlined />} onClick={() => {
+          if (page !== 1) {
+            setPage(1);
+          } else {
+            loadTasks();
+          }
+        }}>刷新</Button>
       </div>
 
-      <Table
-        dataSource={tasks}
-        columns={columns}
-        rowKey="id"
-        loading={loading}
-        size="middle"
-        rowSelection={{
-          selectedRowKeys,
-          onChange: (keys) => setSelectedRowKeys(keys as string[]),
-        }}
-        pagination={{
-          current: page, pageSize, total,
-          onChange: (p) => setPage(p),
-          showTotal: (t) => `共 ${t} 条`,
-        }}
-        style={{ flex: 1 }}
-      />
+      {/* 表格区域 */}
+      <div style={{ flex: 1, padding: '0 16px', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        <Table
+          dataSource={tasks}
+          columns={columns}
+          rowKey="id"
+          loading={loading}
+          size="middle"
+          locale={{ emptyText: <Empty description="暂无数据" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
+          pagination={false}
+          scroll={{ x: 900, y: 'calc(100vh - 280px)' }}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: (keys) => setSelectedRowKeys(keys as string[]),
+            preserveSelectedRowKeys: true,
+          }}
+        />
+      </div>
 
-      {/* 创建任务弹窗 */}
+      {/* 底部分页栏 */}
+      <div style={{ paddingTop: '16px', paddingBottom: '16px', borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(0, 0, 0, 0.1)', display: 'flex', justifyContent: 'center' }}>
+        <Pagination
+          current={page}
+          pageSize={pageSize}
+          total={total}
+          onChange={(p) => setPage(p)}
+          onShowSizeChange={(_current, size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
+          showTotal={(t) => `共 ${t} 条记录`}
+          showSizeChanger
+          showQuickJumper
+          pageSizeOptions={['10', '20', '40', '60', '80']}
+          locale={{
+            items_per_page: '条/页',
+            jump_to: '前往',
+            jump_to_confirm: '确定',
+            page: '页',
+            prev_page: '上一页',
+            next_page: '下一页',
+            prev_5: '向前 5 页',
+            next_5: '向后 5 页',
+            prev_3: '向前 3 页',
+            next_3: '向后 3 页',
+            first: '第一页',
+            last: '最后一页'
+          }}
+          className={`pagination ${theme === 'dark' ? 'dark' : 'light'}`}
+          style={{ margin: 0 }}
+        />
+      </div>
+
+      {/* 创建/编辑任务弹窗 */}
       <Modal
-        title="创建数据抽取任务"
+        title={editingTask ? '编辑数据抽取任务' : '创建数据抽取任务'}
         open={createVisible}
         onCancel={() => setCreateVisible(false)}
         width={650}
@@ -329,13 +546,19 @@ const OntologyTaskPage: React.FC = () => {
           <Button key="cancel" onClick={() => setCreateVisible(false)}>取消</Button>,
           createStep === 0 && <Button key="next" type="primary" onClick={handleNextStep}>下一步</Button>,
           createStep === 1 && <Button key="back" onClick={() => setCreateStep(0)}>上一步</Button>,
-          createStep === 1 && <Button key="submit" type="primary" onClick={handleCreateTask}>创建</Button>,
+          createStep === 1 && <Button key="submit" type="primary" onClick={handleCreateTask}>{editingTask ? '保存' : '创建'}</Button>,
         ]}
       >
-        <Steps current={createStep} size="small" style={{ marginBottom: 24 }}>
-          <Steps.Step title="选择数据源与对象" />
-          <Steps.Step title="选择导出格式" />
-        </Steps>
+        <Steps
+          current={createStep}
+          size="small"
+          style={{ marginBottom: 24 }}
+          onChange={handleStepChange}
+          items={[
+            { title: '选择数据源与对象' },
+            { title: '选择导出格式' },
+          ]}
+        />
 
         <Form form={createForm} layout="vertical">
           {createStep === 0 && (
@@ -346,26 +569,76 @@ const OntologyTaskPage: React.FC = () => {
               <Form.Item name="datasource_id" label="数据源" rules={[{ required: true, message: '请选择数据源' }]}>
                 <Select
                   placeholder="请选择数据源"
+                  allowClear
                   onChange={handleDatasourceChange}
                   options={datasources.map(ds => ({ label: ds.name, value: ds.id }))}
+                  notFoundContent="暂无关系型数据源"
                 />
               </Form.Item>
               <div style={{ marginBottom: 16 }}>
-                <Radio.Group value={taskType} onChange={e => setTaskType(e.target.value)}>
+                <Radio.Group value={taskType} onChange={e => { setTaskType(e.target.value); createForm.setFieldValue('ontology_object_id', undefined); setSelectedObject(null); setSelectedColumns([]); }}>
                   <Radio.Button value="object">选择本体对象</Radio.Button>
                   <Radio.Button value="sql">自定义SQL</Radio.Button>
                 </Radio.Group>
               </div>
               {taskType === 'object' ? (
-                <Form.Item name="ontology_object_id" label="本体对象" rules={[{ required: true, message: '请选择本体对象' }]}>
-                  <Select
-                    placeholder="请选择本体对象"
-                    options={objects.map((obj: any) => ({
-                      label: `${obj.title ? obj.title + ' / ' : ''}${obj.name}`,
-                      value: obj.id,
-                    }))}
-                  />
-                </Form.Item>
+                <>
+                  <Form.Item name="ontology_object_id" label="本体对象" rules={[{ required: true, message: '请选择本体对象' }]}>
+                    <Select
+                      placeholder="请选择本体对象"
+                      allowClear
+                      showSearch
+                      optionFilterProp="label"
+                      onChange={handleObjectChange}
+                      notFoundContent="暂无本体对象"
+                      options={objects.map(obj => ({
+                        value: obj.id,
+                        label: obj.name,
+                      }))}
+                      optionRender={(option) => {
+                        const obj = objects.find(o => o.id === option.value);
+                        return (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', overflow: 'hidden' }}>
+                            <span style={{ fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{obj?.name}</span>
+                            {obj?.title && (
+                              <span style={{ fontSize: 12, color: '#999', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{obj.title}</span>
+                            )}
+                          </div>
+                        );
+                      }}
+                    />
+                  </Form.Item>
+                  {selectedObject && (
+                    <div style={{ marginBottom: 8, marginTop: -8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <span style={{ fontSize: 13 }}>抽取字段</span>
+                        <Checkbox
+                          checked={allColumnsSelected}
+                          indeterminate={!allColumnsSelected && someColumnsSelected}
+                          onChange={e => {
+                            const all = (selectedObject.content?.columns || []).map(c => c.column_name);
+                            setSelectedColumns(e.target.checked ? all : []);
+                          }}
+                        >
+                          全选
+                        </Checkbox>
+                      </div>
+                      <Table
+                        dataSource={objectColumnList}
+                        columns={extractFieldColumns}
+                        rowKey="column_name"
+                        size="small"
+                        pagination={false}
+                        scroll={{ y: 200 }}
+                        locale={{ emptyText: '暂无字段' }}
+                        rowSelection={{
+                          selectedRowKeys: selectedColumns,
+                          onChange: (keys) => setSelectedColumns(keys as string[]),
+                        }}
+                      />
+                    </div>
+                  )}
+                </>
               ) : (
                 <Form.Item name="custom_sql" label="自定义SQL" rules={[{ required: true, message: '请输入SQL语句' }]}>
                   <TextArea rows={4} placeholder="SELECT * FROM table_name" />
@@ -386,7 +659,7 @@ const OntologyTaskPage: React.FC = () => {
               <div style={{ marginTop: 16 }}>
                 <div style={{ fontWeight: 600, marginBottom: 8 }}>格式样例：</div>
                 {exportFormats.map(fmt => (
-                  <div key={fmt.value} style={{ display: createForm.getFieldValue('export_format') === fmt.value ? 'block' : 'none' }}>
+                  <div key={fmt.value} style={{ display: exportFormatValue === fmt.value ? 'block' : 'none' }}>
                     <pre style={{
                       background: '#f5f5f5', padding: 12, borderRadius: 6,
                       fontSize: 12, maxHeight: 200, overflow: 'auto', whiteSpace: 'pre-wrap',
@@ -407,6 +680,8 @@ const OntologyTaskPage: React.FC = () => {
         width={700}
         open={resultVisible}
         onClose={() => setResultVisible(false)}
+        getContainer={false}
+        contentWrapperStyle={{ boxShadow: '-8px 0 24px rgba(0,0,0,0.15)' }}
       >
         {resultData ? (
           <div>

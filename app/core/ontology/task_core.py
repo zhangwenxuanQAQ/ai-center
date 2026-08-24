@@ -6,6 +6,7 @@
 import json
 import base64
 import logging
+import re
 import time
 from datetime import datetime, timedelta
 from threading import Thread
@@ -113,6 +114,7 @@ class OntologyTaskCore:
                 ontology_object_id = configs.get('ontology_object_id', '')
                 custom_sql = configs.get('custom_sql', '')
                 export_format = configs.get('export_format', OntologyExportFormat.JSON)
+                selected_columns = configs.get('columns', [])
 
                 # 构建SQL
                 _push_progress("正在构建查询SQL", 0.1)
@@ -122,7 +124,20 @@ class OntologyTaskCore:
                     ontology_obj = OntologyTaskCore._get_ontology_object(ontology_object_id)
                     if not ontology_obj:
                         raise Exception("本体对象不存在")
-                    sql = f"SELECT * FROM {ontology_obj['name']}"
+                    table_name = ontology_obj['name']
+                    # 标识符加反引号需避免误触发SQL校验的危险关键字（如`desc`），仅含特殊字符时加引号
+                    def _quote_ident(ident: str) -> str:
+                        return f"`{ident}`" if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', ident) else ident
+                    # 校验选中的字段是否存在于本体对象字段中，防止SQL注入
+                    if selected_columns:
+                        valid_columns = {col.get('column_name', '') for col in (ontology_obj.get('content', {}).get('columns') or [])}
+                        valid_selected = [c for c in selected_columns if c in valid_columns]
+                        if not valid_selected:
+                            raise Exception("未选择有效的抽取字段")
+                        column_list = ', '.join(_quote_ident(c) for c in valid_selected)
+                        sql = f"SELECT {column_list} FROM {_quote_ident(table_name)}"
+                    else:
+                        sql = f"SELECT * FROM {_quote_ident(table_name)}"
                 else:
                     raise Exception("任务配置缺失：请指定本体对象或自定义SQL")
 

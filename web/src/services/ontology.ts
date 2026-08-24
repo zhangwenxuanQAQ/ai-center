@@ -174,6 +174,15 @@ export const ontologyService = {
     return http.post('/aicenter/v1/ontology/task', data);
   },
 
+  /** 更新任务 */
+  updateTask: async (id: string, data: {
+    name?: string;
+    datasource_id?: string;
+    configs?: Record<string, any>;
+  }): Promise<OntologyTask> => {
+    return http.post(`/aicenter/v1/ontology/task/${id}`, data);
+  },
+
   /** SSE流式获取任务进度 */
   getTaskStreamUrl: (id: string): string => {
     return `${API_BASE_URL}/aicenter/v1/ontology/task/${id}/stream`;

@@ -68,8 +68,35 @@ export async function request<T = any>(
       ...requestConfig,
     });
 
-    // 解析响应体
-    const result: ApiResponse<T> = await response.json();
+    // 解析响应体（非JSON响应时兜底为空）
+    let body: any = null;
+    try {
+      body = await response.json();
+    } catch (e) {}
+
+    // 统一处理后端HTTP错误（4xx/5xx），提取真实错误信息
+    if (!response.ok) {
+      let errMsg = `请求失败 (HTTP ${response.status})`;
+      if (body) {
+        if (typeof body.detail === 'string' && body.detail) {
+          errMsg = body.detail;
+        } else if (Array.isArray(body.detail)) {
+          // Pydantic参数校验错误：提取各项msg
+          const msgs = body.detail.map((d: any) => d?.msg || '').filter(Boolean);
+          if (msgs.length > 0) {
+            errMsg = msgs.join('；');
+          }
+        } else if (body.message) {
+          errMsg = body.message;
+        }
+      }
+      const httpError: any = new Error(errMsg);
+      httpError.isBusinessError = true;
+      httpError.status = response.status;
+      throw httpError;
+    }
+
+    const result: ApiResponse<T> = body;
 
     // 检查业务状态码
     if (result.code !== 200 && result.code !== 201) {

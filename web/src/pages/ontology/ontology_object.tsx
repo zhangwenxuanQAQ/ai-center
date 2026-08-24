@@ -5,9 +5,9 @@ import { Table, Button, Drawer, Input, message, Modal, Space, Dropdown, Popconfi
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, SyncOutlined,
   SearchOutlined, ExportOutlined, ReloadOutlined, FileTextOutlined, SaveOutlined, ClearOutlined,
-  DownOutlined
+  DownOutlined, CopyOutlined
 } from '@ant-design/icons';
-import { ontologyService, OntologyObject } from '../../services/ontology';
+import { ontologyService, OntologyObject, OntologyContent } from '../../services/ontology';
 import { datasourceService, Datasource } from '../../services/datasource';
 import '../../styles/common.css';
 import '../chat/chat.less';
@@ -15,6 +15,252 @@ import '../chat/chat.less';
 const { TextArea } = Input;
 const { Text } = Typography;
 const { Sider: LeftSider, Content } = Layout;
+
+/**
+ * 编辑本体对象抽屉（独立子组件）
+ * 将编辑抽屉的表单、字段表格状态隔离在子组件内，
+ * 输入中文名称时只重渲染子组件，避免触发整个页面（含主列表表格、添加本体弹窗）重渲染导致卡顿。
+ */
+const OntologyEditDrawer: React.FC<{
+  open: boolean;
+  object: OntologyObject | null;
+  datasourceId: string;
+  onClose: () => void;
+  onSave: (id: string, values: { title: string; description: string; content: OntologyContent }) => Promise<void>;
+}> = ({ open, object, datasourceId, onClose, onSave }) => {
+  const [form] = Form.useForm();
+  const [editing, setEditing] = useState<OntologyObject | null>(null);
+  const [descEditingIndex, setDescEditingIndex] = useState<number>(-1);
+  const [descEditingValue, setDescEditingValue] = useState<string>('');
+  const [tables, setTables] = useState<any[]>([]);
+  const [fkColumnsCache, setFkColumnsCache] = useState<Record<string, any[]>>({});
+  const [saving, setSaving] = useState(false);
+
+  // 打开抽屉时加载数据源表列表（供外键表下拉框使用）并预加载已有外键字段
+  useEffect(() => {
+    if (!open || !object) return;
+    setEditing(object);
+    setDescEditingIndex(-1);
+    setDescEditingValue('');
+    setFkColumnsCache({});
+    setTables([]);
+    form.setFieldsValue({ title: object.title, description: object.description });
+    if (!datasourceId) return;
+    datasourceService.listTables(datasourceId).then(res => {
+      setTables(res?.tables || []);
+      const fkTables = [...new Set(
+        (object.content?.columns || [])
+          .map(c => c.foreign_key?.referenced_table)
+          .filter(Boolean)
+      )];
+      fkTables.forEach(async (fkTable) => {
+        try {
+          const fkRes = await datasourceService.getTableColumns(datasourceId, fkTable as string);
+          const colList = (fkRes?.columns || []).map((col: any) => ({
+            column_name: col.column_name || '',
+            data_type: col.data_type || col.column_type || '',
+          }));
+          setFkColumnsCache(prev => ({ ...prev, [fkTable as string]: colList }));
+        } catch {
+          // 忽略加载失败
+        }
+      });
+    }).catch(() => setTables([]));
+  }, [open, object, datasourceId]);
+
+  const handleClose = () => {
+    setEditing(null);
+    onClose();
+  };
+
+  const handleSave = async () => {
+    if (!editing) return;
+    try {
+      const values = await form.validateFields();
+      setSaving(true);
+      await onSave(editing.id, { title: values.title, description: values.description, content: editing.content });
+      setEditing(null);
+      onClose();
+    } catch (e: any) {
+      if (e?.errorFields) return; // 表单校验失败
+      message.error(e.message || '保存失败');
+    }
+    setSaving(false);
+  };
+
+  const handleColumnChange = (colIndex: number, field: string, value: any) => {
+    if (!editing) return;
+    const content = { ...editing.content };
+    const columns = [...(content.columns || [])];
+    columns[colIndex] = { ...columns[colIndex], [field]: value };
+    content.columns = columns;
+    setEditing({ ...editing, content });
+  };
+
+  const handleForeignKeyChange = async (colIndex: number, fkField: string, value: string) => {
+    if (!editing) return;
+    const content = { ...editing.content };
+    const columns = [...(content.columns || [])];
+    const fk = columns[colIndex].foreign_key || { referenced_table: '', referenced_column: '' };
+    if (fkField === 'referenced_table' && value !== fk.referenced_table) {
+      fk.referenced_column = '';
+    }
+    columns[colIndex] = { ...columns[colIndex], foreign_key: { ...fk, [fkField]: value } };
+    content.columns = columns;
+    setEditing({ ...editing, content });
+    if (fkField === 'referenced_table' && value && !fkColumnsCache[value] && datasourceId) {
+      try {
+        const res = await datasourceService.getTableColumns(datasourceId, value);
+        const colList = (res?.columns || []).map((col: any) => ({
+          column_name: col.column_name || '',
+          data_type: col.data_type || col.column_type || '',
+        }));
+        setFkColumnsCache(prev => ({ ...prev, [value]: colList }));
+      } catch {
+        // 忽略加载失败
+      }
+    }
+  };
+
+  const fieldColumns = [
+    { title: '字段名', dataIndex: 'column_name', key: 'column_name', width: 220,
+      render: (text: string) => <Text code>{text}</Text>
+    },
+    { title: '中文名称', dataIndex: 'column_name_cn', key: 'column_name_cn', width: 120,
+      render: (text: string, _: any, index: number) => (
+        <Input size="small" value={text} placeholder="中文名称"
+          onChange={e => handleColumnChange(index, 'column_name_cn', e.target.value)} />
+      )
+    },
+    { title: '主键', dataIndex: 'is_primary_key', key: 'is_primary_key', width: 60,
+      render: (val: boolean, _: any, index: number) => (
+        <Checkbox checked={val} onChange={e => handleColumnChange(index, 'is_primary_key', e.target.checked)} />
+      )
+    },
+    { title: '外键表', key: 'fk_table', width: 100,
+      render: (_: any, record: any, index: number) => (
+        <Select
+          size="small"
+          value={record.foreign_key?.referenced_table || undefined}
+          placeholder="请选择外键表"
+          showSearch
+          allowClear
+          style={{ width: '100%' }}
+          options={tables.map(t => ({ label: t.table_name || t, value: t.table_name || t }))}
+          notFoundContent="暂无表数据"
+          onChange={(val) => handleForeignKeyChange(index, 'referenced_table', val || '')}
+        />
+      )
+    },
+    { title: '外键字段', key: 'fk_column', width: 100,
+      render: (_: any, record: any, index: number) => {
+        const fkTable = record.foreign_key?.referenced_table;
+        const cols = fkTable ? (fkColumnsCache[fkTable] || []) : [];
+        const fkColumns = cols.map((c: any) => ({ label: c.column_name, value: c.column_name }));
+        return (
+          <Select
+            size="small"
+            value={record.foreign_key?.referenced_column || undefined}
+            placeholder={fkTable ? '请选择外键字段' : '请先选择外键表'}
+            showSearch
+            allowClear
+            style={{ width: '100%' }}
+            options={fkColumns}
+            notFoundContent={fkTable ? '暂无字段数据' : '请先选择外键表'}
+            disabled={!fkTable}
+            onChange={(val) => handleForeignKeyChange(index, 'referenced_column', val || '')}
+          />
+        );
+      }
+    },
+    { title: '描述', dataIndex: 'column_description', key: 'column_description', width: 80, align: 'center' as const,
+      render: (text: string, _: any, index: number) => (
+        <Popover
+          trigger="click"
+          placement="leftTop"
+          open={descEditingIndex === index}
+          onOpenChange={(visible) => {
+            if (visible) {
+              setDescEditingIndex(index);
+              setDescEditingValue(text || '');
+            } else if (descEditingIndex === index) {
+              setDescEditingIndex(-1);
+            }
+          }}
+          title="编辑字段描述"
+          content={
+            <div style={{ width: 280 }}>
+              <TextArea
+                rows={4}
+                value={descEditingValue}
+                onChange={e => setDescEditingValue(e.target.value)}
+                placeholder="请输入字段描述"
+                autoFocus
+              />
+              <div style={{ textAlign: 'right', marginTop: 8 }}>
+                <Space size={8}>
+                  <Button size="small" onClick={() => setDescEditingIndex(-1)}>取消</Button>
+                  <Button size="small" type="primary" onClick={() => {
+                    handleColumnChange(index, 'column_description', descEditingValue);
+                    setDescEditingIndex(-1);
+                  }}>保存</Button>
+                </Space>
+              </div>
+            </div>
+          }
+        >
+          <Button
+            type="text"
+            size="small"
+            icon={<FileTextOutlined />}
+            style={text ? { color: 'var(--primary-color)' } : undefined}
+          />
+        </Popover>
+      )
+    },
+  ];
+
+  return (
+    <Drawer
+      title="编辑本体对象"
+      width={700}
+      open={open}
+      onClose={handleClose}
+      getContainer={false}
+      contentWrapperStyle={{ boxShadow: '-8px 0 24px rgba(0,0,0,0.15)' }}
+      styles={{ body: { padding: 24, background: 'var(--bg-color, inherit)', color: 'var(--text-color, inherit)' } }}
+    >
+      {editing && (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 16 }}>
+            <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleSave}>保存</Button>
+          </div>
+          <Form form={form} layout="vertical">
+            <Form.Item label="表名">
+              <Input value={editing.name} disabled />
+            </Form.Item>
+            <Form.Item name="title" label="表中文名称">
+              <Input placeholder="请输入表中文名称" />
+            </Form.Item>
+            <Form.Item name="description" label="表描述">
+              <TextArea rows={2} placeholder="请输入表描述" />
+            </Form.Item>
+          </Form>
+          <div style={{ marginTop: 24 }}>
+            <div style={{ fontWeight: 600, marginBottom: 12, fontSize: 14 }}>字段列表</div>
+            <Table
+              dataSource={editing.content.columns || []}
+              rowKey="column_name"
+              size="small"
+              pagination={false}
+              columns={fieldColumns}
+            />
+          </div>
+        </>
+      )}
+    </Drawer>
+  );
+};
 
 const OntologyObjectPage: React.FC = () => {
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
@@ -35,13 +281,6 @@ const OntologyObjectPage: React.FC = () => {
   // 编辑抽屉
   const [editVisible, setEditVisible] = useState(false);
   const [editObject, setEditObject] = useState<OntologyObject | null>(null);
-  const [editForm] = Form.useForm();
-  // 字段描述编辑popover
-  const [descEditingIndex, setDescEditingIndex] = useState<number>(-1);
-  const [descEditingValue, setDescEditingValue] = useState<string>('');
-  // 编辑抽屉中外键表下拉框数据
-  const [editTables, setEditTables] = useState<any[]>([]);
-  const [editFkColumnsCache, setEditFkColumnsCache] = useState<Record<string, any[]>>({});
 
   // 查询数据抽屉
   const [queryVisible, setQueryVisible] = useState(false);
@@ -359,97 +598,17 @@ const OntologyObjectPage: React.FC = () => {
     }
   };
 
-  // 编辑
+  // 编辑：打开抽屉，字段加载与编辑逻辑封装在子组件内
   const handleEdit = (record: OntologyObject) => {
     setEditObject(record);
-    editForm.setFieldsValue({
-      title: record.title,
-      description: record.description,
-    });
-    setEditFkColumnsCache({});
-    setEditTables([]);
     setEditVisible(true);
-    if (!selectedDatasourceId) return;
-    // 加载数据源所有表列表，供外键表下拉框使用
-    datasourceService.listTables(selectedDatasourceId).then(res => {
-      setTables(res?.tables || []);
-      setEditTables(res?.tables || []);
-      // 预加载已有外键表的字段列表，使外键字段下拉框有选项
-      const fkTables = [...new Set(
-        (record.content?.columns || [])
-          .map(c => c.foreign_key?.referenced_table)
-          .filter(Boolean)
-      )];
-      fkTables.forEach(async (fkTable) => {
-        try {
-          const fkRes = await datasourceService.getTableColumns(selectedDatasourceId, fkTable as string);
-          const colList = (fkRes?.columns || []).map((col: any) => ({
-            column_name: col.column_name || '',
-            data_type: col.data_type || col.column_type || '',
-          }));
-          setEditFkColumnsCache(prev => ({ ...prev, [fkTable as string]: colList }));
-        } catch {
-          // 忽略加载失败
-        }
-      });
-    }).catch(() => {
-      setEditTables([]);
-    });
   };
 
-  const handleEditSave = async () => {
-    if (!editObject) return;
-    try {
-      const values = await editForm.validateFields();
-      const content = editObject.content;
-      await ontologyService.updateObject(editObject.id, {
-        title: values.title,
-        description: values.description,
-        content: content,
-      });
-      message.success('保存成功');
-      setEditVisible(false);
-      loadObjects();
-    } catch (e: any) {
-      message.error(e.message || '保存失败');
-    }
-  };
-
-  // 编辑字段
-  const handleColumnChange = (colIndex: number, field: string, value: any) => {
-    if (!editObject) return;
-    const content = { ...editObject.content };
-    const columns = [...(content.columns || [])];
-    columns[colIndex] = { ...columns[colIndex], [field]: value };
-    content.columns = columns;
-    setEditObject({ ...editObject, content });
-  };
-
-  const handleForeignKeyChange = async (colIndex: number, fkField: string, value: string) => {
-    if (!editObject) return;
-    const content = { ...editObject.content };
-    const columns = [...(content.columns || [])];
-    const fk = columns[colIndex].foreign_key || { referenced_table: '', referenced_column: '' };
-    // 如果选了外键表且与当前不同，清空外键字段
-    if (fkField === 'referenced_table' && value !== fk.referenced_table) {
-      fk.referenced_column = '';
-    }
-    columns[colIndex] = { ...columns[colIndex], foreign_key: { ...fk, [fkField]: value } };
-    content.columns = columns;
-    setEditObject({ ...editObject, content });
-    // 如果选了外键表且字段未缓存，则加载
-    if (fkField === 'referenced_table' && value && !editFkColumnsCache[value] && selectedDatasourceId) {
-      try {
-        const res = await datasourceService.getTableColumns(selectedDatasourceId, value);
-        const colList = (res?.columns || []).map((col: any) => ({
-          column_name: col.column_name || '',
-          data_type: col.data_type || col.column_type || '',
-        }));
-        setEditFkColumnsCache(prev => ({ ...prev, [value]: colList }));
-      } catch {
-        // 忽略加载失败
-      }
-    }
+  // 编辑抽屉保存（由子组件回调）
+  const handleEditSave = async (id: string, values: { title: string; description: string; content: OntologyContent }) => {
+    await ontologyService.updateObject(id, values);
+    message.success('保存成功');
+    loadObjects();
   };
 
   // 删除
@@ -580,6 +739,50 @@ const OntologyObjectPage: React.FC = () => {
     }
   };
 
+  // 查询数据列：固定列宽，内容超过宽度用 Tooltip 展示完整内容并支持复制
+  const copyCellValue = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      message.success('已复制');
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = value;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); message.success('已复制'); }
+      catch { message.error('复制失败'); }
+      document.body.removeChild(ta);
+    }
+  };
+
+  const queryTableColumns = queryColumns.map(col => ({
+    title: col,
+    dataIndex: col,
+    key: col,
+    width: 160,
+    ellipsis: true,
+    render: (value: any) => {
+      const str = value === null || value === undefined ? '' : String(value);
+      if (!str) return <Text type="secondary">-</Text>;
+      return (
+        <Tooltip
+          title={
+            <div style={{ maxWidth: 360, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                <span>{str}</span>
+                <CopyOutlined style={{ cursor: 'pointer', flexShrink: 0 }} onClick={() => copyCellValue(str)} />
+              </div>
+            </div>
+          }
+          placement="topLeft"
+          overlayStyle={{ maxWidth: 400 }}
+        >
+          <span style={{ cursor: 'default' }}>{str}</span>
+        </Tooltip>
+      );
+    },
+  }));
+
   const columns = [
     { title: '名称', dataIndex: 'name', key: 'name', width: 200, sorter: true, defaultSortOrder: 'ascend' as const },
     { title: '中文名', dataIndex: 'title', key: 'title', width: 200, sorter: true,
@@ -607,7 +810,7 @@ const OntologyObjectPage: React.FC = () => {
               { key: 'markdown', label: 'Markdown', onClick: () => handleExport(record, 'markdown') },
             ]
           }}>
-            <Tooltip title="导出">
+            <Tooltip title="导出元数据">
               <Button type="text" size="small" icon={<ExportOutlined />} />
             </Tooltip>
           </Dropdown>
@@ -714,7 +917,7 @@ const OntologyObjectPage: React.FC = () => {
             }}
           >
             <Button icon={<ExportOutlined />} disabled={selectedRowKeys.length === 0}>
-              批量导出 ({selectedRowKeys.length}) <DownOutlined />
+              导出本体 ({selectedRowKeys.length}) <DownOutlined />
             </Button>
           </Dropdown>
           <Input
@@ -814,141 +1017,14 @@ const OntologyObjectPage: React.FC = () => {
         </div>
       </Content>
 
-      {/* 编辑抽屉 */}
-      <Drawer
-        title="编辑本体对象"
-        width={700}
+      {/* 编辑抽屉（独立子组件，隔离重渲染） */}
+      <OntologyEditDrawer
         open={editVisible}
-        onClose={() => setEditVisible(false)}
-        getContainer={false}
-        contentWrapperStyle={{ boxShadow: '-8px 0 24px rgba(0,0,0,0.15)' }}
-        styles={{ body: { padding: 24, background: 'var(--bg-color, inherit)', color: 'var(--text-color, inherit)' } }}
-      >
-        {editObject && (
-          <>
-            <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 16 }}>
-              <Button type="primary" icon={<SaveOutlined />} onClick={handleEditSave}>保存</Button>
-            </div>
-            <Form form={editForm} layout="vertical">
-              <Form.Item label="表名">
-                <Input value={editObject.name} disabled />
-              </Form.Item>
-              <Form.Item name="title" label="表中文名称">
-                <Input placeholder="请输入表中文名称" />
-              </Form.Item>
-              <Form.Item name="description" label="表描述">
-                <TextArea rows={2} placeholder="请输入表描述" />
-              </Form.Item>
-            </Form>
-            <div style={{ marginTop: 24 }}>
-              <div style={{ fontWeight: 600, marginBottom: 12, fontSize: 14 }}>字段列表</div>
-              <Table
-                dataSource={editObject.content.columns || []}
-                rowKey="column_name"
-                size="small"
-                pagination={false}
-                columns={[
-                  { title: '字段名', dataIndex: 'column_name', key: 'column_name', width: 220,
-                    render: (text: string) => <Text code>{text}</Text>
-                  },
-                  { title: '中文名称', dataIndex: 'column_name_cn', key: 'column_name_cn', width: 120,
-                    render: (text: string, _: any, index: number) => (
-                      <Input size="small" value={text} placeholder="中文名称"
-                        onChange={e => handleColumnChange(index, 'column_name_cn', e.target.value)} />
-                    )
-                  },
-                  { title: '主键', dataIndex: 'is_primary_key', key: 'is_primary_key', width: 60,
-                    render: (val: boolean, _: any, index: number) => (
-                      <Checkbox checked={val} onChange={e => handleColumnChange(index, 'is_primary_key', e.target.checked)} />
-                    )
-                  },
-                  { title: '外键表', key: 'fk_table', width: 100,
-                    render: (_: any, record: any, index: number) => (
-                      <Select
-                        size="small"
-                        value={record.foreign_key?.referenced_table || undefined}
-                        placeholder="请选择外键表"
-                        showSearch
-                        allowClear
-                        style={{ width: '100%' }}
-                        options={editTables.map(t => ({ label: t.table_name || t, value: t.table_name || t }))}
-                        notFoundContent="暂无表数据"
-                        onChange={(val) => handleForeignKeyChange(index, 'referenced_table', val || '')}
-                      />
-                    )
-                  },
-                  { title: '外键字段', key: 'fk_column', width: 100,
-                    render: (_: any, record: any, index: number) => {
-                      const fkTable = record.foreign_key?.referenced_table;
-                      const cols = fkTable ? (editFkColumnsCache[fkTable] || []) : [];
-                      const fkColumns = cols.map((c: any) => ({ label: c.column_name, value: c.column_name }));
-                      return (
-                        <Select
-                          size="small"
-                          value={record.foreign_key?.referenced_column || undefined}
-                          placeholder={fkTable ? '请选择外键字段' : '请先选择外键表'}
-                          showSearch
-                          allowClear
-                          style={{ width: '100%' }}
-                          options={fkColumns}
-                          notFoundContent={fkTable ? '暂无字段数据' : '请先选择外键表'}
-                          disabled={!fkTable}
-                          onChange={(val) => handleForeignKeyChange(index, 'referenced_column', val || '')}
-                        />
-                      );
-                    }
-                  },
-                  { title: '描述', dataIndex: 'column_description', key: 'column_description', width: 80, align: 'center' as const,
-                    render: (text: string, _: any, index: number) => (
-                      <Popover
-                        trigger="click"
-                        placement="leftTop"
-                        open={descEditingIndex === index}
-                        onOpenChange={(visible) => {
-                          if (visible) {
-                            setDescEditingIndex(index);
-                            setDescEditingValue(text || '');
-                          } else if (descEditingIndex === index) {
-                            setDescEditingIndex(-1);
-                          }
-                        }}
-                        title="编辑字段描述"
-                        content={
-                          <div style={{ width: 280 }}>
-                            <TextArea
-                              rows={4}
-                              value={descEditingValue}
-                              onChange={e => setDescEditingValue(e.target.value)}
-                              placeholder="请输入字段描述"
-                              autoFocus
-                            />
-                            <div style={{ textAlign: 'right', marginTop: 8 }}>
-                              <Space size={8}>
-                                <Button size="small" onClick={() => setDescEditingIndex(-1)}>取消</Button>
-                                <Button size="small" type="primary" onClick={() => {
-                                  handleColumnChange(index, 'column_description', descEditingValue);
-                                  setDescEditingIndex(-1);
-                                }}>保存</Button>
-                              </Space>
-                            </div>
-                          </div>
-                        }
-                      >
-                        <Button
-                          type="text"
-                          size="small"
-                          icon={<FileTextOutlined />}
-                          style={text ? { color: 'var(--primary-color)' } : undefined}
-                        />
-                      </Popover>
-                    )
-                  },
-                ]}
-              />
-            </div>
-          </>
-        )}
-      </Drawer>
+        object={editObject}
+        datasourceId={selectedDatasourceId}
+        onClose={() => { setEditVisible(false); setEditObject(null); }}
+        onSave={handleEditSave}
+      />
 
       {/* 查询数据抽屉 */}
       <Drawer
@@ -978,9 +1054,9 @@ const OntologyObjectPage: React.FC = () => {
             rowKey={(_, index) => String(index)}
             size="small"
             pagination={false}
-            scroll={{ x: 'max-content', y: 'calc(100vh - 300px)' }}
+            scroll={{ x: queryColumns.length * 160, y: 'calc(100vh - 300px)' }}
             locale={{ emptyText: '暂无数据' }}
-            columns={queryColumns.map(col => ({ title: col, dataIndex: col, key: col, ellipsis: true }))}
+            columns={queryTableColumns}
           />
         </Spin>
       </Drawer>

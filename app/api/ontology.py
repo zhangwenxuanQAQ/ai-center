@@ -9,7 +9,7 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 
 from app.services.ontology.dto import (
-    OntologyObjectUpdate, OntologyObjectBatchCreate, OntologyTaskCreate
+    OntologyObjectUpdate, OntologyObjectBatchCreate, OntologyTaskCreate, OntologyTaskUpdate
 )
 from app.services.ontology.service import OntologyService
 from app.core.ontology import OntologyObjectCore, OntologyTaskCore
@@ -168,6 +168,15 @@ def create_task(dto: OntologyTaskCreate):
     """创建数据抽取任务"""
     task = OntologyService.create_task(dto)
     return ResponseUtil.success(data=task, message="任务创建成功")
+
+
+@router.post("/task/{task_id}", response_model=ApiResponse)
+def update_task(task_id: str, dto: OntologyTaskUpdate):
+    """更新数据抽取任务"""
+    task = OntologyService.update_task(task_id, dto)
+    if not task:
+        return ResponseUtil.error(code=400, message="任务不存在或当前状态不可编辑")
+    return ResponseUtil.success(data=task, message="任务更新成功")
 
 
 @router.post("/task/batch_delete", response_model=ApiResponse)
