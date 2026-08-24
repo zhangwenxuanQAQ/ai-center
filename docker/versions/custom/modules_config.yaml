@@ -1,0 +1,36 @@
+# AI Center 版本配置 - 自定义功能版
+# 此配置用于指定启用的功能模块
+# 系统会自动解析依赖关系，确保依赖的模块也被启用
+
+version: "1.0"
+description: "自定义功能版 - 仅包含指定的功能模块"
+
+# 启用的功能模块列表
+# 可用模块列表：
+# - user: 用户管理（核心模块，必须启用）
+# - llm_model: 模型管理
+# - prompt: 提示词
+# - datasource: 数据源
+# - knowledgebase: 知识库
+# - mcp: MCP服务
+# - toolkit: 工具箱
+# - chatbot: 机器人
+# - chat: 聊天
+# - agent: 智能体
+# - system_monitor: 系统监控
+# - integration: 插件集成
+# - ontology: 本体工作台
+
+# 示例：仅启用基础功能（用户管理 + 模型管理 + 提示词）
+enabled_modules:
+  - user
+  - llm_model
+  - prompt
+  - system_monitor
+
+# 注意：
+# - 系统会自动解析依赖关系
+# - 例如启用 chatbot 时，会自动启用 user, llm_model, prompt, knowledgebase, mcp, toolkit
+# - 例如启用 agent 时，会自动启用 user, llm_model, prompt, knowledgebase, mcp, toolkit, chatbot
+#
+# 如需启用所有模块，请使用 docker/versions/full/ 中的配置

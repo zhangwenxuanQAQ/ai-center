@@ -76,7 +76,7 @@ function AppLayout({ children }: LayoutProps) {
         collapsedWidth={60}
         className={theme === 'dark' ? 'dark-theme-sider' : 'light-theme-sider'}
         collapsed={collapsed}
-        style={{ overflow: 'hidden', height: '100%', display: 'flex', flexDirection: 'column' }}
+        style={{ position: 'relative', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
       >
         {/* Logo */}
         <div style={{
@@ -98,7 +98,7 @@ function AppLayout({ children }: LayoutProps) {
         {/* 左侧菜单栏 */}
         <Menu
           mode="inline"
-          style={{ flex: 1, borderRight: 0, textAlign: 'left' }}
+          style={{ flex: 1, borderRight: 0, textAlign: 'left', overflowY: 'auto', minHeight: 0 }}
           selectedKeys={[currentPath]}
           defaultOpenKeys={['sub1', 'sub2', 'sub3', 'sub4']}
         >
@@ -146,7 +146,7 @@ function AppLayout({ children }: LayoutProps) {
         </Menu>
         
         {/* 折叠按钮 */}
-        <div style={{ position: 'absolute', bottom: 0, width: '100%', padding: '12px', textAlign: 'center', background: theme === 'dark' ? 'rgb(30, 30, 30)' : '#ffffff', borderTop: theme === 'dark' ? '1px solid #333' : '1px solid #e8e8e8' }}>
+        <div style={{ flexShrink: 0, padding: '12px', textAlign: 'center', background: theme === 'dark' ? 'rgb(30, 30, 30)' : '#ffffff', borderTop: theme === 'dark' ? '1px solid #333' : '1px solid #e8e8e8' }}>
           <Button 
             type="text" 
             icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} 

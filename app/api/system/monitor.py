@@ -174,4 +174,23 @@ def get_database_pool_status():
     return ResponseUtil.success(data=pool_status, message="获取数据库连接池状态成功")
 
 
+@router.get("/monitor/version/config", response_model=ApiResponse)
+def get_version_config():
+    """
+    获取当前版本的模块配置信息
+    
+    返回当前版本启用的模块列表、API前缀、前端路由等信息
+    供前端根据版本配置动态渲染菜单和路由
+    
+    Returns:
+        ApiResponse: 统一格式的响应对象，包含版本配置信息
+    """
+    try:
+        from app.versioning import version_manager
+        version_info = version_manager.get_version_info()
+        return ResponseUtil.success(data=version_info, message="获取版本配置成功")
+    except Exception as e:
+        return ResponseUtil.error(message=f"获取版本配置失败: {str(e)}")
+
+
 

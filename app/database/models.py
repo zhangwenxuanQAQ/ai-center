@@ -715,10 +715,13 @@ class OntologyTask(SoftDeleteModel):
         table_name = 'ontology_task'
 
 
-def create_tables():
+def create_tables(enabled_tables: set = None):
     """
     创建所有数据表
     如果表不存在则创建，已存在则不做任何操作
+    
+    Args:
+        enabled_tables: 启用的表名集合，为None时创建所有表
     """
     tables = [
         User,
@@ -756,11 +759,18 @@ def create_tables():
     ]
     
     for table in tables:
+        table_name = table._meta.table_name
+        
+        # 如果指定了启用的表列表，只创建启用的表
+        if enabled_tables is not None and table_name not in enabled_tables:
+            print(f"表 {table_name} 在当前版本中未启用，跳过创建")
+            continue
+        
         if not table.table_exists():
             table.create_table()
-            print(f"表 {table._meta.table_name} 创建成功")
+            print(f"表 {table_name} 创建成功")
         else:
-            print(f"表 {table._meta.table_name} 已存在")
+            print(f"表 {table_name} 已存在")
 
 
 if __name__ == "__main__":

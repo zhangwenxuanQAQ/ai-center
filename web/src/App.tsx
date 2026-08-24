@@ -1,7 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Layout, Menu, Button, Card, Breadcrumb, ConfigProvider, theme as antTheme } from 'antd';
+import { Layout, Menu, Button, Card, Breadcrumb, ConfigProvider, theme as antTheme, Spin } from 'antd';
 import { HomeOutlined, MessageOutlined, SettingOutlined, LogoutOutlined, RobotOutlined, BookOutlined, DatabaseOutlined, CommentOutlined, MoonOutlined, SunOutlined, MenuFoldOutlined, MenuUnfoldOutlined, HistoryOutlined, TeamOutlined, ToolOutlined, FileTextOutlined, CloudServerOutlined, DashboardOutlined, DesktopOutlined, ApartmentOutlined, ArrowLeftOutlined, PartitionOutlined } from '@ant-design/icons';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import './styles/index.css';
 import './styles/common.css';
 import './styles/variables.css';
@@ -32,9 +32,61 @@ import IntegrationSidebarPage from './integration/sidebar/index.tsx';
 import IntegrationPreviewPage from './integration/preview/index.tsx';
 import OntologyObject from './pages/ontology/ontology_object.tsx';
 import OntologyTask from './pages/ontology/ontology_task.tsx';
+import NotFound from './pages/notfound/notfound.tsx';
+import { getVersionConfig, getAvailableMenus, VersionInfo, isModuleEnabled, MenuItemConfig } from './services/versionConfig';
 
 const { Header, Content, Sider } = Layout;
 
+// 页面路由与模块的映射关系
+const routeModuleMap: Record<string, string> = {
+  '/chatbots': 'chatbot',
+  '/chatbot/setting/:id': 'chatbot',
+  '/mcps': 'mcp',
+  '/mcp/setting/:id': 'mcp',
+  '/toolkit': 'toolkit',
+  '/knowledgebases': 'knowledgebase',
+  '/knowledgebase/create': 'knowledgebase',
+  '/knowledgebase/detail/:id': 'knowledgebase',
+  '/llm_models': 'llm_model',
+  '/llm_model/setting/:id': 'llm_model',
+  '/prompts': 'prompt',
+  '/prompt/setting/:id': 'prompt',
+  '/users': 'user',
+  '/chats': 'chat',
+  '/datasources': 'datasource',
+  '/system/monitor': 'system_monitor',
+  '/agents': 'agent',
+  '/agent/setting/:id': 'agent',
+  '/ontology/objects': 'ontology',
+  '/ontology/tasks': 'ontology',
+};
+
+// 路由组件映射
+const routeComponents: Record<string, React.ComponentType> = {
+  '/': Home,
+  '/chatbots': Chatbot,
+  '/chatbot/setting/:id': ChatbotSetting,
+  '/mcps': MCP,
+  '/mcp/setting/:id': MCPSetting,
+  '/toolkit': Toolkit,
+  '/knowledgebases': Knowledgebase,
+  '/knowledgebase/create': KnowledgebaseCreate,
+  '/knowledgebase/detail/:id': KnowledgebaseDetail,
+  '/llm_models': LLMModel,
+  '/llm_model/setting/:id': LLMModelSetting,
+  '/prompts': Prompt,
+  '/prompt/setting/:id': PromptSetting,
+  '/users': User,
+  '/chats': Chat,
+  '/datasources': Datasource,
+  '/system/monitor': SystemMonitor,
+  '/agents': Agent,
+  '/agent/setting/:id': AgentSetting,
+  '/ontology/objects': OntologyObject,
+  '/ontology/tasks': OntologyTask,
+};
+
+// 面包屑映射
 const breadcrumbMap: Record<string, { title: string; path?: string }[]> = {
   '/': [{ title: '首页' }],
   '/chatbots': [{ title: '首页', path: '/' }, { title: '机器人' }],
@@ -73,9 +125,11 @@ const getBreadcrumbItems = (path: string) => {
 interface AppContentProps {
   theme: 'light' | 'dark';
   toggleTheme: () => void;
+  versionInfo: VersionInfo | null;
+  loading: boolean;
 }
 
-function AppContent({ theme, toggleTheme }: AppContentProps) {
+function AppContent({ theme, toggleTheme, versionInfo, loading }: AppContentProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
@@ -84,17 +138,109 @@ function AppContent({ theme, toggleTheme }: AppContentProps) {
     setCollapsed(!collapsed);
   };
 
+  // 根据版本配置获取可用菜单
+  const availableMenus = useMemo(() => {
+    return getAvailableMenus(versionInfo);
+  }, [versionInfo]);
+
+  // 渲染菜单项
+  const renderMenuItems = (menus: MenuItemConfig[]): React.ReactNode[] => {
+    return menus.map(menu => {
+      if (menu.children && menu.children.length > 0) {
+        const SubMenuIcon = getIconComponent(menu.icon);
+        return (
+          <Menu.SubMenu key={menu.key} title={menu.label} icon={SubMenuIcon ? <SubMenuIcon /> : undefined}>
+            {renderMenuItems(menu.children)}
+          </Menu.SubMenu>
+        );
+      } else {
+        const IconComponent = getIconComponent(menu.icon);
+        return (
+          <Menu.Item key={menu.key} icon={IconComponent ? <IconComponent /> : undefined}>
+            {menu.path ? <Link to={menu.path}>{menu.label}</Link> : menu.label}
+          </Menu.Item>
+        );
+      }
+    });
+  };
+
+  // 获取图标组件
+  function getIconComponent(iconName?: string): React.ComponentType | null {
+    const iconMap: Record<string, React.ComponentType> = {
+      'HomeOutlined': HomeOutlined,
+      'MessageOutlined': MessageOutlined,
+      'RobotOutlined': RobotOutlined,
+      'BookOutlined': BookOutlined,
+      'ApartmentOutlined': ApartmentOutlined,
+      'DatabaseOutlined': DatabaseOutlined,
+      'CommentOutlined': CommentOutlined,
+      'SettingOutlined': SettingOutlined,
+      'CloudServerOutlined': CloudServerOutlined,
+      'FileTextOutlined': FileTextOutlined,
+      'DesktopOutlined': DesktopOutlined,
+      'DashboardOutlined': DashboardOutlined,
+      'HistoryOutlined': HistoryOutlined,
+      'TeamOutlined': TeamOutlined,
+      'PartitionOutlined': PartitionOutlined,
+      'ToolOutlined': ToolOutlined,
+    };
+    return iconName ? (iconMap[iconName] || null) : null;
+  }
+
+  // 检查路由是否启用
+  const isRouteAvailable = (path: string): boolean => {
+    if (!versionInfo) return true;
+    if (path === '/' || path === '') return true;
+    const moduleName = routeModuleMap[path];
+    if (!moduleName) return true;
+    return isModuleEnabled(moduleName, versionInfo);
+  };
+
   // 集成页面路由 - 不使用主布局
   if (location.pathname.startsWith('/integration/')) {
+    // 检查integration模块是否启用
+    if (versionInfo && !isModuleEnabled('integration', versionInfo)) {
+      return <NotFound />;
+    }
     return (
       <Routes>
         <Route path="/integration/chat" element={<IntegrationChatPage />} />
         <Route path="/integration/sidebar" element={<IntegrationSidebarPage />} />
         <Route path="/integration/preview" element={<IntegrationPreviewPage />} />
         <Route path="/integration/preview/:token" element={<IntegrationPreviewPage />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     );
   }
+
+  if (loading) {
+    return (
+      <Layout style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <Spin size="large" tip="加载中..." />
+      </Layout>
+    );
+  }
+
+  // 动态路由渲染
+  const renderRoutes = () => {
+    const routes: React.ReactNode[] = [];
+    
+    // 首页始终可用
+    routes.push(<Route key="home" path="/" element={<Home />} />);
+
+    // 根据启用的模块注册路由
+    Object.entries(routeComponents).forEach(([path, Component]) => {
+      if (path === '/') return; // 首页已处理
+      if (isRouteAvailable(path)) {
+        routes.push(<Route key={path} path={path} element={<Component />} />);
+      }
+    });
+
+    // 404 通配符路由
+    routes.push(<Route key="notfound" path="*" element={<NotFound />} />);
+
+    return routes;
+  };
 
   return (
     <Layout style={{ height: '100vh', overflow: 'hidden' }} className={theme === 'dark' ? 'dark-theme' : 'light-theme'}>
@@ -105,7 +251,7 @@ function AppContent({ theme, toggleTheme }: AppContentProps) {
           collapsedWidth={60} 
           className={theme === 'dark' ? 'dark-theme-sider' : 'light-theme-sider'}
           collapsed={collapsed}
-          style={{ overflow: 'hidden', height: '100%', display: 'flex', flexDirection: 'column' }}
+          style={{ position: 'relative', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
         >
            <div style={{ display: 'flex', alignItems: 'center', gap: 12,height:69,paddingLeft:24,borderBottom:'1px solid', borderBottomColor: theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#e8eaed' }}>
             <img
@@ -118,61 +264,13 @@ function AppContent({ theme, toggleTheme }: AppContentProps) {
           <Menu
             mode="inline"
             className="hide-scrollbar"
-            style={{ flex: 1, borderRight: 0, textAlign: 'left', overflowY: 'auto' }}
+            style={{ flex: 1, borderRight: 0, textAlign: 'left', overflowY: 'auto', minHeight: 0 }}
             defaultSelectedKeys={['1']}
-            defaultOpenKeys={['sub1', 'sub2', 'sub3', 'sub4', 'sub5']}
+            defaultOpenKeys={availableMenus.map(m => m.key)}
           >
-            <Menu.Item key="1" icon={<HomeOutlined />}>
-              <Link to="/">首页</Link>
-            </Menu.Item>
-            <Menu.SubMenu key="sub1" title="聊天" icon={<TeamOutlined />}>
-              <Menu.Item key="2" icon={<MessageOutlined />}>
-                <Link to="/chats">聊天</Link>
-              </Menu.Item>
-            </Menu.SubMenu>
-            <Menu.SubMenu key="sub5" title="本体工作台" icon={<PartitionOutlined />}>
-              <Menu.Item key="ontology-objects" icon={<DatabaseOutlined />}>
-                <Link to="/ontology/objects">本体对象</Link>
-              </Menu.Item>
-              <Menu.Item key="ontology-tasks" icon={<CloudServerOutlined />}>
-                <Link to="/ontology/tasks">数据抽取</Link>
-              </Menu.Item>
-            </Menu.SubMenu>
-            <Menu.SubMenu key="sub2" title="配置" icon={<ToolOutlined />}>
-              <Menu.Item key="3" icon={<RobotOutlined />}>
-                <Link to="/chatbots">机器人</Link>
-              </Menu.Item>
-              <Menu.Item key="4" icon={<BookOutlined />}>
-                <Link to="/knowledgebases">知识库</Link>
-              </Menu.Item>
-              <Menu.Item key="agent" icon={<ApartmentOutlined />}>
-                <Link to="/agents">智能体</Link>
-              </Menu.Item>
-              <Menu.Item key="5" icon={<DatabaseOutlined />}>
-                <Link to="/toolkit">工具箱</Link>
-              </Menu.Item>
-              <Menu.Item key="6" icon={<CommentOutlined />}>
-                <Link to="/prompts">提示词</Link>
-              </Menu.Item>
-              <Menu.Item key="7" icon={<SettingOutlined />}>
-                <Link to="/llm_models">模型管理</Link>
-              </Menu.Item>
-              <Menu.Item key="8" icon={<CloudServerOutlined />}>
-                <Link to="/datasources">数据源</Link>
-              </Menu.Item>
-            </Menu.SubMenu>
-            <Menu.SubMenu key="sub3" title="日志" icon={<FileTextOutlined />}>
-              <Menu.Item key="9" icon={<HistoryOutlined />}>
-                <Link to="/chats">问答日志</Link>
-              </Menu.Item>
-            </Menu.SubMenu>
-            <Menu.SubMenu key="sub4" title="系统" icon={<DesktopOutlined />}>
-            <Menu.Item key="10" icon={<DashboardOutlined />}>
-              <Link to="/system/monitor">监控</Link>
-            </Menu.Item>
-          </Menu.SubMenu>
+            {renderMenuItems(availableMenus)}
           </Menu>
-          <div style={{ padding: '12px', textAlign: 'center', background: theme === 'dark' ? '#1a1a2e' : '#ffffff', borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #e8eaed' }}>
+          <div style={{ flexShrink: 0, padding: '12px', textAlign: 'center', background: theme === 'dark' ? '#1a1a2e' : '#ffffff', borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #e8eaed' }}>
             <Button 
               type="text" 
               icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} 
@@ -184,8 +282,6 @@ function AppContent({ theme, toggleTheme }: AppContentProps) {
         <Layout style={{ padding: '0', overflow: 'hidden', height: '100%', background: theme === 'dark' ? 'linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%)' : '#f5f7fa', }}>
            <Header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: theme === 'dark' ? '#1a1a2e' : '#ffffff', height: 69, flexShrink: 0, borderBottom: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #e8e8e8' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-        
-          {/* <div style={{ width: 1, height: 24, background: theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#e8eaed' }} /> */}
           <Breadcrumb style={{ color: theme === 'dark' ? '#e0e0e0' : '#333333', fontSize: 14 }}>
             {getBreadcrumbItems(location.pathname).map((item, index) => (
               <Breadcrumb.Item key={index}>
@@ -232,7 +328,6 @@ function AppContent({ theme, toggleTheme }: AppContentProps) {
       </Header>
           <Content
             style={{
-             
               padding: 16,
               margin: 16,
               height: '100%',
@@ -242,51 +337,9 @@ function AppContent({ theme, toggleTheme }: AppContentProps) {
               overflow: 'hidden'
             }}
           >
-            <div 
-              style={{height:'100%'}}
-              // style={{ 
-              //   background: 'transparent',
-              //   borderColor: 'transparent',
-              //   borderRadius: 0,
-              //   flex: 1,
-              //   overflow: 'hidden',
-              //   display: 'flex',
-              //   flexDirection: 'column',
-              //   height: '100%'
-              // }}
-              // bodyStyle={{ 
-              //   background: 'transparent',
-              //   color: theme === 'dark' ? '#e0e0e0' : '#333333',
-              //   height: '100%',
-              //   overflow: 'hidden',
-              //   flex: 1,
-              //   display: 'flex',
-              //   flexDirection: 'column',
-              //   padding: 0
-              // }}
-            >
+            <div style={{height:'100%'}}>
               <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/chatbots" element={<Chatbot />} />
-                <Route path="/chatbot/setting/:id" element={<ChatbotSetting />} />
-                <Route path="/mcps" element={<MCP />} />
-                <Route path="/mcp/setting/:id" element={<MCPSetting />} />
-                <Route path="/toolkit" element={<Toolkit />} />
-                <Route path="/knowledgebases" element={<Knowledgebase />} />
-                <Route path="/knowledgebase/create" element={<KnowledgebaseCreate />} />
-                <Route path="/knowledgebase/detail/:id" element={<KnowledgebaseDetail />} />
-                <Route path="/llm_models" element={<LLMModel />} />
-                <Route path="/llm_model/setting/:id" element={<LLMModelSetting />} />
-                <Route path="/prompts" element={<Prompt />} />
-                <Route path="/prompt/setting/:id" element={<PromptSetting />} />
-                <Route path="/users" element={<User />} />
-                <Route path="/chats" element={<Chat />} />
-                <Route path="/datasources" element={<Datasource />} />
-                <Route path="/system/monitor" element={<SystemMonitor />} />
-                <Route path="/agents" element={<Agent />} />
-            <Route path="/agent/setting/:id" element={<AgentSetting />} />
-            <Route path="/ontology/objects" element={<OntologyObject />} />
-            <Route path="/ontology/tasks" element={<OntologyTask />} />
+                {renderRoutes()}
               </Routes>
             </div>
           </Content>
@@ -302,10 +355,28 @@ function App() {
     return (savedTheme as 'light' | 'dark') || 'dark';
   });
 
+  const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
     document.body.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
   }, [theme]);
+
+  // 加载版本配置
+  useEffect(() => {
+    const loadVersion = async () => {
+      try {
+        const config = await getVersionConfig();
+        setVersionInfo(config);
+      } catch (e) {
+        console.warn('[VERSION] 加载版本配置失败，使用默认配置');
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadVersion();
+  }, []);
 
   const toggleTheme = () => {
     setTheme(theme === 'light' ? 'dark' : 'light');
@@ -325,9 +396,9 @@ function App() {
       cssVar={true}
       hashed={false}
     >
-    <Router>
-      <AppContent theme={theme} toggleTheme={toggleTheme} />
-    </Router>
+      <Router>
+        <AppContent theme={theme} toggleTheme={toggleTheme} versionInfo={versionInfo} loading={loading} />
+      </Router>
     </ConfigProvider>
   );
 }

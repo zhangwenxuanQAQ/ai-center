@@ -1,0 +1,41 @@
+# AI Center 版本配置 - 满血版（所有功能模块）
+# 此配置启用所有功能模块，包含完整功能
+# 用于打包"满血版"镜像
+
+version: "1.0"
+description: "满血版 - 包含所有功能模块"
+
+enabled_modules:
+  - user
+  - llm_model
+  - prompt
+  - datasource
+  - knowledgebase
+  - mcp
+  - toolkit
+  - chatbot
+  - chat
+  - agent
+  - system_monitor
+  - integration
+  - ontology
+
+# 说明：
+# - 此配置文件用于指定镜像中启用的功能模块
+# - 系统会自动解析依赖关系，确保启用模块的所有依赖也被启用
+# - 如需定制版本，请使用 docker/versions/custom/ 目录作为模板
+#
+# 模块列表（全部可用）：
+# - user: 用户管理（核心模块，必须启用）
+# - llm_model: 模型管理
+# - prompt: 提示词
+# - datasource: 数据源
+# - knowledgebase: 知识库
+# - mcp: MCP服务
+# - toolkit: 工具箱
+# - chatbot: 机器人
+# - chat: 聊天
+# - agent: 智能体
+# - system_monitor: 系统监控
+# - integration: 插件集成
+# - ontology: 本体工作台

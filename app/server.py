@@ -38,6 +38,12 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# 先加载版本配置，再导入路由（确保路由注册时版本管理器已初始化）
+from app.versioning import version_manager
+version_manager.load_config()
+enabled_tables = version_manager.get_enabled_tables()
+logger.info(f"[VERSION] 已启用模块关联的数据库表: {sorted(enabled_tables)}")
+
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -83,7 +89,8 @@ try:
         raise Exception("数据库连接失败")
     
     logger.info("\n[DB] 正在初始化数据表...")
-    create_tables()
+    # 根据版本配置创建表，只创建启用模块关联的表
+    create_tables(enabled_tables=enabled_tables)
     logger.info("[DB] ✅ 数据表初始化完成")
     
 except Exception as e:
@@ -2078,9 +2085,52 @@ app.add_exception_handler(Exception, general_exception_handler)
 # 注册主路由（前缀/aicenter/v1）
 app.include_router(router, prefix="/aicenter/v1")
 
-# 单独注册integration API路由（前缀/aicenter/api，用于OpenAI兼容的对外API）
-from app.api import integration_api_router
-app.include_router(integration_api_router, prefix="/aicenter/api", tags=["integration_api"])
+# 根据版本配置条件性注册integration API路由
+# 只有integration模块启用时才注册
+if version_manager.is_module_enabled('integration'):
+    from app.api import integration_api_router
+    app.include_router(integration_api_router, prefix="/aicenter/api", tags=["integration_api"])
+    logger.info("[VERSION] 已注册 integration API 路由 (/aicenter/api)")
+else:
+    logger.info("[VERSION] integration 模块未启用，跳过注册 /aicenter/api 路由")
+
+
+# API访问控制中间件 - 拦截对禁用模块API的请求
+@app.middleware("http")
+async def version_access_control_middleware(request: Request, call_next):
+    """
+    版本访问控制中间件
+    拦截对禁用模块API的请求，返回403错误
+    """
+    import re
+    
+    path = request.url.path
+    
+    # 版本配置端点始终允许访问（用于前端判断功能可用性）
+    if '/version/config' in path:
+        return await call_next(request)
+    
+    # 只对 /aicenter/v1/ 开头的API路径进行检查
+    if path.startswith('/aicenter/v1/'):
+        # 提取模块前缀
+        match = re.match(r'^/aicenter/v1/([^/]+)', path)
+        if match:
+            module_prefix = match.group(1)
+            
+            # 检查该前缀是否属于启用的模块
+            enabled_prefixes = version_manager.get_enabled_api_prefixes()
+            full_prefix = f'/{module_prefix}'
+            
+            if full_prefix not in enabled_prefixes:
+                # 返回403 Forbidden
+                response = ResponseUtil.error(
+                    code=ResponseCode.FORBIDDEN,
+                    message=f'模块 {module_prefix} 在当前版本中不可用'
+                )
+                json_response = JSONResponse(content=response.model_dump(), status_code=403)
+                return _apply_cors_headers(json_response, request)
+    
+    return await call_next(request)
 
 if __name__ == "__main__":
     # 此文件不再直接启动服务
