@@ -1822,12 +1822,18 @@ async def custom_redoc_html():
         redoc_js_url="/static/swagger-ui/redoc.standalone.js",
     )
 
+# CORS 配置（同时供 CORSMiddleware 与错误响应补充CORS头复用）
+CORS_ALLOW_ORIGINS = ["*"]
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_METHODS = ["*"]
+CORS_ALLOW_HEADERS = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=CORS_ALLOW_ORIGINS,
+    allow_credentials=CORS_ALLOW_CREDENTIALS,
+    allow_methods=CORS_ALLOW_METHODS,
+    allow_headers=CORS_ALLOW_HEADERS,
 )
 
 @app.middleware("http")
@@ -1912,7 +1918,9 @@ async def base_service_error_handler(request: Request, exc: BaseServiceError):
         message=exc.message,
         data={"error_type": exc.__class__.__name__, "detail": exc.detail}
     )
-    return JSONResponse(content=response.model_dump(), status_code=ResponseCode.INTERNAL_ERROR)
+    # 500 响应绕过 CORSMiddleware，需手动补充 CORS 头，否则跨域前端无法读取错误信息
+    json_response = JSONResponse(content=response.model_dump(), status_code=ResponseCode.INTERNAL_ERROR)
+    return _apply_cors_headers(json_response, request)
 
 async def resource_not_found_error_handler(request: Request, exc: ResourceNotFoundError):
     """
@@ -1988,14 +1996,49 @@ async def value_error_handler(request: Request, exc: ValueError):
     return JSONResponse(content=response.model_dump(), status_code=400)
 
 # 添加通用异常处理器
+def _apply_cors_headers(response: JSONResponse, request: Request) -> JSONResponse:
+    """
+    为响应补充CORS头。
+
+    背景：Starlette 1.x 将 500/Exception 处理器挂载到最外层 ServerErrorMiddleware，
+    其生成的响应会绕过内层的 CORSMiddleware，导致 500 等错误响应缺少 CORS 头。
+    跨域场景下浏览器无法读取无 CORS 头的响应体，fetch 直接抛 "Failed to fetch"，
+    前端表现为"网络连接失败"。此处与 CORSMiddleware 行为保持一致地补充 CORS 头。
+
+    Args:
+        response: 响应对象
+        request: 请求对象
+
+    Returns:
+        JSONResponse: 已补充CORS头的响应
+    """
+    origin = request.headers.get("origin")
+    if not origin:
+        return response
+    headers = response.headers
+    allow_all = "*" in CORS_ALLOW_ORIGINS
+    if allow_all:
+        # 与 CORSMiddleware 一致：allow_all + allow_credentials 时回显具体 Origin
+        if CORS_ALLOW_CREDENTIALS:
+            headers["Access-Control-Allow-Origin"] = origin
+            headers.add_vary_header("Origin")
+        else:
+            headers["Access-Control-Allow-Origin"] = "*"
+    elif origin in CORS_ALLOW_ORIGINS:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers.add_vary_header("Origin")
+    if CORS_ALLOW_CREDENTIALS:
+        headers["Access-Control-Allow-Credentials"] = "true"
+    return response
+
 async def general_exception_handler(request: Request, exc: Exception):
     """
     处理所有未捕获的异常
-    
+
     Args:
         request: 请求对象
         exc: 异常对象
-        
+
     Returns:
         JSONResponse: 统一格式的响应
     """
@@ -2003,7 +2046,9 @@ async def general_exception_handler(request: Request, exc: Exception):
         code=ResponseCode.INTERNAL_ERROR,
         message=f"服务器内部错误: {str(exc)}"
     )
-    return JSONResponse(content=response.model_dump(), status_code=500)
+    # 500 响应绕过 CORSMiddleware，需手动补充 CORS 头，否则跨域前端无法读取错误信息
+    json_response = JSONResponse(content=response.model_dump(), status_code=500)
+    return _apply_cors_headers(json_response, request)
 
 app.add_exception_handler(ValueError, value_error_handler)
 app.add_exception_handler(Exception, general_exception_handler)
