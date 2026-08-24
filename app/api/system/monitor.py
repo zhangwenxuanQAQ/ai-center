@@ -15,7 +15,7 @@ def get_system_version():
     """
     获取系统版本号
     
-    从PROJECT_VERSION文件读取系统版本信息
+    从 pyproject.toml 读取系统版本信息
     
     Returns:
         ApiResponse: 统一格式的响应对象，包含版本号

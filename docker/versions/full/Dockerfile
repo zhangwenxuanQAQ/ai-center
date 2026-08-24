@@ -67,7 +67,6 @@ COPY app/core/knowledgebase/rag/res/nltk_data /root/nltk_data
 COPY 9b5ad71b2ce5302211f9c61530b329a4922fc6a4 9b5ad71b2ce5302211f9c61530b329a4922fc6a4
 # [MODULE:knowledgebase:END]
 # ===== 模块特定文件结束 =====
-COPY PROJECT_VERSION PROJECT_VERSION
 
 RUN rm -rf ./app/test
 

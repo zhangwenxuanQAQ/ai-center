@@ -37,19 +37,24 @@ class MonitorService:
         """
         获取系统版本号
         
-        从项目根目录的PROJECT_VERSION文件读取版本信息
+        从项目根目录的 pyproject.toml 读取版本信息
         
         Returns:
             str: 系统版本号
         """
         try:
-            version_path = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
-                'PROJECT_VERSION'
-            )
-            if os.path.exists(version_path):
-                with open(version_path, 'r', encoding='utf-8') as f:
-                    return f.read().strip()
+            import tomllib
+            from pathlib import Path
+            
+            project_root = Path(__file__).parent.parent.parent.parent
+            pyproject_path = project_root / "pyproject.toml"
+            
+            if pyproject_path.exists():
+                with open(pyproject_path, "rb") as f:
+                    data = tomllib.load(f)
+                    project = data.get("project", {})
+                    version = project.get("version", "0.1.0")
+                    return version
             return "unknown"
         except Exception as e:
             logger.error(f"读取版本号失败: {e}")
