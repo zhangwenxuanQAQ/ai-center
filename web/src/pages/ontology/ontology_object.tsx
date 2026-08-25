@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Table, Button, Drawer, Input, message, Modal, Space, Dropdown, Popconfirm,
-  Form, Spin, Checkbox, Typography, Layout, Empty, Tooltip, Select, Pagination, Popover
+  Form, Spin, Checkbox, Typography, Layout, Empty, Tooltip, Select, Pagination, Popover, Progress
 } from 'antd';
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, SyncOutlined,
@@ -9,6 +9,7 @@ import {
 } from '@ant-design/icons';
 import { ontologyService, OntologyObject, OntologyContent } from '../../services/ontology';
 import { datasourceService, Datasource } from '../../services/datasource';
+import { getDatasourceIcon as getDatasourceIconSvg } from '../../utils/avatar';
 import '../../styles/common.css';
 import '../chat/chat.less';
 
@@ -303,6 +304,9 @@ const OntologyObjectPage: React.FC = () => {
   const [tableEdits, setTableEdits] = useState<Record<string, { title: string; description: string; columns: any[] }>>({});
   // 外键表字段缓存 { table_name: [{ column_name, ... }] }
   const [fkTableColumnsCache, setFkTableColumnsCache] = useState<Record<string, any[]>>({});
+  // 批量创建进度
+  const [batchCreating, setBatchCreating] = useState(false);
+  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
   // 拖拽分隔线
   const [leftWidth, setLeftWidth] = useState(260);
   const dragRef = useRef(false);
@@ -549,43 +553,56 @@ const OntologyObjectPage: React.FC = () => {
       return;
     }
     try {
-      // 为每个选中的表组装content（包含表信息和字段信息）
-      const buildColumns = (cols: any[]) => cols.map((col: any) => ({
-        column_name: col.column_name || '',
-        column_name_cn: col.column_comment || col.column_name_cn || '',
-        column_description: col.column_comment || col.column_description || '',
-        data_type: col.data_type || col.column_type || '',
-        is_primary_key: col.is_primary_key || col.column_key === 'PRI' || false,
-        is_nullable: col.is_nullable !== 'NO' && col.is_nullable !== false,
-        foreign_key: col.foreign_key || null,
-      }));
+      setBatchCreating(true);
+      setBatchProgress({ current: 0, total: selectedTables.length });
 
-      // 并行加载未预览表的字段
-      const loadPromises = selectedTables.map(async (name) => {
+      // 为每个选中的表组装数据（不再前端查询字段，由后端按需查询）
+      const objects = selectedTables.map(name => {
         const edits = tableEdits[name];
-        if (edits) {
-          return { name, title: edits.title, description: edits.description, columns: edits.columns };
+        if (edits && edits.columns && edits.columns.length > 0) {
+          // 已预览/编辑过的表，发送编辑后的字段信息
+          const buildColumns = (cols: any[]) => cols.map((col: any) => ({
+            column_name: col.column_name || '',
+            column_name_cn: col.column_comment || col.column_name_cn || '',
+            column_description: col.column_comment || col.column_description || '',
+            data_type: col.data_type || col.column_type || '',
+            is_primary_key: col.is_primary_key || col.column_key === 'PRI' || false,
+            is_nullable: col.is_nullable !== 'NO' && col.is_nullable !== false,
+            foreign_key: col.foreign_key || null,
+          }));
+          return {
+            name,
+            title: edits.title || '',
+            description: edits.description || '',
+            content: {
+              table_name: name,
+              title: edits.title || '',
+              description: edits.description || '',
+              columns: buildColumns(edits.columns),
+            },
+          };
+        } else {
+          // 未预览的表，只发送基本信息，由后端查询字段
+          const tableInfo = tables.find(t => (t.table_name || t) === name);
+          return {
+            name,
+            title: '',
+            description: tableInfo?.table_comment || '',
+            content: {
+              table_name: name,
+              title: '',
+              description: tableInfo?.table_comment || '',
+              columns: [],
+            },
+          };
         }
-        // 未预览的表，加载字段
-        const res = await datasourceService.getTableColumns(selectedDatasourceId, name);
-        const columns = buildColumns(res?.columns || []);
-        const tableInfo = tables.find(t => (t.table_name || t) === name);
-        return { name, title: '', description: tableInfo?.table_comment || '', columns };
       });
-      const tableDataList = await Promise.all(loadPromises);
 
-      const objects = tableDataList.map(item => ({
-        name: item.name,
-        title: item.title ?? '',
-        description: item.description ?? '',
-        content: {
-          table_name: item.name,
-          title: item.title ?? '',
-          description: item.description ?? '',
-          columns: item.columns,
-        },
-      }));
+      setBatchProgress({ current: Math.ceil(selectedTables.length / 2), total: selectedTables.length });
       const results = await ontologyService.batchCreateObjects(selectedDatasourceId, objects);
+      
+      setBatchProgress({ current: selectedTables.length, total: selectedTables.length });
+      
       if (results && results.length > 0) {
         message.success(`成功创建${results.length}个本体对象`);
       } else {
@@ -598,6 +615,9 @@ const OntologyObjectPage: React.FC = () => {
       loadObjects();
     } catch (e: any) {
       message.error(e.message || '创建失败');
+    } finally {
+      setBatchCreating(false);
+      setBatchProgress({ current: 0, total: 0 });
     }
   };
 
@@ -618,6 +638,8 @@ const OntologyObjectPage: React.FC = () => {
   const handleDelete = (record: OntologyObject) => {
     Modal.confirm({
       title: '确认删除',
+      okText: '确定',
+      cancelText: '取消',
       content: `确定要删除本体对象 "${record.name}" 吗？`,
       onOk: async () => {
         try {
@@ -833,11 +855,12 @@ const OntologyObjectPage: React.FC = () => {
   ];
 
   const getDatasourceIcon = (type: string) => {
-    const iconMap: Record<string, string> = {
-      mysql: '🐬', postgresql: '🐘', oracle: '🔴', sql_server: '🟢',
-      s3: '🪣', minio: '📦', rustfs: '🦀', tavily: '🔍',
+    // 特殊类型映射
+    const iconTypeMap: Record<string, string> = {
+      's3': 'amazon_s3',
     };
-    return iconMap[type] || '📊';
+    const mappedType = iconTypeMap[type] || type;
+    return getDatasourceIconSvg(mappedType);
   };
 
   const getDatasourceTypeLabel = (type: string) => {
@@ -883,7 +906,9 @@ const OntologyObjectPage: React.FC = () => {
                   onClick={() => handleDatasourceClick(ds.id)}
                   className={`conversation-item ${theme === 'dark' ? 'dark' : 'light'} ${selectedDatasourceId === ds.id ? 'selected' : ''}`}
                 >
-                  <div className="conversation-icon">{getDatasourceIcon(ds.type)}</div>
+                  <div className="conversation-icon">
+                    <img src={getDatasourceIcon(ds.type)} alt={ds.type} style={{ width: 20, height: 20 }} />
+                  </div>
                   <div className="conversation-content">
                     <div className="conversation-title" style={{ textAlign: 'left' }}>{ds.name}</div>
                     <div className="conversation-meta" style={{ justifyContent: 'flex-start' }}>
@@ -924,12 +949,24 @@ const OntologyObjectPage: React.FC = () => {
             </Button>
           </Dropdown>
           <Input
-            placeholder="搜索名称"
+            placeholder="搜索名称/中文名/描述"
             value={searchName}
             onChange={e => setSearchName(e.target.value)}
             onBlur={() => {
               searchNameRef.current = searchName;
-              setPage(1);
+              if (page === 1) {
+                loadObjects();
+              } else {
+                setPage(1);
+              }
+            }}
+            onPressEnter={() => {
+              searchNameRef.current = searchName;
+              if (page === 1) {
+                loadObjects();
+              } else {
+                setPage(1);
+              }
             }}
             prefix={<SearchOutlined />}
             style={{
@@ -1070,10 +1107,23 @@ const OntologyObjectPage: React.FC = () => {
         open={batchVisible}
         onOk={handleBatchConfirm}
         onCancel={() => { setBatchVisible(false); setSelectedTables([]); setTableEdits({}); setFkTableColumnsCache({}); setPreviewTable(''); }}
-        okText="确定"
+        okText={batchCreating ? '创建中...' : '确定'}
         cancelText="取消"
         width={1150}
+        confirmLoading={batchCreating}
+        okButtonProps={{ disabled: batchCreating }}
+        cancelButtonProps={{ disabled: batchCreating }}
       >
+        {/* 进度条 */}
+        {batchCreating && batchProgress.total > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <Progress
+              percent={Math.round((batchProgress.current / batchProgress.total) * 100)}
+              format={percent => `正在创建 ${batchProgress.current}/${batchProgress.total} (${percent}%)`}
+              status="active"
+            />
+          </div>
+        )}
         <div ref={containerRef} style={{ display: 'flex', height: 480 }}>
           {/* 左侧：表列表 */}
           <div style={{ width: leftWidth, minWidth: 200, display: 'flex', flexDirection: 'column', border: '1px solid #e8e8e8', borderRadius: 6, overflow: 'hidden' }}>

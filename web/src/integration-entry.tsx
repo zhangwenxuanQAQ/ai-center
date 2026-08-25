@@ -2,6 +2,10 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ConfigProvider, theme as antTheme } from 'antd';
+import zhCN from 'antd/locale/zh_CN';
+import dayjs from 'dayjs';
+import 'dayjs/locale/zh-cn';
+dayjs.locale('zh-cn');
 import IntegrationChatPage from './integration/chat/index.tsx';
 import IntegrationSidebarPage from './integration/sidebar/index.tsx';
 import IntegrationPreviewPage from './integration/preview/index.tsx';
@@ -23,6 +27,7 @@ document.head.appendChild(style);
 function IntegrationApp() {
   return (
     <ConfigProvider
+      locale={zhCN}
       theme={{
         algorithm: antTheme.defaultAlgorithm,
         token: {

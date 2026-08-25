@@ -15,6 +15,61 @@ class OracleDatasource(DatasourceBase):
     实现Oracle数据库的连接测试、查询执行和Schema信息获取
     """
 
+    @staticmethod
+    def _convert_value(value):
+        """
+        转换Oracle查询结果中的特殊类型值（如CLOB/BLOB等）为可序列化的字符串
+        
+        Args:
+            value: 原始值
+            
+        Returns:
+            可序列化的值
+        """
+        if value is None:
+            return None
+        # 处理oracledb LOB对象（CLOB/BLOB）
+        if hasattr(value, 'read') and hasattr(value, 'getvalue'):
+            try:
+                # CLOB: 读取字符串内容
+                return value.read()
+            except Exception:
+                try:
+                    return value.getvalue()
+                except Exception:
+                    return str(value)
+        # 处理oracledb LOB对象（通过类名判断，避免导入）
+        class_name = value.__class__.__name__
+        if class_name == 'LOB':
+            try:
+                return value.read()
+            except Exception:
+                try:
+                    return value.getvalue()
+                except Exception:
+                    return str(value)
+        # 处理bytes类型（BLOB）
+        if isinstance(value, bytes):
+            try:
+                return value.decode('utf-8')
+            except UnicodeDecodeError:
+                return value.decode('utf-8', errors='replace')
+        return value
+
+    @staticmethod
+    def _convert_row(row: tuple, columns: list) -> dict:
+        """
+        转换一行数据中的所有值
+        
+        Args:
+            row: 原始行数据元组
+            columns: 列名列表
+            
+        Returns:
+            转换后的字典
+        """
+        return {col: OracleDatasource._convert_value(val) for col, val in zip(columns, row)}
+
     def test_connection(self) -> Dict[str, Any]:
         """
         测试Oracle数据库连接
@@ -53,7 +108,7 @@ class OracleDatasource(DatasourceBase):
             if query.strip().upper().startswith('SELECT'):
                 columns = [desc[0] for desc in cursor.description] if cursor.description else []
                 results = cursor.fetchall()
-                rows = [dict(zip(columns, row)) for row in results]
+                rows = [OracleDatasource._convert_row(row, columns) for row in results]
                 connection.close()
                 return {
                     "success": True,

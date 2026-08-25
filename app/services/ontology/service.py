@@ -37,7 +37,12 @@ class OntologyService:
         if datasource_id:
             query = query.where(OntologyObject.datasource_id == datasource_id)
         if name:
-            query = query.where(OntologyObject.name.contains(name))
+            # 模糊搜索名称、中文名、描述
+            query = query.where(
+                (OntologyObject.name.contains(name)) |
+                (OntologyObject.title.contains(name)) |
+                (OntologyObject.description.contains(name))
+            )
         total = query.count()
         # 支持排序字段：name / title / description / created_at
         sort_fields = {
@@ -79,13 +84,22 @@ class OntologyService:
                 logger.info(f"表 {table_name} 已存在，跳过创建")
                 continue
 
-            # 如果前端传了content，直接使用；否则从数据源构建
+            # 如果前端传了content
             if item.content:
                 content = item.content.model_dump()
                 # 同步content中的title和description
                 content['title'] = content.get('title') or item.title or ''
                 content['description'] = content.get('description') or item.description or ''
+                # 如果content中没有字段信息（columns为空），则从数据源查询字段
+                if not content.get('columns'):
+                    logger.info(f"表 {table_name} content中无字段信息，从数据源查询字段")
+                    columns_result = OntologyObjectCore.build_ontology_content(
+                        datasource_id, table_name,
+                        title=content.get('title'), description=content.get('description')
+                    )
+                    content['columns'] = columns_result.get('columns', [])
             else:
+                # 没有content，直接从数据源构建
                 content = OntologyObjectCore.build_ontology_content(
                     datasource_id, table_name,
                     title=item.title, description=item.description

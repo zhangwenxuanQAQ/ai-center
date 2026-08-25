@@ -1064,7 +1064,9 @@ const OntologyTaskPage: React.FC = () => {
                 {exportFormats.map(fmt => (
                   <div key={fmt.value} style={{ display: exportFormatValue === fmt.value ? 'block' : 'none' }}>
                     <pre style={{
-                      background: '#f5f5f5', padding: 12, borderRadius: 6,
+                      background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5',
+                      color: theme === 'dark' ? '#e0e0e0' : '#333333',
+                      padding: 12, borderRadius: 6,
                       fontSize: 12, maxHeight: 200, overflow: 'auto', whiteSpace: 'pre-wrap',
                     }}>
                       {fmt.sample}

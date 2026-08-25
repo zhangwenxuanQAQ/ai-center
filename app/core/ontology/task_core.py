@@ -390,7 +390,7 @@ class OntologyTaskCore:
     @staticmethod
     def _normalize_row_value(value: Any) -> Any:
         """
-        将数据库行中的非JSON可序列化值（datetime/date/time等）转为字符串
+        将数据库行中的非JSON可序列化值（datetime/date/time/LOB/bytes等）转为字符串
 
         Args:
             value: 数据库查询结果中的原始值
@@ -398,14 +398,40 @@ class OntologyTaskCore:
         Returns:
             Any: 可JSON序列化的值
         """
+        if value is None:
+            return None
         if isinstance(value, dict):
             return {k: OntologyTaskCore._normalize_row_value(v) for k, v in value.items()}
         if isinstance(value, (list, tuple)):
             return [OntologyTaskCore._normalize_row_value(v) for v in value]
         if isinstance(value, (datetime, date, dt_time)):
             return value.strftime('%Y-%m-%d %H:%M:%S')
-        if isinstance(value, (set, bytes)):
+        # 处理set类型
+        if isinstance(value, set):
             return str(value)
+        # 处理bytes类型（BLOB、BYTEA等二进制字段）
+        if isinstance(value, bytes):
+            try:
+                return value.decode('utf-8')
+            except UnicodeDecodeError:
+                # 无法解码的二进制数据，返回十六进制字符串
+                return '0x' + value.hex()
+        # 处理Oracle LOB对象（通过类名判断，避免强依赖oracledb）
+        class_name = value.__class__.__name__
+        if class_name == 'LOB':
+            try:
+                return value.read()
+            except Exception:
+                try:
+                    return value.getvalue()
+                except Exception:
+                    return str(value)
+        # 处理其他可能的大字段/特殊对象
+        if hasattr(value, 'read') and callable(value.read):
+            try:
+                return value.read()
+            except Exception:
+                pass
         return value
 
     @staticmethod

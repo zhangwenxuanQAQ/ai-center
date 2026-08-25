@@ -1026,8 +1026,8 @@ const DatasourceManagement: React.FC = () => {
                       >
                         <div className="ds-card-content">
                           <div className="ds-header">
-                            <div className={`ds-icon ${index % 2 === 0 ? 'blue-icon' : 'red-icon'}`}>
-                              <DatabaseOutlined style={{ fontSize: '24px', color: '#fff' }} />
+                            <div className="ds-icon">
+                              <img src={getDatasourceAvatar(datasource.type)} alt={datasource.type} />
                             </div>
                             <div className="ds-info">
                               <h3 className="ds-title">{datasource.name}</h3>
