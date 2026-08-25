@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Layout, Tree, Card, Row, Col, Empty, Spin, Button, Modal, Form, Input, Select, TreeSelect, message, Popconfirm, Pagination, Upload, Tooltip, Drawer, Switch, Slider, InputNumber, Popover, Tag } from 'antd';
 import type { UploadProps } from 'antd';
 const { TextArea } = Input;
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UpOutlined, DownOutlined, ApiOutlined, ApiTwoTone, UploadOutlined, ToolOutlined, ThunderboltOutlined, CodeOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, ClockCircleOutlined, EyeOutlined, SettingOutlined, ClearOutlined, SendOutlined, StopOutlined, BulbOutlined, RightOutlined, PlayCircleOutlined, InfoCircleOutlined, ReloadOutlined, CopyOutlined, MinusSquareOutlined, PlusSquareOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UpOutlined, DownOutlined, ApiOutlined, ApiTwoTone, UploadOutlined, ToolOutlined, ThunderboltOutlined, CodeOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, ClockCircleOutlined, EyeOutlined, SettingOutlined, ClearOutlined, SendOutlined, StopOutlined, BulbOutlined, RightOutlined, PlayCircleOutlined, InfoCircleOutlined, ReloadOutlined, CopyOutlined } from '@ant-design/icons';
 import type { TreeDataNode, TreeProps } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import ChatMarkdown from '../../components/ChatMarkdown';
@@ -14,149 +14,10 @@ import '../../styles/common.css';
 import './toolkit.less';
 import '../prompt/prompt_setting.less';
 import { getDefaultAvatar } from '../../utils/avatar';
+import JsonViewer from '../../components/JsonViewer';
 
 const { Sider: LeftSider, Content } = Layout;
 const { Option } = Select;
-
-// JSON美化渲染组件 - 支持字段展开收起
-const JsonValueRenderer: React.FC<{
-  value: any;
-  keyName?: string;
-  isLast?: boolean;
-  level?: number;
-  theme: 'dark' | 'light';
-}> = ({ value, keyName, isLast = true, level = 0, theme }) => {
-  const [expanded, setExpanded] = useState(level < 1);
-  const isDark = theme === 'dark';
-
-  const renderKey = (k: string) => (
-    <span style={{ color: isDark ? '#8c8c8c' : '#8c8c8c' }}>"{k}"</span>
-  );
-
-  const renderPrimitive = (val: any): React.ReactNode => {
-    if (val === null) return <span style={{ color: '#cf1322' }}>null</span>;
-    if (typeof val === 'boolean') return <span style={{ color: '#722ed1' }}>{String(val)}</span>;
-    if (typeof val === 'number') return <span style={{ color: '#d46b08' }}>{val}</span>;
-    if (typeof val === 'string') return <span style={{ color: '#389e0d' }}>"{String(val)}"</span>;
-    return <span>{String(val)}</span>;
-  };
-
-  // 键名部分
-  const keyPart = keyName ? (
-    <>
-      {renderKey(keyName)}
-      <span style={{ color: isDark ? '#8c8c8c' : '#8c8c8c' }}>: </span>
-    </>
-  ) : null;
-
-  // null / 基本类型直接渲染
-  if (value === null || ['string', 'number', 'boolean'].includes(typeof value)) {
-    return (
-      <div style={{ display: 'flex', paddingLeft: level * 20, fontSize: 13, lineHeight: '22px', fontFamily: 'monospace' }}>
-        {keyPart}
-        {renderPrimitive(value)}
-        {!isLast && <span style={{ color: isDark ? '#8c8c8c' : '#8c8c8c' }}>,</span>}
-      </div>
-    );
-  }
-
-  const isArray = Array.isArray(value);
-  const items = isArray ? value : Object.entries(value);
-  const itemCount = isArray ? value.length : Object.keys(value).length;
-  const openBracket = isArray ? '[' : '{';
-  const closeBracket = isArray ? ']' : '}';
-
-  // 空数组/对象直接显示
-  if (itemCount === 0) {
-    return (
-      <div style={{ display: 'flex', paddingLeft: level * 20, fontSize: 13, lineHeight: '22px', fontFamily: 'monospace' }}>
-        {keyPart}
-        <span style={{ color: isDark ? '#8c8c8c' : '#8c8c8c' }}>{openBracket}{closeBracket}</span>
-        {!isLast && <span style={{ color: isDark ? '#8c8c8c' : '#8c8c8c' }}>,</span>}
-      </div>
-    );
-  }
-
-  // 折叠时显示概要
-  if (!expanded) {
-    return (
-      <div
-        style={{ display: 'flex', paddingLeft: level * 20, fontSize: 13, lineHeight: '22px', fontFamily: 'monospace', cursor: 'pointer', userSelect: 'none' }}
-        onClick={() => setExpanded(true)}
-      >
-        <span style={{ display: 'inline-flex', alignItems: 'center', marginRight: 2, color: isDark ? '#8c8c8c' : '#8c8c8c' }}>
-          <PlusSquareOutlined />
-        </span>
-        {keyPart}
-        <span style={{ color: isDark ? '#8c8c8c' : '#8c8c8c' }}>{openBracket}</span>
-        <span style={{ color: isDark ? '#8c8c8c' : '#8c8c8c', fontStyle: 'italic', margin: '0 4px' }}>
-          {isArray ? `... ${itemCount} items` : `... ${itemCount} keys`}
-        </span>
-        <span style={{ color: isDark ? '#8c8c8c' : '#8c8c8c' }}>{closeBracket}</span>
-        {!isLast && <span style={{ color: isDark ? '#8c8c8c' : '#8c8c8c' }}>,</span>}
-      </div>
-    );
-  }
-
-  // 展开时显示子项
-  return (
-    <div style={{ fontSize: 13, fontFamily: 'monospace' }}>
-      <div
-        style={{ display: 'flex', paddingLeft: level * 20, lineHeight: '22px', cursor: 'pointer', userSelect: 'none' }}
-        onClick={() => setExpanded(false)}
-      >
-        <span style={{ display: 'inline-flex', alignItems: 'center', marginRight: 2, color: isDark ? '#8c8c8c' : '#8c8c8c' }}>
-          <MinusSquareOutlined />
-        </span>
-        {keyPart}
-        <span style={{ color: isDark ? '#8c8c8c' : '#8c8c8c' }}>{openBracket}</span>
-      </div>
-      {items.map((item: any, idx: number) => {
-        const k = isArray ? idx : item[0];
-        const v = isArray ? item : item[1];
-        const last = idx === itemCount - 1;
-        return (
-          <JsonValueRenderer
-            key={String(k)}
-            keyName={isArray ? undefined : String(k)}
-            value={v}
-            isLast={last}
-            level={level + 1}
-            theme={theme}
-          />
-        );
-      })}
-      <div style={{ display: 'flex', paddingLeft: level * 20, lineHeight: '22px' }}>
-        <span style={{ width: 16 }}></span>
-        <span style={{ color: isDark ? '#8c8c8c' : '#8c8c8c' }}>{closeBracket}</span>
-        {!isLast && <span style={{ color: isDark ? '#8c8c8c' : '#8c8c8c' }}>,</span>}
-      </div>
-    </div>
-  );
-};
-
-// JSON美化渲染入口组件
-const JsonViewer: React.FC<{ data: any; theme: 'dark' | 'light' }> = ({ data, theme }) => {
-  if (data === null || data === undefined) {
-    return <span style={{ color: '#cf1322', fontFamily: 'monospace' }}>null</span>;
-  }
-
-  // 字符串尝试解析
-  let value = data;
-  if (typeof data === 'string') {
-    try {
-      value = JSON.parse(data);
-    } catch {
-      return <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontFamily: 'monospace', fontSize: 13 }}>{data}</pre>;
-    }
-  }
-
-  return (
-    <div style={{ fontFamily: 'monospace' }}>
-      <JsonValueRenderer value={value} theme={theme} level={0} isLast={true} />
-    </div>
-  );
-};
 
 // 工具类型图标映射
 const TOOL_TYPE_ICON: Record<string, React.ReactNode> = {
@@ -1705,7 +1566,7 @@ const ToolkitManagement: React.FC = () => {
       <Drawer
         title="参数测试"
         placement="right"
-        width={500}
+        width={600}
         getContainer={() => pageContainerRef.current!}
         open={paramTestDrawerVisible}
         onClose={() => setParamTestDrawerVisible(false)}
@@ -1758,12 +1619,28 @@ const ToolkitManagement: React.FC = () => {
                     </span>
                   )}
                 </div>
-                <div style={{ padding: 12, borderRadius: 8, background: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#f5f5f5', border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'}`, overflow: 'auto', maxHeight: 400, fontSize: 13 }}>
-                  {paramTestResult.status === 'success' ? (
-                    <JsonViewer data={paramTestResult.result} theme={theme} />
-                  ) : (
-                    <JsonViewer data={paramTestResult.error || paramTestResult.message || '未知错误'} theme={theme} />
-                  )}
+                <div style={{ position: 'relative' }}>
+                  <Tooltip title="复制结果">
+                    <Button
+                      size="small"
+                      type="text"
+                      icon={<CopyOutlined />}
+                      onClick={() => {
+                        const value = paramTestResult.status === 'success'
+                          ? (typeof paramTestResult.result === 'string' ? paramTestResult.result : JSON.stringify(paramTestResult.result, null, 2))
+                          : (paramTestResult.error || paramTestResult.message || '未知错误');
+                        copyToClipboard(value, '结果');
+                      }}
+                      style={{ position: 'absolute', top: 8, right: 8, zIndex: 1, color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)' }}
+                    />
+                  </Tooltip>
+                  <div style={{ padding: 12, borderRadius: 8, background: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#f5f5f5', border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'}`, overflow: 'auto', maxHeight: 400, fontSize: 13 }}>
+                    {paramTestResult.status === 'success' ? (
+                      <JsonViewer data={paramTestResult.result} theme={theme} />
+                    ) : (
+                      <JsonViewer data={paramTestResult.error || paramTestResult.message || '未知错误'} theme={theme} />
+                    )}
+                  </div>
                 </div>
               </div>
             )}
