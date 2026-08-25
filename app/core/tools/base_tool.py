@@ -1,8 +1,98 @@
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 if TYPE_CHECKING:
     from app.core.hooks.base_hook import BaseHook
+
+
+class ToolResult:
+    """
+    工具统一返回结果类
+
+    所有内置工具的_run方法应返回ToolResult实例，
+    用于统一工具执行结果的格式，便于前端和调用方处理。
+
+    Attributes:
+        status: 执行状态，"success" | "error"
+        result: 工具执行的实际结果数据
+        message: 执行结果的描述信息
+        error: 错误信息（仅在status为error时使用）
+        metadata: 附加元数据（如耗时、数据源ID等）
+    """
+
+    def __init__(
+        self,
+        status: str = "success",
+        result: Any = None,
+        message: str = "",
+        error: str = "",
+        metadata: Optional[Dict[str, Any]] = None,
+    ):
+        self.status = status
+        self.result = result
+        self.message = message
+        self.error = error
+        self.metadata = metadata or {}
+
+    @property
+    def success(self) -> bool:
+        """是否执行成功"""
+        return self.status == "success"
+
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为字典"""
+        return {
+            "status": self.status,
+            "result": self.result,
+            "message": self.message,
+            "error": self.error,
+            "metadata": self.metadata,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ToolResult":
+        """从字典创建实例"""
+        return cls(
+            status=data.get("status", "success"),
+            result=data.get("result"),
+            message=data.get("message", ""),
+            error=data.get("error", ""),
+            metadata=data.get("metadata", {}),
+        )
+
+    @classmethod
+    def ok(cls, result: Any = None, message: str = "", **metadata) -> "ToolResult":
+        """创建成功结果"""
+        return cls(
+            status="success",
+            result=result,
+            message=message or "执行成功",
+            metadata=metadata,
+        )
+
+    @classmethod
+    def error(cls, message: str, error: str = "", result: Any = None, **metadata) -> "ToolResult":
+        """创建错误结果"""
+        return cls(
+            status="error",
+            result=result,
+            message=message,
+            error=error or message,
+            metadata=metadata,
+        )
+
+    def __repr__(self) -> str:
+        return f"ToolResult(status={self.status!r}, message={self.message!r})"
+
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, ToolResult):
+            return NotImplemented
+        return (
+            self.status == other.status
+            and self.result == other.result
+            and self.message == other.message
+            and self.error == other.error
+        )
 
 
 class BaseToolParam:
@@ -38,7 +128,7 @@ class BaseTool(ABC):
         from datetime import datetime
         self.created_at = datetime.now().isoformat()
 
-    def run(self, **kwargs) -> Any:
+    def run(self, **kwargs) -> Union[ToolResult, Any]:
         """
         执行工具（模板方法）
 
@@ -51,7 +141,7 @@ class BaseTool(ABC):
             **kwargs: 工具调用参数
 
         Returns:
-            Any: 工具执行结果
+            Union[ToolResult, Any]: 工具执行结果（推荐使用ToolResult）
         """
         # 1. 执行before hooks，处理入参
         for hook in self.hooks:
@@ -78,8 +168,16 @@ class BaseTool(ABC):
 
         return result
 
+    def _success(self, result: Any = None, message: str = "", **metadata) -> ToolResult:
+        """创建成功的工具执行结果（便捷方法）"""
+        return ToolResult.ok(result=result, message=message, **metadata)
+
+    def _error(self, message: str, error: str = "", result: Any = None, **metadata) -> ToolResult:
+        """创建错误的工具执行结果（便捷方法）"""
+        return ToolResult.error(message=message, error=error, result=result, **metadata)
+
     @abstractmethod
-    def _run(self, **kwargs) -> Any:
+    def _run(self, **kwargs) -> Union[ToolResult, Any]:
         """
         执行实际工具逻辑（由子类实现）
 
@@ -87,7 +185,7 @@ class BaseTool(ABC):
             **kwargs: 工具调用参数
 
         Returns:
-            Any: 工具执行结果
+            Union[ToolResult, Any]: 工具执行结果，推荐返回ToolResult实例
         """
         raise NotImplementedError("Subclass must implement _run()")
 

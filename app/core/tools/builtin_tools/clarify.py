@@ -11,7 +11,7 @@
 import logging
 from typing import Any
 
-from app.core.tools import BaseTool, BaseToolParam, ToolRegistry
+from app.core.tools import BaseTool, BaseToolParam, ToolRegistry, ToolResult
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +96,7 @@ class clarify(BaseTool):
         ),
     ]
 
-    def _run(self, **kwargs) -> Any:
+    def _run(self, **kwargs) -> ToolResult:
         """执行澄清工具，返回包含问题和选项的结构化结果。
 
         前端根据返回结果中的 type='clarify' 渲染交互式 UI，
@@ -108,14 +108,14 @@ class clarify(BaseTool):
 
         # 校验问题文本
         if not question or not question.strip():
-            return {"error": "问题文本不能为空"}
+            return self._error(message="问题文本不能为空", error="question is required")
 
         question = question.strip()
 
         # 清洗和校验选项
         if choices is not None:
             if not isinstance(choices, list):
-                return {"error": "choices 必须是字符串列表"}
+                return self._error(message="choices 必须是字符串列表", error="choices must be a list")
             # 将 LLM 可能输出的 dict 形态选项展开为纯文本
             choices = [s for s in (_flatten_choice(c) for c in choices) if s]
             if len(choices) > MAX_CHOICES:
@@ -123,13 +123,15 @@ class clarify(BaseTool):
             if not choices:
                 choices = None  # 空列表视为开放式问题
 
-        result = {
+        result_data = {
             "type": "clarify",
             "question": question,
             "choices": choices,
             "multi_select": bool(multi_select) if choices is not None else False,
-            "message": "已向用户提出澄清问题，等待用户回复..."
         }
 
         logger.info(f"澄清工具触发 - 问题: {question}, 选项数: {len(choices) if choices else 0}, 多选: {multi_select}")
-        return result
+        return self._success(
+            result=result_data,
+            message="已向用户提出澄清问题，等待用户回复..."
+        )

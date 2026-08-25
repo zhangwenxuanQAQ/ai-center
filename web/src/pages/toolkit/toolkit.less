@@ -683,6 +683,59 @@
   }
 }
 
+/* 抽屉容器内定位 - 使Drawer在page-container内滑出 */
+.toolkit-drawer {
+  position: absolute !important;
+
+  :global {
+    .ant-drawer-mask {
+      position: absolute !important;
+    }
+
+    .ant-drawer-content-wrapper {
+      position: absolute !important;
+    }
+  }
+
+  &.dark {
+    :global {
+      .ant-drawer-content {
+        background: rgba(26, 26, 46, 0.98);
+        border-left: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: -8px 0 32px rgba(0, 0, 0, 0.3);
+      }
+
+      .ant-drawer-header {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .ant-drawer-title {
+        color: rgba(255, 255, 255, 0.95);
+        font-size: 16px;
+        font-weight: 600;
+      }
+
+      .ant-drawer-close {
+        color: rgba(255, 255, 255, 0.65);
+
+        &:hover {
+          color: rgba(255, 255, 255, 0.95);
+        }
+      }
+    }
+  }
+
+  &.light {
+    :global {
+      .ant-drawer-content {
+        background: #fff;
+        border-left: 1px solid rgba(0, 0, 0, 0.06);
+        box-shadow: -8px 0 32px rgba(0, 0, 0, 0.08);
+      }
+    }
+  }
+}
+
 /* 模态框样式 */
 .toolkit-modal {
   &.dark {

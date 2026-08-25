@@ -8,8 +8,7 @@ import base64
 import logging
 import re
 import time
-import io
-from datetime import datetime, date, timedelta, time as dt_time
+from datetime import datetime, date, timedelta
 from threading import Thread, Lock
 from typing import Optional, Dict, Any
 
@@ -26,6 +25,7 @@ from app.constants.ontology_constants import (
     ONTOLOGY_EXPORT_FORMAT_FILE_EXT,
 )
 from app.core.ontology.utils import ontology_object_to_dict, task_to_dict
+from app.core.datasource.utils import quote_ident, normalize_rows, format_data
 from app.core.hooks.ontology_task_hook import OntologyTaskHook
 
 logger = logging.getLogger(__name__)
@@ -224,19 +224,16 @@ class OntologyTaskCore:
                 if not ontology_obj:
                     raise Exception("本体对象不存在")
                 table_name = ontology_obj['name']
-                # 标识符加反引号需避免误触发SQL校验的危险关键字（如`desc`），仅含特殊字符时加引号
-                def _quote_ident(ident: str) -> str:
-                    return f"`{ident}`" if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', ident) else ident
                 # 校验选中的字段是否存在于本体对象字段中，防止SQL注入
                 if selected_columns:
                     valid_columns = {col.get('column_name', '') for col in (ontology_obj.get('content', {}).get('columns') or [])}
                     valid_selected = [c for c in selected_columns if c in valid_columns]
                     if not valid_selected:
                         raise Exception("未选择有效的抽取字段")
-                    column_list = ', '.join(_quote_ident(c) for c in valid_selected)
-                    sql = f"SELECT {column_list} FROM {_quote_ident(table_name)}"
+                    column_list = ', '.join(quote_ident(c) for c in valid_selected)
+                    sql = f"SELECT {column_list} FROM {quote_ident(table_name)}"
                 else:
-                    sql = f"SELECT * FROM {_quote_ident(table_name)}"
+                    sql = f"SELECT * FROM {quote_ident(table_name)}"
             else:
                 raise Exception("任务配置缺失：请指定本体对象或自定义SQL")
 
@@ -269,13 +266,13 @@ class OntologyTaskCore:
                 rows = []
                 row_count = 0
             # 将 datetime/date 等非JSON可序列化值转为字符串，保证导出文件正常生成
-            rows = OntologyTaskCore._normalize_rows(rows)
+            rows = normalize_rows(rows)
             _push_progress(f"查询完成，共获取 {row_count} 条数据", 0.5)
             OntologyTaskCore.update_task_progress(task_id, 0.5, f"查询完成，共获取 {row_count} 条数据")
 
             _push_progress("正在格式化数据", 0.7)
             OntologyTaskCore.update_task_progress(task_id, 0.7, "正在格式化数据")
-            file_content = OntologyTaskCore._format_data(rows, export_format)
+            file_content = format_data(rows, export_format)
 
             _push_progress("正在生成结果文件", 0.85)
             # _format_data 现在统一返回 bytes，直接 base64 编码即可
@@ -386,130 +383,3 @@ class OntologyTaskCore:
             OntologyObject.deleted == False
         ).first()
         return ontology_object_to_dict(obj) if obj else None
-
-    @staticmethod
-    def _normalize_row_value(value: Any) -> Any:
-        """
-        将数据库行中的非JSON可序列化值（datetime/date/time/LOB/bytes等）转为字符串
-
-        Args:
-            value: 数据库查询结果中的原始值
-
-        Returns:
-            Any: 可JSON序列化的值
-        """
-        if value is None:
-            return None
-        if isinstance(value, dict):
-            return {k: OntologyTaskCore._normalize_row_value(v) for k, v in value.items()}
-        if isinstance(value, (list, tuple)):
-            return [OntologyTaskCore._normalize_row_value(v) for v in value]
-        if isinstance(value, (datetime, date, dt_time)):
-            return value.strftime('%Y-%m-%d %H:%M:%S')
-        # 处理set类型
-        if isinstance(value, set):
-            return str(value)
-        # 处理bytes类型（BLOB、BYTEA等二进制字段）
-        if isinstance(value, bytes):
-            try:
-                return value.decode('utf-8')
-            except UnicodeDecodeError:
-                # 无法解码的二进制数据，返回十六进制字符串
-                return '0x' + value.hex()
-        # 处理Oracle LOB对象（通过类名判断，避免强依赖oracledb）
-        class_name = value.__class__.__name__
-        if class_name == 'LOB':
-            try:
-                return value.read()
-            except Exception:
-                try:
-                    return value.getvalue()
-                except Exception:
-                    return str(value)
-        # 处理其他可能的大字段/特殊对象
-        if hasattr(value, 'read') and callable(value.read):
-            try:
-                return value.read()
-            except Exception:
-                pass
-        return value
-
-    @staticmethod
-    def _normalize_rows(rows: list) -> list:
-        """批量转换查询结果行，保证可JSON序列化"""
-        return [OntologyTaskCore._normalize_row_value(row) for row in rows]
-
-    @staticmethod
-    def _format_data(data: list, export_format: str) -> bytes:
-        """根据导出格式转换数据，返回 bytes 类型内容（文本格式为utf-8编码的bytes，Excel为xlsx二进制bytes）"""
-        if export_format == OntologyExportFormat.EXCEL:
-            return OntologyTaskCore._to_excel_bytes(data)
-
-        if export_format == OntologyExportFormat.JSON:
-            content = json.dumps(data, ensure_ascii=False, indent=2)
-            return content.encode('utf-8')
-
-        if export_format == OntologyExportFormat.MARKDOWN:
-            if data:
-                headers = list(data[0].keys())
-                lines = [
-                    '| ' + ' | '.join(headers) + ' |',
-                    '| ' + ' | '.join(['---'] * len(headers)) + ' |',
-                ]
-                for row in data:
-                    lines.append('| ' + ' | '.join(str(row.get(h, '')) for h in headers) + ' |')
-                return '\n'.join(lines).encode('utf-8')
-            return '（无数据）'.encode('utf-8')
-
-        # 默认JSON
-        return json.dumps(data, ensure_ascii=False, indent=2).encode('utf-8')
-
-    @staticmethod
-    def _to_excel_bytes(data: list) -> bytes:
-        """将数据列表转换为Excel二进制内容（字段名作为表头，每行一条数据）"""
-        from openpyxl import Workbook
-        from openpyxl.styles import Font, Alignment, PatternFill
-
-        wb = Workbook()
-        ws = wb.active
-        ws.title = '数据抽取结果'
-
-        if not data:
-            # 空数据时只写一个提示
-            ws['A1'] = '（无数据）'
-            ws['A1'].font = Font(bold=True)
-        else:
-            headers = list(data[0].keys())
-            # 写入表头行
-            header_font = Font(bold=True, color='FFFFFF')
-            header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
-            header_alignment = Alignment(horizontal='center', vertical='center')
-
-            for col_idx, header in enumerate(headers, 1):
-                cell = ws.cell(row=1, column=col_idx, value=header)
-                cell.font = header_font
-                cell.fill = header_fill
-                cell.alignment = header_alignment
-
-            # 写入数据行
-            for row_idx, row_data in enumerate(data, 2):
-                for col_idx, header in enumerate(headers, 1):
-                    value = row_data.get(header)
-                    # datetime/date等已在_normalize_rows中转为字符串
-                    ws.cell(row=row_idx, column=col_idx, value=value)
-
-            # 自动调整列宽（粗略估算）
-            for col_idx, header in enumerate(headers, 1):
-                max_len = len(str(header))
-                for row_data in data:
-                    cell_val = row_data.get(header)
-                    cell_len = len(str(cell_val)) if cell_val is not None else 0
-                    max_len = max(max_len, cell_len)
-                # 中文按2倍宽度估算
-                adjusted_width = min(max_len * 1.5 + 2, 50)
-                ws.column_dimensions[ws.cell(row=1, column=col_idx).column_letter].width = adjusted_width
-
-        # 保存到内存流
-        buffer = io.BytesIO()
-        wb.save(buffer)
-        return buffer.getvalue()

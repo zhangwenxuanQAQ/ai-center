@@ -37,6 +37,7 @@ RUN echo "deb http://mirrors.aliyun.com/ubuntu/ noble main restricted universe m
     nginx \
     ffmpeg \
     ca-certificates \
+    vim \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 

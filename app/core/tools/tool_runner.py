@@ -7,6 +7,7 @@ import logging
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
 from app.core.tools.tool_registry import ToolRegistry
+from app.core.tools.base_tool import ToolResult
 
 if TYPE_CHECKING:
     from app.core.tools.base_tool import BaseTool
@@ -55,6 +56,25 @@ class ToolRunner:
                 arguments[param_name] = default_value
         try:
             result = tool.run(**arguments)
+            # 统一处理ToolResult
+            if isinstance(result, ToolResult):
+                return {
+                    "success": result.success,
+                    "result": result.result if result.success else None,
+                    "error": result.error if not result.success else None,
+                    "message": result.message,
+                    "metadata": result.metadata,
+                }
+            # 兼容旧的返回格式
+            if isinstance(result, dict) and "status" in result:
+                # 已转换格式的字典
+                return {
+                    "success": result.get("status") == "success",
+                    "result": result.get("result"),
+                    "error": result.get("error"),
+                    "message": result.get("message", ""),
+                    "metadata": result.get("metadata", {}),
+                }
             return {"success": True, "result": result}
         except Exception as e:
             logger.error(f"调用工具 '{name}' 失败: {e}", exc_info=True)

@@ -9,6 +9,7 @@ from app.services.toolkit.dto import ToolkitCategoryCreate, ToolkitCategoryUpdat
 from app.constants.toolkit_constants import TOOL_TYPE, TOOL_TYPE_NAME
 from app.utils.response import ResponseUtil, ApiResponse
 from app.core.tools.tool_registry import ToolRegistry
+from app.core.tools.base_tool import ToolResult
 
 router = APIRouter()
 
@@ -230,6 +231,17 @@ async def run_builtin_tool(tool_name: str, request: Request):
 
     try:
         result = tool.run(**body)
+        # 统一处理ToolResult
+        if isinstance(result, ToolResult):
+            if result.success:
+                return ResponseUtil.success(
+                    data=result.to_dict(),
+                    message=result.message or "工具执行成功"
+                )
+            else:
+                return ResponseUtil.error(
+                    message=result.error or result.message or "工具执行失败"
+                )
         return ResponseUtil.success(data=result, message="工具执行成功")
     except Exception as e:
         return ResponseUtil.error(message=f"工具执行失败: {str(e)}")

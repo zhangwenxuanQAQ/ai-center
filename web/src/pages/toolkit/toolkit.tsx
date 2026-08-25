@@ -2,11 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Layout, Tree, Card, Row, Col, Empty, Spin, Button, Modal, Form, Input, Select, TreeSelect, message, Popconfirm, Pagination, Upload, Tooltip, Drawer, Switch, Slider, InputNumber, Popover, Tag } from 'antd';
 import type { UploadProps } from 'antd';
 const { TextArea } = Input;
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UpOutlined, DownOutlined, ApiOutlined, ApiTwoTone, UploadOutlined, ToolOutlined, ThunderboltOutlined, CodeOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, ClockCircleOutlined, EyeOutlined, SettingOutlined, ClearOutlined, SendOutlined, StopOutlined, BulbOutlined, RightOutlined, PlayCircleOutlined, InfoCircleOutlined, ReloadOutlined, CopyOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UpOutlined, DownOutlined, ApiOutlined, ApiTwoTone, UploadOutlined, ToolOutlined, ThunderboltOutlined, CodeOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, ClockCircleOutlined, EyeOutlined, SettingOutlined, ClearOutlined, SendOutlined, StopOutlined, BulbOutlined, RightOutlined, PlayCircleOutlined, InfoCircleOutlined, ReloadOutlined, CopyOutlined, MinusSquareOutlined, PlusSquareOutlined } from '@ant-design/icons';
 import type { TreeDataNode, TreeProps } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import ChatMarkdown from '../../components/ChatMarkdown';
 import { toolkitService, BuiltinTool, BuiltinToolParam } from '../../services/toolkit';
+import { datasourceService, Datasource } from '../../services/datasource';
 import { llmModelService, LLMModel } from '../../services/llm_model';
 import { mcpService, MCPServer, MCPCategory } from '../../services/mcp';
 import '../../styles/common.css';
@@ -16,6 +17,146 @@ import { getDefaultAvatar } from '../../utils/avatar';
 
 const { Sider: LeftSider, Content } = Layout;
 const { Option } = Select;
+
+// JSON美化渲染组件 - 支持字段展开收起
+const JsonValueRenderer: React.FC<{
+  value: any;
+  keyName?: string;
+  isLast?: boolean;
+  level?: number;
+  theme: 'dark' | 'light';
+}> = ({ value, keyName, isLast = true, level = 0, theme }) => {
+  const [expanded, setExpanded] = useState(level < 1);
+  const isDark = theme === 'dark';
+
+  const renderKey = (k: string) => (
+    <span style={{ color: isDark ? '#8c8c8c' : '#8c8c8c' }}>"{k}"</span>
+  );
+
+  const renderPrimitive = (val: any): React.ReactNode => {
+    if (val === null) return <span style={{ color: '#cf1322' }}>null</span>;
+    if (typeof val === 'boolean') return <span style={{ color: '#722ed1' }}>{String(val)}</span>;
+    if (typeof val === 'number') return <span style={{ color: '#d46b08' }}>{val}</span>;
+    if (typeof val === 'string') return <span style={{ color: '#389e0d' }}>"{String(val)}"</span>;
+    return <span>{String(val)}</span>;
+  };
+
+  // 键名部分
+  const keyPart = keyName ? (
+    <>
+      {renderKey(keyName)}
+      <span style={{ color: isDark ? '#8c8c8c' : '#8c8c8c' }}>: </span>
+    </>
+  ) : null;
+
+  // null / 基本类型直接渲染
+  if (value === null || ['string', 'number', 'boolean'].includes(typeof value)) {
+    return (
+      <div style={{ display: 'flex', paddingLeft: level * 20, fontSize: 13, lineHeight: '22px', fontFamily: 'monospace' }}>
+        {keyPart}
+        {renderPrimitive(value)}
+        {!isLast && <span style={{ color: isDark ? '#8c8c8c' : '#8c8c8c' }}>,</span>}
+      </div>
+    );
+  }
+
+  const isArray = Array.isArray(value);
+  const items = isArray ? value : Object.entries(value);
+  const itemCount = isArray ? value.length : Object.keys(value).length;
+  const openBracket = isArray ? '[' : '{';
+  const closeBracket = isArray ? ']' : '}';
+
+  // 空数组/对象直接显示
+  if (itemCount === 0) {
+    return (
+      <div style={{ display: 'flex', paddingLeft: level * 20, fontSize: 13, lineHeight: '22px', fontFamily: 'monospace' }}>
+        {keyPart}
+        <span style={{ color: isDark ? '#8c8c8c' : '#8c8c8c' }}>{openBracket}{closeBracket}</span>
+        {!isLast && <span style={{ color: isDark ? '#8c8c8c' : '#8c8c8c' }}>,</span>}
+      </div>
+    );
+  }
+
+  // 折叠时显示概要
+  if (!expanded) {
+    return (
+      <div
+        style={{ display: 'flex', paddingLeft: level * 20, fontSize: 13, lineHeight: '22px', fontFamily: 'monospace', cursor: 'pointer', userSelect: 'none' }}
+        onClick={() => setExpanded(true)}
+      >
+        <span style={{ display: 'inline-flex', alignItems: 'center', marginRight: 2, color: isDark ? '#8c8c8c' : '#8c8c8c' }}>
+          <PlusSquareOutlined />
+        </span>
+        {keyPart}
+        <span style={{ color: isDark ? '#8c8c8c' : '#8c8c8c' }}>{openBracket}</span>
+        <span style={{ color: isDark ? '#8c8c8c' : '#8c8c8c', fontStyle: 'italic', margin: '0 4px' }}>
+          {isArray ? `... ${itemCount} items` : `... ${itemCount} keys`}
+        </span>
+        <span style={{ color: isDark ? '#8c8c8c' : '#8c8c8c' }}>{closeBracket}</span>
+        {!isLast && <span style={{ color: isDark ? '#8c8c8c' : '#8c8c8c' }}>,</span>}
+      </div>
+    );
+  }
+
+  // 展开时显示子项
+  return (
+    <div style={{ fontSize: 13, fontFamily: 'monospace' }}>
+      <div
+        style={{ display: 'flex', paddingLeft: level * 20, lineHeight: '22px', cursor: 'pointer', userSelect: 'none' }}
+        onClick={() => setExpanded(false)}
+      >
+        <span style={{ display: 'inline-flex', alignItems: 'center', marginRight: 2, color: isDark ? '#8c8c8c' : '#8c8c8c' }}>
+          <MinusSquareOutlined />
+        </span>
+        {keyPart}
+        <span style={{ color: isDark ? '#8c8c8c' : '#8c8c8c' }}>{openBracket}</span>
+      </div>
+      {items.map((item: any, idx: number) => {
+        const k = isArray ? idx : item[0];
+        const v = isArray ? item : item[1];
+        const last = idx === itemCount - 1;
+        return (
+          <JsonValueRenderer
+            key={String(k)}
+            keyName={isArray ? undefined : String(k)}
+            value={v}
+            isLast={last}
+            level={level + 1}
+            theme={theme}
+          />
+        );
+      })}
+      <div style={{ display: 'flex', paddingLeft: level * 20, lineHeight: '22px' }}>
+        <span style={{ width: 16 }}></span>
+        <span style={{ color: isDark ? '#8c8c8c' : '#8c8c8c' }}>{closeBracket}</span>
+        {!isLast && <span style={{ color: isDark ? '#8c8c8c' : '#8c8c8c' }}>,</span>}
+      </div>
+    </div>
+  );
+};
+
+// JSON美化渲染入口组件
+const JsonViewer: React.FC<{ data: any; theme: 'dark' | 'light' }> = ({ data, theme }) => {
+  if (data === null || data === undefined) {
+    return <span style={{ color: '#cf1322', fontFamily: 'monospace' }}>null</span>;
+  }
+
+  // 字符串尝试解析
+  let value = data;
+  if (typeof data === 'string') {
+    try {
+      value = JSON.parse(data);
+    } catch {
+      return <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontFamily: 'monospace', fontSize: 13 }}>{data}</pre>;
+    }
+  }
+
+  return (
+    <div style={{ fontFamily: 'monospace' }}>
+      <JsonValueRenderer value={value} theme={theme} level={0} isLast={true} />
+    </div>
+  );
+};
 
 // 工具类型图标映射
 const TOOL_TYPE_ICON: Record<string, React.ReactNode> = {
@@ -80,8 +221,16 @@ const ToolkitManagement: React.FC = () => {
   const [viewDrawerVisible, setViewDrawerVisible] = useState(false);
   const [currentTool, setCurrentTool] = useState<BuiltinTool | null>(null);
   const [paramValues, setParamValues] = useState<Record<string, any>>({});
-  const [paramTestResult, setParamTestResult] = useState<string | null>(null);
+  const [paramTestResult, setParamTestResult] = useState<{ status: 'success' | 'error'; result: any; message: string; error?: string } | null>(null);
   const [paramTesting, setParamTesting] = useState(false);
+
+  // 数据抽取工具相关状态
+  const [dsDatasources, setDsDatasources] = useState<Datasource[]>([]);
+  const [dsTables, setDsTables] = useState<{ table_name: string; table_comment?: string }[]>([]);
+  const [dsColumns, setDsColumns] = useState<{ column_name: string; data_type?: string }[]>([]);
+  const [dsLoading, setDsLoading] = useState(false);
+  const [dsLoadingTables, setDsLoadingTables] = useState(false);
+  const [dsLoadingColumns, setDsLoadingColumns] = useState(false);
 
   // 模型测试相关状态
   const [models, setModels] = useState<LLMModel[]>([]);
@@ -99,6 +248,7 @@ const ToolkitManagement: React.FC = () => {
   const [expandedToolCalls, setExpandedToolCalls] = useState<Set<string>>(new Set());
   const [expandedToolCallResults, setExpandedToolCallResults] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const pageContainerRef = useRef<HTMLDivElement>(null);
   const [thinkingDuration, setThinkingDuration] = useState<Record<string, number>>({});
   const thinkingStartTimeRef = useRef<Record<string, number>>({});
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -591,6 +741,115 @@ const ToolkitManagement: React.FC = () => {
   const renderParamInput = (param: BuiltinToolParam) => {
     const value = paramValues[param.name] ?? param.default ?? '';
     const onChange = (v: any) => setParamValues({ ...paramValues, [param.name]: v });
+    const isDataExtraction = currentTool?.name === 'data_extraction';
+
+    // 数据抽取工具的特殊参数渲染
+    if (isDataExtraction) {
+      if (param.name === 'datasource_id') {
+        return (
+          <Select
+            value={value || undefined}
+            onChange={(v) => {
+              onChange(v);
+              // 切换数据源时加载表列表
+              if (v) {
+                loadTables(v);
+              } else {
+                setDsTables([]);
+                setDsColumns([]);
+              }
+            }}
+            placeholder={dsLoading ? '加载中...' : '请选择数据源'}
+            loading={dsLoading}
+            style={{ width: '100%' }}
+            showSearch
+            optionFilterProp="label"
+          >
+            {dsDatasources.map(ds => (
+              <Option key={ds.id} value={ds.id} label={ds.name}>
+                {ds.name} <span style={{ color: '#999', fontSize: 12 }}>({ds.type})</span>
+              </Option>
+            ))}
+          </Select>
+        );
+      }
+      if (param.name === 'table_name') {
+        return (
+          <Select
+            value={value || undefined}
+            onChange={(v) => {
+              onChange(v);
+              // 切换表时加载字段列表
+              const dsId = paramValues['datasource_id'];
+              if (v && dsId) {
+                loadColumns(dsId, v);
+              } else {
+                setDsColumns([]);
+              }
+            }}
+            placeholder={
+              !paramValues['datasource_id'] ? '请先选择数据源' :
+              dsLoadingTables ? '加载中...' :
+              dsTables.length === 0 ? '该数据源无表' : '请选择表'
+            }
+            loading={dsLoadingTables}
+            disabled={!paramValues['datasource_id']}
+            style={{ width: '100%' }}
+            showSearch
+            optionFilterProp="label"
+          >
+            {dsTables.map(t => (
+              <Option key={t.table_name} value={t.table_name} label={t.table_name}>
+                {t.table_name} {t.table_comment ? <span style={{ color: '#999', fontSize: 12 }}>({t.table_comment})</span> : null}
+              </Option>
+            ))}
+          </Select>
+        );
+      }
+      if (param.name === 'fields') {
+        return (
+          <Select
+            mode="tags"
+            value={value ? String(value).split(',').filter(Boolean) : []}
+            onChange={(v) => onChange(v.join(','))}
+            placeholder={
+              !paramValues['table_name'] ? '请先选择表' :
+              dsLoadingColumns ? '加载中...' :
+              dsColumns.length === 0 ? '该表无字段' : '请选择或输入字段（支持自定义输入）'
+            }
+            loading={dsLoadingColumns}
+            disabled={!paramValues['table_name']}
+            style={{ width: '100%' }}
+            open={dsColumns.length > 0 || !paramValues['table_name'] ? undefined : false}
+          >
+            {dsColumns.map(c => (
+              <Option key={c.column_name} value={c.column_name}>
+                {c.column_name} {c.data_type ? <span style={{ color: '#999', fontSize: 12 }}>({c.data_type})</span> : null}
+              </Option>
+            ))}
+          </Select>
+        );
+      }
+      if (param.name === 'sql') {
+        return (
+          <TextArea
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            rows={6}
+            placeholder="请输入自定义SQL语句（优先于表名和字段）"
+            style={{ width: '100%', fontFamily: 'monospace' }}
+          />
+        );
+      }
+      if (param.name === 'output_format') {
+        return (
+          <Select value={value} onChange={onChange} style={{ width: '100%' }} placeholder="请选择输出格式">
+            <Option value="json">JSON</Option>
+            <Option value="markdown">Markdown</Option>
+          </Select>
+        );
+      }
+    }
 
     switch (param.type) {
       case 'integer':
@@ -660,13 +919,29 @@ const ToolkitManagement: React.FC = () => {
         body: JSON.stringify(processedParams),
       });
       const result = await response.json();
-      if (result.code === 200) {
-        setParamTestResult(typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2));
+      if (result.code === 200 && result.data) {
+        const d = result.data;
+        setParamTestResult({
+          status: d.status || 'success',
+          result: d.result,
+          message: d.message || '',
+          error: d.error,
+        });
       } else {
-        setParamTestResult('错误: ' + (result.message || '执行失败'));
+        setParamTestResult({
+          status: 'error',
+          result: null,
+          message: result.message || '执行失败',
+          error: result.message || '执行失败',
+        });
       }
     } catch (error: any) {
-      setParamTestResult('错误: ' + error.message);
+      setParamTestResult({
+        status: 'error',
+        result: null,
+        message: error.message || '请求异常',
+        error: error.message || '请求异常',
+      });
     } finally {
       setParamTesting(false);
     }
@@ -765,7 +1040,76 @@ const ToolkitManagement: React.FC = () => {
 
   // 打开各种抽屉
   const openViewDrawer = (tool: BuiltinTool) => { setCurrentTool(tool); setViewDrawerVisible(true); };
-  const openParamTestDrawer = (tool: BuiltinTool) => { setCurrentTool(tool); setParamValues({}); setParamTestResult(null); setParamTestDrawerVisible(true); };
+  const openParamTestDrawer = (tool: BuiltinTool) => { 
+    setCurrentTool(tool); 
+    setParamValues({}); 
+    setParamTestResult(null); 
+    setParamTestDrawerVisible(true);
+    // 如果是数据抽取工具，加载数据源列表
+    if (tool.name === 'data_extraction') {
+      loadDatasources();
+    }
+  };
+
+  // 数据抽取工具：加载关系型数据源列表
+  const loadDatasources = async () => {
+    setDsLoading(true);
+    try {
+      const relationalTypes = ['mysql', 'postgresql', 'oracle', 'sql_server'];
+      const allDatasources: Datasource[] = [];
+      // 分页获取所有数据源
+      let page = 1;
+      let hasMore = true;
+      while (hasMore) {
+        const result = await datasourceService.getDatasources(undefined, page, 100);
+        const items = result.data || [];
+        allDatasources.push(...items);
+        if (items.length < 100) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+      }
+      // 过滤关系型数据源
+      const relational = allDatasources.filter(d => relationalTypes.includes(d.type));
+      setDsDatasources(relational);
+    } catch (e) {
+      console.error('加载数据源失败:', e);
+    } finally {
+      setDsLoading(false);
+    }
+  };
+
+  // 数据抽取工具：加载表列表
+  const loadTables = async (datasourceId: string) => {
+    setDsLoadingTables(true);
+    setDsTables([]);
+    setDsColumns([]);
+    try {
+      const result = await datasourceService.listTables(datasourceId);
+      const tables = result?.tables || [];
+      setDsTables(tables);
+    } catch (e) {
+      console.error('加载表列表失败:', e);
+    } finally {
+      setDsLoadingTables(false);
+    }
+  };
+
+  // 数据抽取工具：加载字段列表
+  const loadColumns = async (datasourceId: string, tableName: string) => {
+    setDsLoadingColumns(true);
+    setDsColumns([]);
+    try {
+      const result = await datasourceService.getTableColumns(datasourceId, tableName);
+      const columns = result?.columns || [];
+      setDsColumns(columns);
+    } catch (e) {
+      console.error('加载字段列表失败:', e);
+    } finally {
+      setDsLoadingColumns(false);
+    }
+  };
   const openModelTestDrawer = (tool: BuiltinTool) => { setCurrentTool(tool); setTestMessages([]); setTestInput(''); setModelConfig({}); setDeepThinking(true); setExpandedReasoning(new Set()); setThinkingMessageId(null); setIsGenerating(false); setEditingMessageId(null); setThinkingDuration({}); setExpandedToolCalls(new Set()); setExpandedToolCallResults(new Set()); setModelTestDrawerVisible(true); };
 
   const toggleReasoning = (messageId: string) => {
@@ -1122,7 +1466,7 @@ const ToolkitManagement: React.FC = () => {
   ];
 
   return (
-    <div className={`page-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+    <div ref={pageContainerRef} className={`page-container ${theme === 'dark' ? 'dark' : 'light'}`}>
       <Layout className="toolkit-layout">
         {/* 顶部工具类型栏 */}
         <div className={`tool-type-bar ${theme === 'dark' ? 'dark' : 'light'}`}>
@@ -1356,6 +1700,76 @@ const ToolkitManagement: React.FC = () => {
           </Content>
         </Layout>
       </Layout>
+
+      {/* 参数测试抽屉 - 在page-container内滑出 */}
+      <Drawer
+        title="参数测试"
+        placement="right"
+        width={500}
+        getContainer={() => pageContainerRef.current!}
+        open={paramTestDrawerVisible}
+        onClose={() => setParamTestDrawerVisible(false)}
+        rootClassName={`toolkit-drawer ${theme === 'dark' ? 'dark' : 'light'}`}
+        styles={{
+          header: { background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fff', color: theme === 'dark' ? '#fff' : '#000' },
+          body: { background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5', color: theme === 'dark' ? '#fff' : '#000', padding: '24px' },
+        }}
+      >
+        {currentTool && (
+          <div>
+            <div style={{ marginBottom: 16 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>{currentTool.title || currentTool.name}</h3>
+              <div style={{ fontSize: 13, color: theme === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)' }}>{currentTool.description}</div>
+            </div>
+            <Form layout="vertical">
+              {currentTool.params.map(param => (
+                <Form.Item
+                  key={param.name}
+                  label={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span>{param.name}</span>
+                      {param.required && <span style={{ color: '#ff4d4f' }}>*</span>}
+                      <Tooltip title={param.description}>
+                        <EyeOutlined style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)', cursor: 'pointer' }} />
+                      </Tooltip>
+                    </div>
+                  }
+                  required={false}
+                >
+                  {renderParamInput(param)}
+                </Form.Item>
+              ))}
+            </Form>
+            <Button type="primary" icon={paramTesting ? <LoadingOutlined /> : <PlayCircleOutlined />} onClick={handleParamTest} loading={paramTesting} style={{ width: '100%', marginBottom: 16 }}>
+              {paramTesting ? '执行中...' : '执行测试'}
+            </Button>
+            {paramTestResult !== null && (
+              <div>
+                <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontWeight: 500 }}>执行结果:</span>
+                  {paramTestResult.status === 'success' ? (
+                    <Tag color="success" icon={<CheckCircleOutlined />}>执行成功</Tag>
+                  ) : (
+                    <Tag color="error" icon={<CloseCircleOutlined />}>执行失败</Tag>
+                  )}
+                  {paramTestResult.message && (
+                    <span style={{ fontSize: 12, color: theme === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)' }}>
+                      {paramTestResult.message}
+                    </span>
+                  )}
+                </div>
+                <div style={{ padding: 12, borderRadius: 8, background: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#f5f5f5', border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'}`, overflow: 'auto', maxHeight: 400, fontSize: 13 }}>
+                  {paramTestResult.status === 'success' ? (
+                    <JsonViewer data={paramTestResult.result} theme={theme} />
+                  ) : (
+                    <JsonViewer data={paramTestResult.error || paramTestResult.message || '未知错误'} theme={theme} />
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </Drawer>
 
       {/* 新增分类模态框 */}
       <Modal title="新增分类" open={isCategoryModalVisible} onOk={handleCategorySubmit} onCancel={() => setIsCategoryModalVisible(false)} width={600} okText="保存" cancelText="取消" className={`toolkit-modal ${theme === 'dark' ? 'dark' : 'light'}`}>
@@ -1659,59 +2073,6 @@ const ToolkitManagement: React.FC = () => {
                 ))
               )}
             </div>
-          </div>
-        )}
-      </Drawer>
-
-      {/* 参数测试抽屉 */}
-      <Drawer
-        title="参数测试"
-        placement="right"
-        width={500}
-        open={paramTestDrawerVisible}
-        onClose={() => setParamTestDrawerVisible(false)}
-        className={`toolkit-modal ${theme === 'dark' ? 'dark' : 'light'}`}
-        styles={{
-          header: { background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fff', color: theme === 'dark' ? '#fff' : '#000' },
-          body: { background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5', color: theme === 'dark' ? '#fff' : '#000', padding: '24px' },
-        }}
-      >
-        {currentTool && (
-          <div>
-            <div style={{ marginBottom: 16 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>{currentTool.title || currentTool.name}</h3>
-              <div style={{ fontSize: 13, color: theme === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)' }}>{currentTool.description}</div>
-            </div>
-            <Form layout="vertical">
-              {currentTool.params.map(param => (
-                <Form.Item
-                  key={param.name}
-                  label={
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span>{param.name}</span>
-                      {param.required && <span style={{ color: '#ff4d4f' }}>*</span>}
-                      <Tooltip title={param.description}>
-                        <EyeOutlined style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)', cursor: 'pointer' }} />
-                      </Tooltip>
-                    </div>
-                  }
-                  required={false}
-                >
-                  {renderParamInput(param)}
-                </Form.Item>
-              ))}
-            </Form>
-            <Button type="primary" icon={paramTesting ? <LoadingOutlined /> : <PlayCircleOutlined />} onClick={handleParamTest} loading={paramTesting} style={{ width: '100%', marginBottom: 16 }}>
-              {paramTesting ? '执行中...' : '执行测试'}
-            </Button>
-            {paramTestResult !== null && (
-              <div>
-                <div style={{ fontWeight: 500, marginBottom: 8 }}>执行结果:</div>
-                <pre style={{ padding: 12, borderRadius: 8, background: theme === 'dark' ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.04)', overflow: 'auto', maxHeight: 400, fontSize: 13, whiteSpace: 'pre-wrap', wordBreak: 'break-all', border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'}` }}>
-                  {paramTestResult}
-                </pre>
-              </div>
-            )}
           </div>
         )}
       </Drawer>

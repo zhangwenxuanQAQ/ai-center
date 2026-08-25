@@ -7,18 +7,18 @@ version:
   name: "full"  # 版本名称: full(满血版) / custom(自定义版)
   description: "满血版 - 包含所有功能模块"
   enabled_modules:
-    # - user
-    # - llm_model
-    # - prompt
-    # - datasource
-    # - knowledgebase
-    # - mcp
-    # - toolkit
-    # - chatbot
-    # - chat
-    # - agent
-    # - system_monitor
-    # - integration
+    - user
+    - llm_model
+    - prompt
+    - datasource
+    - knowledgebase
+    - mcp
+    - toolkit
+    - chatbot
+    - chat
+    - agent
+    - system_monitor
+    - integration
     - ontology
 
 # 模块定义

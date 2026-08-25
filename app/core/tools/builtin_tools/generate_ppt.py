@@ -14,7 +14,7 @@ from pptx.util import Inches, Pt, Emu
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.dml.color import RGBColor
 
-from app.core.tools import BaseTool, BaseToolParam, ToolRegistry
+from app.core.tools import BaseTool, BaseToolParam, ToolRegistry, ToolResult
 
 logger = logging.getLogger(__name__)
 
@@ -319,7 +319,7 @@ class generate_ppt(BaseTool):
         ),
     ]
 
-    def _run(self, **kwargs) -> Any:
+    def _run(self, **kwargs) -> ToolResult:
         title = kwargs.get("title", "未命名演示文稿")
         slides = kwargs.get("slides", [])
         template_ppt = kwargs.get("template_ppt", "")
@@ -334,9 +334,15 @@ class generate_ppt(BaseTool):
             try:
                 slides = json.loads(slides)
             except json.JSONDecodeError:
-                return "PPT 生成失败：slides 参数格式错误，需要 JSON 数组"
+                return self._error(
+                    message="PPT 生成失败：slides 参数格式错误，需要 JSON 数组",
+                    error="slides must be a valid JSON array"
+                )
         if not isinstance(slides, list) or len(slides) == 0:
-            return "PPT 生成失败：slides 不能为空，需要提供至少一页幻灯片定义"
+            return self._error(
+                message="PPT 生成失败：slides 不能为空，需要提供至少一页幻灯片定义",
+                error="slides is empty or invalid"
+            )
 
         # 解析 style_config
         if isinstance(style_config, str):
@@ -359,7 +365,10 @@ class generate_ppt(BaseTool):
                 prs = Presentation()
         except Exception as e:
             logger.error(f"加载模板失败: {e}", exc_info=True)
-            return f"PPT 生成失败：加载模板失败 - {str(e)}"
+            return self._error(
+                message=f"PPT 生成失败：加载模板失败 - {str(e)}",
+                error=str(e)
+            )
 
         # 设置幻灯片尺寸
         if "slide_width_inches" in style_config:
@@ -400,18 +409,25 @@ class generate_ppt(BaseTool):
 
             download_url = f"/aicenter/v1/chat/download_ppt/{file_id}"
 
-            return {
-                "type": "ppt_file",
-                "file_name": file_name,
-                "file_id": file_id,
-                "title": title,
-                "slide_count": len(slides),
-                "download_url": download_url,
-                "message": f"成功生成 PPT「{title}」，共 {len(slides)} 页幻灯片。请使用 markdown 链接格式输出下载链接：[{file_name}]({download_url})"
-            }
+            return self._success(
+                result={
+                    "type": "ppt_file",
+                    "file_name": file_name,
+                    "file_id": file_id,
+                    "title": title,
+                    "slide_count": len(slides),
+                    "download_url": download_url,
+                },
+                message=f"成功生成 PPT「{title}」，共 {len(slides)} 页幻灯片",
+                file_name=file_name,
+                download_url=download_url,
+            )
         except Exception as e:
             logger.error(f"导出 PPT 失败: {e}", exc_info=True)
-            return f"PPT 生成失败：导出文件失败 - {str(e)}"
+            return self._error(
+                message=f"PPT 生成失败：导出文件失败 - {str(e)}",
+                error=str(e)
+            )
 
     @staticmethod
     def _load_template(template_ppt: str) -> Presentation:

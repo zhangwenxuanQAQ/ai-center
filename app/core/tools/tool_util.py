@@ -152,6 +152,7 @@ def _execute_single_tool(tool_call: Dict, tool_map: Dict[str, BaseTool]) -> Dict
             'task_name': task_name,
             'elapsed_ms': elapsed,
             'result': result.get('result', ''),
+            'message': result.get('message', ''),
             'parameters': function_args
         }
     else:
@@ -160,7 +161,7 @@ def _execute_single_tool(tool_call: Dict, tool_map: Dict[str, BaseTool]) -> Dict
             'tool_name': function_name,
             'task_name': task_name,
             'elapsed_ms': elapsed,
-            'error': result.get('error', '工具调用失败'),
+            'error': result.get('error') or result.get('message') or '工具调用失败',
             'parameters': function_args
         }
 
