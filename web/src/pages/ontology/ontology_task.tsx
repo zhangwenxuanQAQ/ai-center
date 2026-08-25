@@ -6,7 +6,8 @@ import {
 } from 'antd';
 import {
   PlusOutlined, PlayCircleOutlined, PauseCircleOutlined, DeleteOutlined,
-  ReloadOutlined, EyeOutlined, RedoOutlined, EditOutlined, DownOutlined, TableOutlined
+  ReloadOutlined, EyeOutlined, RedoOutlined, EditOutlined, DownOutlined, TableOutlined,
+  CopyOutlined
 } from '@ant-design/icons';
 import { ontologyService, OntologyTask, OntologyObject, ExportFormat, TaskResult } from '../../services/ontology';
 import { datasourceService, Datasource } from '../../services/datasource';
@@ -1098,6 +1099,41 @@ const OntologyTaskPage: React.FC = () => {
               <Descriptions.Item label="结束时间">{resultData.task_end_at || '-'}</Descriptions.Item>
               <Descriptions.Item label="耗时">{formatDurationSeconds(resultData.task_duration)}</Descriptions.Item>
               <Descriptions.Item label="执行时间">{resultData.executed_at || '-'}</Descriptions.Item>
+              {resultData.task_progress_message && (
+                <Descriptions.Item label="日志">
+                  <Tooltip
+                    title={
+                      <div style={{ maxHeight: 300, overflow: 'auto', whiteSpace: 'pre-wrap' }}>
+                        {resultData.task_progress_message}
+                      </div>
+                    }
+                    placement="topLeft"
+                    overlayStyle={{ maxWidth: 600 }}
+                  >
+                    <div style={{
+                      maxWidth: 480,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}>
+                      <span>{resultData.task_progress_message}</span>
+                      <CopyOutlined
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigator.clipboard.writeText(resultData.task_progress_message!).then(() => {
+                            message.success('已复制');
+                          });
+                        }}
+                        style={{ color: '#1890ff', fontSize: 12, flexShrink: 0 }}
+                      />
+                    </div>
+                  </Tooltip>
+                </Descriptions.Item>
+              )}
               <Descriptions.Item label="数据行数">{resultData.row_count ?? '-'}</Descriptions.Item>
               <Descriptions.Item label="文件格式">{resultData.format || '-'}</Descriptions.Item>
               <Descriptions.Item label="链接过期时间">
