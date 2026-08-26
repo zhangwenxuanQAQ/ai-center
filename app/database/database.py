@@ -91,6 +91,21 @@ def get_db_connection():
             # 标记当前线程已获取连接
             _thread_local.connection_acquired = True
             logger.debug(f"线程 {threading.current_thread().name} 获取数据库连接")
+        # 健康检查：ping底层pymysql连接，失效则自动重连TCP连接
+        # 解决连接池中连接长时间空闲被MySQL服务端断开的问题
+        try:
+            conn = db.connection()
+            if conn is not None and hasattr(conn, 'ping'):
+                conn.ping(reconnect=True)
+        except Exception as ping_error:
+            logger.warning(f"数据库连接ping失败，尝试重连: {ping_error}")
+            db.close()
+            db.connect(reuse_if_open=True)
+            # 重连后再次ping确认
+            conn = db.connection()
+            if conn is not None and hasattr(conn, 'ping'):
+                conn.ping(reconnect=True)
+            _thread_local.connection_acquired = True
     except Exception as e:
         logger.error(f"数据库连接失败: {e}")
         try:

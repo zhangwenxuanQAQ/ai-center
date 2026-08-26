@@ -18,6 +18,7 @@ import ChatbotSetting from './pages/chatbot/chatbot_setting.tsx';
 import MCP from './pages/mcp/mcp.tsx';
 import MCPSetting from './pages/mcp/mcp_setting.tsx';
 import Toolkit from './pages/toolkit/toolkit.tsx';
+import ApiSetting from './pages/api_server/api_setting.tsx';
 import Knowledgebase from './pages/knowledgebase/knowledgebase.tsx';
 import KnowledgebaseCreate from './pages/knowledgebase/knowledgebase_create.tsx';
 import KnowledgebaseDetail from './pages/knowledgebase/knowledgebase_detail.tsx';
@@ -48,6 +49,7 @@ const routeModuleMap: Record<string, string> = {
   '/mcps': 'mcp',
   '/mcp/setting/:id': 'mcp',
   '/toolkit': 'toolkit',
+  '/api/setting/:id': 'api',
   '/knowledgebases': 'knowledgebase',
   '/knowledgebase/create': 'knowledgebase',
   '/knowledgebase/detail/:id': 'knowledgebase',
@@ -73,6 +75,7 @@ const routeComponents: Record<string, React.ComponentType> = {
   '/mcps': MCP,
   '/mcp/setting/:id': MCPSetting,
   '/toolkit': Toolkit,
+  '/api/setting/:id': ApiSetting,
   '/knowledgebases': Knowledgebase,
   '/knowledgebase/create': KnowledgebaseCreate,
   '/knowledgebase/detail/:id': KnowledgebaseDetail,
@@ -98,6 +101,7 @@ const breadcrumbMap: Record<string, { title: string; path?: string }[]> = {
   '/mcps': [{ title: '首页', path: '/' }, { title: 'MCP' }],
   '/mcp/setting/:id': [{ title: '首页', path: '/' }, { title: 'MCP', path: '/mcps' }, { title: 'MCP配置' }],
   '/toolkit': [{ title: '首页', path: '/' }, { title: '工具箱' }],
+  '/api/setting/:id': [{ title: '首页', path: '/' }, { title: '工具箱', path: '/toolkit' }, { title: 'API配置' }],
   '/knowledgebases': [{ title: '首页', path: '/' }, { title: '知识库' }],
   '/knowledgebase/create': [{ title: '首页', path: '/' }, { title: '知识库', path: '/knowledgebases' }, { title: '新增知识库' }],
   '/knowledgebase/detail/:id': [{ title: '首页', path: '/' }, { title: '知识库', path: '/knowledgebases' }, { title: '知识库详情' }],

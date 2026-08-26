@@ -1,7 +1,7 @@
 """
-Swagger/OpenAPI 转 MCP Tool 转换器
+Swagger/OpenAPI 转换器
 
-将Swagger/OpenAPI文档转换为MCP工具标准结构
+将Swagger/OpenAPI文档转换为MCP工具标准结构或API接口结构
 """
 
 import json
@@ -16,32 +16,32 @@ logger = logging.getLogger(__name__)
 
 class SwaggerConverter:
     """
-    Swagger/OpenAPI 转 MCP Tool 转换器
-    
-    将Swagger/OpenAPI文档中的API端点转换为MCP工具定义
+    Swagger/OpenAPI 转换器
+
+    将Swagger/OpenAPI文档中的API端点转换为MCP工具定义或API接口定义
     """
-    
+
     def __init__(self, base_url: str = None, headers: Dict[str, str] = None):
         """
         初始化转换器
-        
+
         Args:
             base_url: API基础URL，用于拼接相对路径
             headers: 请求头，用于调用需要认证的API
         """
         self.base_url = base_url
         self.headers = headers or {}
-    
+
     def load_from_url(self, swagger_url: str) -> Dict[str, Any]:
         """
         从URL加载Swagger文档
-        
+
         Args:
             swagger_url: Swagger文档URL
-            
+
         Returns:
             Dict: Swagger文档内容
-            
+
         Raises:
             httpx.HTTPError: HTTP请求失败
             ValueError: 文档解析失败
@@ -56,17 +56,17 @@ class SwaggerConverter:
         except json.JSONDecodeError as e:
             logger.error(f"解析Swagger文档失败: {e}")
             raise ValueError(f"无效的JSON格式: {e}")
-    
+
     def load_from_json(self, swagger_json: str) -> Dict[str, Any]:
         """
         从JSON字符串加载Swagger文档
-        
+
         Args:
             swagger_json: Swagger文档JSON字符串
-            
+
         Returns:
             Dict: Swagger文档内容
-            
+
         Raises:
             ValueError: JSON解析失败
         """
@@ -75,9 +75,9 @@ class SwaggerConverter:
         except json.JSONDecodeError as e:
             logger.error(f"解析Swagger JSON失败: {e}")
             raise ValueError(f"无效的JSON格式: {e}")
-    
+
     def convert_to_mcp_tools(
-        self, 
+        self,
         swagger_doc: Dict[str, Any],
         server_id: str = None,
         include_patterns: List[str] = None,
@@ -85,21 +85,21 @@ class SwaggerConverter:
     ) -> List[Dict[str, Any]]:
         """
         将Swagger文档转换为MCP工具列表
-        
+
         Args:
             swagger_doc: Swagger文档内容
             server_id: MCP服务ID
             include_patterns: 包含的API路径模式列表（正则表达式）
             exclude_patterns: 排除的API路径模式列表（正则表达式）
-            
+
         Returns:
             List[Dict]: MCP工具列表
         """
         tools = []
-        
+
         openapi_version = swagger_doc.get('openapi')
         swagger_version = swagger_doc.get('swagger')
-        
+
         if openapi_version:
             paths = swagger_doc.get('paths', {})
             base_path = ''
@@ -108,7 +108,7 @@ class SwaggerConverter:
             base_path = swagger_doc.get('basePath', '')
         else:
             raise ValueError("无法识别的Swagger/OpenAPI文档格式")
-        
+
         servers = swagger_doc.get('servers', [])
         if servers and not self.base_url:
             self.base_url = servers[0].get('url', '')
@@ -116,20 +116,20 @@ class SwaggerConverter:
             schemes = swagger_doc.get('schemes', ['http'])
             host = swagger_doc.get('host', '')
             self.base_url = f"{schemes[0]}://{host}{base_path}"
-        
+
         for path, path_item in paths.items():
             if include_patterns:
                 if not any(re.match(pattern, path) for pattern in include_patterns):
                     continue
-            
+
             if exclude_patterns:
                 if any(re.match(pattern, path) for pattern in exclude_patterns):
                     continue
-            
+
             for method in ['get', 'post', 'put', 'delete', 'patch']:
                 if method not in path_item:
                     continue
-                
+
                 operation = path_item[method]
                 tool = self._convert_operation_to_tool(
                     path=path,
@@ -140,9 +140,76 @@ class SwaggerConverter:
                 )
                 if tool:
                     tools.append(tool)
-        
+
         return tools
-    
+
+    def convert_to_apis(
+        self,
+        swagger_doc: Dict[str, Any],
+        server_id: str = None,
+        include_patterns: List[str] = None,
+        exclude_patterns: List[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        将Swagger文档转换为API接口列表
+
+        Args:
+            swagger_doc: Swagger文档内容
+            server_id: API服务ID
+            include_patterns: 包含的API路径模式列表（正则表达式）
+            exclude_patterns: 排除的API路径模式列表（正则表达式）
+
+        Returns:
+            List[Dict]: API接口列表，每项包含name/title/description/configs/status
+        """
+        apis = []
+
+        openapi_version = swagger_doc.get('openapi')
+        swagger_version = swagger_doc.get('swagger')
+
+        if openapi_version:
+            paths = swagger_doc.get('paths', {})
+            base_path = ''
+        elif swagger_version:
+            paths = swagger_doc.get('paths', {})
+            base_path = swagger_doc.get('basePath', '')
+        else:
+            raise ValueError("无法识别的Swagger/OpenAPI文档格式")
+
+        servers = swagger_doc.get('servers', [])
+        if servers and not self.base_url:
+            self.base_url = servers[0].get('url', '')
+        elif swagger_doc.get('host'):
+            schemes = swagger_doc.get('schemes', ['http'])
+            host = swagger_doc.get('host', '')
+            self.base_url = f"{schemes[0]}://{host}{base_path}"
+
+        for path, path_item in paths.items():
+            if include_patterns:
+                if not any(re.match(pattern, path) for pattern in include_patterns):
+                    continue
+
+            if exclude_patterns:
+                if any(re.match(pattern, path) for pattern in exclude_patterns):
+                    continue
+
+            for method in ['get', 'post', 'put', 'delete', 'patch']:
+                if method not in path_item:
+                    continue
+
+                operation = path_item[method]
+                api = self._convert_operation_to_api(
+                    path=path,
+                    method=method,
+                    operation=operation,
+                    server_id=server_id,
+                    swagger_doc=swagger_doc
+                )
+                if api:
+                    apis.append(api)
+
+        return apis
+
     def _convert_operation_to_tool(
         self,
         path: str,
@@ -153,14 +220,14 @@ class SwaggerConverter:
     ) -> Optional[Dict[str, Any]]:
         """
         将单个API操作转换为MCP工具
-        
+
         Args:
             path: API路径
             method: HTTP方法
             operation: 操作定义
             server_id: MCP服务ID
             swagger_doc: 完整的Swagger文档
-            
+
         Returns:
             Dict: MCP工具定义
         """
@@ -168,21 +235,21 @@ class SwaggerConverter:
         if not operation_id:
             path_safe = re.sub(r'[{}:/]', '_', path).strip('_')
             operation_id = f"{method}_{path_safe}"
-        
+
         operation_id = re.sub(r'[^a-zA-Z0-9_]', '_', operation_id)
-        
+
         summary = operation.get('summary', '')
         description = operation.get('description', summary)
-        
+
         input_schema = self._build_input_schema(operation, swagger_doc)
-        
+
         # 构建标准MCP工具配置结构
         tool_config = {
             'name': operation_id,
             'description': description or f"{method.upper()} {path}",
             'inputSchema': input_schema
         }
-        
+
         # 构建额外配置，包含接口路径、请求方式、base_url和请求头
         extra_config = {
             'path': path,
@@ -193,7 +260,7 @@ class SwaggerConverter:
             'parameters': operation.get('parameters', []),
             'requestBody': operation.get('requestBody')
         }
-        
+
         return {
             'name': operation_id,
             'title': summary or f"{method.upper()} {path}",
@@ -205,7 +272,141 @@ class SwaggerConverter:
             'input_schema': input_schema,
             'status': True
         }
-    
+
+    def _convert_operation_to_api(
+        self,
+        path: str,
+        method: str,
+        operation: Dict[str, Any],
+        server_id: str,
+        swagger_doc: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        将单个API操作转换为API接口定义
+
+        Args:
+            path: API路径
+            method: HTTP方法
+            operation: 操作定义
+            server_id: API服务ID
+            swagger_doc: 完整的Swagger文档
+
+        Returns:
+            Dict: API接口定义，包含name/title/description/configs/status
+        """
+        operation_id = operation.get('operationId', '')
+        if not operation_id:
+            path_safe = re.sub(r'[{}:/]', '_', path).strip('_')
+            operation_id = f"{method}_{path_safe}"
+
+        operation_id = re.sub(r'[^a-zA-Z0-9_]', '_', operation_id)
+
+        summary = operation.get('summary', '')
+        description = operation.get('description', summary)
+
+        # 构建configs，包含method/path/parameters/headers
+        parameters = self._build_api_parameters(operation, swagger_doc)
+        headers = self._build_api_headers(operation, swagger_doc)
+
+        configs = {
+            'method': method.upper(),
+            'path': path,
+            'parameters': parameters,
+            'headers': headers,
+        }
+
+        return {
+            'name': operation_id,
+            'title': summary or f"{method.upper()} {path}",
+            'description': description or f"{method.upper()} {path}",
+            'server_id': server_id,
+            'configs': json.dumps(configs),
+            'status': True
+        }
+
+    def _build_api_parameters(
+        self,
+        operation: Dict[str, Any],
+        swagger_doc: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """
+        构建API接口的请求参数列表
+
+        Args:
+            operation: 操作定义
+            swagger_doc: 完整的Swagger文档
+
+        Returns:
+            List[Dict]: 参数列表，每项包含name/in/type/description
+        """
+        parameters = []
+        for param in operation.get('parameters', []):
+            param_name = param.get('name', '')
+            param_in = param.get('in', 'query')
+            param_schema = param.get('schema', {})
+            param_description = param.get('description', '')
+
+            param_dict = {
+                'name': param_name,
+                'in': param_in,
+                'type': param_schema.get('type', 'string'),
+                'description': param_description,
+            }
+            if 'default' in param_schema:
+                param_dict['default'] = param_schema.get('default')
+            parameters.append(param_dict)
+
+        # requestBody中的参数
+        request_body = operation.get('requestBody')
+        if request_body:
+            content = request_body.get('content', {})
+            json_content = content.get('application/json', {})
+            schema = json_content.get('schema', {})
+
+            ref = schema.get('$ref')
+            if ref:
+                schema = self._resolve_ref(ref, swagger_doc)
+
+            body_properties = schema.get('properties', {})
+            for prop_name, prop_schema in body_properties.items():
+                prop_dict = {
+                    'name': prop_name,
+                    'in': 'body',
+                    'type': prop_schema.get('type', 'string'),
+                    'description': prop_schema.get('description', ''),
+                }
+                if 'default' in prop_schema:
+                    prop_dict['default'] = prop_schema.get('default')
+                parameters.append(prop_dict)
+
+        return parameters
+
+    def _build_api_headers(
+        self,
+        operation: Dict[str, Any],
+        swagger_doc: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """
+        构建API接口的请求头列表
+
+        Args:
+            operation: 操作定义
+            swagger_doc: 完整的Swagger文档
+
+        Returns:
+            List[Dict]: 请求头列表，每项包含key/value/type
+        """
+        headers = []
+        for param in operation.get('parameters', []):
+            if param.get('in') == 'header':
+                param_schema = param.get('schema', {})
+                headers.append({
+                    'key': param.get('name', ''),
+                    'value': param_schema.get('default', ''),
+                    'type': param_schema.get('type', 'string'),
+                })
+        return headers
+
     def _build_input_schema(
         self,
         operation: Dict[str, Any],
@@ -213,17 +414,17 @@ class SwaggerConverter:
     ) -> Dict[str, Any]:
         """
         构建工具的输入Schema
-        
+
         Args:
             operation: 操作定义
             swagger_doc: 完整的Swagger文档
-            
+
         Returns:
             Dict: JSON Schema格式的输入定义
         """
         properties = {}
         required = []
-        
+
         parameters = operation.get('parameters', [])
         for param in parameters:
             param_name = param.get('name')
@@ -231,7 +432,7 @@ class SwaggerConverter:
             param_schema = param.get('schema', {})
             param_description = param.get('description', '')
             param_required = param.get('required', False)
-            
+
             if param_in == 'body':
                 ref = param_schema.get('$ref')
                 if ref:
@@ -244,29 +445,29 @@ class SwaggerConverter:
                     'type': param_schema.get('type', 'string'),
                     'description': param_description
                 }
-                
+
                 if param_schema.get('enum'):
                     prop['enum'] = param_schema.get('enum')
                 if param_schema.get('default'):
                     prop['default'] = param_schema.get('default')
                 if param_schema.get('format'):
                     prop['format'] = param_schema.get('format')
-                
+
                 properties[param_name] = prop
-                
+
                 if param_required:
                     required.append(param_name)
-        
+
         request_body = operation.get('requestBody')
         if request_body:
             content = request_body.get('content', {})
             json_content = content.get('application/json', {})
             schema = json_content.get('schema', {})
-            
+
             ref = schema.get('$ref')
             if ref:
                 schema = self._resolve_ref(ref, swagger_doc)
-            
+
             body_properties = schema.get('properties', {})
             for prop_name, prop_schema in body_properties.items():
                 prop = {
@@ -281,42 +482,42 @@ class SwaggerConverter:
                     prop['format'] = prop_schema.get('format')
                 if prop_schema.get('items'):
                     prop['items'] = prop_schema.get('items')
-                
+
                 properties[prop_name] = prop
-            
+
             body_required = schema.get('required', [])
             if request_body.get('required'):
                 required.extend(body_required)
-        
+
         return {
             'type': 'object',
             'properties': properties,
             'required': list(set(required))
         }
-    
+
     def _resolve_ref(self, ref: str, swagger_doc: Dict[str, Any]) -> Dict[str, Any]:
         """
         解析$ref引用
-        
+
         Args:
             ref: 引用路径，如 "#/components/schemas/User"
             swagger_doc: 完整的Swagger文档
-            
+
         Returns:
             Dict: 解析后的schema定义
         """
         if not ref.startswith('#/'):
             return {}
-        
+
         parts = ref[2:].split('/')
         current = swagger_doc
-        
+
         for part in parts:
             if part in current:
                 current = current[part]
             else:
                 return {}
-        
+
         return current
 
 
@@ -330,7 +531,7 @@ def convert_swagger_url_to_mcp_tools(
 ) -> List[Dict[str, Any]]:
     """
     从Swagger URL转换为MCP工具列表
-    
+
     Args:
         swagger_url: Swagger文档URL
         server_id: MCP服务ID
@@ -338,7 +539,7 @@ def convert_swagger_url_to_mcp_tools(
         headers: 请求头
         include_patterns: 包含的API路径模式列表
         exclude_patterns: 排除的API路径模式列表
-        
+
     Returns:
         List[Dict]: MCP工具列表
     """
@@ -347,7 +548,7 @@ def convert_swagger_url_to_mcp_tools(
         from urllib.parse import urlparse
         parsed_url = urlparse(swagger_url)
         base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
-    
+
     converter = SwaggerConverter(base_url=base_url, headers=headers)
     swagger_doc = converter.load_from_url(swagger_url)
     return converter.convert_to_mcp_tools(
@@ -368,7 +569,7 @@ def convert_swagger_json_to_mcp_tools(
 ) -> List[Dict[str, Any]]:
     """
     从Swagger JSON字符串转换为MCP工具列表
-    
+
     Args:
         swagger_json: Swagger文档JSON字符串
         server_id: MCP服务ID
@@ -376,7 +577,7 @@ def convert_swagger_json_to_mcp_tools(
         headers: 请求头
         include_patterns: 包含的API路径模式列表
         exclude_patterns: 排除的API路径模式列表
-        
+
     Returns:
         List[Dict]: MCP工具列表
     """
@@ -384,6 +585,75 @@ def convert_swagger_json_to_mcp_tools(
     converter = SwaggerConverter(base_url=base_url, headers=headers)
     swagger_doc = converter.load_from_json(swagger_json)
     return converter.convert_to_mcp_tools(
+        swagger_doc=swagger_doc,
+        server_id=server_id,
+        include_patterns=include_patterns,
+        exclude_patterns=exclude_patterns
+    )
+
+
+def convert_swagger_url_to_apis(
+    swagger_url: str,
+    server_id: str = None,
+    base_url: str = None,
+    headers: Dict[str, str] = None,
+    include_patterns: List[str] = None,
+    exclude_patterns: List[str] = None
+) -> List[Dict[str, Any]]:
+    """
+    从Swagger URL转换为API接口列表
+
+    Args:
+        swagger_url: Swagger文档URL
+        server_id: API服务ID
+        base_url: API基础URL
+        headers: 请求头
+        include_patterns: 包含的API路径模式列表
+        exclude_patterns: 排除的API路径模式列表
+
+    Returns:
+        List[Dict]: API接口列表
+    """
+    if not base_url:
+        from urllib.parse import urlparse
+        parsed_url = urlparse(swagger_url)
+        base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
+
+    converter = SwaggerConverter(base_url=base_url, headers=headers)
+    swagger_doc = converter.load_from_url(swagger_url)
+    return converter.convert_to_apis(
+        swagger_doc=swagger_doc,
+        server_id=server_id,
+        include_patterns=include_patterns,
+        exclude_patterns=exclude_patterns
+    )
+
+
+def convert_swagger_json_to_apis(
+    swagger_json: str,
+    server_id: str = None,
+    base_url: str = None,
+    headers: Dict[str, str] = None,
+    include_patterns: List[str] = None,
+    exclude_patterns: List[str] = None
+) -> List[Dict[str, Any]]:
+    """
+    从Swagger JSON字符串转换为API接口列表
+
+    Args:
+        swagger_json: Swagger文档JSON字符串
+        server_id: API服务ID
+        base_url: API基础URL
+        headers: 请求头
+        include_patterns: 包含的API路径模式列表
+        exclude_patterns: 排除的API路径模式列表
+
+    Returns:
+        List[Dict]: API接口列表
+    """
+    converter = SwaggerConverter(base_url=base_url, headers=headers)
+    swagger_doc = converter.load_from_json(swagger_json)
+    return converter.convert_to_apis(
         swagger_doc=swagger_doc,
         server_id=server_id,
         include_patterns=include_patterns,

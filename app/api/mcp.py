@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 def get_swagger_converter():
     import importlib.util
     import os
-    utils_path = os.path.join(os.path.dirname(__file__), '..', 'core', 'mcp', 'utils', 'swagger_converter.py')
+    utils_path = os.path.join(os.path.dirname(__file__), '..', 'utils', 'swagger_converter.py')
     spec = importlib.util.spec_from_file_location("swagger_converter", utils_path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

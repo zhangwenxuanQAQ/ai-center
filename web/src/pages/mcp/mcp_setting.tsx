@@ -1238,9 +1238,8 @@ const MCPSetting: React.FC = () => {
                 paddingTop: '16px', 
                 borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8',
                 display: 'flex',
-                justifyContent: 'flex-end',
+                justifyContent: 'center',
                 flexShrink: 0,
-                background: theme === 'dark' ? 'rgba(30, 30, 30, 0.95)' : '#fff'
               }}>
                 <Pagination
                   current={toolsPage}
@@ -1248,28 +1247,13 @@ const MCPSetting: React.FC = () => {
                   total={toolsTotal}
                   showSizeChanger
                   showQuickJumper
-                  showTotal={(total) => `共 ${total} 条`}
+                  showTotal={(total) => `共 ${total} 条记录`}
                   pageSizeOptions={['10', '20', '50', '100']}
-                  size="small"
                   onChange={(page, pageSize) => {
                     setToolsPage(page);
                     setToolsPageSize(pageSize);
-                    // 切换页号时不清空选择
                   }}
-                  locale={{
-                    items_per_page: '条/页',
-                    jump_to: '跳转到',
-                    jump_to_confirm: '确定',
-                    page: '页',
-                    prev_page: '上一页',
-                    next_page: '下一页',
-                    prev_5: '向前 5 页',
-                    next_5: '向后 5 页',
-                    prev_3: '向前 3 页',
-                    next_3: '向后 3 页',
-                    first: '第一页',
-                    last: '最后一页'
-                  }}
+                  className={`pagination ${theme === 'dark' ? 'dark' : 'light'}`}
                 />
               </div>
             </div>

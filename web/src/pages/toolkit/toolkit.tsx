@@ -10,6 +10,7 @@ import { toolkitService, BuiltinTool, BuiltinToolParam } from '../../services/to
 import { datasourceService, Datasource } from '../../services/datasource';
 import { llmModelService, LLMModel } from '../../services/llm_model';
 import { mcpService, MCPServer, MCPCategory } from '../../services/mcp';
+import ApiTool from './api_tool';
 import '../../styles/common.css';
 import './toolkit.less';
 import '../prompt/prompt_setting.less';
@@ -1315,6 +1316,7 @@ const ToolkitManagement: React.FC = () => {
 
   // 判断当前选中的工具类型
   const showMcpList = selectedToolType === 'mcp';
+  const showApiList = selectedToolType === 'api';
   const showBuiltinTools = selectedToolType === 'builtin_tool';
 
   // 工具类型列表（内置工具放最后）
@@ -1356,6 +1358,10 @@ const ToolkitManagement: React.FC = () => {
         </div>
 
         <Layout className="toolkit-main">
+          {showApiList ? (
+            <ApiTool theme={theme} />
+          ) : (
+            <>
           {showMcpList && (
             <LeftSider width={260} className={`category-sider ${theme === 'dark' ? 'dark' : 'light'}`}>
               <div className={`sider-header ${theme === 'dark' ? 'dark' : 'light'}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1559,6 +1565,8 @@ const ToolkitManagement: React.FC = () => {
               </div>
             )}
           </Content>
+            </>
+          )}
         </Layout>
       </Layout>
 

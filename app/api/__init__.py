@@ -22,6 +22,7 @@ from .system.monitor import router as system_monitor_router
 from .agent import router as agent_router
 from .mcp import router as mcp_router
 from .toolkit import router as toolkit_router
+from .api_server import router as api_router
 from .integration.management import router as integration_management_router
 from .integration.api import router as integration_api_router
 from .ontology import router as ontology_router
@@ -47,6 +48,7 @@ _module_routes = {
     'chatbot': [(chatbot_router, "/chatbot", "chatbot"), (chatbot_category_router, "/chatbot_category", "chatbot_category")],
     'mcp': [(mcp_router, "/mcp", "mcp")],
     'toolkit': [(toolkit_router, "/toolkit", "toolkit")],
+    'api': [(api_router, "/api_server", "api_server")],
     'knowledgebase': [(knowledgebase_router, "/knowledgebase", "knowledgebase")],
     'llm_model': [(llm_model_router, "/llm_model", "llm_model")],
     'prompt': [(prompt_router, "/prompt", "prompt")],

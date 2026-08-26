@@ -1,4 +1,4 @@
-﻿.mcp-setting-container {
+.mcp-setting-container {
   padding: 8px;
   display: flex;
   gap: 8px;
@@ -171,4 +171,66 @@
 
 .react-resizable-handle:active {
   background-color: rgba(24, 144, 255, 0.4);
+}
+
+.pagination {
+  &.dark {
+    :global {
+      .ant-pagination {
+        color: var(--dark-text-primary);
+      }
+      
+      .ant-pagination-item {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--dark-border);
+        
+        a {
+          color: var(--dark-text-secondary);
+        }
+        
+        &:hover {
+          border-color: ~"var(--primary-color)";
+          
+          a {
+            color: ~"var(--primary-color)";
+          }
+        }
+        
+        &.ant-pagination-item-active {
+          background: ~"var(--primary-color)";
+          border: none;
+          
+          a {
+            color: #fff;
+          }
+        }
+      }
+      
+      .ant-pagination-prev,
+      .ant-pagination-next {
+        color: var(--dark-text-secondary);
+        
+        .ant-pagination-item-link {
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid var(--dark-border);
+          color: var(--dark-text-secondary);
+        }
+        
+        &:hover .ant-pagination-item-link {
+          color: ~"var(--primary-color)";
+          border-color: ~"var(--primary-color)";
+        }
+      }
+      
+      .ant-pagination-options {
+        color: var(--dark-text-primary);
+
+        .ant-select-selector {
+          background: rgba(255, 255, 255, 0.05);
+          border-color: var(--dark-border);
+          color: var(--dark-text-primary);
+        }
+      }
+    }
+  }
 }

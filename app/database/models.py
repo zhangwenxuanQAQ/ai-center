@@ -419,6 +419,61 @@ class ChatbotMCP(SoftDeleteModel):
         table_name = 'chatbot_mcp'
 
 
+class ApiServerCategory(SoftDeleteModel):
+    """
+    API服务分类模型
+
+    存储API服务分类信息，支持树形结构
+    """
+    name = CharField(max_length=255, index=True, verbose_name="分类名称")
+    description = TextField(null=True, verbose_name="分类描述")
+    parent_id = CharField(max_length=40, null=True, index=True, verbose_name="父分类ID")
+    sort_order = IntegerField(default=0, verbose_name="排序序号")
+    is_default = BooleanField(default=False, verbose_name="是否默认分类")
+
+    class Meta:
+        table_name = 'api_server_category'
+        indexes = (
+            (('parent_id', 'sort_order'), False),
+        )
+
+
+class ApiServer(SoftDeleteModel):
+    """
+    API服务模型
+
+    存储API服务配置信息
+    """
+    name = CharField(max_length=255, index=True, verbose_name="API服务名称")
+    description = TextField(null=True, verbose_name="API服务描述")
+    url = CharField(max_length=512, null=True, verbose_name="API服务基础URL")
+    avatar = TextField(null=True, verbose_name="API服务头像")
+    headers = TextField(null=True, verbose_name="请求头配置，JSON格式字符串")
+    configs = TextField(null=True, verbose_name="API服务配置，JSON格式字符串")
+    category_id = CharField(max_length=40, null=True, index=True, verbose_name="分类ID")
+    status = BooleanField(default=True, verbose_name="状态，True表示启用，False表示停用")
+
+    class Meta:
+        table_name = 'api_server'
+
+
+class Api(SoftDeleteModel):
+    """
+    API接口模型
+
+    存储具体API接口信息
+    """
+    name = CharField(max_length=255, index=True, verbose_name="接口名称")
+    title = CharField(max_length=255, null=True, verbose_name="接口标题")
+    description = TextField(null=True, verbose_name="接口描述")
+    server_id = CharField(max_length=40, index=True, verbose_name="API服务ID")
+    configs = TextField(null=True, verbose_name="接口配置，JSON格式字符串，包含method/path/parameters等")
+    status = BooleanField(default=True, verbose_name="状态，True表示启用，False表示禁用")
+
+    class Meta:
+        table_name = 'api'
+
+
 class ChatbotModel(SoftDeleteModel):
     """
     机器人模型关联模型
@@ -741,6 +796,9 @@ def create_tables(enabled_tables: set = None):
         MCPServer,
         MCPTool,
         ChatbotMCP,
+        ApiServerCategory,
+        ApiServer,
+        Api,
         ChatbotModel,
         ChatbotPrompt,
         ChatbotTool,
