@@ -38,6 +38,7 @@ from app.database.models import KnowledgebaseDocument, Knowledgebase, LLMModel
 from app.database.storage.rustfs_utils import rustfs_utils
 from app.database.database import db_connection_scope
 from app.core.llm_model.factory import LLMFactory
+from app.core.hooks.task_info_hook import TaskInfoHook
 from app.constants.knowledgebase_document_constants import RunningStatus
 
 logger = logging.getLogger(__name__)
@@ -264,7 +265,9 @@ class TaskExecutor:
                         doc.token_num = 0
                         doc.chunk_num = 0
                         doc.save()
-                        
+                        # 任务恢复重置时同步任务信息表（任务中心）
+                        TaskInfoHook.sync_document(doc)
+
                         self._publish_doc_event(doc.kb_id, {
                             "doc_id": doc.id,
                             "running_status": doc.running_status,
@@ -878,7 +881,9 @@ class TaskExecutor:
                 self._update_kb_stats(task.kb_id, task.token_num, len(task.result))
 
             doc.save()
-            
+            # 任务运行中更新文档时同步任务信息表（任务中心）
+            TaskInfoHook.sync_document(doc)
+
             self._publish_doc_event(task.kb_id, {
                 "doc_id": task.doc_id,
                 "running_status": doc.running_status,
@@ -1929,7 +1934,9 @@ class TaskExecutor:
             doc.token_num = 0
             doc.chunk_num = 0
             doc.save()
-            
+            # 重新解析重置时同步任务信息表（任务中心）
+            TaskInfoHook.sync_document(doc)
+
             self._publish_doc_event(doc.kb_id, {
                 "doc_id": doc.id,
                 "running_status": doc.running_status,
@@ -1978,6 +1985,8 @@ class TaskExecutor:
             doc.chunk_num = 0
             doc.token_num = 0
             doc.save()
+            # 切片数据删除重置时同步任务信息表（任务中心）
+            TaskInfoHook.sync_document(doc)
         except Exception as e:
             logger.error(f"更新文档状态失败: {e}")
 

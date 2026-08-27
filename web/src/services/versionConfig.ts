@@ -122,6 +122,11 @@ function getDefaultVersionInfo(): VersionInfo {
       required: false, api_prefixes: ['/ontology'], frontend_routes: ['/ontology/objects', '/ontology/tasks'],
       menu_keys: ['ontology'], dependencies: ['user', 'datasource']
     },
+    {
+      name: 'task_center', display_name: '任务中心', description: '任务执行与日志管理',
+      required: false, api_prefixes: ['/task_center'], frontend_routes: ['/task_center/tasks', '/task_center/logs'],
+      menu_keys: ['task_center'], dependencies: ['user']
+    },
   ];
 
   const modulesMap: Record<string, ModuleInfo> = {};
@@ -221,6 +226,10 @@ export function getAvailableMenus(versionInfo: VersionInfo | null): MenuItemConf
     { key: 'ontology_group', label: '本体工作台', icon: 'PartitionOutlined', children: [
       { key: 'ontology-objects', label: '本体对象', icon: 'DatabaseOutlined', path: '/ontology/objects', moduleName: 'ontology' },
       { key: 'ontology-tasks', label: '数据抽取', icon: 'CloudServerOutlined', path: '/ontology/tasks', moduleName: 'ontology' },
+    ]},
+    { key: 'task_center_group', label: '任务中心', icon: 'ScheduleOutlined', children: [
+      { key: 'task_center-tasks', label: '任务列表', icon: 'UnorderedListOutlined', path: '/task_center/tasks', moduleName: 'task_center' },
+      { key: 'task_center-logs', label: '任务日志', icon: 'FileTextOutlined', path: '/task_center/logs', moduleName: 'task_center' },
     ]},
     { key: 'config_group', label: '配置', icon: 'ToolOutlined', children: [
       { key: 'chatbot', label: '机器人', icon: 'RobotOutlined', path: '/chatbots', moduleName: 'chatbot' },

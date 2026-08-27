@@ -219,6 +219,9 @@ class VersionManager:
             'ontology': {'name': '本体工作台', 'description': '本体对象与数据抽取', 'required': False,
                          'api_prefixes': ['/ontology'], 'frontend_routes': ['/ontology/objects', '/ontology/tasks'],
                          'menu_keys': ['ontology'], 'database_tables': ['ontology_object', 'ontology_task'], 'dependencies': ['user', 'datasource']},
+            'task_center': {'name': '任务中心', 'description': '任务执行与日志管理', 'required': False,
+                            'api_prefixes': ['/task_center'], 'frontend_routes': ['/task_center/tasks', '/task_center/logs'],
+                            'menu_keys': ['task_center'], 'database_tables': ['task_info', 'task_log'], 'dependencies': ['user']},
         }
         for name, config in default_modules.items():
             self._modules[name] = ModuleConfig(name, config)

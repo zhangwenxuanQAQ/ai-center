@@ -19,6 +19,7 @@ enabled_modules:
   - system_monitor
   - integration
   - ontology
+  - task_center
 
 # 说明：
 # - 此配置文件用于指定镜像中启用的功能模块

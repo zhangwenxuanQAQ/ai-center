@@ -51,6 +51,8 @@ def run_database_migrations(db):
         _migrate_chatbot_chat(db)
         _migrate_chatbot_chat_message(db)
         _migrate_chatbot_tool(db)
+        _migrate_task_info_source_fields(db)
+        _migrate_task_info_description_field(db)
 
         logger.info("\n[MIGRATION] ✅ 数据库迁移完成")
     except Exception as e:
@@ -1792,3 +1794,83 @@ def _migrate_chatbot_tool(db):
         logger.info("[MIGRATION]   chatbot_tool 表迁移完成")
     except Exception as e:
         logger.error(f"[MIGRATION]   迁移 chatbot_tool 表失败: {e}")
+
+
+def _migrate_task_info_source_fields(db):
+    """
+    迁移 task_info 表结构：
+    新增 source_type/source_id 字段（关联业务模块源记录，供task_info_hook同步使用）。
+    如果已经更新过表结构则跳过。
+    """
+    logger.info("\n[MIGRATION] 迁移 task_info 表结构...")
+    try:
+        table_names = _get_table_names(db)
+
+        if 'task_info' not in table_names:
+            logger.info("[MIGRATION]   task_info 表不存在，将在create_tables中创建")
+            return
+
+        cursor = db.execute_sql("DESCRIBE task_info;")
+        columns = [column[0] for column in cursor.fetchall()]
+
+        if 'source_type' not in columns:
+            db.execute_sql(
+                "ALTER TABLE task_info ADD COLUMN source_type VARCHAR(50) DEFAULT NULL "
+                "COMMENT '来源类型：ontology_task/knowledgebase_document'"
+            )
+            logger.info("[MIGRATION]   成功添加 source_type 字段")
+        else:
+            logger.info("[MIGRATION]   source_type 字段已存在，跳过")
+
+        if 'source_id' not in columns:
+            db.execute_sql(
+                "ALTER TABLE task_info ADD COLUMN source_id VARCHAR(40) DEFAULT NULL "
+                "COMMENT '来源记录ID'"
+            )
+            logger.info("[MIGRATION]   成功添加 source_id 字段")
+        else:
+            logger.info("[MIGRATION]   source_id 字段已存在，跳过")
+
+        # 添加 (source_type, source_id) 组合索引
+        try:
+            db.execute_sql(
+                "ALTER TABLE task_info ADD INDEX idx_task_info_source (source_type, source_id)"
+            )
+            logger.info("[MIGRATION]   已添加 (source_type, source_id) 索引")
+        except Exception as e:
+            logger.info(f"[MIGRATION]   添加索引跳过: {e}")
+
+        logger.info("[MIGRATION]   task_info 表迁移完成")
+    except Exception as e:
+        logger.error(f"[MIGRATION]   迁移 task_info 表失败: {e}")
+
+
+def _migrate_task_info_description_field(db):
+    """
+    迁移 task_info 表结构：
+    新增 description 字段（任务描述）。
+    如果已经更新过表结构则跳过。
+    """
+    logger.info("\n[MIGRATION] 迁移 task_info 表 description 字段...")
+    try:
+        table_names = _get_table_names(db)
+
+        if 'task_info' not in table_names:
+            logger.info("[MIGRATION]   task_info 表不存在，将在create_tables中创建")
+            return
+
+        cursor = db.execute_sql("DESCRIBE task_info;")
+        columns = [column[0] for column in cursor.fetchall()]
+
+        if 'description' not in columns:
+            db.execute_sql(
+                "ALTER TABLE task_info ADD COLUMN description TEXT DEFAULT NULL "
+                "COMMENT '任务描述'"
+            )
+            logger.info("[MIGRATION]   成功添加 description 字段")
+        else:
+            logger.info("[MIGRATION]   description 字段已存在，跳过")
+
+        logger.info("[MIGRATION]   task_info 表 description 字段迁移完成")
+    except Exception as e:
+        logger.error(f"[MIGRATION]   迁移 task_info 表 description 字段失败: {e}")

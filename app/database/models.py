@@ -773,6 +773,57 @@ class OntologyTask(SoftDeleteModel):
         table_name = 'ontology_task'
 
 
+class TaskInfo(SoftDeleteModel):
+    """
+    任务信息模型
+
+    存储任务中心任务信息，一个任务可多次执行，每次执行生成一条task_log记录。
+    数据抽取/文档切片类型任务通过source_type/source_id关联业务模块源记录，由task_info_hook同步。
+    """
+    name = CharField(max_length=255, index=True, verbose_name="任务名称")
+    description = TextField(null=True, verbose_name="任务描述")
+    task_status = CharField(max_length=20, default="pending", index=True, verbose_name="任务状态")
+    task_type = CharField(max_length=50, index=True, verbose_name="任务类型：data_extract/api/doc_chunk")
+    task_configs = TextField(null=True, verbose_name="任务配置JSON")
+    task_progress = FloatField(default=0, verbose_name="任务进度(0-1)")
+    task_progress_message = TextField(null=True, verbose_name="任务进度消息")
+    task_begin_at = DateTimeField(null=True, verbose_name="任务开始时间")
+    task_end_at = DateTimeField(null=True, verbose_name="任务结束时间")
+    task_duration = IntegerField(default=0, verbose_name="任务耗时(毫秒)")
+    source_type = CharField(max_length=50, null=True, index=True, verbose_name="来源类型：ontology_task/knowledgebase_document")
+    source_id = CharField(max_length=40, null=True, index=True, verbose_name="来源记录ID")
+
+    class Meta:
+        table_name = 'task_info'
+        indexes = (
+            (('source_type', 'source_id'), False),
+        )
+
+
+class TaskLog(SoftDeleteModel):
+    """
+    任务日志模型
+
+    每次任务执行时生成一条记录，记录该次执行的状态、进度、进度消息等
+    """
+    task_id = CharField(max_length=40, index=True, verbose_name="任务ID")
+    name = CharField(max_length=255, verbose_name="任务名称")
+    task_status = CharField(max_length=20, default="pending", index=True, verbose_name="任务状态")
+    task_type = CharField(max_length=50, index=True, verbose_name="任务类型：data_extract/api/doc_chunk")
+    task_configs = TextField(null=True, verbose_name="任务配置JSON")
+    task_progress = FloatField(default=0, verbose_name="任务进度(0-1)")
+    task_progress_message = TextField(null=True, verbose_name="任务进度消息")
+    task_begin_at = DateTimeField(null=True, verbose_name="任务开始时间")
+    task_end_at = DateTimeField(null=True, verbose_name="任务结束时间")
+    task_duration = IntegerField(default=0, verbose_name="任务耗时(毫秒)")
+
+    class Meta:
+        table_name = 'task_log'
+        indexes = (
+            (('task_id', 'created_at'), False),
+        )
+
+
 def create_tables(enabled_tables: set = None):
     """
     创建所有数据表
@@ -817,6 +868,8 @@ def create_tables(enabled_tables: set = None):
         ChatbotChatMessage,
         OntologyObject,
         OntologyTask,
+        TaskInfo,
+        TaskLog,
     ]
     
     for table in tables:

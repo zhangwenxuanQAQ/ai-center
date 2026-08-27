@@ -18,6 +18,7 @@ from app.constants.ontology_constants import (
 )
 from app.core.ontology.object_core import OntologyObjectCore
 from app.core.ontology.utils import ontology_object_to_dict, task_to_dict
+from app.core.hooks.task_info_hook import TaskInfoHook
 from app.database.db_utils import handle_transaction
 
 logger = logging.getLogger(__name__)
@@ -240,6 +241,8 @@ class OntologyService:
         )
         # id 字段有默认值，实例化后主键非空，需 force_insert=True 否则 save 会执行 UPDATE
         task.save(force_insert=True)
+        # 同步任务信息表（任务中心）
+        TaskInfoHook.sync_ontology_task(task)
         return task_to_dict(task)
 
     @staticmethod
@@ -264,6 +267,8 @@ class OntologyService:
             task.task_progress = 0
             task.task_progress_message = ''
         task.save()
+        # 同步任务信息表（任务中心）
+        TaskInfoHook.sync_ontology_task(task)
         return task_to_dict(task)
 
     @staticmethod
@@ -277,6 +282,8 @@ class OntologyService:
             ).first()
             if task and task.status != OntologyTaskStatus.RUNNING:
                 task.delete_instance()
+                # 同步删除任务信息表（任务中心）
+                TaskInfoHook.sync_ontology_task_delete(task_id)
                 deleted_count += 1
         return deleted_count
 

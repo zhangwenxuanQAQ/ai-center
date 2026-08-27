@@ -4,7 +4,7 @@ import zhCN from 'antd/locale/zh_CN';
 import dayjs from 'dayjs';
 import 'dayjs/locale/zh-cn';
 dayjs.locale('zh-cn');
-import { HomeOutlined, MessageOutlined, SettingOutlined, LogoutOutlined, RobotOutlined, BookOutlined, DatabaseOutlined, CommentOutlined, MoonOutlined, SunOutlined, MenuFoldOutlined, MenuUnfoldOutlined, HistoryOutlined, TeamOutlined, ToolOutlined, FileTextOutlined, CloudServerOutlined, DashboardOutlined, DesktopOutlined, ApartmentOutlined, ArrowLeftOutlined, PartitionOutlined } from '@ant-design/icons';
+import { HomeOutlined, MessageOutlined, SettingOutlined, LogoutOutlined, RobotOutlined, BookOutlined, DatabaseOutlined, CommentOutlined, MoonOutlined, SunOutlined, MenuFoldOutlined, MenuUnfoldOutlined, HistoryOutlined, TeamOutlined, ToolOutlined, FileTextOutlined, CloudServerOutlined, DashboardOutlined, DesktopOutlined, ApartmentOutlined, ArrowLeftOutlined, PartitionOutlined, ScheduleOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import { useState, useEffect, useMemo } from 'react';
 import './styles/index.css';
 import './styles/common.css';
@@ -37,6 +37,8 @@ import IntegrationSidebarPage from './integration/sidebar/index.tsx';
 import IntegrationPreviewPage from './integration/preview/index.tsx';
 import OntologyObject from './pages/ontology/ontology_object.tsx';
 import OntologyTask from './pages/ontology/ontology_task.tsx';
+import TaskCenterTask from './pages/task_center/task_info.tsx';
+import TaskCenterLog from './pages/task_center/task_log.tsx';
 import NotFound from './pages/notfound/notfound.tsx';
 import { getVersionConfig, getAvailableMenus, VersionInfo, isModuleEnabled, MenuItemConfig } from './services/versionConfig';
 
@@ -65,6 +67,8 @@ const routeModuleMap: Record<string, string> = {
   '/agent/setting/:id': 'agent',
   '/ontology/objects': 'ontology',
   '/ontology/tasks': 'ontology',
+  '/task_center/tasks': 'task_center',
+  '/task_center/logs': 'task_center',
 };
 
 // 路由组件映射
@@ -91,6 +95,8 @@ const routeComponents: Record<string, React.ComponentType> = {
   '/agent/setting/:id': AgentSetting,
   '/ontology/objects': OntologyObject,
   '/ontology/tasks': OntologyTask,
+  '/task_center/tasks': TaskCenterTask,
+  '/task_center/logs': TaskCenterLog,
 };
 
 // 面包屑映射
@@ -117,6 +123,8 @@ const breadcrumbMap: Record<string, { title: string; path?: string }[]> = {
   '/agent/setting/:id': [{ title: '首页', path: '/' }, { title: '智能体', path: '/agents' }, { title: '智能体配置' }],
   '/ontology/objects': [{ title: '首页', path: '/' }, { title: '本体工作台', path: '/ontology/objects' }, { title: '本体对象' }],
   '/ontology/tasks': [{ title: '首页', path: '/' }, { title: '本体工作台', path: '/ontology/objects' }, { title: '数据抽取' }],
+  '/task_center/tasks': [{ title: '首页', path: '/' }, { title: '任务中心', path: '/task_center/tasks' }, { title: '任务列表' }],
+  '/task_center/logs': [{ title: '首页', path: '/' }, { title: '任务中心', path: '/task_center/tasks' }, { title: '任务日志' }],
 };
 
 const getBreadcrumbItems = (path: string) => {
@@ -191,6 +199,8 @@ function AppContent({ theme, toggleTheme, versionInfo, loading }: AppContentProp
       'TeamOutlined': TeamOutlined,
       'PartitionOutlined': PartitionOutlined,
       'ToolOutlined': ToolOutlined,
+      'ScheduleOutlined': ScheduleOutlined,
+      'UnorderedListOutlined': UnorderedListOutlined,
     };
     return iconName ? (iconMap[iconName] || null) : null;
   }

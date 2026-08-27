@@ -27,6 +27,7 @@ from app.constants.ontology_constants import (
 from app.core.ontology.utils import ontology_object_to_dict, task_to_dict
 from app.core.datasource.utils import quote_ident, normalize_rows, format_data
 from app.core.hooks.ontology_task_hook import OntologyTaskHook
+from app.core.hooks.task_info_hook import TaskInfoHook
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,8 @@ class OntologyTaskCore:
             if task.task_begin_at:
                 task.task_duration = int((task.task_end_at - task.task_begin_at).total_seconds() * 1000)
         task.save()
+        # 同步任务信息表（任务中心）
+        TaskInfoHook.sync_ontology_task_runtime(task)
         OntologyTaskCore._publish_task_event(task)
         return True
 
@@ -87,6 +90,8 @@ class OntologyTaskCore:
             existing = task.task_progress_message or ''
             task.task_progress_message = f"{existing}\n[{timestamp}] {message}".strip()
         task.save()
+        # 同步任务信息表（任务中心）
+        TaskInfoHook.sync_ontology_task_runtime(task)
         OntologyTaskCore._publish_task_event(task)
         return True
 
@@ -195,6 +200,8 @@ class OntologyTaskCore:
                 if t:
                     t.status = status
                     t.save()
+                    # 同步任务信息表（任务中心）
+                    TaskInfoHook.sync_ontology_task_runtime(t)
                     OntologyTaskCore._publish_task_event(t)
             except Exception as ex:
                 logger.error(f"任务结束状态写入失败: task_id={task_id}, error={ex}")

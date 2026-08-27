@@ -26,6 +26,7 @@ from .api_server import router as api_router
 from .integration.management import router as integration_management_router
 from .integration.api import router as integration_api_router
 from .ontology import router as ontology_router
+from .task_center import router as task_center_router
 
 # 版本配置路由（始终注册，不依赖任何模块）
 _version_router = APIRouter()
@@ -59,6 +60,7 @@ _module_routes = {
     'agent': [(agent_router, "/agent", "agent")],
     'integration': [(integration_management_router, "/integration", "integration")],
     'ontology': [(ontology_router, "/ontology", "ontology")],
+    'task_center': [(task_center_router, "/task_center", "task_center")],
 }
 
 

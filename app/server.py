@@ -8,6 +8,7 @@ import sys
 import os
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 # 主进程检测机制
 # 使用环境变量来标识主进程，确保MCP服务和任务执行器只在主进程启动
@@ -1692,6 +1693,14 @@ try:
     from app.database.migrations import _migrate_chatbot_tool
     _migrate_chatbot_tool(db)
 
+    # 迁移 task_info 表结构（新增 source_type/source_id 源关联字段）
+    from app.database.migrations import _migrate_task_info_source_fields
+    _migrate_task_info_source_fields(db)
+
+    # 迁移 task_info 表结构（新增 description 任务描述字段）
+    from app.database.migrations import _migrate_task_info_description_field
+    _migrate_task_info_description_field(db)
+
     logger.info("\n[MIGRATION] ✅ 数据库迁移完成")
 except Exception as e:
     logger.error(f"\n[MIGRATION] ❌ 数据库迁移失败: {e}")
@@ -1785,6 +1794,30 @@ async def chat_event_lifespan(app: FastAPI):
         logger.info("[ONTOLOGY] 已清理任务执行队列并重置残留的等待/运行中任务状态")
     except Exception as e:
         logger.warning(f"[ONTOLOGY] 恢复任务队列状态失败: {e}")
+
+    # 重启后任务中心执行线程已丢失，运行中的任务标记为已取消（可重新执行）
+    try:
+        from app.database.models import TaskInfo, TaskLog
+        from app.constants.task_center_constants import TaskStatus as TaskCenterTaskStatus
+
+        now = datetime.now()
+        TaskInfo.update(
+            task_status=TaskCenterTaskStatus.CANCEL,
+            task_end_at=now
+        ).where(
+            TaskInfo.task_status == TaskCenterTaskStatus.RUNNING,
+            TaskInfo.deleted == False
+        ).execute()
+        TaskLog.update(
+            task_status=TaskCenterTaskStatus.CANCEL,
+            task_end_at=now
+        ).where(
+            TaskLog.task_status == TaskCenterTaskStatus.RUNNING,
+            TaskLog.deleted == False
+        ).execute()
+        logger.info("[TASK_CENTER] 已重置任务中心残留的运行中任务状态")
+    except Exception as e:
+        logger.warning(f"[TASK_CENTER] 恢复任务状态失败: {e}")
 
     yield
 

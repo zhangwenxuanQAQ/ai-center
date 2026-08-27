@@ -15,6 +15,7 @@ from app.services.knowledgebase.dto import (
 )
 from app.database.db_utils import handle_transaction
 from app.core.exceptions import ResourceNotFoundError, DuplicateResourceError
+from app.core.hooks.task_info_hook import TaskInfoHook
 from app.database.es_utils import es_utils
 
 logger = logging.getLogger(__name__)
@@ -560,6 +561,8 @@ class KnowledgebaseDocumentService:
 
         db_doc = KnowledgebaseDocument(**doc_data)
         db_doc.save(force_insert=True)
+        # 同步任务信息表（任务中心）
+        TaskInfoHook.sync_document(db_doc)
 
         Knowledgebase.update(
             doc_num=Knowledgebase.doc_num + 1,
@@ -935,6 +938,8 @@ class KnowledgebaseDocumentService:
             setattr(db_doc, field, value)
         db_doc.updated_at = datetime.now()
         db_doc.save()
+        # 同步任务信息表（任务中心）
+        TaskInfoHook.sync_document(db_doc)
         return db_doc
 
     @staticmethod
@@ -980,6 +985,8 @@ class KnowledgebaseDocumentService:
         db_doc.deleted = True
         db_doc.deleted_at = datetime.now()
         db_doc.save()
+        # 同步删除任务信息表（任务中心）
+        TaskInfoHook.sync_document_delete(document_id)
 
         Knowledgebase.update(
             doc_num=Knowledgebase.doc_num - 1,
@@ -1058,7 +1065,11 @@ class KnowledgebaseDocumentService:
             (KnowledgebaseDocument.id.in_(document_ids)) &
             (KnowledgebaseDocument.deleted == False)
         ).execute()
-        
+
+        # 同步删除任务信息表（任务中心）
+        for doc_id in document_ids:
+            TaskInfoHook.sync_document_delete(doc_id)
+
         # 更新每个知识库的统计信息
         for kb_id, stats in kb_stats.items():
             Knowledgebase.update(

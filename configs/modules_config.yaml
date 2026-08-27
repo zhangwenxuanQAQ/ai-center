@@ -21,6 +21,7 @@ version:
     - system_monitor
     - integration
     - ontology
+    - task_center
 
 # 模块定义
 modules:
@@ -266,3 +267,20 @@ modules:
     dependencies:
       - "user"
       - "datasource"
+
+  task_center:
+    name: "任务中心"
+    description: "任务执行与日志管理"
+    required: false
+    api_prefixes:
+      - "/task_center"
+    frontend_routes:
+      - "/task_center/tasks"
+      - "/task_center/logs"
+    menu_keys:
+      - "task_center"
+    database_tables:
+      - "task_info"
+      - "task_log"
+    dependencies:
+      - "user"
