@@ -5,7 +5,7 @@
 import socket
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from app.services.chatbot.service import ChatbotService
 from app.services.chatbot.dto import ChatbotCreate, ChatbotUpdate, Chatbot as ChatbotSchema
 from app.utils.response import ResponseUtil, ApiResponse
@@ -280,8 +280,8 @@ class BindToolRequest(BaseModel):
     """
     绑定工具请求DTO
     """
-    mcp_server_id: str = Field(..., description="MCP服务ID")
-    mcp_tool_id: str = Field(..., description="MCP工具ID")
+    tool_type: str = Field(..., description="工具类型（mcp/api/code_script/builtin_tool/skill）")
+    configs: Dict[str, Any] = Field({}, description="工具绑定配置，如MCP: {server_id, tool_ids}")
 
 
 class UnbindToolRequest(BaseModel):
@@ -391,7 +391,7 @@ def bind_tool_to_chatbot(chatbot_id: str, request: BindToolRequest):
     Returns:
         ApiResponse: 统一格式的响应对象
     """
-    chatbot_tool = ChatbotService.bind_tool_to_chatbot(chatbot_id, request.mcp_server_id, request.mcp_tool_id)
+    chatbot_tool = ChatbotService.bind_tool_to_chatbot(chatbot_id, request.tool_type, request.configs)
     return ResponseUtil.success(data={"binding_id": str(chatbot_tool.id)}, message="工具绑定成功")
 
 

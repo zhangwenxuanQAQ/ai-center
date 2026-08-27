@@ -11,7 +11,7 @@ import json
 import time
 import asyncio
 import concurrent.futures
-from typing import Dict, Any, List, AsyncGenerator
+from typing import Dict, Any, List, Tuple, AsyncGenerator
 
 from app.core.tools.base_tool import BaseTool
 from app.core.tools.builtin_tools.mcp_tool import McpTool
@@ -103,7 +103,174 @@ def convert_kbs_to_openai_tools(kbs: List) -> List[Dict[str, Any]]:
     return [convert_kb_to_openai_tool(kb) for kb in kbs]
 
 
-# ========== 工具调用执行 ==========
+# ========== API工具转换 ==========
+
+def build_api_tool_to_openai_tool(server, api, configs: Dict[str, Any]):
+    """
+    将绑定的API接口转换为OpenAI tool格式及可执行工具实例。
+
+    Args:
+        server: ApiServer数据库对象（提供基础地址与服务级请求头）
+        api: Api数据库对象（提供方法、路径、参数等）
+        configs: 接口configs（JSON解析后的字典）
+
+    Returns:
+        tuple: (OpenAI tool格式字典, CustomTool可执行实例)
+    """
+    from app.core.tools.custom_tool import CustomTool
+    from app.core.tools.builtin_tools.api_call import (
+        api_call, normalize_headers, split_params,
+    )
+
+    method = (configs.get("method", "GET") or "GET").upper()
+    path = configs.get("path", "/") or "/"
+    param_defs = configs.get("parameters", []) or []
+
+    # 构建参数schema（仅暴露query/path参数给大模型填写）
+    properties = {}
+    required = []
+    for p in param_defs:
+        if not isinstance(p, dict) or not p.get("name"):
+            continue
+        if p.get("in") in ("query", "path"):
+            properties[p["name"]] = {
+                "type": p.get("type", "string"),
+                "description": p.get("description", ""),
+            }
+            if p.get("required"):
+                required.append(p["name"])
+
+    func_name = (getattr(api, "name", None) or f"api_{api.id}")[:64]
+    description = getattr(api, "description", "") or getattr(api, "title", "") or func_name
+
+    openai_tool = {
+        "type": "function",
+        "function": {
+            "name": func_name,
+            "description": description,
+            "parameters": {"type": "object", "properties": properties, "required": required},
+        },
+    }
+
+    # 服务级请求头 + 接口级请求头
+    server_headers = normalize_headers(getattr(server, "headers", None))
+    interface_headers = normalize_headers(configs.get("headers", []))
+    base_url = getattr(server, "url", "") or ""
+
+    def _api_callback(**kwargs):
+        # 大模型提供的query/path参数
+        query_params, path_params = split_params(
+            [{"name": k, "in": "query", "value": v} for k, v in kwargs.items()]
+        )
+        # 合并接口配置中的默认query/path参数
+        default_query, default_path = split_params(param_defs, value_key="default")
+        for k, v in default_query.items():
+            query_params.setdefault(k, v)
+        for k, v in default_path.items():
+            path_params.setdefault(k, v)
+
+        # 统一转为api_call工具执行，复用其HTTP请求与结果封装逻辑
+        return api_call().run(
+            server_url=base_url,
+            path=path,
+            method=method,
+            headers={**server_headers, **interface_headers},
+            query_params=query_params,
+            path_params=path_params,
+        )
+
+    runner = CustomTool(
+        name=func_name,
+        title=getattr(api, "title", func_name),
+        description=description,
+        callback=_api_callback,
+    )
+    return openai_tool, runner
+
+
+# ========== 机器人工具绑定转换 ==========
+
+def convert_tool_bindings_to_openai_tools(tool_bindings: List) -> Tuple[List[Dict[str, Any]], Dict[str, BaseTool]]:
+    """
+    将机器人工具绑定(ChatbotTool)列表转换为OpenAI tool格式及可执行工具映射。
+
+    按tool_type分发处理不同类型的工具绑定：
+        - mcp: 从configs.tool_ids加载MCP工具
+        - builtin_tool: 从configs.tool_names/tool_ids加载已注册的内置工具
+        - api: 从configs.server_id/api_ids加载API接口并封装为可调用工具
+        - code_script / skill: 暂未实现聊天内调用，留作扩展点
+
+    Args:
+        tool_bindings: ChatbotTool数据库对象列表
+
+    Returns:
+        Tuple[List[Dict[str, Any]], Dict[str, BaseTool]]: (OpenAI tool定义列表, 工具名称->工具实例映射)
+    """
+    from app.core.tools import ToolRegistry
+    from app.core.tools.builtin_tools.mcp_tool import McpTool
+    from app.database.models import MCPTool, ApiServer, Api
+
+    openai_tools: List[Dict[str, Any]] = []
+    tool_map: Dict[str, BaseTool] = {}
+
+    for binding in tool_bindings:
+        tool_type = binding.tool_type or "mcp"
+        configs = binding.configs
+        if isinstance(configs, str):
+            try:
+                configs = json.loads(configs)
+            except Exception:
+                configs = {}
+        if not isinstance(configs, dict):
+            configs = {}
+
+        if tool_type == "mcp":
+            tool_ids = configs.get("tool_ids", []) or []
+            if not tool_ids:
+                continue
+            mcp_tools = list(MCPTool.select().where(
+                (MCPTool.id.in_(tool_ids)) &
+                (MCPTool.deleted == False) &
+                (MCPTool.status == True)
+            ))
+            openai_tools.extend(convert_db_tools_to_openai_tools(mcp_tools))
+            for t in mcp_tools:
+                tool_map[t.name] = McpTool.from_db_tool(t)
+        elif tool_type == "builtin_tool":
+            tool_names = configs.get("tool_names", []) or configs.get("tool_ids", []) or []
+            for name in tool_names:
+                builtin = ToolRegistry.get_tool(name)
+                if not builtin:
+                    continue
+                openai_tools.append(builtin.to_openai_tool())
+                tool_map[builtin.name] = builtin
+        elif tool_type == "api":
+            # API工具：将绑定的接口封装为可调用工具（复用api_call工具执行）
+            # configs: {server_id, api_ids}
+            server_id = configs.get("server_id", "")
+            api_ids = configs.get("api_ids", []) or []
+            apis = list(Api.select().where(
+                (Api.id.in_(api_ids)) & (Api.deleted == False)
+            )) if api_ids else []
+            server = ApiServer.get_by_id(server_id) if server_id else None
+            for a in apis:
+                a_configs = a.configs
+                if isinstance(a_configs, str):
+                    try:
+                        a_configs = json.loads(a_configs)
+                    except Exception:
+                        a_configs = {}
+                if not isinstance(a_configs, dict):
+                    a_configs = {}
+                _openai_tool, _runner = build_api_tool_to_openai_tool(server, a, a_configs)
+                openai_tools.append(_openai_tool)
+                tool_map[_openai_tool["function"]["name"]] = _runner
+        # code_script / skill：暂未实现聊天内调用，留作扩展点
+
+    return openai_tools, tool_map
+
+
+
 
 def _execute_single_tool(tool_call: Dict, tool_map: Dict[str, BaseTool]) -> Dict[str, Any]:
     """

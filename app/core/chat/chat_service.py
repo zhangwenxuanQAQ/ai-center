@@ -23,11 +23,11 @@ from typing import List, Dict, Any, Optional, Generator, AsyncGenerator, Tuple, 
 
 logger = logging.getLogger(__name__)
 
-from app.database.models import Chat, ChatMessage, LLMModel, Chatbot, ChatbotPrompt, ChatbotTool, MCPTool
+from app.database.models import Chat, ChatMessage, LLMModel, Chatbot, ChatbotPrompt, ChatbotTool
 from app.services.chat.dto import QueryItem
 from app.services.chat.service import ChatService, ChatMessageService
 from app.core.llm_model.factory import LLMFactory
-from app.core.tools.tool_util import process_tool_calls, convert_db_tools_to_openai_tools, convert_kbs_to_openai_tools
+from app.core.tools.tool_util import process_tool_calls, convert_kbs_to_openai_tools, convert_tool_bindings_to_openai_tools
 from app.core.exceptions import ResourceNotFoundError
 from app.core.utils.resource_utils import get_provider_avatar_url
 from app.core.chat.dto import ChatStreamResponse, ToolCallInfo, MessageStatus, MessageStep
@@ -727,19 +727,9 @@ class ChatCoreService:
             (ChatbotTool.chatbot_id == chatbot_id) &
             (ChatbotTool.deleted == False)
         ))
-        
-        tool_ids = [binding.mcp_tool_id for binding in tool_bindings]
-        tools = list(MCPTool.select().where(
-            (MCPTool.id.in_(tool_ids)) &
-            (MCPTool.deleted == False)
-        ))
-        
-        openai_tools = convert_db_tools_to_openai_tools(tools)
 
-        from app.core.tools.builtin_tools.mcp_tool import McpTool
-        tool_map = {}
-        for tool in tools:
-            tool_map[tool.name] = McpTool.from_db_tool(tool)
+        # 统一将机器人工具绑定转换为OpenAI tool格式及可执行工具映射
+        openai_tools, tool_map = convert_tool_bindings_to_openai_tools(tool_bindings)
 
         from app.database.models import ChatbotKnowledgebase, Knowledgebase
 

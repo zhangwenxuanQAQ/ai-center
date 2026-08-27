@@ -50,7 +50,8 @@ def run_database_migrations(db):
         _migrate_chatbot_integration(db)
         _migrate_chatbot_chat(db)
         _migrate_chatbot_chat_message(db)
-        
+        _migrate_chatbot_tool(db)
+
         logger.info("\n[MIGRATION] ✅ 数据库迁移完成")
     except Exception as e:
         logger.error(f"\n[MIGRATION] ❌ 数据库迁移失败: {e}")
@@ -1652,3 +1653,142 @@ def _migrate_chatbot_chat_message(db):
                 logger.info("[MIGRATION]   成功添加 model_id 字段")
     except Exception as e:
         logger.error(f"[MIGRATION]   创建/更新 chatbot_chat_message 表失败: {e}")
+
+
+def _migrate_chatbot_tool(db):
+    """
+    迁移 chatbot_tool 表结构：
+    删除 mcp_tool_id/mcp_server_id 字段，新增 tool_type/configs 字段。
+    已有记录按 mcp_server_id 分组，组装为 configs={server_id, tool_ids} 的新记录，
+    旧记录删除。如果已经更新过表结构则跳过。
+    支持从中断的中间状态（tool_type已加但旧列仍在）恢复。
+    """
+    logger.info("\n[MIGRATION] 迁移 chatbot_tool 表结构...")
+    try:
+        import json
+        import uuid
+        table_names = _get_table_names(db)
+
+        if 'chatbot_tool' not in table_names:
+            logger.info("[MIGRATION]   chatbot_tool 表不存在，将在create_tables中创建")
+            return
+
+        cursor = db.execute_sql("DESCRIBE chatbot_tool;")
+        columns = [column[0] for column in cursor.fetchall()]
+
+        # 删除旧的 (chatbot_id, mcp_tool_id) 唯一索引（若存在）
+        def _drop_old_indexes():
+            try:
+                idx_cursor = db.execute_sql(
+                    "SELECT INDEX_NAME FROM information_schema.statistics "
+                    "WHERE table_name = 'chatbot_tool' AND column_name = 'mcp_tool_id' "
+                    "GROUP BY INDEX_NAME;"
+                )
+                for idx_row in idx_cursor.fetchall():
+                    idx_name = idx_row[0]
+                    db.execute_sql(f"ALTER TABLE chatbot_tool DROP INDEX `{idx_name}`")
+                    logger.info(f"[MIGRATION]   已删除索引 {idx_name}")
+            except Exception as e:
+                logger.info(f"[MIGRATION]   删除旧索引时跳过: {e}")
+
+        def _drop_old_columns(cols):
+            if 'mcp_tool_id' in cols:
+                db.execute_sql("ALTER TABLE chatbot_tool DROP COLUMN mcp_tool_id")
+                logger.info("[MIGRATION]   已删除 mcp_tool_id 字段")
+            if 'mcp_server_id' in cols:
+                db.execute_sql("ALTER TABLE chatbot_tool DROP COLUMN mcp_server_id")
+                logger.info("[MIGRATION]   已删除 mcp_server_id 字段")
+
+        # 情况A：tool_type 已存在（新表或已完成/中断的迁移）
+        if 'tool_type' in columns:
+            # 确保 configs 字段存在
+            if 'configs' not in columns:
+                db.execute_sql("ALTER TABLE chatbot_tool ADD COLUMN configs TEXT DEFAULT NULL")
+                logger.info("[MIGRATION]   成功补充 configs 字段")
+            # 清理可能残留的旧列（中断恢复）
+            if 'mcp_tool_id' in columns or 'mcp_server_id' in columns:
+                logger.info("[MIGRATION]   检测到残留旧字段，清理 mcp_tool_id/mcp_server_id")
+                _drop_old_indexes()
+                _drop_old_columns(columns)
+            else:
+                logger.info("[MIGRATION]   chatbot_tool 已是最新结构，跳过迁移")
+            return
+
+        # 情况B：旧表结构，开始完整迁移
+        logger.info("[MIGRATION]   检测到旧表结构，开始迁移 mcp_tool_id/mcp_server_id -> tool_type/configs")
+
+        # 1. 新增字段
+        db.execute_sql("ALTER TABLE chatbot_tool ADD COLUMN tool_type VARCHAR(50) DEFAULT NULL")
+        db.execute_sql("ALTER TABLE chatbot_tool ADD COLUMN configs TEXT DEFAULT NULL")
+        logger.info("[MIGRATION]   成功新增 tool_type/configs 字段")
+
+        # 2. 先删除旧唯一索引，避免新记录插入时 (chatbot_id, mcp_tool_id) 冲突
+        _drop_old_indexes()
+
+        # 3. 读取旧记录，按 (chatbot_id, mcp_server_id) 分组
+        cursor = db.execute_sql(
+            "SELECT id, chatbot_id, mcp_server_id, mcp_tool_id, deleted, deleted_at, deleted_user_id, "
+            "created_at, updated_at, create_user_id, update_user_id FROM chatbot_tool;"
+        )
+        old_rows = cursor.fetchall()
+
+        grouped = {}  # key: (chatbot_id, mcp_server_id) -> {"tool_ids": [], "deleted": bool, ...}
+        for row in old_rows:
+            (rid, chatbot_id, mcp_server_id, mcp_tool_id,
+             deleted, deleted_at, deleted_user_id,
+             created_at, updated_at, create_user_id, update_user_id) = row
+            key = (chatbot_id, mcp_server_id)
+            if key not in grouped:
+                grouped[key] = {
+                    "chatbot_id": chatbot_id,
+                    "server_id": mcp_server_id,
+                    "tool_ids": [],
+                    "deleted": bool(deleted),
+                    "deleted_at": deleted_at,
+                    "deleted_user_id": deleted_user_id,
+                    "created_at": created_at,
+                    "updated_at": updated_at,
+                    "create_user_id": create_user_id,
+                    "update_user_id": update_user_id,
+                }
+            if mcp_tool_id:
+                grouped[key]["tool_ids"].append(str(mcp_tool_id))
+
+        # 4. 删除所有旧记录
+        db.execute_sql("DELETE FROM chatbot_tool;")
+        logger.info(f"[MIGRATION]   已清空旧记录 {len(old_rows)} 条")
+
+        # 5. 删除旧字段（此时索引已删，可安全删列）
+        _drop_old_columns(columns)
+
+        # 6. 按分组写入新记录
+        new_count = 0
+        for key, info in grouped.items():
+            configs = json.dumps({
+                "server_id": info["server_id"],
+                "tool_ids": info["tool_ids"],
+            }, ensure_ascii=False)
+            new_id = uuid.uuid4().hex
+            db.execute_sql(
+                "INSERT INTO chatbot_tool "
+                "(id, chatbot_id, tool_type, configs, deleted, deleted_at, deleted_user_id, "
+                "created_at, updated_at, create_user_id, update_user_id) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                (new_id, info["chatbot_id"], "mcp", configs,
+                 1 if info["deleted"] else 0, info["deleted_at"], info["deleted_user_id"],
+                 info["created_at"], info["updated_at"], info["create_user_id"], info["update_user_id"])
+            )
+            new_count += 1
+
+        logger.info(f"[MIGRATION]   已生成新记录 {new_count} 条")
+
+        # 7. 添加新索引
+        try:
+            db.execute_sql("ALTER TABLE chatbot_tool ADD INDEX idx_chatbot_tool_chatbot_id_tool_type (chatbot_id, tool_type)")
+            logger.info("[MIGRATION]   已添加 (chatbot_id, tool_type) 索引")
+        except Exception as e:
+            logger.info(f"[MIGRATION]   添加索引跳过: {e}")
+
+        logger.info("[MIGRATION]   chatbot_tool 表迁移完成")
+    except Exception as e:
+        logger.error(f"[MIGRATION]   迁移 chatbot_tool 表失败: {e}")

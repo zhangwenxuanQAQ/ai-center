@@ -1686,7 +1686,11 @@ try:
         affected = cursor.rowcount if hasattr(cursor, 'rowcount') else 0
         logger.info("[MIGRATION]   已清空 mcp_server.category_id 字段")
     except Exception as e:
-        logger.error(f"[MIGRATION]   清空 mcp_server.category_id 字段失败: {e}")
+        logger.error(f"[MIGRATION]   清空 mcp_server 表的 category_id 字段失败: {e}")
+
+    # 迁移 chatbot_tool 表结构（mcp_tool_id/mcp_server_id -> tool_type/configs）
+    from app.database.migrations import _migrate_chatbot_tool
+    _migrate_chatbot_tool(db)
 
     logger.info("\n[MIGRATION] ✅ 数据库迁移完成")
 except Exception as e:

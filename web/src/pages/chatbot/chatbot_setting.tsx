@@ -17,6 +17,9 @@ import { promptService, Prompt } from '../../services/prompt';
 import { knowledgebaseService, Knowledgebase } from '../../services/knowledgebase';
 import { mcpService, MCPServer } from '../../services/mcp';
 import { llmModelService, LLMModel } from '../../services/llm_model';
+import { apiService as apiServerService } from '../../services/api_server';
+import { toolkitService } from '../../services/toolkit';
+import { buildToolTypeOptions, getToolTypeIcon, getToolTypeColor, ToolTypeOption } from '../../constants/toolTypes';
 import { integrationService, IntegrationConfig, IntegrationConfigsDetail, IntegrationConfigParam } from '../../services/integration';
 import '../../styles/common.css';
 import './chatbot_setting.less';
@@ -192,6 +195,12 @@ const ChatbotSetting: React.FC = () => {
   const [isToolSelectModalVisible, setIsToolSelectModalVisible] = useState(false);
   const [mcpServersWithTools, setMcpServersWithTools] = useState<any[]>([]);
   const [expandedServers, setExpandedServers] = useState<string[]>([]);
+  // 工具选择弹窗：当前工具类型与对应数据
+  const [toolSelectType, setToolSelectType] = useState<string>('mcp');
+  const [toolSelectLoading, setToolSelectLoading] = useState<boolean>(false);
+  // 工具类型来自后端接口：{key: 显示名称}，以及构建后的Tab选项
+  const [toolTypeNames, setToolTypeNames] = useState<Record<string, string>>({});
+  const [toolTypeOptions, setToolTypeOptions] = useState<ToolTypeOption[]>([]);
   // 读取全局主色（与 tab 选中色保持一致）
   const primaryColor = (() => { try { return getComputedStyle(document.documentElement).getPropertyValue('--primary-color').trim() || '#5a6fd6'; } catch { return '#5a6fd6'; } })();
   const [expandedModalServers, setExpandedModalServers] = useState<string[]>([]);
@@ -272,6 +281,7 @@ const ChatbotSetting: React.FC = () => {
       fetchChatbot(id);
       fetchCategories();
       fetchSourceTypes();
+      fetchToolTypes();
       fetchPrompts();
       fetchKnowledges();
       fetchMcpServers();
@@ -337,35 +347,76 @@ const ChatbotSetting: React.FC = () => {
     }
   };
 
-  const handleSelectTool = async () => {
+  // 加载工具选择弹窗中某工具类型的数据
+  const loadToolSelectData = async (type: string) => {
+    setToolSelectLoading(true);
     try {
-      // 获取所有MCP服务及其工具
-      const servers = await mcpService.getServers(1, 100);
-      const serversWithTools = await Promise.all(
-        servers.data.map(async (server: any) => {
-          try {
-            const tools = await mcpService.getTools(1, 100, server.id);
-            return {
-              ...server,
-              tools: tools.data || []
-            };
-          } catch (error) {
-            console.error(`Failed to fetch tools for server ${server.id}:`, error);
-            return {
-              ...server,
-              tools: []
-            };
-          }
-        })
-      );
-      setMcpServersWithTools(serversWithTools);
-      setExpandedModalServers([]);
-      setSelectedTools({});
-      setIsToolSelectModalVisible(true);
+      if (type === 'mcp') {
+        const servers = await mcpService.getServers(1, 100);
+        const serversWithTools = await Promise.all(
+          servers.data.map(async (server: any) => {
+            try {
+              const tools = await mcpService.getTools(1, 100, server.id);
+              return { ...server, tools: tools.data || [] };
+            } catch {
+              return { ...server, tools: [] };
+            }
+          })
+        );
+        setMcpServersWithTools(serversWithTools);
+      } else if (type === 'api') {
+        const servers = await apiServerService.getServers(1, 100);
+        const serversWithApis = await Promise.all(
+          servers.data.map(async (server: any) => {
+            try {
+              const result = await apiServerService.getInterfaces(1, 100, server.id);
+              return { ...server, tools: result.data || [] };
+            } catch {
+              return { ...server, tools: [] };
+            }
+          })
+        );
+        setMcpServersWithTools(serversWithApis);
+      } else if (type === 'builtin_tool') {
+        const result = await toolkitService.getBuiltinTools(1, 100);
+        // 内置工具无服务概念，统一放入一个虚拟分组
+        setMcpServersWithTools([{
+          id: '__builtin__',
+          name: '内置工具',
+          code: '',
+          avatar: '',
+          tools: (result.data || []).map((t: any) => ({ ...t, id: t.name, title: t.title || t.name, name: t.name, description: t.description }))
+        }]);
+      } else {
+        // code_script / skill 暂未实现加载
+        setMcpServersWithTools([]);
+      }
     } catch (error) {
-      console.error('Failed to fetch MCP servers:', error);
-      message.error('获取MCP服务失败');
+      console.error(`Failed to fetch ${type} tools:`, error);
+      message.error('获取工具列表失败');
+      setMcpServersWithTools([]);
+    } finally {
+      setToolSelectLoading(false);
     }
+  };
+
+  const handleSelectTool = async () => {
+    setToolSelectType('mcp');
+    setSelectedTools({});
+    setExpandedModalServers([]);
+    setServerFilter('');
+    setToolFilter('');
+    await loadToolSelectData('mcp');
+    setIsToolSelectModalVisible(true);
+  };
+
+  const handleToolSelectTypeChange = async (type: string) => {
+    setToolSelectType(type);
+    setSelectedTools({});
+    setExpandedModalServers([]);
+    setServerFilter('');
+    setToolFilter('');
+    await loadToolSelectData(type);
   };
 
   const handleToggleServerExpand = (serverId: string) => {
@@ -391,11 +442,21 @@ const ChatbotSetting: React.FC = () => {
   const handleBindTools = async () => {
     if (!chatbot) return;
     try {
-      // 绑定所有选中的工具
-      for (const [serverId, toolIds] of Object.entries(selectedTools)) {
-        for (const toolId of toolIds) {
-          await chatbotService.bindToolToChatbot(chatbot.id, serverId, toolId);
+      const type = toolSelectType;
+      for (const [serverId, ids] of Object.entries(selectedTools)) {
+        if (!ids || ids.length === 0) continue;
+        let configs: any;
+        if (type === 'mcp') {
+          configs = { server_id: serverId, tool_ids: ids };
+        } else if (type === 'api') {
+          configs = { server_id: serverId, api_ids: ids };
+        } else if (type === 'builtin_tool') {
+          configs = { tool_names: ids };
+        } else {
+          // code_script / skill
+          configs = { tool_ids: ids };
         }
+        await chatbotService.bindToolToChatbot(chatbot.id, type, configs);
       }
       message.success('工具绑定成功');
       setIsToolSelectModalVisible(false);
@@ -1243,6 +1304,20 @@ const ChatbotSetting: React.FC = () => {
       console.error('Failed to fetch source types:', error);
     }
   };
+
+  // 从后端获取工具类型({key: 显示名称})，并构建Tab选项
+  const fetchToolTypes = async () => {
+    try {
+      const data = await toolkitService.getToolTypes();
+      setToolTypeNames(data || {});
+      setToolTypeOptions(buildToolTypeOptions(data || {}));
+    } catch (error) {
+      console.error('Failed to fetch tool types:', error);
+    }
+  };
+
+  // 获取工具类型显示名称（取值来自后端），未知类型回退到原始值
+  const getToolTypeName = (type: string): string => toolTypeNames[type] || type || '未知';
 
   const fetchPrompts = async () => {
     try {
@@ -2434,12 +2509,12 @@ const ChatbotSetting: React.FC = () => {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {boundTools.map(server => (
-                  <div key={server.server_id} style={{
+                  <div key={server.id} style={{
                     border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8',
                     borderRadius: '4px',
                     background: theme === 'dark' ? 'rgba(255, 255, 255, 0.02)' : '#fff'
                   }}>
-                    <div 
+                    <div
                       style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -2448,13 +2523,13 @@ const ChatbotSetting: React.FC = () => {
                         cursor: 'pointer',
                         borderBottom: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8'
                       }}
-                      onClick={() => handleToggleServerExpand(server.server_id)}
+                      onClick={() => handleToggleServerExpand(server.id)}
                     >
-                      <Avatar 
-                        size={24} 
-                        src={server.server_avatar || undefined} 
-                        icon={<ApiOutlined />}
-                        style={{ backgroundColor: 'var(--primary-color)', flexShrink: 0 }}
+                      <Avatar
+                        size={24}
+                        src={server.server_avatar || undefined}
+                        icon={getToolTypeIcon(server.tool_type)}
+                        style={{ backgroundColor: getToolTypeColor(server.tool_type), flexShrink: 0 }}
                       />
                       <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>
@@ -2463,19 +2538,30 @@ const ChatbotSetting: React.FC = () => {
                         <div style={{ fontSize: '11px', color: theme === 'dark' ? '#aaa' : '#999' }}>
                           {server.server_code}
                         </div>
+                        <Tag color={getToolTypeColor(server.tool_type)} style={{ marginInlineEnd: 0, fontSize: '11px', lineHeight: '18px' }}>
+                          {getToolTypeIcon(server.tool_type)} {getToolTypeName(server.tool_type)}
+                        </Tag>
                       </div>
                       <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999' }}>
                         {server.tools.length} 个工具
                       </div>
+                      <Button
+                        type="text"
+                        icon={<DeleteOutlined />}
+                        size="small"
+                        danger
+                        onClick={(e) => { e.stopPropagation(); handleUnbindTool(server.id); }}
+                        title="解绑该组工具"
+                      />
                       <div style={{ fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999' }}>
-                        {expandedServers.includes(server.server_id) ? '▼' : '▶'}
+                        {expandedServers.includes(server.id) ? '▼' : '▶'}
                       </div>
                     </div>
-                    {expandedServers.includes(server.server_id) && (
+                    {expandedServers.includes(server.id) && (
                       <div style={{ padding: '8px 12px', borderTop: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          {server.tools.map((tool: any) => (
-                            <div key={tool.id} style={{
+                          {server.tools.map((tool: any, idx: number) => (
+                            <div key={tool.tool_id || idx} style={{
                               display: 'flex',
                               flexDirection: 'column',
                               gap: '4px',
@@ -2493,18 +2579,8 @@ const ChatbotSetting: React.FC = () => {
                                     {tool.tool_name}
                                   </div>
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                  <div style={{ fontSize: '11px', color: theme === 'dark' ? '#aaa' : '#999' }}>
-                                    {tool.tool_type}
-                                  </div>
-                                  <Button
-                                    type="text"
-                                    icon={<DeleteOutlined />}
-                                    size="small"
-                                    danger
-                                    onClick={() => handleUnbindTool(tool.id)}
-                                    title="解绑工具"
-                                  />
+                                <div style={{ fontSize: '11px', color: theme === 'dark' ? '#aaa' : '#999' }}>
+                                  {tool.tool_type}
                                 </div>
                               </div>
                               {tool.tool_description && (
@@ -3789,6 +3865,34 @@ const ChatbotSetting: React.FC = () => {
         width={800}
         className={`chatbot-modal ${theme === 'dark' ? 'dark' : 'light'}`}
       >
+        {/* 工具类型切换 */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+          {toolTypeOptions.map(opt => {
+            const active = toolSelectType === opt.key;
+            return (
+              <div
+                key={opt.key}
+                onClick={() => handleToolSelectTypeChange(opt.key)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  borderRadius: '16px',
+                  cursor: 'pointer',
+                  border: `1px solid ${active ? opt.color : (theme === 'dark' ? 'rgba(255,255,255,0.15)' : '#e8e8e8')}`,
+                  background: active ? opt.color : (theme === 'dark' ? 'rgba(255,255,255,0.02)' : '#fff'),
+                  color: active ? '#fff' : (theme === 'dark' ? '#ddd' : '#333'),
+                  fontSize: '13px',
+                  transition: 'all 0.2s',
+                }}
+              >
+                <span style={{ fontSize: '14px' }}>{opt.icon}</span>
+                {opt.name}
+              </div>
+            );
+          })}
+        </div>
         {/* 过滤输入框 */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
           <Input
@@ -3805,9 +3909,13 @@ const ChatbotSetting: React.FC = () => {
           />
         </div>
         
-        {mcpServersWithTools.length === 0 ? (
+        {toolSelectLoading ? (
+          <div style={{ textAlign: 'center', padding: '24px' }}>
+            <Spin />
+          </div>
+        ) : mcpServersWithTools.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '24px', color: theme === 'dark' ? '#aaa' : '#999' }}>
-            暂无可用MCP服务
+            暂无可用{getToolTypeName(toolSelectType)}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
@@ -3852,11 +3960,11 @@ const ChatbotSetting: React.FC = () => {
                           : [...prev, server.id]
                       )}
                     >
-                      <Avatar 
-                        size={24} 
-                        src={server.avatar} 
-                        icon={<ApiOutlined />}
-                        style={{ backgroundColor: 'var(--primary-color)', flexShrink: 0 }}
+                      <Avatar
+                        size={24}
+                        src={server.avatar}
+                        icon={getToolTypeIcon(toolSelectType)}
+                        style={{ backgroundColor: getToolTypeColor(toolSelectType), flexShrink: 0 }}
                       />
                       <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <div style={{ fontSize: '14px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000' }}>

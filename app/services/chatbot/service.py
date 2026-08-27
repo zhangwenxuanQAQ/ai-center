@@ -784,79 +784,174 @@ class ChatbotService:
     def get_chatbot_tools(chatbot_id: str):
         """
         获取机器人绑定的工具列表
-        
+
+        按绑定记录返回，每条记录包含 tool_type、configs 及对应类型的工具详情。
+        MCP类型按服务分组并补充服务信息；其它类型尽量补充工具名称等信息。
+
         Args:
             chatbot_id: 机器人ID
-            
+
         Returns:
-            list: 绑定的工具信息列表，按服务分组
+            list: 绑定的工具信息列表
         """
         try:
-            # 获取机器人绑定的所有工具
             chatbot_tools = ChatbotTool.select().where(
                 (ChatbotTool.chatbot_id == chatbot_id) &
                 (ChatbotTool.deleted == False)
             )
-            
-            # 按服务分组
-            tools_by_server = {}
-            for chatbot_tool in chatbot_tools:
-                try:
-                    # 获取MCP工具信息
-                    mcp_tool = MCPTool.get_by_id(chatbot_tool.mcp_tool_id)
-                    if mcp_tool.deleted or not mcp_tool.status:
-                        continue
-                    
-                    # 获取MCP服务信息
-                    mcp_server = MCPServer.get_by_id(chatbot_tool.mcp_server_id)
-                    if mcp_server.deleted:
-                        continue
-                    
-                    # 按服务分组
-                    server_id = chatbot_tool.mcp_server_id
-                    if server_id not in tools_by_server:
-                        tools_by_server[server_id] = {
-                            "server_id": server_id,
-                            "server_name": mcp_server.name,
-                            "server_code": mcp_server.code,
-                            "server_avatar": mcp_server.avatar,
-                            "tools": []
-                        }
-                    
-                    # 添加工具信息
-                    tools_by_server[server_id]["tools"].append({
-                        "id": str(chatbot_tool.id),
-                        "tool_id": str(mcp_tool.id),
-                        "tool_title": mcp_tool.title,
-                        "tool_name": mcp_tool.name,
-                        "tool_description": mcp_tool.description,
-                        "tool_type": mcp_tool.tool_type
-                    })
-                except (MCPTool.DoesNotExist, MCPServer.DoesNotExist):
-                    pass
-            
-            # 转换为列表格式
-            result = list(tools_by_server.values())
+
+            result = []
+            for cb_tool in chatbot_tools:
+                tool_type = cb_tool.tool_type or "mcp"
+                configs = cb_tool.configs
+                if isinstance(configs, str):
+                    try:
+                        configs = json.loads(configs)
+                    except Exception:
+                        configs = {}
+                if not isinstance(configs, dict):
+                    configs = {}
+
+                item = ChatbotService._enrich_tool_binding(tool_type, configs)
+                item["id"] = str(cb_tool.id)
+                item["tool_type"] = tool_type
+                item["configs"] = configs
+                result.append(item)
             return result
         except Exception as e:
             return []
-    
+
+    @staticmethod
+    def _enrich_tool_binding(tool_type: str, configs: dict) -> dict:
+        """根据工具类型补充绑定记录的展示信息（服务名/头像、工具列表）。"""
+        item = {
+            "server_id": configs.get("server_id", ""),
+            "server_name": "",
+            "server_code": "",
+            "server_avatar": "",
+            "tools": [],
+        }
+        try:
+            if tool_type == "mcp":
+                server_id = configs.get("server_id", "")
+                tool_ids = configs.get("tool_ids", []) or []
+                server = MCPServer.get_by_id(server_id) if server_id else None
+                if server and not server.deleted:
+                    item["server_name"] = server.name
+                    item["server_code"] = server.code
+                    item["server_avatar"] = server.avatar
+                if tool_ids:
+                    mcp_tools = list(MCPTool.select().where(
+                        (MCPTool.id.in_(tool_ids)) & (MCPTool.deleted == False)
+                    ))
+                    for t in mcp_tools:
+                        if not t.status:
+                            continue
+                        item["tools"].append({
+                            "tool_id": str(t.id),
+                            "tool_title": t.title,
+                            "tool_name": t.name,
+                            "tool_description": t.description,
+                            "tool_type": t.tool_type,
+                        })
+            elif tool_type == "api":
+                server_id = configs.get("server_id", "")
+                api_ids = configs.get("api_ids", []) or configs.get("tool_ids", []) or []
+                from app.database.models import ApiServer, Api
+                server = ApiServer.get_by_id(server_id) if server_id else None
+                if server and not server.deleted:
+                    item["server_name"] = server.name
+                    item["server_avatar"] = server.avatar
+                if api_ids:
+                    apis = list(Api.select().where(
+                        (Api.id.in_(api_ids)) & (Api.deleted == False)
+                    ))
+                    for a in apis:
+                        item["tools"].append({
+                            "tool_id": str(a.id),
+                            "tool_title": a.title or a.name,
+                            "tool_name": a.name,
+                            "tool_description": a.description,
+                            "tool_type": "api",
+                        })
+            elif tool_type == "builtin_tool":
+                from app.core.tools import ToolRegistry
+                tool_names = configs.get("tool_names", []) or configs.get("tool_ids", []) or []
+                item["server_name"] = "内置工具"
+                for name in tool_names:
+                    t = ToolRegistry.get_tool(name)
+                    if t:
+                        item["tools"].append({
+                            "tool_id": name,
+                            "tool_title": getattr(t, "title", name),
+                            "tool_name": getattr(t, "name", name),
+                            "tool_description": getattr(t, "description", ""),
+                            "tool_type": "builtin_tool",
+                        })
+            elif tool_type in ("code_script", "skill"):
+                # 代码脚本/SKILL：暂仅回填configs中的名称信息
+                ids = configs.get("tool_ids", []) or []
+                names = configs.get("tool_names", []) or []
+                item["server_name"] = "code_script" if tool_type == "code_script" else "skill"
+                for idx, tid in enumerate(ids):
+                    item["tools"].append({
+                        "tool_id": tid,
+                        "tool_title": names[idx] if idx < len(names) else tid,
+                        "tool_name": names[idx] if idx < len(names) else tid,
+                        "tool_description": "",
+                        "tool_type": tool_type,
+                    })
+        except Exception:
+            pass
+        return item
+
+    @staticmethod
+    def _binding_group_key(tool_type: str, configs: dict):
+        """计算绑定记录的去重分组键，用于合并同组工具。"""
+        if tool_type in ("mcp", "api"):
+            return ("server", configs.get("server_id", ""))
+        # builtin_tool / code_script / skill：同类型合并为一条
+        return ("type", tool_type)
+
+    @staticmethod
+    def _merge_configs(tool_type: str, old_configs: dict, new_configs: dict) -> dict:
+        """合并同组工具的configs（对工具ID列表取并集）。"""
+        merged = dict(new_configs)
+        id_keys = ["tool_ids", "api_ids", "tool_names"]
+        for key in id_keys:
+            old_list = old_configs.get(key, []) or []
+            new_list = new_configs.get(key, []) or []
+            if old_list or new_list:
+                seen = []
+                for x in old_list + new_list:
+                    if x not in seen:
+                        seen.append(x)
+                merged[key] = seen
+        # 保留server_id等非列表字段
+        for k, v in old_configs.items():
+            if k not in id_keys and k not in merged:
+                merged[k] = v
+        return merged
+
     @staticmethod
     @handle_transaction
-    def bind_tool_to_chatbot(chatbot_id: str, mcp_server_id: str, mcp_tool_id: str):
+    def bind_tool_to_chatbot(chatbot_id: str, tool_type: str, configs: dict):
         """
         绑定工具到机器人
-        
+
+        通用工具绑定：按 tool_type + configs 存储。同组（如同server）的工具
+        会合并到同一条绑定记录中。
+
         Args:
             chatbot_id: 机器人ID
-            mcp_server_id: MCP服务ID
-            mcp_tool_id: MCP工具ID
-            
+            tool_type: 工具类型（mcp/api/code_script/builtin_tool/skill）
+            configs: 绑定配置，如 {"server_id": "...", "tool_ids": [...]}
+
         Returns:
             ChatbotTool: 绑定关系对象
-            
+
         Raises:
-            ResourceNotFoundError: 机器人、MCP服务或工具不存在
+            ResourceNotFoundError: 机器人不存在
         """
         try:
             # 检查机器人是否存在
@@ -866,60 +961,64 @@ class ChatbotService:
                     raise ResourceNotFoundError(message=f"机器人 {chatbot_id} 不存在")
             except Chatbot.DoesNotExist:
                 raise ResourceNotFoundError(message=f"机器人 {chatbot_id} 不存在")
-            
-            # 检查MCP服务是否存在
-            try:
-                mcp_server = MCPServer.get_by_id(mcp_server_id)
-                if mcp_server.deleted:
-                    raise ResourceNotFoundError(message=f"MCP服务 {mcp_server_id} 不存在")
-            except MCPServer.DoesNotExist:
-                raise ResourceNotFoundError(message=f"MCP服务 {mcp_server_id} 不存在")
-            
-            # 检查MCP工具是否存在
-            try:
-                mcp_tool = MCPTool.get_by_id(mcp_tool_id)
-                if mcp_tool.deleted or not mcp_tool.status:
-                    raise ResourceNotFoundError(message=f"MCP工具 {mcp_tool_id} 不存在或未启用")
-                if mcp_tool.server_id != mcp_server_id:
-                    raise ResourceNotFoundError(message=f"MCP工具 {mcp_tool_id} 不属于MCP服务 {mcp_server_id}")
-            except MCPTool.DoesNotExist:
-                raise ResourceNotFoundError(message=f"MCP工具 {mcp_tool_id} 不存在")
-            
-            # 检查是否已经绑定
-            existing_binding = ChatbotTool.select().where(
+
+            if not isinstance(configs, dict):
+                configs = {}
+
+            group_key = ChatbotService._binding_group_key(tool_type, configs)
+
+            # 查找同组已有绑定记录
+            existing = None
+            bindings = ChatbotTool.select().where(
                 (ChatbotTool.chatbot_id == chatbot_id) &
-                (ChatbotTool.mcp_tool_id == mcp_tool_id) &
+                (ChatbotTool.tool_type == tool_type) &
                 (ChatbotTool.deleted == False)
-            ).first()
-            
-            if existing_binding:
-                return existing_binding
-            
+            )
+            for b in bindings:
+                b_configs = b.configs
+                if isinstance(b_configs, str):
+                    try:
+                        b_configs = json.loads(b_configs)
+                    except Exception:
+                        b_configs = {}
+                if not isinstance(b_configs, dict):
+                    b_configs = {}
+                if ChatbotService._binding_group_key(tool_type, b_configs) == group_key:
+                    existing = b
+                    existing_configs = b_configs
+                    break
+
+            if existing:
+                # 合并工具ID列表
+                merged = ChatbotService._merge_configs(tool_type, existing_configs, configs)
+                existing.configs = json.dumps(merged, ensure_ascii=False)
+                existing.save()
+                return existing
+
             # 创建新的绑定关系
             chatbot_tool = ChatbotTool(
                 chatbot_id=chatbot_id,
-                mcp_server_id=mcp_server_id,
-                mcp_tool_id=mcp_tool_id
+                tool_type=tool_type,
+                configs=json.dumps(configs, ensure_ascii=False),
             )
             chatbot_tool.save(force_insert=True)
-            
             return chatbot_tool
         except Exception as e:
             raise
-    
+
     @staticmethod
     @handle_transaction
     def unbind_tool_from_chatbot(chatbot_id: str, tool_binding_id: str):
         """
         解绑机器人的工具
-        
+
         Args:
             chatbot_id: 机器人ID
             tool_binding_id: 工具绑定ID
-            
+
         Returns:
             bool: 解绑是否成功
-            
+
         Raises:
             ResourceNotFoundError: 绑定关系不存在
         """
@@ -929,12 +1028,11 @@ class ChatbotService:
                 (ChatbotTool.chatbot_id == chatbot_id) &
                 (ChatbotTool.deleted == False)
             ).first()
-            
+
             if not chatbot_tool:
                 raise ResourceNotFoundError(message=f"工具绑定关系 {tool_binding_id} 不存在")
-            
+
             ChatbotTool.delete().where(ChatbotTool.id == chatbot_tool.id).execute()
-            
             return True
         except Exception as e:
             raise

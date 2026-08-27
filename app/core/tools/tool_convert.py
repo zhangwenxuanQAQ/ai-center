@@ -16,22 +16,6 @@ class ToolConvert:
     """工具转换器，处理工具格式转换和注入"""
 
     @staticmethod
-    def to_openai_tools(tool_names: Optional[List[str]] = None) -> List[Dict[str, Any]]:
-        """将内置工具转换为OpenAI工具格式"""
-        tools = []
-        if tool_names:
-            for name in tool_names:
-                tool = ToolRegistry.get_tool(name)
-                if tool:
-                    tools.append(tool.to_openai_tool())
-                else:
-                    logger.warning(f"builtin tool '{name}' not registered")
-        else:
-            for tool in ToolRegistry.get_all_tools().values():
-                tools.append(tool.to_openai_tool())
-        return tools
-
-    @staticmethod
     def inject_builtin_tools(
         tools: Optional[List[Dict[str, Any]]] = None,
         tool_map: Optional[Dict[str, BaseTool]] = None,

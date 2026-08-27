@@ -272,13 +272,13 @@ export const chatbotService = {
   /**
    * 绑定工具到机器人
    * @param chatbotId - 机器人ID
-   * @param mcpServerId - MCP服务ID
-   * @param mcpToolId - MCP工具ID
+   * @param toolType - 工具类型（mcp/api/code_script/builtin_tool/skill）
+   * @param configs - 绑定配置，如MCP: {server_id, tool_ids}
    */
-  bindToolToChatbot: async (chatbotId: string, mcpServerId: string, mcpToolId: string): Promise<any> => {
+  bindToolToChatbot: async (chatbotId: string, toolType: string, configs: any): Promise<any> => {
     return http.post<any>(`/aicenter/v1/chatbot/${chatbotId}/tools/bind`, {
-      mcp_server_id: mcpServerId,
-      mcp_tool_id: mcpToolId
+      tool_type: toolType,
+      configs: configs
     });
   },
 
