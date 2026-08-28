@@ -1874,3 +1874,34 @@ def _migrate_task_info_description_field(db):
         logger.info("[MIGRATION]   task_info 表 description 字段迁移完成")
     except Exception as e:
         logger.error(f"[MIGRATION]   迁移 task_info 表 description 字段失败: {e}")
+
+
+def _migrate_task_output_field(db):
+    """
+    迁移 task_info / task_log 表结构：
+    新增 task_output 字段（任务输出结果JSON）。
+    如果已经更新过表结构则跳过。
+    """
+    logger.info("\n[MIGRATION] 迁移 task_info / task_log 表 task_output 字段...")
+    for table_name in ('task_info', 'task_log'):
+        try:
+            table_names = _get_table_names(db)
+
+            if table_name not in table_names:
+                logger.info(f"[MIGRATION]   {table_name} 表不存在，将在create_tables中创建")
+                continue
+
+            cursor = db.execute_sql(f"DESCRIBE {table_name};")
+            columns = [column[0] for column in cursor.fetchall()]
+
+            if 'task_output' not in columns:
+                db.execute_sql(
+                    f"ALTER TABLE {table_name} ADD COLUMN task_output TEXT DEFAULT NULL "
+                    f"COMMENT '任务输出结果JSON'"
+                )
+                logger.info(f"[MIGRATION]   成功在 {table_name} 表添加 task_output 字段")
+            else:
+                logger.info(f"[MIGRATION]   {table_name} 表 task_output 字段已存在，跳过")
+        except Exception as e:
+            logger.error(f"[MIGRATION]   迁移 {table_name} 表 task_output 字段失败: {e}")
+    logger.info("[MIGRATION]   task_output 字段迁移完成")

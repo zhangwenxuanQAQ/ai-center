@@ -790,6 +790,7 @@ class TaskInfo(SoftDeleteModel):
     task_begin_at = DateTimeField(null=True, verbose_name="任务开始时间")
     task_end_at = DateTimeField(null=True, verbose_name="任务结束时间")
     task_duration = IntegerField(default=0, verbose_name="任务耗时(毫秒)")
+    task_output = TextField(null=True, verbose_name="任务输出结果JSON")
     source_type = CharField(max_length=50, null=True, index=True, verbose_name="来源类型：ontology_task/knowledgebase_document")
     source_id = CharField(max_length=40, null=True, index=True, verbose_name="来源记录ID")
 
@@ -816,6 +817,7 @@ class TaskLog(SoftDeleteModel):
     task_begin_at = DateTimeField(null=True, verbose_name="任务开始时间")
     task_end_at = DateTimeField(null=True, verbose_name="任务结束时间")
     task_duration = IntegerField(default=0, verbose_name="任务耗时(毫秒)")
+    task_output = TextField(null=True, verbose_name="任务输出结果JSON")
 
     class Meta:
         table_name = 'task_log'

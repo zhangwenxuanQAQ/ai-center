@@ -17,10 +17,16 @@
 import json
 import logging
 
-from app.constants.task_center_constants import TaskType, TaskSourceType
-from app.constants.ontology_constants import OntologyTaskStatus
+from app.constants.task_center_constants import (
+    TaskType, TaskSourceType, TASK_CENTER_EVENTS_CHANNEL,
+)
+from app.constants.ontology_constants import OntologyTaskStatus, ONTOLOGY_TASK_RESULT_PREFIX
 from app.constants.knowledgebase_document_constants import RunningStatus
-from app.database.models import TaskInfo, TaskLog
+from app.database.models import TaskInfo, TaskLog, Knowledgebase, KnowledgebaseDocument
+from app.database.redis_utils import redis_utils
+from app.core.task_center.task_output import (
+    DataExtractTaskOutput, DocChunkTaskOutput, create_task_output, format_duration_ms,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +58,69 @@ class TaskInfoHook:
     # ==================== 通用内部方法 ====================
 
     @staticmethod
+    def _build_common_output(task_info: TaskInfo, output):
+        """填充任务输出公共字段（状态/错误/起止时间/耗时）"""
+        status = task_info.task_status
+        error = None
+        if status == "fail":
+            message = task_info.task_progress_message or ''
+            # 取进度消息中最后一条错误信息
+            for line in reversed(message.split('\n')):
+                if '失败' in line or '异常' in line or '错误' in line:
+                    error = line.strip()
+                    break
+            error = error or (message.split('\n')[-1].strip() if message else None) or '任务执行失败'
+        output.set_common(
+            status='success' if status == "done" else ('fail' if status == "fail" else status),
+            error=error,
+            start_time=task_info.task_begin_at.strftime('%Y-%m-%d %H:%M:%S') if task_info.task_begin_at else '',
+            end_time=task_info.task_end_at.strftime('%Y-%m-%d %H:%M:%S') if task_info.task_end_at else '',
+            duration=format_duration_ms(task_info.task_duration),
+            executed_at=task_info.task_end_at.strftime('%Y-%m-%d %H:%M:%S') if task_info.task_end_at else '',
+        )
+        return output
+
+    @staticmethod
+    def _finalize_task_output(task_info: TaskInfo) -> None:
+        """任务到达终态时构建任务输出结果并保存到task_output字段"""
+        try:
+            if task_info.task_status not in ("done", "fail", "cancel"):
+                return
+            if task_info.task_type == TaskType.DATA_EXTRACT:
+                output = DataExtractTaskOutput()
+                # 从Redis读取本体任务结果文件信息
+                try:
+                    result = redis_utils.get_obj(f"{ONTOLOGY_TASK_RESULT_PREFIX}{task_info.source_id}")
+                    if result:
+                        output.set('export_format', result.get('format', ''))
+                        output.set('row_count', result.get('row_count', 0))
+                        output.set('result_file', result.get('file_name', ''))
+                        output.set('expire_at', result.get('expire_at', ''))
+                except Exception:
+                    pass
+            elif task_info.task_type == TaskType.DOC_CHUNK:
+                output = DocChunkTaskOutput()
+                doc = KnowledgebaseDocument.select().where(
+                    KnowledgebaseDocument.id == task_info.source_id
+                ).first() if task_info.source_id else None
+                if doc:
+                    if doc.kb_id:
+                        kb = Knowledgebase.select().where(Knowledgebase.id == doc.kb_id).first()
+                        if kb:
+                            output.set('kb_name', kb.name or '')
+                    output.set('document', doc.title or doc.file_name or '')
+                    output.set('chunk_method', doc.chunk_method or '')
+                    output.set('chunk_count', doc.chunk_num or 0)
+            else:
+                output = create_task_output(task_info.task_type)
+
+            TaskInfoHook._build_common_output(task_info, output)
+            task_info.task_output = output.to_json()
+            task_info.save()
+        except Exception as e:
+            logger.error(f"[TASK_INFO_HOOK] 构建任务输出结果失败: task_id={task_info.id}, error={e}")
+
+    @staticmethod
     def _find_by_source(source_type: str, source_id: str):
         """按来源查找任务信息记录"""
         return TaskInfo.select().where(
@@ -59,6 +128,23 @@ class TaskInfoHook:
             TaskInfo.source_id == source_id,
             TaskInfo.deleted == False
         ).first()
+
+    @staticmethod
+    def _publish_task_center_event(task_info: TaskInfo) -> None:
+        """推送任务中心实时状态事件到Redis频道（供任务列表页SSE订阅）
+
+        数据抽取/文档切片任务由委托模块执行，其事件只发布到各自业务频道，
+        此处同步到任务中心频道，保证任务中心列表可实时接收状态推送。
+        """
+        try:
+            redis_utils.publish(TASK_CENTER_EVENTS_CHANNEL, {
+                'task_id': task_info.id,
+                'task_status': task_info.task_status,
+                'task_progress': task_info.task_progress or 0,
+                'task_progress_message': task_info.task_progress_message or '',
+            })
+        except Exception as e:
+            logger.warning(f"[TASK_INFO_HOOK] 推送任务中心事件失败: task_id={task_info.id}, error={e}")
 
     @staticmethod
     def _delete_by_source(source_type: str, source_id: str) -> None:
@@ -119,6 +205,7 @@ class TaskInfoHook:
                 log.task_progress_message = task_info.task_progress_message or ''
                 log.task_end_at = task_info.task_end_at
                 log.task_duration = task_info.task_duration or 0
+                log.task_output = task_info.task_output or None
                 log.save()
         except Exception as e:
             logger.error(f"[TASK_INFO_HOOK] 同步任务执行日志失败: task_id={task_info.id}, error={e}")
@@ -188,6 +275,10 @@ class TaskInfoHook:
             task_info.task_end_at = task.task_end_at
             task_info.task_duration = task.task_duration or 0
             task_info.save()
+            # 推送任务中心频道事件（任务列表页SSE实时接收）
+            TaskInfoHook._publish_task_center_event(task_info)
+            # 终态时构建任务输出结果（含结果文件信息）
+            TaskInfoHook._finalize_task_output(task_info)
             # 同步生成/更新任务执行日志（每次执行生成一条task_log）
             TaskInfoHook._sync_execution_log(task_info, task_info.task_status)
         except Exception as e:
@@ -263,6 +354,10 @@ class TaskInfoHook:
             task_info.task_end_at = doc.task_end_at
             task_info.task_duration = doc.task_duration or 0
             task_info.save()
+            # 推送任务中心频道事件（任务列表页SSE实时接收）
+            TaskInfoHook._publish_task_center_event(task_info)
+            # 终态时构建任务输出结果（含文档切片统计）
+            TaskInfoHook._finalize_task_output(task_info)
             # 同步生成/更新任务执行日志（每次执行生成一条task_log）
             TaskInfoHook._sync_execution_log(task_info, status)
         except Exception as e:

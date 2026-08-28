@@ -1,11 +1,14 @@
 /**
  * 接口调用任务结果抽屉
+ * 结果字段来自后端TaskOutput结果类（task_output字段，[{name, title, value}]）
  */
 
 import React from 'react';
-import { Drawer, Descriptions, Tag } from 'antd';
+import { Drawer, Descriptions, Tag, Typography } from 'antd';
 import { TaskResult } from '../../../services/taskCenter';
-import { statusColorMap, taskTypeColorMap, formatDurationSeconds } from '../constants';
+import { statusColorMap } from '../constants';
+
+const { Text, Link } = Typography;
 
 interface ApiTaskResultProps {
   open: boolean;
@@ -15,17 +18,93 @@ interface ApiTaskResultProps {
   onClose: () => void;
 }
 
-/** 代码块/日志展示样式 */
-const preStyle = (theme: 'light' | 'dark'): React.CSSProperties => ({
-  background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5',
-  color: theme === 'dark' ? '#e0e0e0' : '#333333',
-  padding: 12, borderRadius: 6, fontFamily: 'monospace',
-  fontSize: 12, maxHeight: 260, overflow: 'auto', whiteSpace: 'pre-wrap',
-});
-
 const ApiTaskResult: React.FC<ApiTaskResultProps> = ({ open, result, loading, theme, onClose }) => {
   const task = result?.task;
   const log = result?.log || null;
+  const source = result?.source_result || null;
+
+  const handleDownloadResult = () => {
+    const fileBase64 = (source as any)?.file_base64;
+    if (fileBase64) {
+      const byteChars = atob(fileBase64);
+      const byteNums = new Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) {
+        byteNums[i] = byteChars.charCodeAt(i);
+      }
+      const byteArr = new Uint8Array(byteNums);
+      const blob = new Blob([byteArr]);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = source?.file_name || 'result';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  /** 渲染字段值（结果文件渲染为下载链接） */
+  const renderFieldValue = (name: string, value: any) => {
+    if (value === null || value === undefined || value === '') {
+      return <Text type="secondary">-</Text>;
+    }
+    if (name === 'status') {
+      const isSuccess = value === 'success';
+      return <Tag color={isSuccess ? 'success' : 'error'}>{value}</Tag>;
+    }
+    if (name === 'result_file') {
+      if ((source as any)?.file_base64) {
+        return <Link onClick={handleDownloadResult}>{value}</Link>;
+      }
+      return <Text>{value}</Text>;
+    }
+    if (typeof value === 'object') {
+      return <Text style={{ fontSize: 12 }}>{JSON.stringify(value)}</Text>;
+    }
+    return <Text>{String(value)}</Text>;
+  };
+
+  /** 结果字段列表（来自任务输出结果类） */
+  const outputFields = task?.task_output || log?.task_output || [];
+
+  /** 执行日志内容（作为结果行显示在"执行时间"之后） */
+  const execLog = log?.task_progress_message || task?.task_progress_message || '';
+
+  const logPreStyle: React.CSSProperties = {
+    background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5',
+    color: theme === 'dark' ? '#e0e0e0' : '#333333',
+    padding: 8, borderRadius: 4, fontFamily: 'monospace',
+    fontSize: 12, maxHeight: 220, overflow: 'auto', whiteSpace: 'pre-wrap', margin: 0,
+  };
+
+  const renderLogItem = (key: string) => (
+    <Descriptions.Item key={key} label="执行日志">
+      {execLog ? (
+        <pre style={logPreStyle}>{execLog}</pre>
+      ) : (
+        <Text type="secondary">暂无执行记录</Text>
+      )}
+    </Descriptions.Item>
+  );
+
+  /** 构建结果行：执行日志紧跟在"执行时间"之后（执行时间为空时追加在末尾） */
+  const outputItems: React.ReactNode[] = [];
+  let logItemInserted = false;
+  outputFields
+    .filter(f => f.value !== null && f.value !== undefined && f.value !== '')
+    .forEach(f => {
+      outputItems.push(
+        <Descriptions.Item key={f.name} label={f.title}>
+          {renderFieldValue(f.name, f.value)}
+        </Descriptions.Item>,
+      );
+      if (f.name === 'executed_at' && !logItemInserted) {
+        outputItems.push(renderLogItem('__exec_log__'));
+        logItemInserted = true;
+      }
+    });
+  if (!logItemInserted) {
+    outputItems.push(renderLogItem('__exec_log__'));
+  }
 
   return (
     <Drawer
@@ -40,46 +119,21 @@ const ApiTaskResult: React.FC<ApiTaskResultProps> = ({ open, result, loading, th
         <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>加载中...</div>
       ) : task ? (
         <div>
-          <Descriptions column={1} size="small" bordered>
-            <Descriptions.Item label="任务名称">{task.name}</Descriptions.Item>
-            {task.description && (
-              <Descriptions.Item label="任务描述">{task.description}</Descriptions.Item>
-            )}
-            <Descriptions.Item label="任务类型">
-              <Tag color={taskTypeColorMap[task.task_type] || 'default'}>{task.task_type_name}</Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="任务状态">
-              <Tag color={statusColorMap[task.task_status] || 'default'}>{task.task_status_label}</Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="进度">{((task.task_progress || 0) * 100).toFixed(1)}%</Descriptions.Item>
-            {log && (
-              <>
-                <Descriptions.Item label="执行时间">{log.created_at || '-'}</Descriptions.Item>
-                <Descriptions.Item label="开始时间">{log.task_begin_at || '-'}</Descriptions.Item>
-                <Descriptions.Item label="结束时间">{log.task_end_at || '-'}</Descriptions.Item>
-                <Descriptions.Item label="耗时">{formatDurationSeconds(log.task_duration)}</Descriptions.Item>
-              </>
-            )}
-            <Descriptions.Item label="请求信息">
-              {task.task_configs?.method || 'GET'} {task.task_configs?.path ? `${task.task_configs?.url || ''}${task.task_configs.path}` : (task.task_configs?.url || '-')}
-            </Descriptions.Item>
-            {task.task_configs?.server_name && (
-              <Descriptions.Item label="API服务">{task.task_configs.server_name}</Descriptions.Item>
-            )}
-            {task.task_configs?.timeout && (
-              <Descriptions.Item label="超时时间">{task.task_configs.timeout}秒</Descriptions.Item>
-            )}
-          </Descriptions>
-
-          <div style={{ fontWeight: 600, margin: '16px 0 8px' }}>响应结果</div>
-          <pre style={preStyle(theme)}>
-            {task.task_progress_message || log?.task_progress_message || '暂无执行记录'}
-          </pre>
-
-          <div style={{ fontWeight: 600, margin: '16px 0 8px' }}>任务配置</div>
-          <pre style={preStyle(theme)}>
-            {JSON.stringify(task.task_configs || {}, null, 2)}
-          </pre>
+          {/* 结果字段（来自任务输出结果类，执行日志行紧跟"执行时间"） */}
+          {outputFields.length > 0 ? (
+            <Descriptions column={1} size="small" bordered>
+              {outputItems}
+            </Descriptions>
+          ) : (
+            <Descriptions column={1} size="small" bordered>
+              <Descriptions.Item label="任务状态">
+                <Tag color={statusColorMap[task.task_status] || 'default'}>{task.task_status_label}</Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="开始时间">{task.task_begin_at || '-'}</Descriptions.Item>
+              <Descriptions.Item label="结束时间">{task.task_end_at || '-'}</Descriptions.Item>
+              {renderLogItem('__exec_log__')}
+            </Descriptions>
+          )}
         </div>
       ) : (
         <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>暂无数据</div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Table, Button, Drawer, Input, message, Modal, Space, Tag, Steps,
-  Form, Select, Radio, Checkbox, Descriptions, Typography, Empty, Pagination, Tooltip, Popover,
+  Form, Select, Radio, Checkbox, Descriptions, Typography, Empty, Pagination, Tooltip, Popover, Popconfirm,
   Dropdown
 } from 'antd';
 import {
@@ -661,13 +661,20 @@ const OntologyTaskPage: React.FC = () => {
           )}
           {(record.status === 'done' || record.status === 'fail' || record.status === 'cancel') && (
             <Tooltip title="重新执行">
-              <Button
-                type="text"
-                size="small"
-                icon={<RedoOutlined />}
-                style={{ color: '#52c41a' }}
-                onClick={() => handleRerun(record)}
-              />
+              <Popconfirm
+                title="确认重新执行"
+                description="确定要重新执行该任务吗？"
+                okText="确定"
+                cancelText="取消"
+                onConfirm={() => handleRerun(record)}
+              >
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<RedoOutlined />}
+                  style={{ color: '#52c41a' }}
+                />
+              </Popconfirm>
             </Tooltip>
           )}
           <Tooltip title="结果">

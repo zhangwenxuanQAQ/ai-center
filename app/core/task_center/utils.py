@@ -5,6 +5,7 @@
 import json
 
 from app.constants.task_center_constants import TASK_STATUS_LABELS, TASK_TYPE_NAME
+from app.core.task_center.task_output import TaskOutput
 
 
 def task_info_to_dict(task) -> dict:
@@ -23,6 +24,7 @@ def task_info_to_dict(task) -> dict:
         'task_begin_at': task.task_begin_at.strftime('%Y-%m-%d %H:%M:%S') if task.task_begin_at else '',
         'task_end_at': task.task_end_at.strftime('%Y-%m-%d %H:%M:%S') if task.task_end_at else '',
         'task_duration': task.task_duration or 0,
+        'task_output': TaskOutput.from_json(getattr(task, 'task_output', None)),
         'source_type': getattr(task, 'source_type', '') or '',
         'source_id': getattr(task, 'source_id', '') or '',
         'created_at': task.created_at.strftime('%Y-%m-%d %H:%M:%S') if task.created_at else '',

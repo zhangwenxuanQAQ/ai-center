@@ -1701,6 +1701,10 @@ try:
     from app.database.migrations import _migrate_task_info_description_field
     _migrate_task_info_description_field(db)
 
+    # 迁移 task_info/task_log 表结构（新增 task_output 任务输出结果字段）
+    from app.database.migrations import _migrate_task_output_field
+    _migrate_task_output_field(db)
+
     logger.info("\n[MIGRATION] ✅ 数据库迁移完成")
 except Exception as e:
     logger.error(f"\n[MIGRATION] ❌ 数据库迁移失败: {e}")

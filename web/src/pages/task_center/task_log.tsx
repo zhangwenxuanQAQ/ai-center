@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Table, Button, Drawer, Input, message, Tag, Select, Descriptions,
-  Empty, Pagination,
+  Empty, Pagination, Tooltip,
 } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { taskCenterService, TaskLog, TaskTypeInfo } from '../../services/taskCenter';
@@ -65,9 +65,40 @@ const TaskCenterLogPage: React.FC = () => {
     { title: '执行时间', dataIndex: 'created_at', key: 'created_at', width: 170 },
     {
       title: '状态', dataIndex: 'task_status', key: 'task_status', width: 110,
-      render: (status: string, record: TaskLog) => (
-        <Tag color={statusColorMap[status] || 'default'}>{record.task_status_label}</Tag>
-      ),
+      render: (status: string, record: TaskLog) => {
+        const statusTag = <Tag color={statusColorMap[status] || 'default'}>{record.task_status_label}</Tag>;
+        const popoverContent = (
+          <div>
+            <div style={{ fontWeight: 600, marginBottom: 8, paddingBottom: 4, borderBottom: '1px solid rgba(0,0,0,0.06)' }}>任务详情</div>
+            <Descriptions size="small" column={1} style={{ width: '360px' }}>
+              <Descriptions.Item label="任务名称">{record.name}</Descriptions.Item>
+              <Descriptions.Item label="当前状态">
+                <Tag color={statusColorMap[status] || 'default'}>{record.task_status_label}</Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="进度">{((record.task_progress || 0) * 100).toFixed(1)}%</Descriptions.Item>
+              {record.task_progress_message && (
+                <Descriptions.Item label="日志">
+                  <div style={{ maxWidth: '320px', wordBreak: 'break-word', whiteSpace: 'pre-wrap', maxHeight: '200px', overflowY: 'auto' }}>
+                    {record.task_progress_message}
+                  </div>
+                </Descriptions.Item>
+              )}
+              {record.task_begin_at && (
+                <Descriptions.Item label="开始时间">{record.task_begin_at}</Descriptions.Item>
+              )}
+              {record.task_end_at && (
+                <Descriptions.Item label="结束时间">{record.task_end_at}</Descriptions.Item>
+              )}
+              <Descriptions.Item label="耗时">{formatDurationSeconds(record.task_duration)}</Descriptions.Item>
+            </Descriptions>
+          </div>
+        );
+        return (
+          <Tooltip title={popoverContent} placement="top" overlayStyle={{ maxWidth: 420 }}>
+            {statusTag}
+          </Tooltip>
+        );
+      },
     },
     {
       title: '进度', dataIndex: 'task_progress', key: 'task_progress', width: 80,
@@ -199,30 +230,24 @@ const TaskCenterLogPage: React.FC = () => {
               </Descriptions.Item>
               <Descriptions.Item label="进度">{((detailLog.task_progress || 0) * 100).toFixed(1)}%</Descriptions.Item>
               <Descriptions.Item label="执行时间">{detailLog.created_at || '-'}</Descriptions.Item>
+              <Descriptions.Item label="进度日志">
+                {detailLog.task_progress_message ? (
+                  <pre style={{
+                    background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5',
+                    color: theme === 'dark' ? '#e0e0e0' : '#333333',
+                    padding: 8, borderRadius: 4, fontFamily: 'monospace',
+                    fontSize: 12, maxHeight: 220, overflow: 'auto', whiteSpace: 'pre-wrap', margin: 0,
+                  }}>
+                    {detailLog.task_progress_message}
+                  </pre>
+                ) : (
+                  <span style={{ color: '#999' }}>暂无日志</span>
+                )}
+              </Descriptions.Item>
               <Descriptions.Item label="开始时间">{detailLog.task_begin_at || '-'}</Descriptions.Item>
               <Descriptions.Item label="结束时间">{detailLog.task_end_at || '-'}</Descriptions.Item>
               <Descriptions.Item label="耗时">{formatDurationSeconds(detailLog.task_duration)}</Descriptions.Item>
             </Descriptions>
-
-            <div style={{ fontWeight: 600, margin: '16px 0 8px' }}>进度日志</div>
-            <pre style={{
-              background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5',
-              color: theme === 'dark' ? '#e0e0e0' : '#333333',
-              padding: 12, borderRadius: 6, fontFamily: 'monospace',
-              fontSize: 12, maxHeight: 300, overflow: 'auto', whiteSpace: 'pre-wrap',
-            }}>
-              {detailLog.task_progress_message || '暂无日志'}
-            </pre>
-
-            <div style={{ fontWeight: 600, margin: '16px 0 8px' }}>任务配置</div>
-            <pre style={{
-              background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5',
-              color: theme === 'dark' ? '#e0e0e0' : '#333333',
-              padding: 12, borderRadius: 6, fontFamily: 'monospace',
-              fontSize: 12, maxHeight: 200, overflow: 'auto', whiteSpace: 'pre-wrap',
-            }}>
-              {JSON.stringify(detailLog.task_configs || {}, null, 2)}
-            </pre>
           </div>
         ) : (
           <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>暂无数据</div>

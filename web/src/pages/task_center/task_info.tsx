@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Table, Button, Drawer, Input, message, Modal, Space, Tag, Select,
-  Descriptions, Empty, Pagination, Tooltip, Dropdown,
+  Descriptions, Empty, Pagination, Tooltip, Dropdown, Popconfirm,
 } from 'antd';
 import {
   PlusOutlined, PlayCircleOutlined, PauseCircleOutlined, DeleteOutlined,
@@ -196,7 +196,6 @@ const TaskCenterTaskPage: React.FC = () => {
       title: '确认删除',
       okText: '确定',
       cancelText: '取消',
-      okButtonProps: { danger: true },
       content: `确定要删除任务 "${record.name}" 吗？其执行历史日志将一并删除。`,
       onOk: async () => {
         try {
@@ -246,7 +245,8 @@ const TaskCenterTaskPage: React.FC = () => {
         );
 
         const popoverContent = (
-          <div style={{ maxHeight: '450px', overflowY: 'auto' }}>
+          <div>
+            <div style={{ fontWeight: 600, marginBottom: 8, paddingBottom: 4, borderBottom: '1px solid rgba(0,0,0,0.06)' }}>任务详情</div>
             <Descriptions size="small" column={1} style={{ width: '400px' }}>
               <Descriptions.Item label="当前状态">
                 <Tag color={statusColorMap[status] || 'default'}>{record.task_status_label}</Tag>
@@ -294,13 +294,20 @@ const TaskCenterTaskPage: React.FC = () => {
           )}
           {(record.task_status === 'done' || record.task_status === 'fail' || record.task_status === 'cancel') && (
             <Tooltip title="重新执行">
-              <Button
-                type="text"
-                size="small"
-                icon={<RedoOutlined />}
-                style={{ color: '#52c41a' }}
-                onClick={() => handleRerun(record)}
-              />
+              <Popconfirm
+                title="确认重新执行"
+                description="确定要重新执行该任务吗？"
+                okText="确定"
+                cancelText="取消"
+                onConfirm={() => handleRerun(record)}
+              >
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<RedoOutlined />}
+                  style={{ color: '#52c41a' }}
+                />
+              </Popconfirm>
             </Tooltip>
           )}
           {record.task_status === 'running' && (
@@ -526,7 +533,6 @@ const TaskCenterTaskPage: React.FC = () => {
             current={historyPage}
             pageSize={20}
             total={historyTotal}
-            size="small"
             showTotal={(t) => `共 ${t} 条记录`}
             onChange={(p) => {
               setHistoryPage(p);

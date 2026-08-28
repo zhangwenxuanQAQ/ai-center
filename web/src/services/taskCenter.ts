@@ -22,6 +22,13 @@ export interface TaskTypeInfo {
   config_fields: TaskTypeConfigField[];
 }
 
+/** 任务输出字段（来自后端TaskOutput结果类） */
+export interface TaskOutputField {
+  name: string;
+  title: string;
+  value: any;
+}
+
 export interface TaskInfo {
   id: string;
   name: string;
@@ -36,6 +43,7 @@ export interface TaskInfo {
   task_begin_at: string;
   task_end_at: string;
   task_duration: number;
+  task_output: TaskOutputField[] | null;
   source_type: string;
   source_id: string;
   created_at: string;
@@ -56,6 +64,7 @@ export interface TaskLog {
   task_begin_at: string;
   task_end_at: string;
   task_duration: number;
+  task_output: TaskOutputField[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -72,7 +81,14 @@ export interface DataExtractSourceResult {
   task_end_at?: string;
   task_duration?: number;
   export_format?: string;
+  export_contents?: string[];
   file_name?: string;
+  file_base64?: string;
+  format?: string;
+  row_count?: number;
+  executed_at?: string;
+  expire_at?: string;
+  result_data?: any;
   data?: any[];
   total?: number;
 }

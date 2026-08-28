@@ -64,12 +64,21 @@ TASK_TYPE_CONFIG_FIELDS = {
          "description": "关联的API服务ID（第一步选择）"},
         {"key": "api_id", "label": "接口ID", "type": "string", "required": True,
          "description": "关联的API接口ID（第一步选择）"},
+        {"key": "param_mode", "label": "参数模式", "type": "select", "required": False,
+         "description": "参数配置模式：single(单参数)/multi(多参数)",
+         "options": [{"value": "single", "label": "单参数"}, {"value": "multi", "label": "多参数"}]},
         {"key": "parameters", "label": "参数列表", "type": "text", "required": False,
-         "description": "接口参数值列表JSON，覆盖接口默认参数（第二步配置）"},
+         "description": "接口参数值列表JSON，单参数为扁平列表，多参数为列表的列表"},
         {"key": "headers", "label": "请求头", "type": "text", "required": False,
          "description": "任务级请求头JSON，覆盖服务级与接口级请求头"},
         {"key": "timeout", "label": "超时时间(秒)", "type": "number", "required": False,
          "description": "请求超时时间，默认30秒"},
+        {"key": "export_format", "label": "导出格式", "type": "select", "required": False,
+         "description": "结果导出格式",
+         "options": [{"value": "json", "label": "JSON"}, {"value": "excel", "label": "Excel"},
+                     {"value": "markdown", "label": "Markdown"}]},
+        {"key": "export_contents", "label": "导出内容", "type": "string", "required": False,
+         "description": "导出内容项列表（逗号分隔）：path/params/response"},
     ],
     TaskType.DOC_CHUNK: [
         {"key": "kb_id", "label": "知识库ID", "type": "string", "required": True,
@@ -99,3 +108,16 @@ TASK_CENTER_EVENTS_CHANNEL = "task_center:task:events"
 
 # 任务进度轮询间隔（秒）
 TASK_CENTER_PROGRESS_INTERVAL = 0.5
+
+# 接口调用任务结果Redis键前缀
+API_TASK_RESULT_PREFIX = "api:task:result:"
+
+# 接口调用任务结果Redis过期时间（24小时）
+API_TASK_RESULT_REDIS_EXPIRE = 86400
+
+# 接口调用任务导出格式文件扩展名
+API_EXPORT_FORMAT_FILE_EXT = {
+    'json': 'json',
+    'excel': 'xlsx',
+    'markdown': 'md',
+}
