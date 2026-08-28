@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Table, Button, Drawer, Input, message, Modal, Space, Tag, Steps,
   Form, Select, Radio, Checkbox, Descriptions, Typography, Empty, Pagination, Tooltip, Popover, Popconfirm,
-  Dropdown
+  Dropdown, Switch
 } from 'antd';
 import {
   PlusOutlined, PlayCircleOutlined, PauseCircleOutlined, DeleteOutlined,
   ReloadOutlined, EyeOutlined, RedoOutlined, EditOutlined, DownOutlined, TableOutlined,
-  CopyOutlined
+  CopyOutlined, RightOutlined
 } from '@ant-design/icons';
 import { ontologyService, OntologyTask, OntologyObject, ExportFormat, TaskResult } from '../../services/ontology';
 import { datasourceService, Datasource } from '../../services/datasource';
@@ -51,6 +51,8 @@ const OntologyTaskPage: React.FC = () => {
   // 批量创建时选中的本体对象列表及各自的字段配置
   const [batchObjectIds, setBatchObjectIds] = useState<string[]>([]);
   const [batchColumnsMap, setBatchColumnsMap] = useState<Record<string, string[]>>({});
+  // 字段配置步骤中已展开字段列表的对象（默认收起）
+  const [expandedFieldObjs, setExpandedFieldObjs] = useState<string[]>([]);
   // 订阅导出格式字段变化，切换时联动显示对应样例
   const exportFormatValue = Form.useWatch('export_format', createForm);
   const [datasources, setDatasources] = useState<Datasource[]>([]);
@@ -93,12 +95,63 @@ const OntologyTaskPage: React.FC = () => {
     return () => observer.disconnect();
   }, []);
 
+  // 已触发自动下载的本体任务id集合（避免重复下载）
+  const autoDownloadedRef = useRef<Set<string>>(new Set());
+  // 正在处理中的自动下载任务（防止SSE重复事件触发多次后端查询/下载）
+  const autoDownloadPendingRef = useRef<Set<string>>(new Set());
+  // 执行过的任务（含跨页选中）的auto_download缓存：task_id -> { auto_download: boolean, name: string }
+  // 批量执行/单个执行提交成功后写入，SSE事件到达时优先读取，不依赖当前页数据也不请求后端
+  const executedTaskConfigsRef = useRef<Map<string, { auto_download: boolean; name: string }>>(new Map());
+  const tasksRef = useRef<OntologyTask[]>(tasks);
+  tasksRef.current = tasks;
+
+  /** 记录要执行的任务配置（在批量执行/单个执行提交成功后调用） */
+  const rememberExecutedTaskConfig = useCallback((taskId: string, cfg: { auto_download: boolean; name: string }) => {
+    executedTaskConfigsRef.current.set(taskId, cfg);
+  }, []);
+
+  /** 本体任务自动下载：fetch获取blob后用同源blob URL触发下载，不跳转、不弹框。
+   *  后端返回文件404时最多重试2次（间隔1.5s），应对_task_output/Redis结果未落盘的短暂竞态。 */
+  const triggerOntologyAutoDownload = useCallback(async (ontologyTaskId: string, fileName?: string) => {
+    if (autoDownloadedRef.current.has(ontologyTaskId)) return;
+    autoDownloadedRef.current.add(ontologyTaskId);
+    const maxRetry = 2;
+    for (let attempt = 0; attempt <= maxRetry; attempt++) {
+      try {
+        const { blob, fileName: backendName } = await ontologyService.downloadTaskResult(ontologyTaskId);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = backendName || fileName || 'result';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        console.info(`[ontology_auto_download] ✅ 下载成功 task=${ontologyTaskId} 文件=${a.download}`);
+        return;
+      } catch (e: any) {
+        const isNotFound = /404|不存在|已过期/.test(e?.message || '');
+        if (attempt < maxRetry && isNotFound) {
+          console.info(`[ontology_auto_download] 重试(${attempt + 1}/${maxRetry}) task=${ontologyTaskId}: ${e?.message}`);
+          await new Promise(r => setTimeout(r, 1500));
+          continue;
+        }
+        console.warn('[ontology_auto_download] failed:', e);
+        message.error(`自动下载失败：${e?.message || '未知错误'}`);
+        return;
+      }
+    }
+  }, []);
+
   // SSE订阅任务事件，运行中任务状态/进度实时推送
   useEffect(() => {
     const eventSource = new EventSource(ontologyService.getTaskEventsUrl());
     eventSource.addEventListener('update', (event) => {
       try {
         const data = JSON.parse(event.data);
+        const isTerminal = ['done', 'success', 'fail', 'cancel', 'error'].includes(data.status);
+        const isSuccess = data.status === 'done' || data.status === 'success';
         setTasks(prevTasks => prevTasks.map(task => {
           if (task.id === data.task_id) {
             return {
@@ -111,6 +164,26 @@ const OntologyTaskPage: React.FC = () => {
           }
           return task;
         }));
+        if (isSuccess
+            && !autoDownloadedRef.current.has(data.task_id)
+            && !autoDownloadPendingRef.current.has(data.task_id)) {
+          autoDownloadPendingRef.current.add(data.task_id);
+          (async () => {
+            try {
+              let task = tasksRef.current.find(t => t.id === data.task_id);
+              if (!task) {
+                task = await ontologyService.getTask(data.task_id);
+              }
+              if (task?.configs?.auto_download) {
+                triggerOntologyAutoDownload(data.task_id, `${task.name}`);
+              }
+            } catch (e) {
+              console.warn('[ontology_auto_download] check failed:', e);
+            } finally {
+              autoDownloadPendingRef.current.delete(data.task_id);
+            }
+          })();
+        }
       } catch (error) {
         console.error('Failed to parse SSE event:', error);
       }
@@ -144,6 +217,7 @@ const OntologyTaskPage: React.FC = () => {
         ontology_object_id: cfg.ontology_object_id,
         custom_sql: cfg.custom_sql,
         export_format: cfg.export_format,
+        auto_download: !!cfg.auto_download,
       });
       // 加载数据源（仅关系型数据库）
       try {
@@ -269,6 +343,13 @@ const OntologyTaskPage: React.FC = () => {
     setBatchColumnsMap(newMap);
   };
 
+  // 批量创建：切换对象字段列表的展开/收起状态
+  const toggleFieldExpand = (objectId: string) => {
+    setExpandedFieldObjs(prev =>
+      prev.includes(objectId) ? prev.filter(id => id !== objectId) : [...prev, objectId]
+    );
+  };
+
   // 步骤条点击跳转
   const handleStepChange = (step: number) => {
     setCreateStep(step);
@@ -370,6 +451,7 @@ const OntologyTaskPage: React.FC = () => {
             export_format: exportFormat,
             ontology_object_id: objId,
           };
+          if (values.auto_download) configs.auto_download = true;
           if (selectedCols.length > 0 && selectedCols.length < allCols.length) {
             configs.columns = selectedCols;
           }
@@ -398,6 +480,7 @@ const OntologyTaskPage: React.FC = () => {
         const configs: Record<string, any> = {
           export_format: values.export_format,
         };
+        if (values.auto_download) configs.auto_download = true;
         if (taskType === 'object') {
           configs.ontology_object_id = values.ontology_object_id;
           if (selectedObject) {
@@ -807,6 +890,7 @@ const OntologyTaskPage: React.FC = () => {
           total={total}
           onChange={(p) => setPage(p)}
           onShowSizeChange={(_current, size) => {
+            setSelectedRowKeys([]);
             setPageSize(size);
             setPage(1);
           }}
@@ -846,6 +930,9 @@ const OntologyTaskPage: React.FC = () => {
         footer={[
           <Button key="cancel" onClick={() => setCreateVisible(false)}>取消</Button>,
           createStep === 0 && !editingTask && (
+            <Button key="next" type="primary" onClick={handleNextStep}>下一步</Button>
+          ),
+          createStep === 1 && createMode === 'batch' && !editingTask && (
             <Button key="next" type="primary" onClick={handleNextStep}>下一步</Button>
           ),
           createStep > 0 && !editingTask && (
@@ -912,10 +999,31 @@ const OntologyTaskPage: React.FC = () => {
                         value: obj.id,
                         label: obj.title || obj.name,
                       }))}
+                      optionRender={(option) => {
+                        const obj = objects.find(o => o.id === option.value);
+                        return (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', overflow: 'hidden' }}>
+                            <span style={{ fontSize: 14, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                              {option.label}
+                            </span>
+                            {obj?.description && (
+                              <span style={{ fontSize: 12, color: '#999', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {obj.description}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      }}
                       style={{ width: '100%' }}
                     />
-                    <div style={{ marginTop: 8, color: '#999', fontSize: 12 }}>
-                      已选择 {batchObjectIds.length} 个对象，每个对象将创建一个独立任务
+                    <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ color: '#999', fontSize: 12 }}>
+                        已选择 {batchObjectIds.length} 个对象，每个对象将创建一个独立任务
+                      </span>
+                      <Space size={8}>
+                        <Button size="small" onClick={() => handleBatchObjectsChange(objects.map(o => o.id))}>全选</Button>
+                        <Button size="small" onClick={() => handleBatchObjectsChange([])}>清空</Button>
+                      </Space>
                     </div>
                   </Form.Item>
                 )}
@@ -1023,11 +1131,13 @@ const OntologyTaskPage: React.FC = () => {
                     const allSelected = selected.length === cols.length && cols.length > 0;
                     const someSelected = selected.length > 0 && !allSelected;
                     return (
-                      <div key={objId} style={{ marginBottom: 20, padding: 12, border: '1px solid #f0f0f0', borderRadius: 6 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                          <span style={{ fontWeight: 600 }}>
+                      <div key={objId} style={{ marginBottom: 12, border: '1px solid #f0f0f0', borderRadius: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px' }}>
+                          <span style={{ fontWeight: 600, cursor: 'pointer', flex: 1 }} onClick={() => toggleFieldExpand(objId)}>
+                            {expandedFieldObjs.includes(objId) ? <DownOutlined style={{ fontSize: 12, marginRight: 8, color: '#999' }} /> : <RightOutlined style={{ fontSize: 12, marginRight: 8, color: '#999' }} />}
                             {obj.name}
                             {obj.title && <span style={{ color: '#999', fontWeight: 400, marginLeft: 8 }}>{obj.title}</span>}
+                            <span style={{ color: '#999', fontWeight: 400, marginLeft: 8, fontSize: 12 }}>（已选 {selected.length}/{cols.length}）</span>
                           </span>
                           <Checkbox
                             checked={allSelected}
@@ -1037,18 +1147,20 @@ const OntologyTaskPage: React.FC = () => {
                             全选
                           </Checkbox>
                         </div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 16px', maxHeight: 180, overflow: 'auto' }}>
-                          {cols.map(col => (
-                            <Checkbox
-                              key={col.column_name}
-                              checked={selected.includes(col.column_name)}
-                              onChange={e => handleBatchColumnToggle(objId, col.column_name, e.target.checked)}
-                            >
-                              {col.column_name}
-                              {col.column_name_cn && <span style={{ color: '#999', marginLeft: 4 }}>({col.column_name_cn})</span>}
-                            </Checkbox>
-                          ))}
-                        </div>
+                        {expandedFieldObjs.includes(objId) && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 16px', padding: '0 12px 12px', maxHeight: 180, overflow: 'auto', borderTop: '1px solid #f0f0f0', paddingTop: 8 }}>
+                            {cols.map(col => (
+                              <Checkbox
+                                key={col.column_name}
+                                checked={selected.includes(col.column_name)}
+                                onChange={e => handleBatchColumnToggle(objId, col.column_name, e.target.checked)}
+                              >
+                                {col.column_name}
+                                {col.column_name_cn && <span style={{ color: '#999', marginLeft: 4 }}>({col.column_name_cn})</span>}
+                              </Checkbox>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -1066,6 +1178,9 @@ const OntologyTaskPage: React.FC = () => {
                     <Radio.Button key={fmt.value} value={fmt.value}>{fmt.label}</Radio.Button>
                   ))}
                 </Radio.Group>
+              </Form.Item>
+              <Form.Item name="auto_download" label="执行完自动下载" valuePropName="checked" initialValue={false}>
+                <Switch />
               </Form.Item>
               <div style={{ marginTop: 16 }}>
                 <div style={{ fontWeight: 600, marginBottom: 8 }}>格式样例：</div>

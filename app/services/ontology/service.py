@@ -215,7 +215,7 @@ class OntologyService:
         if name:
             query = query.where(OntologyTask.name.contains(name))
         total = query.count()
-        tasks = query.order_by(OntologyTask.created_at.desc()).paginate(page, page_size)
+        tasks = query.order_by(OntologyTask.created_at.desc(), OntologyTask.id.desc()).paginate(page, page_size)
         task_dicts = [task_to_dict(t) for t in tasks]
         return OntologyService._fill_datasource_names(task_dicts), total
 

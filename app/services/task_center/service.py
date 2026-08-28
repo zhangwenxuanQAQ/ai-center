@@ -73,7 +73,7 @@ class TaskCenterService:
         if task_status:
             query = query.where(TaskInfo.task_status == task_status)
         total = query.count()
-        tasks = query.order_by(TaskInfo.created_at.desc()).paginate(page, page_size)
+        tasks = query.order_by(TaskInfo.created_at.desc(), TaskInfo.id.desc()).paginate(page, page_size)
         return [task_info_to_dict(task) for task in tasks], total
 
     @staticmethod
@@ -347,7 +347,7 @@ class TaskCenterService:
         if task_status:
             query = query.where(TaskLog.task_status == task_status)
         total = query.count()
-        logs = query.order_by(TaskLog.created_at.desc()).paginate(page, page_size)
+        logs = query.order_by(TaskLog.created_at.desc(), TaskLog.id.desc()).paginate(page, page_size)
         return [task_log_to_dict(log) for log in logs], total
 
     @staticmethod

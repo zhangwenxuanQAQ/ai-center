@@ -13,8 +13,6 @@ version:
     - datasource
     - knowledgebase
     - mcp
-    - toolkit
-    - api
     - chatbot
     - chat
     - agent
@@ -22,6 +20,8 @@ version:
     - integration
     - ontology
     - task_center
+    - toolkit
+    - api
 
 # 模块定义
 modules:
@@ -136,7 +136,9 @@ modules:
       - "toolkit"
     database_tables:
       - "toolkit_category"
-    dependencies: []
+    dependencies:
+      - mcp
+      - api
 
   api:
     name: "API接口"

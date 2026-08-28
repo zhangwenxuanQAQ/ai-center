@@ -15,8 +15,11 @@ python docker/versions/build.py --version full
 # 构建自定义功能版（根据配置文件）
 python docker/versions/build.py --version custom
 
-# 仅生成 Dockerfile，不构建镜像
+# 仅生成 Dockerfile，不构建镜像（输出到 stdout）
 python docker/versions/build.py --version custom --no-build
+
+# 仅生成 Dockerfile 并保存到指定文件
+python docker/versions/build.py --version custom --no-build -o my.Dockerfile
 
 # 使用自定义配置文件
 python docker/versions/build.py --config docker/versions/my-version/modules_config.yaml
@@ -24,6 +27,8 @@ python docker/versions/build.py --config docker/versions/my-version/modules_conf
 # 自定义镜像标签
 python docker/versions/build.py --version custom -t my-registry/aicenter:v1.0
 ```
+
+> **注意**：构建镜像时不会生成 `Dockerfile.generated` 临时文件，Dockerfile 内容通过 stdin 直接传递给 `docker build -f -`。
 
 ### 直接使用 Dockerfile（传统方式）
 
@@ -154,9 +159,9 @@ python docker/versions/build.py --config docker/versions/my-version/modules_conf
 |------|------|------|
 | `--version`, `-v` | 版本名称 (full/custom) | `--version full` |
 | `--config`, `-c` | 自定义配置文件路径 | `--config docker/versions/my-version/modules_config.yaml` |
-| `--output`, `-o` | 输出 Dockerfile 路径 | `--output /tmp/output.Dockerfile` |
+| `--output`, `-o` | 输出 Dockerfile 路径（仅 `--no-build` 时生效） | `--no-build -o my.Dockerfile` |
 | `--image-tag`, `-t` | Docker 镜像标签 | `-t aicenter:v1.0` |
-| `--no-build` | 仅生成 Dockerfile，不构建镜像 | `--no-build` |
+| `--no-build` | 仅生成 Dockerfile，不构建镜像（默认输出到 stdout） | `--no-build` |
 | `--no-cache` | 不使用缓存构建镜像 | `--no-cache` |
 
 ## 注意事项

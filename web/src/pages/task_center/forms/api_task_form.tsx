@@ -184,6 +184,7 @@ const ApiTaskForm: React.FC<ApiTaskFormProps> = ({ open, taskTypeLabel, editingT
           timeout: configs.timeout ?? 30,
           export_format: configs.export_format || 'json',
           export_contents: configs.export_contents || ['path', 'params', 'response'],
+          auto_download: !!configs.auto_download,
         });
         setExportFormat(configs.export_format || 'json');
         setHeaders(parseHeaders(configs.headers));
@@ -203,6 +204,7 @@ const ApiTaskForm: React.FC<ApiTaskFormProps> = ({ open, taskTypeLabel, editingT
           timeout: configs.timeout ?? 30,
           export_format: configs.export_format || 'json',
           export_contents: configs.export_contents || ['path', 'params', 'response'],
+          auto_download: !!configs.auto_download,
         });
         setExportFormat(configs.export_format || 'json');
       }
@@ -480,6 +482,7 @@ const ApiTaskForm: React.FC<ApiTaskFormProps> = ({ open, taskTypeLabel, editingT
         configs.timeout = values.timeout ?? 30;
         configs.export_format = values.export_format || 'json';
         configs.export_contents = values.export_contents || ['path', 'params', 'response'];
+        if (values.auto_download) configs.auto_download = true;
       } else {
         if (!selectedServer || !selectedApi) {
           message.warning('请先选择服务和接口');
@@ -534,6 +537,7 @@ const ApiTaskForm: React.FC<ApiTaskFormProps> = ({ open, taskTypeLabel, editingT
         configs.timeout = values.timeout ?? 30;
         configs.export_format = values.export_format || 'json';
         configs.export_contents = values.export_contents || ['path', 'params', 'response'];
+        if (values.auto_download) configs.auto_download = true;
       }
 
       setSubmitting(true);
@@ -664,6 +668,7 @@ const ApiTaskForm: React.FC<ApiTaskFormProps> = ({ open, taskTypeLabel, editingT
         <>
           <Steps
             current={current}
+            size="small"
             items={[
               { title: '选择服务和接口' },
               { title: '参数配置' },
@@ -864,6 +869,10 @@ const ApiTaskForm: React.FC<ApiTaskFormProps> = ({ open, taskTypeLabel, editingT
 
               <Form.Item name="export_contents" label="导出内容" rules={[{ required: true, message: '请选择导出内容' }]}>
                 <Checkbox.Group options={EXPORT_CONTENT_OPTIONS} />
+              </Form.Item>
+
+              <Form.Item name="auto_download" label="执行完自动下载" valuePropName="checked" initialValue={false}>
+                <Switch />
               </Form.Item>
             </div>
           </Form>

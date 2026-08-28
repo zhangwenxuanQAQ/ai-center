@@ -184,6 +184,26 @@ export const taskCenterService = {
     return http.get(`/aicenter/v1/task_center/task/${id}/result`);
   },
 
+  /** 下载任务结果文件（返回二进制Blob，不走统一JSON封装） */
+  downloadTaskResult: async (id: string): Promise<Blob> => {
+    const response = await fetch(`${API_BASE_URL}/aicenter/v1/task_center/task/${id}/download`);
+    if (!response.ok) {
+      // 后端返回JSON错误信息（文件过期等）
+      let errMsg = `下载失败 (HTTP ${response.status})`;
+      try {
+        const body = await response.json();
+        if (body?.message) errMsg = body.message;
+      } catch {}
+      throw new Error(errMsg);
+    }
+    return response.blob();
+  },
+
+  /** 获取任务结果文件下载URL（用于直接点击下载，浏览器不弹出保存对话框） */
+  getTaskDownloadUrl: (id: string): string => {
+    return `${API_BASE_URL}/aicenter/v1/task_center/task/${id}/download`;
+  },
+
   /** 获取任务执行历史日志 */
   getTaskHistoryLogs: async (id: string, page: number = 1,
                              pageSize: number = 20): Promise<{ data: TaskLog[]; total: number }> => {

@@ -8,7 +8,8 @@
     python docker/versions/build.py --version full
     python docker/versions/build.py --version custom
     python docker/versions/build.py --config docker/versions/my-version/modules_config.yaml
-    python docker/versions/build.py --version custom --no-build  # 仅生成 Dockerfile
+    python docker/versions/build.py --version custom --no-build  # 仅生成 Dockerfile（输出到 stdout）
+    python docker/versions/build.py --version custom --no-build -o Dockerfile.out  # 输出到指定文件
 """
 
 import os
@@ -119,7 +120,7 @@ def parse_module_dependencies(config: dict) -> Set[str]:
 def process_dockerfile_template(
     template_path: str,
     enabled_modules: Set[str],
-    output_path: str
+    output_path: str = None
 ) -> str:
     """
     根据启用的模块处理 Dockerfile 模板
@@ -132,7 +133,10 @@ def process_dockerfile_template(
     Args:
         template_path: 模板 Dockerfile 路径
         enabled_modules: 启用的模块集合
-        output_path: 输出 Dockerfile 路径
+        output_path: 输出文件路径（可选，指定时才写文件）
+    
+    Returns:
+        处理后的 Dockerfile 内容字符串
     """
     if not os.path.exists(template_path):
         print(f"[ERROR] 模板文件不存在: {template_path}")
@@ -175,37 +179,41 @@ def process_dockerfile_template(
         # 正常保留该行
         processed_lines.append(line)
 
-    # 写入输出文件
-    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-    with open(output_path, 'w', encoding='utf-8') as f:
-        f.writelines(processed_lines)
+    # 生成内容字符串
+    content = ''.join(processed_lines)
 
-    print(f"\n[SUCCESS] Dockerfile 已生成: {output_path}")
-    return output_path
+    # 仅在指定了 output_path 时才写文件
+    if output_path:
+        os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        print(f"\n[SUCCESS] Dockerfile 已生成: {output_path}")
+
+    return content
 
 
 def build_image(
-    dockerfile_path: str,
+    dockerfile_content: str,
     image_tag: str,
     project_root: str,
     no_cache: bool = False
 ):
     """
-    构建 Docker 镜像
+    构建 Docker 镜像（通过 stdin 传递 Dockerfile 内容，不生成临时文件）
     
     Args:
-        dockerfile_path: Dockerfile 路径
+        dockerfile_content: Dockerfile 内容字符串
         image_tag: 镜像标签
         project_root: 项目根目录
         no_cache: 是否不使用缓存
     """
     print(f"\n[BUILD] 开始构建镜像: {image_tag}")
-    print(f"[BUILD] Dockerfile: {dockerfile_path}")
+    print(f"[BUILD] Dockerfile 内容已通过 stdin 传递")
     print(f"[BUILD] 项目根目录: {project_root}")
 
     cmd = [
         'docker', 'build',
-        '-f', dockerfile_path,
+        '-f', '-',  # 从 stdin 读取 Dockerfile
         '-t', image_tag,
     ]
 
@@ -214,9 +222,13 @@ def build_image(
 
     cmd.append(project_root)
 
-    print(f"[BUILD] 执行命令: {' '.join(cmd)}")
+    print(f"[BUILD] 执行命令: docker build -f - -t {image_tag} [context]")
 
-    result = subprocess.run(cmd, cwd=project_root)
+    result = subprocess.run(
+        cmd, cwd=project_root,
+        input=dockerfile_content.encode('utf-8'),
+        stdout=sys.stdout, stderr=sys.stderr
+    )
 
     if result.returncode == 0:
         print(f"\n[SUCCESS] 镜像 {image_tag} 构建成功！")
@@ -240,8 +252,11 @@ def main():
     # 使用自定义配置文件
     python docker/versions/build.py --config docker/versions/my-version/modules_config.yaml
 
-    # 仅生成 Dockerfile，不构建镜像
+    # 仅生成 Dockerfile（输出到 stdout，不生成文件）
     python docker/versions/build.py --version custom --no-build
+
+    # 仅生成 Dockerfile 并保存到指定文件
+    python docker/versions/build.py --version custom --no-build -o my.Dockerfile
         """
     )
 
@@ -258,7 +273,7 @@ def main():
 
     parser.add_argument(
         '--output', '-o',
-        help='输出 Dockerfile 路径'
+        help='输出 Dockerfile 路径（仅 --no-build 时生效；构建时不生成任何文件）'
     )
 
     parser.add_argument(
@@ -269,7 +284,7 @@ def main():
     parser.add_argument(
         '--no-build',
         action='store_true',
-        help='仅生成 Dockerfile，不构建镜像'
+        help='仅生成 Dockerfile，不构建镜像（输出到 stdout 或指定 --output）'
     )
 
     parser.add_argument(
@@ -311,11 +326,10 @@ def main():
         print(f"[ERROR] Dockerfile 模板不存在: {template_path}")
         sys.exit(1)
 
-    # 确定输出路径
-    if args.output:
+    # 确定输出路径（仅在 --no-build 且指定了 --output 时写文件）
+    output_path = None
+    if args.no_build and args.output:
         output_path = os.path.abspath(args.output)
-    else:
-        output_path = template_path + '.generated'
 
     # 加载配置
     print(f"\n[INFO] 加载配置文件: {config_path}")
@@ -327,26 +341,37 @@ def main():
 
     print(f"\n[INFO] 启用的模块: {sorted(enabled_modules)}")
 
-    # 处理 Dockerfile 模板
+    # 处理 Dockerfile 模板（返回内容字符串，不生成临时文件）
     print("\n[INFO] 处理 Dockerfile 模板...")
-    process_dockerfile_template(
+    dockerfile_content = process_dockerfile_template(
         template_path=template_path,
         enabled_modules=enabled_modules,
-        output_path=output_path
+        output_path=output_path  # 仅当 --no-build + --output 时有值
     )
 
     # 构建镜像
     if not args.no_build:
+        # 正常构建：通过 stdin 传递 Dockerfile 内容，不生成任何文件
         image_tag = args.image_tag or f"aicenter:{args.version or 'custom'}"
         build_image(
-            dockerfile_path=output_path,
+            dockerfile_content=dockerfile_content,
             image_tag=image_tag,
             project_root=project_root,
             no_cache=args.no_cache
         )
     else:
-        print(f"\n[INFO] 已跳过镜像构建（--no-build）")
-        print(f"[INFO] 可手动构建: docker build -f {output_path} -t <image-tag> .")
+        # 仅生成 Dockerfile
+        if output_path:
+            print(f"\n[INFO] Dockerfile 已保存到: {output_path}")
+        else:
+            print(f"\n[INFO] 已跳过镜像构建（--no-build）")
+            print(f"[INFO] 以下为生成的 Dockerfile 内容：\n")
+            print("=" * 60)
+            print(dockerfile_content)
+            print("=" * 60)
+            print(f"\n[INFO] 提示：可通过以下命令手动构建：")
+            print(f"      docker build -f - -t <image-tag> .  # 从 stdin 读取")
+            print(f"      或指定输出文件后：docker build -f {args.output or '<output-path>'} -t <image-tag> .")
 
 
 if __name__ == '__main__':

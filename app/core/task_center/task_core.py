@@ -871,57 +871,119 @@ class TaskCenterCore:
     def _save_api_result_file(task_id: str, result_data: dict, export_format: str, file_name: str) -> Optional[dict]:
         """将接口调用任务结果保存为文件（存Redis，base64编码，24小时过期）
 
-        result_data: 包含 status, error, path, params, response 等字段
+        result_data: 单参数模式含 status/error/path/params/status_code/response；
+                     多参数模式含 summary/results
         export_format: json/excel/markdown
         file_name: 结果文件名
 
         Returns:
             dict: 保存的文件信息（file_name/format/executed_at/expire_at），失败返回None
         """
+        from io import BytesIO
+        from openpyxl import Workbook
+
         try:
-            # 生成文件内容
-            content = ''
             ext = API_EXPORT_FORMAT_FILE_EXT.get(export_format, 'json')
+            file_bytes: bytes = b''  # 最终要存Redis的二进制内容
 
             if export_format == 'json':
                 content = json.dumps(result_data, ensure_ascii=False, indent=2)
+                file_bytes = content.encode('utf-8')
+
             elif export_format == 'markdown':
                 md_parts = [f"# 接口调用结果\n"]
-                md_parts.append(f"## 执行状态: {result_data.get('status', 'unknown')}")
-                if result_data.get('error'):
-                    md_parts.append(f"\n**错误消息**: {result_data['error']}")
-                if result_data.get('path'):
-                    md_parts.append(f"\n## 接口路径\n```\n{result_data['path']}\n```")
-                if result_data.get('params'):
-                    md_parts.append(f"\n## 接口参数")
-                    if isinstance(result_data['params'], dict):
-                        for k, v in result_data['params'].items():
-                            md_parts.append(f"- **{k}**: `{v}`")
-                if result_data.get('response'):
+
+                # 多参数模式：按参数组分节
+                if 'results' in result_data and 'summary' in result_data:
+                    for r in result_data.get('results', []):
+                        status_icon = '✅' if r.get('status') == 'success' else '❌'
+                        md_parts.append(f"\n## 第{r.get('group', '?')}组 {status_icon}")
+                        md_parts.append(f"- **状态**: {r.get('status', 'unknown')}")
+                        md_parts.append(f"- **状态码**: {r.get('status_code', '-')}")
+                        md_parts.append(f"- **耗时**: {r.get('elapsed', '-')}秒")
+                        if r.get('params'):
+                            md_parts.append(f"- **参数**: `{json.dumps(r['params'], ensure_ascii=False)}`")
+                        if r.get('error'):
+                            md_parts.append(f"- **错误**: {r['error']}")
+                        if r.get('response') not in (None, ''):
+                            md_parts.append(f"- **响应**:")
+                            md_parts.append(f"```json\n{str(r['response'])[:2000]}\n```")
+                else:
+                    # 单参数模式
+                    md_parts.append(f"## 执行状态: {result_data.get('status', 'unknown')}")
+                    if result_data.get('error'):
+                        md_parts.append(f"\n**错误消息**: {result_data['error']}")
+                    if result_data.get('path'):
+                        md_parts.append(f"\n## 接口路径\n```\n{result_data['path']}\n```")
+                    if result_data.get('params'):
+                        md_parts.append(f"\n## 接口参数")
+                        if isinstance(result_data['params'], dict):
+                            for k, v in result_data['params'].items():
+                                md_parts.append(f"- **{k}**: `{v}`")
+                    # 始终输出响应部分（即使为空也显示占位）
                     md_parts.append(f"\n## 接口返回结果")
                     resp = result_data.get('response', '')
-                    md_parts.append(f"```json\n{resp}\n```")
+                    if resp not in (None, ''):
+                        md_parts.append(f"```json\n{str(resp)[:2000]}\n```")
+                    else:
+                        md_parts.append("（无响应内容）")
+
                 content = '\n'.join(md_parts)
+                file_bytes = content.encode('utf-8')
+
             elif export_format == 'excel':
-                # Excel格式使用CSV兼容性格式（后续可扩展为xlsx）
-                headers = ['执行状态', '错误消息', '接口路径', '参数', '状态码', '响应']
-                row = [
-                    result_data.get('status', ''),
-                    result_data.get('error', '') or '',
-                    result_data.get('path', '') or '',
-                    json.dumps(result_data.get('params', {}), ensure_ascii=False) if result_data.get('params') else '',
-                    str(result_data.get('status_code', '')),
-                    str(result_data.get('response', ''))[:1000],
-                ]
-                content = ','.join(headers) + '\n' + ','.join(
-                    f'"{str(v).replace(chr(34), chr(34)+chr(34))}"' for v in row
-                )
-                ext = 'csv'
+                wb = Workbook()
+                ws = wb.active
+                ws.title = '接口调用结果'
+
+                if 'results' in result_data and 'summary' in result_data:
+                    # 多参数模式：每行一个接口调用结果
+                    headers = ['序号', '状态', '状态码', '耗时(秒)', '参数', '响应', '错误']
+                    ws.append(headers)
+                    for r in result_data.get('results', []):
+                        ws.append([
+                            r.get('group', ''),
+                            r.get('status', ''),
+                            r.get('status_code', ''),
+                            r.get('elapsed', ''),
+                            json.dumps(r.get('params', {}), ensure_ascii=False) if r.get('params') else '',
+                            str(r.get('response', ''))[:2000] if r.get('response') else '',
+                            r.get('error', '') or '',
+                        ])
+                else:
+                    # 单参数模式
+                    headers = ['执行状态', '错误消息', '接口路径', '参数', '状态码', '响应']
+                    ws.append(headers)
+                    ws.append([
+                        result_data.get('status', ''),
+                        result_data.get('error', '') or '',
+                        result_data.get('path', '') or '',
+                        json.dumps(result_data.get('params', {}), ensure_ascii=False) if result_data.get('params') else '',
+                        str(result_data.get('status_code', '')),
+                        str(result_data.get('response', ''))[:2000] if result_data.get('response') else '',
+                    ])
+
+                # 调整列宽（基于第一行表头宽度）
+                from openpyxl.utils import get_column_letter
+                for col_idx in range(1, ws.max_column + 1):
+                    col_letter = get_column_letter(col_idx)
+                    max_len = 0
+                    for row in range(1, ws.max_row + 1):
+                        cell_val = ws.cell(row=row, column=col_idx).value
+                        if cell_val is not None:
+                            max_len = max(max_len, len(str(cell_val)))
+                    ws.column_dimensions[col_letter].width = min(max_len + 4, 60)
+
+                buf = BytesIO()
+                wb.save(buf)
+                file_bytes = buf.getvalue()
+
             else:
                 content = json.dumps(result_data, ensure_ascii=False, indent=2)
+                file_bytes = content.encode('utf-8')
 
-            # 编码为base64存Redis
-            file_base64 = base64.b64encode(content.encode('utf-8')).decode('utf-8')
+            # base64编码存Redis（文本与二进制统一处理）
+            file_base64 = base64.b64encode(file_bytes).decode('utf-8')
             result_key = f"{API_TASK_RESULT_PREFIX}{task_id}"
             now = datetime.now()
             file_info = {

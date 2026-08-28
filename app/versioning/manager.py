@@ -178,15 +178,18 @@ class VersionManager:
         self._config_loaded = True
 
     def _init_default_modules(self):
-        """初始化默认模块定义（当配置文件不存在时使用）"""
+        """初始化默认模块定义（当配置文件不存在时使用）
+
+        与 configs/modules_config.yaml 中的 modules 定义保持同步
+        """
         default_modules = {
-            'user': {'name': '用户管理', 'description': '用户账号管理', 'required': True,
+            'user': {'name': '用户管理', 'description': '用户账号管理、权限控制', 'required': True,
                      'api_prefixes': ['/user'], 'frontend_routes': ['/users'],
                      'menu_keys': ['user'], 'database_tables': ['user'], 'dependencies': []},
-            'llm_model': {'name': '模型管理', 'description': '大语言模型配置', 'required': False,
+            'llm_model': {'name': '模型管理', 'description': '大语言模型配置与管理', 'required': False,
                           'api_prefixes': ['/llm_model'], 'frontend_routes': ['/llm_models', '/llm_model/setting/:id'],
                           'menu_keys': ['llm_model'], 'database_tables': ['llm_model', 'llm_category'], 'dependencies': []},
-            'prompt': {'name': '提示词', 'description': '系统提示词模板', 'required': False,
+            'prompt': {'name': '提示词', 'description': '系统提示词模板管理', 'required': False,
                        'api_prefixes': ['/prompt'], 'frontend_routes': ['/prompts', '/prompt/setting/:id'],
                        'menu_keys': ['prompt'], 'database_tables': ['prompt', 'prompt_category'], 'dependencies': []},
             'datasource': {'name': '数据源', 'description': '外部数据源连接配置', 'required': False,
@@ -200,7 +203,10 @@ class VersionManager:
                     'menu_keys': ['mcp'], 'database_tables': ['mcp_server', 'mcp_category', 'mcp_tool'], 'dependencies': []},
             'toolkit': {'name': '工具箱', 'description': '自定义工具和API', 'required': False,
                         'api_prefixes': ['/toolkit'], 'frontend_routes': ['/toolkit'],
-                        'menu_keys': ['toolkit'], 'database_tables': ['toolkit_category'], 'dependencies': []},
+                        'menu_keys': ['toolkit'], 'database_tables': ['toolkit_category'], 'dependencies': ['mcp', 'api']},
+            'api': {'name': 'API接口', 'description': 'API服务分类、配置与接口管理', 'required': False,
+                    'api_prefixes': ['/api_server'], 'frontend_routes': ['/toolkit', '/api/setting/:id'],
+                    'menu_keys': ['api'], 'database_tables': ['api_server_category', 'api_server', 'api'], 'dependencies': []},
             'chatbot': {'name': '机器人', 'description': 'AI机器人创建与配置', 'required': False,
                         'api_prefixes': ['/chatbot', '/chatbot_category'], 'frontend_routes': ['/chatbots', '/chatbot/setting/:id'],
                         'menu_keys': ['chatbot'], 'database_tables': ['chatbot', 'chatbot_category', 'chatbot_model'], 'dependencies': ['user', 'llm_model', 'prompt', 'knowledgebase', 'mcp', 'toolkit']},

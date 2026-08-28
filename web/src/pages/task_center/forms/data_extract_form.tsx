@@ -231,6 +231,17 @@ const DataExtractForm: React.FC<DataExtractFormProps> = ({ open, taskTypeLabel, 
                 optionFilterProp="label"
                 onChange={handleObjectChange}
                 options={objectOptions}
+                optionRender={(option) => {
+                  const obj = objects.find(o => o.id === option.value);
+                  return (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', overflow: 'hidden' }}>
+                      <span style={{ fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{option.label}</span>
+                      {obj?.description && (
+                        <span style={{ fontSize: 12, color: '#999', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{obj.description}</span>
+                      )}
+                    </div>
+                  );
+                }}
               />
             </Form.Item>
             {selectedObject && columnOptions.length > 0 && (

@@ -166,6 +166,11 @@ export const ontologyService = {
     return http.get(`/aicenter/v1/ontology/task/list?${params.join('&')}`);
   },
 
+  /** 获取单个任务 */
+  getTask: async (id: string): Promise<OntologyTask> => {
+    return http.get(`/aicenter/v1/ontology/task/${id}`);
+  },
+
   /** 创建任务 */
   createTask: async (data: {
     name: string;
@@ -212,6 +217,33 @@ export const ontologyService = {
   /** 获取任务结果 */
   getTaskResult: async (id: string): Promise<TaskResult> => {
     return http.get(`/aicenter/v1/ontology/task/${id}/result`);
+  },
+
+  /** 下载本体任务结果文件（通过任务中心统一下载接口，支持本体任务ID或任务中心任务ID） */
+  downloadTaskResult: async (taskId: string): Promise<{ blob: Blob; fileName: string }> => {
+    const response = await fetch(`${API_BASE_URL}/aicenter/v1/task_center/task/${taskId}/download`);
+    if (!response.ok) {
+      let errMsg = `下载失败 (HTTP ${response.status})`;
+      try {
+        const body = await response.json();
+        if (body?.message) errMsg = body.message;
+      } catch {}
+      throw new Error(errMsg);
+    }
+    const blob = await response.blob();
+    // 从Content-Disposition解析后端文件名（含扩展名），作为下载文件名
+    let fileName = '';
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="?([^";]+)"?/i);
+    if (match?.[1]) {
+      try { fileName = decodeURIComponent(match[1]); } catch { fileName = match[1]; }
+    }
+    return { blob, fileName };
+  },
+
+  /** 获取本体任务结果文件下载URL（直链下载，浏览器不弹出保存对话框） */
+  getTaskDownloadUrl: (ontologyTaskId: string): string => {
+    return `${API_BASE_URL}/aicenter/v1/task_center/task/${ontologyTaskId}/download`;
   },
 
   /** 批量删除任务 */

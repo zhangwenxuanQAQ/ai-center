@@ -4,15 +4,18 @@
 
 import logging
 import asyncio
+import base64
 from fastapi import APIRouter, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 
 from app.services.task_center.dto import TaskInfoCreate, TaskInfoUpdate
 from app.services.task_center.service import TaskCenterService
 from app.core.task_center import TaskCenterCore
+from app.database.models import TaskInfo
 from app.utils.response import ResponseUtil, ApiResponse
 from app.constants.task_center_constants import (
-    TASK_STATUS_LABELS, TASK_TYPE_NAME, TASK_CENTER_EVENTS_CHANNEL,
+    TASK_STATUS_LABELS, TASK_TYPE_NAME, TASK_CENTER_EVENTS_CHANNEL, TaskSourceType, TaskType,
+    API_EXPORT_FORMAT_FILE_EXT,
 )
 
 router = APIRouter()
@@ -288,6 +291,59 @@ def get_task_result(task_id: str):
     if not result:
         return ResponseUtil.not_found(message="任务不存在")
     return ResponseUtil.success(data=result)
+
+
+@router.get("/task/{task_id}/download", summary="下载任务结果文件")
+def download_task_result(task_id: str):
+    """下载任务结果文件（接口调用/数据抽取任务，从Redis读取base64解码为二进制，含过期判断）"""
+    task = TaskInfo.select().where(
+        TaskInfo.id == task_id,
+        TaskInfo.deleted == False
+    ).first()
+    if not task:
+        # 兼容本体任务ID（本体工作台SSE事件中的task_id为本体任务ID）：按来源关联查找
+        task = TaskInfo.select().where(
+            TaskInfo.source_type == TaskSourceType.ONTOLOGY_TASK,
+            TaskInfo.source_id == task_id,
+            TaskInfo.deleted == False
+        ).first()
+    if not task:
+        return ResponseUtil.not_found(message="任务不存在")
+
+    # 数据抽取任务：从本体任务结果Redis读取
+    file_info = None
+    if task.task_type == TaskType.DATA_EXTRACT and task.source_type == TaskSourceType.ONTOLOGY_TASK and task.source_id:
+        from app.core.ontology.task_core import OntologyTaskCore
+        file_info = OntologyTaskCore._get_result_file(task.source_id)
+    elif task.task_type == TaskType.API:
+        file_info = TaskCenterCore._get_api_result_file(task_id)
+
+    if not file_info or not file_info.get('file_base64'):
+        return ResponseUtil.not_found(message="结果文件不存在或已过期")
+
+    file_bytes = base64.b64decode(file_info['file_base64'])
+    file_name = file_info.get('file_name', 'result')
+    # file_name已含扩展名（如api_result_xxx.xlsx）；无后缀时按导出格式映射补全
+    if '.' in file_name:
+        ext = file_name.rsplit('.', 1)[-1].lower()
+    else:
+        ext = API_EXPORT_FORMAT_FILE_EXT.get(file_info.get('format', 'json'), 'json')
+        file_name = f"{file_name}.{ext}"
+
+    mime_map = {
+        'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'md': 'text/markdown',
+        'json': 'application/json',
+        'csv': 'text/csv',
+        'sql': 'application/sql',
+    }
+    media_type = mime_map.get(ext, 'application/octet-stream')
+
+    return Response(
+        content=file_bytes,
+        media_type=media_type,
+        headers={'Content-Disposition': f'attachment; filename="{file_name}"'}
+    )
 
 
 @router.get("/task/{task_id}/logs", response_model=ApiResponse)

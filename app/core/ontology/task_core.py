@@ -334,6 +334,15 @@ class OntologyTaskCore:
     # ==================== 任务结果 ====================
 
     @staticmethod
+    def _get_result_file(task_id: str) -> Optional[dict]:
+        """获取任务结果文件信息（从Redis读取，过期返回None）"""
+        try:
+            result_key = f"{ONTOLOGY_TASK_RESULT_PREFIX}{task_id}"
+            return redis_utils.get_obj(result_key) if redis_utils.is_available else None
+        except Exception:
+            return None
+
+    @staticmethod
     def get_task_result(task_id: str) -> dict:
         """获取任务执行结果"""
         task = OntologyTaskCore.get_task(task_id)

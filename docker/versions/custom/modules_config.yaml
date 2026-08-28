@@ -24,6 +24,9 @@ description: "自定义功能版 - 仅包含指定的功能模块"
 # 示例：仅启用基础功能（用户管理 + 模型管理 + 提示词）
 enabled_modules:
   - ontology
+  - task_center
+  - toolkit
+  - api
 
 # 注意：
 # - 系统会自动解析依赖关系

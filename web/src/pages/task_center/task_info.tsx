@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Table, Button, Drawer, Input, message, Modal, Space, Tag, Select,
-  Descriptions, Empty, Pagination, Tooltip, Dropdown, Popconfirm,
+  Descriptions, Empty, Pagination, Tooltip, Dropdown, Popconfirm, Typography,
 } from 'antd';
 import {
   PlusOutlined, PlayCircleOutlined, PauseCircleOutlined, DeleteOutlined,
   ReloadOutlined, EyeOutlined, RedoOutlined, DownOutlined, HistoryOutlined, EditOutlined,
 } from '@ant-design/icons';
-import { taskCenterService, TaskInfo, TaskLog, TaskTypeInfo, TaskResult } from '../../services/taskCenter';
+import { taskCenterService, TaskInfo, TaskLog, TaskTypeInfo, TaskResult, TaskOutputField } from '../../services/taskCenter';
 import { statusColorMap, taskTypeColorMap, formatDurationSeconds, useTheme } from './constants';
 import TaskFormModal from './forms';
 import TaskResultDrawer from './results';
@@ -68,24 +68,86 @@ const TaskCenterTaskPage: React.FC = () => {
     taskCenterService.getTaskStatuses().then(setTaskStatuses).catch(() => {});
   }, []);
 
+  // 使用 ref 保存最新的 taskStatuses，避免 EventSource 因依赖变化而重建
+  const taskStatusesRef = useRef(taskStatuses);
+  taskStatusesRef.current = taskStatuses;
+
+  // 已触发自动下载的任务（避免重复下载）
+  const autoDownloadedRef = useRef<Set<string>>(new Set());
+  // 正在处理中的自动下载任务（防止SSE重复事件触发多次后端查询）
+  const autoDownloadPendingRef = useRef<Set<string>>(new Set());
+  // 持用tasks引用，在EventSource回调中直接读最新
+  const tasksRef = useRef<TaskInfo[]>(tasks);
+  tasksRef.current = tasks;
+
+  /** 自动下载：fetch获取blob后用同源blob URL触发下载，不跳转、不弹框 */
+  const triggerAutoDownload = useCallback(async (taskId: string, fileName?: string) => {
+    if (autoDownloadedRef.current.has(taskId)) return;
+    autoDownloadedRef.current.add(taskId);
+    try {
+      const blob = await taskCenterService.downloadTaskResult(taskId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName || 'result';
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e: any) {
+      console.warn('[auto_download] failed:', e);
+    }
+  }, []);
+
   // SSE订阅任务事件，运行中任务状态/进度实时推送
+  // 只创建一次 EventSource，不依赖 taskStatuses
   useEffect(() => {
     const eventSource = new EventSource(taskCenterService.getTaskEventsUrl());
     eventSource.addEventListener('update', (event) => {
       try {
         const data = JSON.parse(event.data);
+        const isTerminal = ['done', 'fail', 'cancel'].includes(data.task_status);
+        const isSuccess = data.task_status === 'done';
         setTasks(prevTasks => prevTasks.map(task => {
           if (task.id === data.task_id) {
             return {
               ...task,
               task_status: data.task_status,
-              task_status_label: taskStatuses[data.task_status] || data.task_status,
+              task_status_label: taskStatusesRef.current[data.task_status] || data.task_status,
               task_progress: data.task_progress,
               task_progress_message: data.task_progress_message,
             };
           }
           return task;
         }));
+        // 终态时触发完整刷新，确保 task_end_at/duration 等字段同步
+        if (isTerminal) {
+          setTimeout(() => loadTasks(), 200);
+        }
+        // auto_download：成功终态时，若任务配置开启立即下载
+        // 跨页支持：当前页查不到任务时，调用后端接口获取任务配置后再判断
+        if (isSuccess
+            && !autoDownloadedRef.current.has(data.task_id)
+            && !autoDownloadPendingRef.current.has(data.task_id)) {
+          autoDownloadPendingRef.current.add(data.task_id);
+          (async () => {
+            try {
+              let task = tasksRef.current.find(t => t.id === data.task_id);
+              if (!task) {
+                task = await taskCenterService.getTask(data.task_id);
+              }
+              if (task?.task_configs?.auto_download) {
+                const outFile = (task.task_output || []).find(f => f.name === 'result_file')?.value;
+                triggerAutoDownload(data.task_id, outFile);
+              }
+            } catch (e) {
+              console.warn('[auto_download] check failed:', e);
+            } finally {
+              autoDownloadPendingRef.current.delete(data.task_id);
+            }
+          })();
+        }
       } catch (error) {
         console.error('Failed to parse SSE event:', error);
       }
@@ -94,7 +156,8 @@ const TaskCenterTaskPage: React.FC = () => {
       // EventSource 断线后浏览器会自动重连，此处仅记录
     };
     return () => eventSource.close();
-  }, [taskStatuses]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 打开新增任务弹窗
   const handleOpenCreate = (taskType: string) => {
@@ -363,9 +426,13 @@ const TaskCenterTaskPage: React.FC = () => {
     },
   ];
 
+  // 暂时禁用的任务类型
+  const DISABLED_TASK_TYPES = ['data_extract', 'doc_chunk'];
+
   // 任务类型下拉选项（来自后端常量）
   const taskTypeOptions = Object.entries(taskTypes).map(([value, info]) => ({
     value, label: info?.name || value,
+    disabled: DISABLED_TASK_TYPES.includes(value),
   }));
 
   return (
@@ -374,8 +441,8 @@ const TaskCenterTaskPage: React.FC = () => {
       <div style={{ padding: '16px 16px 12px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <Dropdown
           menu={{
-            items: taskTypeOptions.map(({ value, label }) => ({
-              key: value, label, icon: <PlusOutlined />,
+            items: taskTypeOptions.map(({ value, label, disabled }) => ({
+              key: value, label, icon: <PlusOutlined />, disabled,
             })),
             onClick: ({ key }) => handleOpenCreate(key),
           }}
@@ -512,20 +579,73 @@ const TaskCenterTaskPage: React.FC = () => {
           locale={{ emptyText: <Empty description="暂无执行历史" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
           pagination={false}
           expandable={{
-            expandedRowRender: (record: TaskLog) => (
-              <div>
-                <div style={{ marginBottom: 4, fontWeight: 600 }}>进度日志</div>
-                <pre style={{
-                  background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5',
-                  color: theme === 'dark' ? '#e0e0e0' : '#333333',
-                  padding: 12, borderRadius: 6, fontFamily: 'monospace',
-                  fontSize: 12, maxHeight: 260, overflow: 'auto', whiteSpace: 'pre-wrap', margin: 0,
-                }}>
-                  {record.task_progress_message || '暂无日志'}
-                </pre>
-              </div>
-            ),
-            rowExpandable: (record: TaskLog) => !!record.task_progress_message,
+            expandedRowRender: (record: TaskLog) => {
+              const outputFields = (record.task_output || []).filter(
+                f => f.value !== null && f.value !== undefined && f.value !== ''
+              );
+              const { Text } = Typography;
+              const handleDownload = async () => {
+                try {
+                  const blob = await taskCenterService.downloadTaskResult(record.task_id);
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  const fileName = outputFields.find(f => f.name === 'result_file')?.value || 'result';
+                  a.download = String(fileName);
+                  a.click();
+                  URL.revokeObjectURL(url);
+                } catch {
+                  message.error('下载失败，文件可能已过期');
+                }
+              };
+              const renderFieldVal = (name: string, value: any) => {
+                if (value === null || value === undefined || value === '') return <Text type="secondary">-</Text>;
+                if (name === 'status') {
+                  const isOk = value === 'success' || value === 'done';
+                  return <Tag color={isOk ? 'success' : 'error'}>{String(value)}</Tag>;
+                }
+                if (name === 'result_file') {
+                  return <Typography.Link onClick={handleDownload}>{String(value)}</Typography.Link>;
+                }
+                if (typeof value === 'object') {
+                  return <Text style={{ fontSize: 12 }}>{JSON.stringify(value)}</Text>;
+                }
+                return <Text>{String(value)}</Text>;
+              };
+              return (
+                <div>
+                  {/* 进度日志 */}
+                  <div style={{ marginBottom: 4, fontWeight: 600 }}>进度日志</div>
+                  <pre style={{
+                    background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5',
+                    color: theme === 'dark' ? '#e0e0e0' : '#333333',
+                    padding: 12, borderRadius: 6, fontFamily: 'monospace',
+                    fontSize: 12, maxHeight: 260, overflow: 'auto', whiteSpace: 'pre-wrap', margin: 0,
+                  }}>
+                    {record.task_progress_message || '暂无日志'}
+                  </pre>
+
+                  {/* 执行结果 */}
+                  {outputFields.length > 0 && (
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ marginBottom: 4, fontWeight: 600 }}>执行结果</div>
+                      <Descriptions column={1} size="small" bordered>
+                        {outputFields.map(f => (
+                          <Descriptions.Item key={f.name} label={f.title}>
+                            {renderFieldVal(f.name, f.value)}
+                          </Descriptions.Item>
+                        ))}
+                      </Descriptions>
+                    </div>
+                  )}
+                </div>
+              );
+            },
+            rowExpandable: (record: TaskLog) =>
+              !!record.task_progress_message ||
+              ((record.task_output || []).filter(
+                f => f.value !== null && f.value !== undefined && f.value !== ''
+              ).length > 0),
           }}
         />
         <div style={{ paddingTop: 16, display: 'flex', justifyContent: 'center' }}>

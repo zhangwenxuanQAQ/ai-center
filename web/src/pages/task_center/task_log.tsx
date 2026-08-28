@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Table, Button, Drawer, Input, message, Tag, Select, Descriptions,
-  Empty, Pagination, Tooltip,
+  Empty, Pagination, Tooltip, Typography,
 } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
-import { taskCenterService, TaskLog, TaskTypeInfo } from '../../services/taskCenter';
+import { taskCenterService, TaskLog, TaskTypeInfo, TaskOutputField } from '../../services/taskCenter';
 import { statusColorMap, taskTypeColorMap, formatDurationSeconds, useTheme } from './constants';
 
 const TaskCenterLogPage: React.FC = () => {
@@ -220,7 +220,7 @@ const TaskCenterLogPage: React.FC = () => {
       >
         {detailLog ? (
           <div>
-            <Descriptions column={1} size="small" bordered>
+            <Descriptions column={1} size="small" bordered labelStyle={{ width: 150, minWidth: 150 }}>
               <Descriptions.Item label="任务名称">{detailLog.name}</Descriptions.Item>
               <Descriptions.Item label="任务类型">
                 <Tag color={taskTypeColorMap[detailLog.task_type] || 'default'}>{detailLog.task_type_name}</Tag>
@@ -248,6 +248,71 @@ const TaskCenterLogPage: React.FC = () => {
               <Descriptions.Item label="结束时间">{detailLog.task_end_at || '-'}</Descriptions.Item>
               <Descriptions.Item label="耗时">{formatDurationSeconds(detailLog.task_duration)}</Descriptions.Item>
             </Descriptions>
+
+            {/* 任务配置（来自后端常量） */}
+            {detailLog.task_configs && Object.keys(detailLog.task_configs).length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <div style={{ marginBottom: 4, fontWeight: 600 }}>任务配置</div>
+                <Descriptions column={1} size="small" bordered labelStyle={{ width: 150, minWidth: 150 }}>
+                  {Object.entries(detailLog.task_configs).map(([key, val]) => (
+                    <Descriptions.Item key={key} label={key}>
+                      {typeof val === 'object'
+                        ? <Typography.Text style={{ fontSize: 12 }}>{JSON.stringify(val)}</Typography.Text>
+                        : String(val)}
+                    </Descriptions.Item>
+                  ))}
+                </Descriptions>
+              </div>
+            )}
+
+            {/* 执行结果（来自后端 task_output） */}
+            {(() => {
+              const outputFields = (detailLog.task_output || []).filter(
+                f => f.value !== null && f.value !== undefined && f.value !== ''
+              );
+              if (outputFields.length === 0) return null;
+              const { Text } = Typography;
+              const handleDownload = async () => {
+                try {
+                  const blob = await taskCenterService.downloadTaskResult(detailLog.task_id);
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  const fileName = outputFields.find(f => f.name === 'result_file')?.value || 'result';
+                  a.download = String(fileName);
+                  a.click();
+                  URL.revokeObjectURL(url);
+                } catch {
+                  message.error('下载失败，文件可能已过期');
+                }
+              };
+              const renderVal = (name: string, value: any) => {
+                if (value === null || value === undefined || value === '') return <Text type="secondary">-</Text>;
+                if (name === 'status') {
+                  const isOk = value === 'success' || value === 'done';
+                  return <Tag color={isOk ? 'success' : 'error'}>{String(value)}</Tag>;
+                }
+                if (name === 'result_file') {
+                  return <Typography.Link onClick={handleDownload}>{String(value)}</Typography.Link>;
+                }
+                if (typeof value === 'object') {
+                  return <Text style={{ fontSize: 12 }}>{JSON.stringify(value)}</Text>;
+                }
+                return <Text>{String(value)}</Text>;
+              };
+              return (
+                <div style={{ marginTop: 16 }}>
+                  <div style={{ marginBottom: 4, fontWeight: 600 }}>执行结果</div>
+                  <Descriptions column={1} size="small" bordered labelStyle={{ width: 150, minWidth: 150 }}>
+                    {outputFields.map(f => (
+                      <Descriptions.Item key={f.name} label={f.title}>
+                        {renderVal(f.name, f.value)}
+                      </Descriptions.Item>
+                    ))}
+                  </Descriptions>
+                </div>
+              );
+            })()}
           </div>
         ) : (
           <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>暂无数据</div>
