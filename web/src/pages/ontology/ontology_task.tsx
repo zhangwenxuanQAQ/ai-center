@@ -227,7 +227,7 @@ const OntologyTaskPage: React.FC = () => {
       // 加载本体对象
       if (!isSql && task.datasource_id) {
         try {
-          const res = await ontologyService.getObjects(task.datasource_id, 1, 100);
+          const res = await ontologyService.getObjects(task.datasource_id, 1, 100000);
           const objList = res.data || [];
           setObjects(objList);
           const obj = objList.find(o => o.id === cfg.ontology_object_id) || null;
@@ -281,7 +281,7 @@ const OntologyTaskPage: React.FC = () => {
     setObjects([]);
     if (!dsId) return;
     try {
-      const res = await ontologyService.getObjects(dsId, 1, 100);
+      const res = await ontologyService.getObjects(dsId, 1, 100000);
       setObjects(res.data || []);
     } catch (e) {}
   };

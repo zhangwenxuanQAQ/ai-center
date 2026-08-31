@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Table, Button, Drawer, Input, message, Modal, Space, Dropdown, Popconfirm,
-  Form, Spin, Checkbox, Typography, Layout, Empty, Tooltip, Select, Pagination, Popover, Progress
+  Form, Spin, Checkbox, Typography, Layout, Empty, Tooltip, Select, Pagination, Popover, Progress, Upload
 } from 'antd';
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, SyncOutlined,
   SearchOutlined, ExportOutlined, ReloadOutlined, FileTextOutlined, SaveOutlined, ClearOutlined,
-  DownOutlined, CopyOutlined
+  DownOutlined, CopyOutlined, UploadOutlined
 } from '@ant-design/icons';
 import { ontologyService, OntologyObject, OntologyContent } from '../../services/ontology';
 import { datasourceService, Datasource } from '../../services/datasource';
@@ -297,6 +297,7 @@ const OntologyObjectPage: React.FC = () => {
   const [selectedTables, setSelectedTables] = useState<string[]>([]); // 选中的表名
   const [tablesLoading, setTablesLoading] = useState(false);
   const [tableFilter, setTableFilter] = useState('');
+  const [fileFilterTables, setFileFilterTables] = useState<Set<string> | null>(null); // 通过文件过滤的表名集合
   const [previewTable, setPreviewTable] = useState<string>(''); // 当前预览的表名
   const [previewColumns, setPreviewColumns] = useState<any[]>([]);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -404,6 +405,8 @@ const OntologyObjectPage: React.FC = () => {
     setBatchVisible(true);
     setTablesLoading(true);
     setTableFilter('');
+    setFileFilterTables(null);
+    setSelectedTables([]);
     setPreviewTable('');
     setPreviewColumns([]);
     setTableEdits({});
@@ -539,6 +542,10 @@ const OntologyObjectPage: React.FC = () => {
   const filteredTables = tables.filter(t => {
     const name = t.table_name || t;
     const comment = t.table_comment || '';
+    // 文件过滤优先：如果有文件过滤，只保留文件中包含的表（不区分大小写）
+    if (fileFilterTables && fileFilterTables.size > 0) {
+      if (!fileFilterTables.has(name.toLowerCase())) return false;
+    }
     if (!tableFilter) return true;
     const filter = tableFilter.toLowerCase();
     return name.toLowerCase().includes(filter) || comment.toLowerCase().includes(filter);
@@ -612,6 +619,8 @@ const OntologyObjectPage: React.FC = () => {
       setSelectedTables([]);
       setTableEdits({});
       setFkTableColumnsCache({});
+      setFileFilterTables(null);
+      setTableFilter('');
       loadObjects();
     } catch (e: any) {
       message.error(e.message || '创建失败');
@@ -1106,7 +1115,7 @@ const OntologyObjectPage: React.FC = () => {
         title="添加本体"
         open={batchVisible}
         onOk={handleBatchConfirm}
-        onCancel={() => { setBatchVisible(false); setSelectedTables([]); setTableEdits({}); setFkTableColumnsCache({}); setPreviewTable(''); }}
+        onCancel={() => { setBatchVisible(false); setSelectedTables([]); setTableEdits({}); setFkTableColumnsCache({}); setPreviewTable(''); setFileFilterTables(null); setTableFilter(''); }}
         okText={batchCreating ? '创建中...' : '确定'}
         cancelText="取消"
         width={1150}
@@ -1142,6 +1151,39 @@ const OntologyObjectPage: React.FC = () => {
                 allowClear
                 style={{ flex: 1, minWidth: 100 }}
               />
+              <Upload
+                accept=".txt"
+                showUploadList={false}
+                beforeUpload={(file) => {
+                  const reader = new FileReader();
+                  reader.onload = (e) => {
+                    const text = (e.target?.result as string) || '';
+                    const names = text.split(/\r?\n/).map(line => line.trim().toLowerCase()).filter(Boolean);
+                    if (names.length === 0) {
+                      message.warning('文件为空，请上传包含表名的txt文件');
+                      return;
+                    }
+                    const nameSet = new Set(names);
+                    const matchedCount = tables.filter(t => nameSet.has((t.table_name || t).toLowerCase())).length;
+                    setFileFilterTables(nameSet);
+                    message.success(`文件中 ${names.length} 个表名，匹配到 ${matchedCount} 个`);
+                  };
+                  reader.readAsText(file);
+                  return false;
+                }}
+              >
+                <Button size="small" icon={<UploadOutlined />}>通过文件过滤</Button>
+              </Upload>
+              {fileFilterTables && (
+                <Button
+                  size="small"
+                  icon={<ClearOutlined />}
+                  onClick={() => { setFileFilterTables(null); message.success('已清除文件过滤'); }}
+                >
+                  清空文件过滤
+                </Button>
+              )}
+              <Button size="small" onClick={() => setSelectedTables([])}>清空已选</Button>
               <span style={{ fontSize: 12, color: '#999', whiteSpace: 'nowrap' }}>
                 已选 {selectedTables.length}/{tables.length}
               </span>

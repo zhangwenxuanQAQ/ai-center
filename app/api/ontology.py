@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 def get_ontology_objects(
     datasource_id: str = Query(None, description="数据源ID"),
     page: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
+    page_size: int = Query(20, ge=1, le=100000, description="每页数量"),
     sort_by: str = Query('name', description="排序字段：name/title/description/created_at"),
     sort_order: str = Query('asc', description="排序方式：asc/desc"),
     name: str = Query(None, description="名称模糊查询")
