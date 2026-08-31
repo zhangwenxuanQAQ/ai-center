@@ -11,6 +11,7 @@ import { datasourceService, Datasource } from '../../services/datasource';
 import { llmModelService, LLMModel } from '../../services/llm_model';
 import { mcpService, MCPServer, MCPCategory } from '../../services/mcp';
 import ApiTool from './api_tool';
+import SkillManagement from '../skill/skill';
 import '../../styles/common.css';
 import './toolkit.less';
 import '../prompt/prompt_setting.less';
@@ -1318,6 +1319,7 @@ const ToolkitManagement: React.FC = () => {
   const showMcpList = selectedToolType === 'mcp';
   const showApiList = selectedToolType === 'api';
   const showBuiltinTools = selectedToolType === 'builtin_tool';
+  const showSkillPage = selectedToolType === 'skill';
 
   // 工具类型列表（内置工具放最后）
   const toolTypes = [
@@ -1360,6 +1362,8 @@ const ToolkitManagement: React.FC = () => {
         <Layout className="toolkit-main">
           {showApiList ? (
             <ApiTool theme={theme} />
+          ) : showSkillPage ? (
+            <SkillManagement theme={theme} />
           ) : (
             <>
           {showMcpList && (

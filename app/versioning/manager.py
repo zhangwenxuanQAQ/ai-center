@@ -228,6 +228,9 @@ class VersionManager:
             'task_center': {'name': '任务中心', 'description': '任务执行与日志管理', 'required': False,
                             'api_prefixes': ['/task_center'], 'frontend_routes': ['/task_center/tasks', '/task_center/logs'],
                             'menu_keys': ['task_center'], 'database_tables': ['task_info', 'task_log'], 'dependencies': ['user']},
+            'skill': {'name': '技能管理', 'description': 'AGENT技能管理与文件目录', 'required': False,
+                      'api_prefixes': ['/skill', '/skill_category'], 'frontend_routes': [],
+                      'menu_keys': [], 'database_tables': ['skill', 'skill_category'], 'dependencies': ['toolkit']},
         }
         for name, config in default_modules.items():
             self._modules[name] = ModuleConfig(name, config)

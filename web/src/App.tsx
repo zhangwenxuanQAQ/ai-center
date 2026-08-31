@@ -201,6 +201,7 @@ function AppContent({ theme, toggleTheme, versionInfo, loading }: AppContentProp
       'ToolOutlined': ToolOutlined,
       'ScheduleOutlined': ScheduleOutlined,
       'UnorderedListOutlined': UnorderedListOutlined,
+      'SkillOutlined': FileTextOutlined,
     };
     return iconName ? (iconMap[iconName] || null) : null;
   }

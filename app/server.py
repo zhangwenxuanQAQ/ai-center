@@ -1665,21 +1665,6 @@ try:
     except Exception as e:
         logger.error(f"[MIGRATION]   初始化工具箱默认分类失败: {e}")
 
-    # 删除 skill 表（不再使用数据库存储SKILL技能）
-    logger.info("\n[MIGRATION] 删除 skill 表...")
-    try:
-        cursor = db.execute_sql("SHOW TABLES;")
-        tables = cursor.fetchall()
-        table_names = [table[0] for table in tables]
-
-        if 'skill' in table_names:
-            db.execute_sql("DROP TABLE IF EXISTS skill;")
-            logger.info("[MIGRATION]   成功删除 skill 表")
-        else:
-            logger.info("[MIGRATION]   skill 表不存在，跳过")
-    except Exception as e:
-        logger.error(f"[MIGRATION]   删除 skill 表失败: {e}")
-
     # 清空 mcp_server 表中的 category_id 字段（弃用 mcp_category 分类）
     logger.info("\n[MIGRATION] 清空 mcp_server 表的 category_id 字段...")
     try:
@@ -1704,6 +1689,103 @@ try:
     # 迁移 task_info/task_log 表结构（新增 task_output 任务输出结果字段）
     from app.database.migrations import _migrate_task_output_field
     _migrate_task_output_field(db)
+
+    # 创建 skill_category 表
+    logger.info("\n[MIGRATION] 创建 skill_category 表...")
+    try:
+        cursor = db.execute_sql("SHOW TABLES LIKE 'skill_category';")
+        if not cursor.fetchone():
+            db.execute_sql("""
+                CREATE TABLE skill_category (
+                    id CHAR(36) NOT NULL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    parent_id CHAR(36),
+                    sort_order INT DEFAULT 0,
+                    is_default TINYINT DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    create_user_id VARCHAR(40) DEFAULT NULL,
+                    update_user_id VARCHAR(40) DEFAULT NULL,
+                    deleted TINYINT DEFAULT 0,
+                    deleted_at DATETIME DEFAULT NULL,
+                    deleted_user_id VARCHAR(36) DEFAULT NULL,
+                    INDEX idx_name (name),
+                    INDEX idx_parent_id (parent_id),
+                    INDEX idx_sort_order (sort_order),
+                    INDEX idx_deleted (deleted),
+                    INDEX idx_parent_sort (parent_id, sort_order)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            """)
+            logger.info("[MIGRATION]   成功创建 skill_category 表")
+        else:
+            logger.info("[MIGRATION]   skill_category 表已存在，跳过")
+    except Exception as e:
+        logger.error(f"[MIGRATION]   创建 skill_category 表失败: {e}")
+
+    # 创建 skill 表
+    logger.info("\n[MIGRATION] 创建 skill 表...")
+    try:
+        cursor = db.execute_sql("SHOW TABLES LIKE 'skill';")
+        if not cursor.fetchone():
+            db.execute_sql("""
+                CREATE TABLE skill (
+                    id CHAR(36) NOT NULL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    title VARCHAR(255),
+                    description TEXT,
+                    tags TEXT,
+                    avatar TEXT,
+                    content TEXT,
+                    metadata TEXT,
+                    category_id VARCHAR(40),
+                    directory VARCHAR(512) NOT NULL,
+                    status TINYINT DEFAULT 1,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    create_user_id VARCHAR(40) DEFAULT NULL,
+                    update_user_id VARCHAR(40) DEFAULT NULL,
+                    deleted TINYINT DEFAULT 0,
+                    deleted_at DATETIME DEFAULT NULL,
+                    deleted_user_id VARCHAR(36) DEFAULT NULL,
+                    INDEX idx_name (name),
+                    INDEX idx_category_id (category_id),
+                    INDEX idx_deleted (deleted)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            """)
+            logger.info("[MIGRATION]   成功创建 skill 表")
+        else:
+            logger.info("[MIGRATION]   skill 表已存在，检查字段...")
+            cursor = db.execute_sql("DESCRIBE skill;")
+            columns = [col[0] for col in cursor.fetchall()]
+            # 删除旧的 code 列
+            if 'code' in columns:
+                db.execute_sql("ALTER TABLE skill DROP COLUMN code")
+                logger.info("[MIGRATION]   已删除 code 字段")
+            # 添加新字段
+            if 'title' not in columns:
+                db.execute_sql("ALTER TABLE skill ADD COLUMN title VARCHAR(255) DEFAULT NULL")
+                logger.info("[MIGRATION]   已添加 title 字段")
+            if 'tags' not in columns:
+                db.execute_sql("ALTER TABLE skill ADD COLUMN tags TEXT")
+                logger.info("[MIGRATION]   已添加 tags 字段")
+            if 'avatar' not in columns:
+                db.execute_sql("ALTER TABLE skill ADD COLUMN avatar TEXT")
+                logger.info("[MIGRATION]   已添加 avatar 字段")
+            if 'content' not in columns:
+                db.execute_sql("ALTER TABLE skill ADD COLUMN content TEXT")
+                logger.info("[MIGRATION]   已添加 content 字段")
+            if 'metadata' not in columns:
+                db.execute_sql("ALTER TABLE skill ADD COLUMN metadata TEXT")
+                logger.info("[MIGRATION]   已添加 metadata 字段")
+            if 'directory' not in columns:
+                db.execute_sql("ALTER TABLE skill ADD COLUMN directory VARCHAR(512) NOT NULL DEFAULT ''")
+                logger.info("[MIGRATION]   已添加 directory 字段")
+            if 'status' not in columns:
+                db.execute_sql("ALTER TABLE skill ADD COLUMN status TINYINT DEFAULT 1")
+                logger.info("[MIGRATION]   已添加 status 字段")
+    except Exception as e:
+        logger.error(f"[MIGRATION]   创建 skill 表失败: {e}")
 
     logger.info("\n[MIGRATION] ✅ 数据库迁移完成")
 except Exception as e:

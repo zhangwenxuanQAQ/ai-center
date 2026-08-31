@@ -61,6 +61,10 @@ COPY 9b5ad71b2ce5302211f9c61530b329a4922fc6a4 9b5ad71b2ce5302211f9c61530b329a492
 
 RUN rm -rf ./app/test
 
+# 创建数据目录，包含skill等运行时持久化目录
+RUN mkdir -p /aicenter/data/skill
+COPY data/ /aicenter/data/
+
 COPY --from=frontend-builder /aicenter/web/dist /aicenter/web/dist
 
 # 复制资源文件到容器中（包括Swagger UI静态资源）
@@ -73,6 +77,10 @@ COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 EXPOSE 80 8081 8082
+
+
+# 持久化数据卷（可选挂载）
+VOLUME ["/aicenter/data"]
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8081/docs || exit 1

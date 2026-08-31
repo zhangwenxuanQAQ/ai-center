@@ -826,6 +826,46 @@ class TaskLog(SoftDeleteModel):
         )
 
 
+class SkillCategory(SoftDeleteModel):
+    """
+    SKILL分类模型
+    
+    存储SKILL分类信息，支持树形结构
+    """
+    name = CharField(max_length=255, index=True, verbose_name="分类名称")
+    description = TextField(null=True, verbose_name="分类描述")
+    parent_id = CharField(max_length=40, null=True, index=True, verbose_name="父分类ID")
+    sort_order = IntegerField(default=0, verbose_name="排序序号")
+    is_default = BooleanField(default=False, verbose_name="是否默认分类")
+    
+    class Meta:
+        table_name = 'skill_category'
+        indexes = (
+            (('parent_id', 'sort_order'), False),
+        )
+
+
+class Skill(SoftDeleteModel):
+    """
+    技能模型
+
+    存储技能信息，文件内容存在data/skill目录下
+    """
+    name = CharField(max_length=255, index=True, verbose_name="技能名称")
+    title = CharField(max_length=255, null=True, verbose_name="技能标题")
+    description = TextField(null=True, verbose_name="技能描述")
+    tags = TextField(null=True, verbose_name="技能标签（JSON数组）")
+    avatar = TextField(null=True, verbose_name="技能头像（base64或URL）")
+    content = TextField(null=True, verbose_name="技能内容（SKILL.md）")
+    metadata = TextField(null=True, verbose_name="元数据（JSON对象）")
+    category_id = CharField(max_length=40, null=True, index=True, verbose_name="分类ID")
+    directory = CharField(max_length=512, verbose_name="技能所在目录（相对data/skill的路径）")
+    status = BooleanField(default=True, verbose_name="状态：True启用，False禁用")
+
+    class Meta:
+        table_name = 'skill'
+
+
 def create_tables(enabled_tables: set = None):
     """
     创建所有数据表
@@ -872,6 +912,8 @@ def create_tables(enabled_tables: set = None):
         OntologyTask,
         TaskInfo,
         TaskLog,
+        SkillCategory,
+        Skill,
     ]
     
     for table in tables:

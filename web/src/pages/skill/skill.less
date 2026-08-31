@@ -1,0 +1,155 @@
+/* SKILL文件目录抽屉样式（独立组件 skill_file_drawer.tsx 引用） */
+
+:global(.ant-drawer-body) {
+  .file-drawer-content {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+
+    .file-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      flex-shrink: 0;
+      gap: 8px;
+
+      .breadcrumb-path {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 13px;
+        flex: 1;
+        min-width: 0;
+        flex-wrap: wrap;
+
+        .breadcrumb-item {
+          cursor: pointer;
+          color: var(--ant-primary-color, #1677ff);
+
+          &:hover {
+            text-decoration: underline;
+          }
+        }
+
+        .breadcrumb-sep {
+          opacity: 0.4;
+        }
+      }
+
+      .toolbar-actions {
+        display: flex;
+        gap: 6px;
+        flex-shrink: 0;
+      }
+    }
+
+    .file-list-area {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      border: 1px solid rgba(128, 128, 128, 0.2);
+      border-radius: 8px;
+      padding: 8px;
+
+      .file-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background 0.15s;
+
+        &:hover {
+          background: rgba(128, 128, 128, 0.1);
+        }
+
+        .file-name {
+          flex: 1;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font-size: 13px;
+        }
+
+        .file-size {
+          opacity: 0.5;
+          font-size: 12px;
+          flex-shrink: 0;
+        }
+
+        .file-actions {
+          display: none;
+          gap: 2px;
+          flex-shrink: 0;
+        }
+
+        &:hover .file-actions {
+          display: flex;
+        }
+      }
+
+      .empty-dir {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        min-height: 200px;
+        opacity: 0.5;
+        gap: 8px;
+      }
+    }
+
+    .file-editor-area {
+      margin-top: 12px;
+      flex-shrink: 0;
+      max-height: 50%;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid rgba(128, 128, 128, 0.2);
+      border-radius: 8px;
+      overflow: hidden;
+
+      .editor-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 12px;
+        border-bottom: 1px solid rgba(128, 128, 128, 0.2);
+        font-weight: 500;
+        font-size: 13px;
+        flex-shrink: 0;
+
+        .editor-actions {
+          display: flex;
+          gap: 6px;
+        }
+      }
+
+      .editor-body {
+        flex: 1;
+        min-height: 200px;
+        padding: 0;
+
+        :global(.ant-input) {
+          min-height: 200px;
+          height: 100%;
+          font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+          font-size: 13px;
+          line-height: 1.5;
+          resize: none;
+          border: none;
+          border-radius: 0;
+        }
+
+        :global(.ant-input-affix-wrapper) {
+          border: none;
+          height: 100%;
+          border-radius: 0;
+        }
+      }
+    }
+  }
+}

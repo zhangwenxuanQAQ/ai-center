@@ -7,20 +7,10 @@ version:
   name: "full"  # 版本名称: full(满血版) / custom(自定义版)
   description: "满血版 - 包含所有功能模块"
   enabled_modules:
-    - user
-    - llm_model
-    - prompt
-    - datasource
-    - knowledgebase
-    - mcp
-    - chatbot
-    - chat
-    - agent
-    - system_monitor
-    - integration
     - ontology
     - task_center
     - toolkit
+    - skill
     - api
 
 # 模块定义
@@ -286,3 +276,18 @@ modules:
       - "task_log"
     dependencies:
       - "user"
+
+  skill:
+    name: "技能管理"
+    description: "AGENT技能管理与文件目录"
+    required: false
+    api_prefixes:
+      - "/skill"
+      - "/skill_category"
+    frontend_routes: []
+    menu_keys: []
+    database_tables:
+      - "skill"
+      - "skill_category"
+    dependencies:
+      - "toolkit"
