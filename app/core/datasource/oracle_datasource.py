@@ -353,3 +353,11 @@ class OracleDatasource(DatasourceBase):
             return {"success": False, "message": "缺少oracledb依赖，请执行: pip install oracledb", "data": {"status": "disconnected"}}
         except Exception as e:
             return {"success": False, "message": f"获取Oracle监控信息失败: {str(e)}", "data": {"status": "disconnected"}}
+
+    def build_count_query(self, base_sql: str) -> str:
+        """Oracle COUNT 查询：子查询别名不加AS"""
+        return f"SELECT COUNT(*) AS total_count FROM ({base_sql}) _count_wrapper"
+
+    def build_page_query(self, base_sql: str, page_size: int, offset: int) -> str:
+        """Oracle 12c+ 分页查询：OFFSET {offset} ROWS FETCH NEXT {page_size} ROWS ONLY"""
+        return f"{base_sql} OFFSET {offset} ROWS FETCH NEXT {page_size} ROWS ONLY"

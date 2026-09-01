@@ -123,7 +123,18 @@ class OntologyObjectCore:
             hook.before(sql=custom_sql)
             query = custom_sql
         else:
-            query = f"SELECT * FROM {obj.name} LIMIT {limit}"
+            # 按数据源类型构建正确的分页SQL
+            base_sql = f"SELECT * FROM {obj.name}"
+            try:
+                ds_instance = DatasourceService.get_datasource_instance(obj.datasource_id)
+                if ds_instance:
+                    query = ds_instance.build_page_query(base_sql, limit, 0)
+                else:
+                    return {'success': False, 'message': '数据源不存在'}
+            except NotImplementedError:
+                return {'success': False, 'message': '此数据源类型不支持分页查询'}
+            except Exception as e:
+                return {'success': False, 'message': f'构建查询SQL失败: {str(e)}'}
 
         result = DatasourceService.execute_query(obj.datasource_id, query)
         return result

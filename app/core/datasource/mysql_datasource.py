@@ -413,6 +413,10 @@ class MySQLDatasource(DatasourceBase):
             if connection:
                 self._return_connection(connection)
 
+    def build_page_query(self, base_sql: str, page_size: int, offset: int) -> str:
+        """MySQL分页查询：LIMIT {page_size} OFFSET {offset}"""
+        return f"{base_sql} LIMIT {page_size} OFFSET {offset}"
+
     def get_monitor_info(self) -> Dict[str, Any]:
         """
         获取MySQL数据库监控信息

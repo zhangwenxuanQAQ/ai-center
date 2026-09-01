@@ -169,3 +169,29 @@ class DatasourceBase(ABC):
             "message": "此数据源类型不支持监控信息获取",
             "data": None
         }
+
+    # ==================== 分页查询模板方法 ====================
+
+    def build_count_query(self, base_sql: str) -> str:
+        """构建 COUNT 查询语句（默认实现，子类可覆盖）
+
+        Args:
+            base_sql: 基础查询SQL（不含分页）
+
+        Returns:
+            str: 用于查询总行数的SQL
+        """
+        return f"SELECT COUNT(*) AS total_count FROM ({base_sql}) AS _count_wrapper"
+
+    def build_page_query(self, base_sql: str, page_size: int, offset: int) -> str:
+        """构建分页查询语句（模板方法，各关系型数据库子类需实现自己的分页语法）
+
+        Args:
+            base_sql: 基础查询SQL（不含分页）
+            page_size: 每页行数
+            offset: 偏移量（从0开始）
+
+        Returns:
+            str: 含分页语法的SQL
+        """
+        raise NotImplementedError(f"{self.__class__.__name__} 不支持分页查询")

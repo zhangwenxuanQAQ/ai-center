@@ -446,7 +446,7 @@ class OntologyTaskCore:
         page_size = ONTOLOGY_PAGINATION_DEFAULT_PAGE_SIZE
 
         # 1. 查询总行数
-        count_sql = f"SELECT COUNT(*) AS total_count FROM ({base_sql}) AS _count_wrapper"
+        count_sql = DatasourceService.build_count_query(datasource_id, base_sql)
         _push_progress("正在查询总行数", 0.3)
         count_result = DatasourceService.execute_query(datasource_id, count_sql)
         if not count_result.get('success'):
@@ -485,7 +485,9 @@ class OntologyTaskCore:
                 raise Exception("任务已被用户取消")
 
             offset = current_page * page_size
-            page_sql = f"{base_sql} LIMIT {page_size} OFFSET {offset}"
+            # 用数据源实例构建正确的分页SQL（MySQL/PostgreSQL: LIMIT/OFFSET, Oracle/SQL Server: OFFSET..FETCH）
+            ds_instance = DatasourceService.get_datasource_instance(datasource_id)
+            page_sql = ds_instance.build_page_query(base_sql, page_size, offset)
 
             page_result = DatasourceService.execute_query(datasource_id, page_sql)
             if not page_result.get('success'):

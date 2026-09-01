@@ -334,3 +334,7 @@ class SQLServerDatasource(DatasourceBase):
             return {"success": False, "message": "缺少pymssql依赖，请执行: pip install pymssql", "data": {"status": "disconnected"}}
         except Exception as e:
             return {"success": False, "message": f"获取SQL Server监控信息失败: {str(e)}", "data": {"status": "disconnected"}}
+
+    def build_page_query(self, base_sql: str, page_size: int, offset: int) -> str:
+        """SQL Server 2012+ 分页查询：OFFSET {offset} ROWS FETCH NEXT {page_size} ROWS ONLY"""
+        return f"{base_sql} OFFSET {offset} ROWS FETCH NEXT {page_size} ROWS ONLY"

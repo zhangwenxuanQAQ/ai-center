@@ -4,6 +4,7 @@
 
 import json
 from datetime import datetime
+from typing import Any, Dict, Optional
 from app.database.models import Datasource, DatasourceCategory, OntologyObject
 from app.services.datasource.dto import DatasourceCreate, DatasourceUpdate
 from app.database.db_utils import handle_transaction
@@ -480,6 +481,64 @@ class DatasourceService:
             return ds_instance.execute_query(query, params)
         except Exception as e:
             return {"success": False, "message": f"查询执行失败: {str(e)}"}
+
+    @staticmethod
+    def get_datasource_instance(datasource_id: str):
+        """获取数据源实例（供需要调用特定方法的外部模块使用）
+
+        Args:
+            datasource_id: 数据源ID
+
+        Returns:
+            DatasourceBase实例 或 None
+        """
+        datasource = DatasourceService.get_datasource(datasource_id)
+        if not datasource:
+            return None
+        datasource_type = datasource.get('type')
+        config = datasource.get('config', {})
+        decrypted_config = DatasourceService._decrypt_sensitive_config(config, datasource_type)
+        return DatasourceFactory.create(datasource_type, decrypted_config)
+
+    @staticmethod
+    def execute_paginated_query(datasource_id: str, base_sql: str, page_size: int, offset: int) -> Dict[str, Any]:
+        """执行分页查询（自动按数据源类型构建正确的分页SQL）
+
+        Args:
+            datasource_id: 数据源ID
+            base_sql: 基础查询SQL（不含分页）
+            page_size: 每页行数
+            offset: 偏移量（从0开始）
+
+        Returns:
+            dict: 查询结果
+        """
+        try:
+            ds_instance = DatasourceService.get_datasource_instance(datasource_id)
+            if not ds_instance:
+                return {"success": False, "message": "数据源不存在"}
+            page_sql = ds_instance.build_page_query(base_sql, page_size, offset)
+            return ds_instance.execute_query(page_sql)
+        except NotImplementedError:
+            return {"success": False, "message": "此数据源类型不支持分页查询"}
+        except Exception as e:
+            return {"success": False, "message": f"分页查询失败: {str(e)}"}
+
+    @staticmethod
+    def build_count_query(datasource_id: str, base_sql: str) -> str:
+        """构建COUNT查询SQL（按数据源类型）
+
+        Args:
+            datasource_id: 数据源ID
+            base_sql: 基础查询SQL
+
+        Returns:
+            str: COUNT SQL语句
+        """
+        ds_instance = DatasourceService.get_datasource_instance(datasource_id)
+        if not ds_instance:
+            raise ValueError("数据源不存在")
+        return ds_instance.build_count_query(base_sql)
     
     @staticmethod
     def get_schema_info(datasource_id: str):

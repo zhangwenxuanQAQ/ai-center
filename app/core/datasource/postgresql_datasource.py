@@ -333,4 +333,8 @@ class PostgreSQLDatasource(DatasourceBase):
         except ImportError:
             return {"success": False, "message": "缺少psycopg2依赖，请执行: pip install psycopg2-binary", "data": {"status": "disconnected"}}
         except Exception as e:
-            return {"success": False, "message": f"获取PostgreSQL监控信息失败: {str(e)}", "data": {"status": "disconnected"}}
+            return {"success": False, "message": f"获取监控信息失败: {str(e)}", "data": {"status": "disconnected"}}
+
+    def build_page_query(self, base_sql: str, page_size: int, offset: int) -> str:
+        """PostgreSQL分页查询：LIMIT {page_size} OFFSET {offset}"""
+        return f"{base_sql} LIMIT {page_size} OFFSET {offset}"
