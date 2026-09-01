@@ -726,12 +726,14 @@ const OntologyObjectPage: React.FC = () => {
   const handleQueryData = async (record: OntologyObject) => {
     setQueryVisible(true);
     setQueryRecord(record);
-    setCustomSql(`SELECT * FROM ${record.name} LIMIT 10`);
+    setCustomSql(`SELECT * FROM ${record.name}`);
     setQueryLoading(true);
     try {
       const res = await ontologyService.queryObjectData(record.id, 10);
       setQueryColumns(res.columns || []);
       setQueryData(res.rows || []);
+      // 显示后端实际执行的分页SQL（让用户看到正确的方言）
+      if (res.query_sql) setCustomSql(res.query_sql);
     } catch (e: any) {
       message.error(e.message || '查询失败');
     }

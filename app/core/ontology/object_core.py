@@ -109,7 +109,11 @@ class OntologyObjectCore:
 
     @staticmethod
     def query_ontology_data(object_id: str, limit: int = 10, custom_sql: str = None) -> dict:
-        """查询本体对象数据（默认10条，支持自定义SQL）"""
+        """查询本体对象数据（默认10条，支持自定义SQL）
+
+        无论是否提供 custom_sql，都会使用数据源实例的 build_page_query 构建正确方言的分页SQL。
+        custom_sql 作为基础 SQL（会被清洗末尾分号），自动套上分页。
+        """
         obj = OntologyObject.select().where(
             OntologyObject.id == object_id,
             OntologyObject.deleted == False
@@ -117,31 +121,37 @@ class OntologyObjectCore:
         if not obj:
             return {'success': False, 'message': '本体对象不存在'}
 
+        # 确定基础SQL：优先用 custom_sql，否则用默认 SELECT * FROM table
         if custom_sql and custom_sql.strip():
             # 使用OntologyTaskHook校验SQL安全性
             hook = OntologyTaskHook()
-            # 清洗SQL：去除末尾分号与空白（Oracle ORA-00911 对末尾分号零容忍）
+            # 清洗SQL：去除末尾中英文分号与空白（Oracle ORA-00911 对末尾分号零容忍）
             cleaned_sql = custom_sql.strip()
             while cleaned_sql and cleaned_sql[-1] in (';', '；', '\n', '\r', '\t', ' '):
                 cleaned_sql = cleaned_sql[:-1].rstrip()
             cleaned_sql = cleaned_sql.strip()
             hook.before(sql=cleaned_sql)
-            query = cleaned_sql
+            base_sql = cleaned_sql
         else:
-            # 按数据源类型构建正确的分页SQL
             base_sql = f"SELECT * FROM {obj.name}"
-            try:
-                ds_instance = DatasourceService.get_datasource_instance(obj.datasource_id)
-                if ds_instance:
-                    query = ds_instance.build_page_query(base_sql, limit, 0)
-                else:
-                    return {'success': False, 'message': '数据源不存在'}
-            except NotImplementedError:
-                return {'success': False, 'message': '此数据源类型不支持分页查询'}
-            except Exception as e:
-                return {'success': False, 'message': f'构建查询SQL失败: {str(e)}'}
+
+        # 按数据源类型构建正确的分页SQL（MySQL/PostgreSQL: LIMIT/OFFSET, Oracle/SQL Server: 方言变体）
+        try:
+            ds_instance = DatasourceService.get_datasource_instance(obj.datasource_id)
+            if not ds_instance:
+                return {'success': False, 'message': '数据源不存在'}
+            query = ds_instance.build_page_query(base_sql, limit, 0)
+        except NotImplementedError:
+            return {'success': False, 'message': '此数据源类型不支持分页查询'}
+        except Exception as e:
+            return {'success': False, 'message': f'构建查询SQL失败: {str(e)}'}
 
         result = DatasourceService.execute_query(obj.datasource_id, query)
+        # 附带实际执行的SQL，供前端展示（让用户看到后端生成的正确分页SQL）
+        if isinstance(result, dict) and isinstance(result.get('data'), dict):
+            result['data']['query_sql'] = query
+        elif isinstance(result, dict):
+            result['query_sql'] = query
         return result
 
     @staticmethod

@@ -492,9 +492,15 @@ class OntologyTaskCore:
                 raise Exception("任务已被用户取消")
 
             offset = current_page * page_size
-            # 用数据源实例构建正确的分页SQL（MySQL/PostgreSQL: LIMIT/OFFSET, Oracle/SQL Server: OFFSET..FETCH）
+            # 用数据源实例构建正确的分页SQL（MySQL/PostgreSQL: LIMIT/OFFSET, Oracle: ROWNUM, SQL Server: OFFSET..FETCH）
             ds_instance = DatasourceService.get_datasource_instance(datasource_id)
             page_sql = ds_instance.build_page_query(base_sql, page_size, offset)
+
+            # 第一页时把实际执行的SQL打印到进度，方便用户定位错误
+            if current_page == 0:
+                first_sql_display = page_sql if len(page_sql) <= 400 else page_sql[:400] + '...'
+                _push_progress(f"第一页SQL: {first_sql_display}", 0.34)
+                OntologyTaskCore.update_task_progress(task_id, 0.34, f"第一页SQL: {first_sql_display}")
 
             page_result = DatasourceService.execute_query(datasource_id, page_sql)
             if not page_result.get('success'):

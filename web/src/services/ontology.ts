@@ -139,7 +139,7 @@ export const ontologyService = {
   },
 
   /** 查询本体对象数据 */
-  queryObjectData: async (id: string, limit: number = 10, customSql?: string): Promise<{ columns: string[]; rows: any[]; total: number }> => {
+  queryObjectData: async (id: string, limit: number = 10, customSql?: string): Promise<{ columns: string[]; rows: any[]; total: number; query_sql?: string }> => {
     let params = [`limit=${limit}`];
     if (customSql) params.push(`custom_sql=${encodeURIComponent(customSql)}`);
     return http.get(`/aicenter/v1/ontology/object/${id}/query?${params.join('&')}`);
