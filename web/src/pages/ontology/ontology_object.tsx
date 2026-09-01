@@ -290,6 +290,7 @@ const OntologyObjectPage: React.FC = () => {
   const [queryLoading, setQueryLoading] = useState(false);
   const [queryRecord, setQueryRecord] = useState<OntologyObject | null>(null);
   const [customSql, setCustomSql] = useState('');
+  const [executedSql, setExecutedSql] = useState('');
 
   // 添加本体弹窗
   const [batchVisible, setBatchVisible] = useState(false);
@@ -727,13 +728,14 @@ const OntologyObjectPage: React.FC = () => {
     setQueryVisible(true);
     setQueryRecord(record);
     setCustomSql(`SELECT * FROM ${record.name}`);
+    setExecutedSql('');
     setQueryLoading(true);
     try {
       const res = await ontologyService.queryObjectData(record.id, 10);
       setQueryColumns(res.columns || []);
       setQueryData(res.rows || []);
-      // 显示后端实际执行的分页SQL（让用户看到正确的方言）
-      if (res.query_sql) setCustomSql(res.query_sql);
+      // 显示后端实际执行的分页SQL（让用户看到正确的方言；不会回填到可编辑输入框）
+      if (res.query_sql) setExecutedSql(res.query_sql);
     } catch (e: any) {
       message.error(e.message || '查询失败');
     }
@@ -751,6 +753,7 @@ const OntologyObjectPage: React.FC = () => {
       const res = await ontologyService.queryObjectData(queryRecord.id, 100, customSql);
       setQueryColumns(res.columns || []);
       setQueryData(res.rows || []);
+      if (res.query_sql) setExecutedSql(res.query_sql);
       message.success('查询成功');
     } catch (e: any) {
       message.error(e.message || '查询失败');
@@ -1089,14 +1092,27 @@ const OntologyObjectPage: React.FC = () => {
       >
         <Spin spinning={queryLoading}>
           <div style={{ marginBottom: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, marginBottom: 8 }}>
-              <TextArea
-                value={customSql}
-                onChange={e => setCustomSql(e.target.value)}
-                placeholder="请输入SQL语句（仅支持SELECT查询）"
-                autoSize={{ minRows: 2, maxRows: 6 }}
-                style={{ flex: 1 }}
-              />
+            {executedSql && (
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ marginBottom: 4, fontSize: 13, fontWeight: 500 }}>实际执行的SQL（后端生成分页语句，只读）</div>
+                <TextArea
+                  value={executedSql}
+                  readOnly
+                  autoSize={{ minRows: 2, maxRows: 6 }}
+                  style={{ fontFamily: 'Consolas, "Courier New", monospace', backgroundColor: 'var(--bg-color, #fafafa)' }}
+                />
+              </div>
+            )}
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ marginBottom: 4, fontSize: 13, fontWeight: 500 }}>基础SQL（仅支持SELECT，不含分页）</div>
+                <TextArea
+                  value={customSql}
+                  onChange={e => setCustomSql(e.target.value)}
+                  placeholder="请输入基础SQL语句（仅支持SELECT查询）"
+                  autoSize={{ minRows: 2, maxRows: 6 }}
+                />
+              </div>
               <Button type="primary" onClick={handleExecuteCustomSql}>执行</Button>
             </div>
           </div>

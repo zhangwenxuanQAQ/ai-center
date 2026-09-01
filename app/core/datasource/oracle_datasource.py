@@ -6,7 +6,9 @@ Oracle数据源实现类
 
 from typing import Any, Dict, Optional
 from app.core.datasource.base import DatasourceBase
+import logging
 
+logger = logging.getLogger(__name__)
 
 class OracleDatasource(DatasourceBase):
     """
@@ -109,6 +111,7 @@ class OracleDatasource(DatasourceBase):
                 password=self.config.get('password', ''),
                 dsn=dsn,
             )
+            logger.info(f"执行Oracle查询: {query}")
             cursor = connection.cursor()
             cursor.execute(query, params)
             if query.strip().upper().startswith('SELECT'):
@@ -369,22 +372,24 @@ class OracleDatasource(DatasourceBase):
         return cleaned.strip()
 
     def build_count_query(self, base_sql: str) -> str:
-        """Oracle COUNT 查询：清洗后再子查询包装，表别名不加AS"""
+        """Oracle COUNT 查询：清洗后再子查询包装，表别名用纯字母（避免下划线触发 ORA-00911）"""
         base = OracleDatasource._strip_ending(base_sql)
-        return f"SELECT COUNT(*) AS total_count FROM ({base}) _count_wrapper"
+        # 末尾可能含有 ORDER BY，子查询里允许；外层 COUNT 不关心顺序
+        return f"SELECT COUNT(*) cnt FROM ({base}) c"
 
     def build_page_query(self, base_sql: str, page_size: int, offset: int) -> str:
         """Oracle 兼容分页（9i~19c+ 全版本通吃）：ROWNUM 双层子查询
 
-        不使用 12c+ 的 OFFSET/FETCH NEXT 语法，避免老版本 ORA-00933。
+        - 不使用 12c+ 的 OFFSET/FETCH NEXT 语法，避免老版本 ORA-00933
+        - 所有子查询别名一律使用纯字母（c/p/rn），规避下划线别名在
+          ASCII 字符集 / 某些 Oracle 版本上触发 ORA-00911 的问题
         """
         base = OracleDatasource._strip_ending(base_sql)
+        upper = offset + page_size
         return (
-            "SELECT * FROM ( "
-            "  SELECT _r.*, ROWNUM AS _rn FROM ( "
-            f"   {base} "
-            "  ) _r "
-            f" WHERE ROWNUM <= {offset + page_size} "
-            ") "
-            f"WHERE _rn > {offset}"
+            "SELECT * FROM ("
+            "SELECT p.*, ROWNUM rn FROM ("
+            f"{base} "
+            f") p WHERE ROWNUM <= {upper}"
+            f") WHERE rn > {offset}"
         )

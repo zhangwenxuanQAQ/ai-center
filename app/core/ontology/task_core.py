@@ -455,16 +455,33 @@ class OntologyTaskCore:
         # 1. 查询总行数
         count_sql = DatasourceService.build_count_query(datasource_id, base_sql)
         _push_progress("正在查询总行数", 0.3)
+        # 把实际执行的总行数SQL也放在进度里，方便用户定位错误（截取400字符防止过长）
+        count_sql_display = count_sql if len(count_sql) <= 400 else count_sql[:400] + '...'
+        _push_progress(f"总行数SQL: {count_sql_display}", 0.31)
+        OntologyTaskCore.update_task_progress(task_id, 0.31, f"总行数SQL: {count_sql_display}")
         count_result = DatasourceService.execute_query(datasource_id, count_sql)
         if not count_result.get('success'):
             raise Exception(count_result.get('message', '查询总行数失败'))
 
         count_data = count_result.get('data')
+        # 各数据源 build_count_query 的列别名不一致（Oracle 是 cnt，Base/MySQL/PG 是 total_count），
+        # 因此通用做法：取第一行的唯一值/第一个值，不依赖具体列名
         if isinstance(count_data, dict):
             rows_data = count_data.get('rows', [])
-            total_rows = int(rows_data[0].get('total_count', 0)) if rows_data else 0
+            if rows_data:
+                first_row = rows_data[0]
+                if isinstance(first_row, dict):
+                    total_rows = int(next(iter(first_row.values()), 0))
+                else:
+                    total_rows = int(first_row)
+            else:
+                total_rows = 0
         elif isinstance(count_data, list) and count_data:
-            total_rows = int(count_data[0].get('total_count', 0))
+            first_row = count_data[0]
+            if isinstance(first_row, dict):
+                total_rows = int(next(iter(first_row.values()), 0))
+            else:
+                total_rows = int(first_row)
         else:
             total_rows = 0
 
