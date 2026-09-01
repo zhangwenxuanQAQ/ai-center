@@ -120,8 +120,13 @@ class OntologyObjectCore:
         if custom_sql and custom_sql.strip():
             # 使用OntologyTaskHook校验SQL安全性
             hook = OntologyTaskHook()
-            hook.before(sql=custom_sql)
-            query = custom_sql
+            # 清洗SQL：去除末尾分号与空白（Oracle ORA-00911 对末尾分号零容忍）
+            cleaned_sql = custom_sql.strip()
+            while cleaned_sql and cleaned_sql[-1] in (';', '；', '\n', '\r', '\t', ' '):
+                cleaned_sql = cleaned_sql[:-1].rstrip()
+            cleaned_sql = cleaned_sql.strip()
+            hook.before(sql=cleaned_sql)
+            query = cleaned_sql
         else:
             # 按数据源类型构建正确的分页SQL
             base_sql = f"SELECT * FROM {obj.name}"

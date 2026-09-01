@@ -97,6 +97,12 @@ class OracleDatasource(DatasourceBase):
         """
         try:
             import oracledb
+            # Oracle 对末尾分号零容忍（ORA-00911）：清洗末尾中英文分号及空白
+            if query:
+                cleaned = query.strip()
+                while cleaned and cleaned[-1] in (';', '；', '\n', '\r', '\t', ' '):
+                    cleaned = cleaned[:-1].rstrip()
+                query = cleaned.strip()
             dsn = f"{self.config.get('host', 'localhost')}:{self.config.get('port', 1521)}/{self.config.get('service_name', '')}"
             connection = oracledb.connect(
                 user=self.config.get('username', ''),
@@ -354,10 +360,31 @@ class OracleDatasource(DatasourceBase):
         except Exception as e:
             return {"success": False, "message": f"获取Oracle监控信息失败: {str(e)}", "data": {"status": "disconnected"}}
 
+    @staticmethod
+    def _strip_ending(sql: str) -> str:
+        """清洗SQL末尾：中英文分号与空白"""
+        cleaned = (sql or '').strip()
+        while cleaned and cleaned[-1] in (';', '；', '\n', '\r', '\t', ' '):
+            cleaned = cleaned[:-1].rstrip()
+        return cleaned.strip()
+
     def build_count_query(self, base_sql: str) -> str:
-        """Oracle COUNT 查询：子查询别名不加AS"""
-        return f"SELECT COUNT(*) AS total_count FROM ({base_sql}) _count_wrapper"
+        """Oracle COUNT 查询：清洗后再子查询包装，表别名不加AS"""
+        base = OracleDatasource._strip_ending(base_sql)
+        return f"SELECT COUNT(*) AS total_count FROM ({base}) _count_wrapper"
 
     def build_page_query(self, base_sql: str, page_size: int, offset: int) -> str:
-        """Oracle 12c+ 分页查询：OFFSET {offset} ROWS FETCH NEXT {page_size} ROWS ONLY"""
-        return f"{base_sql} OFFSET {offset} ROWS FETCH NEXT {page_size} ROWS ONLY"
+        """Oracle 兼容分页（9i~19c+ 全版本通吃）：ROWNUM 双层子查询
+
+        不使用 12c+ 的 OFFSET/FETCH NEXT 语法，避免老版本 ORA-00933。
+        """
+        base = OracleDatasource._strip_ending(base_sql)
+        return (
+            "SELECT * FROM ( "
+            "  SELECT _r.*, ROWNUM AS _rn FROM ( "
+            f"   {base} "
+            "  ) _r "
+            f" WHERE ROWNUM <= {offset + page_size} "
+            ") "
+            f"WHERE _rn > {offset}"
+        )

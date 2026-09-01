@@ -296,6 +296,13 @@ class OntologyTaskCore:
             # 日志中打印执行的SQL语句
             OntologyTaskCore.update_task_progress(task_id, 0.1, f"构建SQL完成: {sql}")
 
+            # 清洗SQL：去除末尾分号与空白（Oracle ORA-00911 对末尾分号零容忍）
+            # 同时处理英文; 中文； 及不可见的空白
+            sql = sql.strip()
+            while sql and sql[-1] in (';', '；', '\n', '\r', '\t', ' '):
+                sql = sql[:-1].rstrip()
+            sql = sql.strip()
+
             # SQL安全校验
             _push_progress("正在进行SQL安全校验", 0.2)
             hook = OntologyTaskHook()
