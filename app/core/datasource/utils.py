@@ -82,21 +82,26 @@ def normalize_rows(rows: list) -> list:
     return [normalize_row_value(row) for row in rows]
 
 
-def format_data(data: list, export_format: str) -> bytes:
+def format_data(data: list, export_format: str, cancel_check_fn=None) -> bytes:
     """
     根据导出格式转换数据，返回 bytes 类型内容
 
     Args:
         data: 行数据列表
         export_format: 导出格式 (json/markdown/excel)
+        cancel_check_fn: 可选的取消检查函数，签名 () -> bool，返回 True 表示任务已取消，
+                        在生成过程中会被周期性调用以支持中断
 
     Returns:
         bytes: 格式化后的二进制内容
+
+    Raises:
+        InterruptedError: 如果 cancel_check_fn 返回 True（表示任务已取消）
     """
     from app.constants.ontology_constants import OntologyExportFormat
 
     if export_format == OntologyExportFormat.EXCEL:
-        return _to_excel_bytes(data)
+        return _to_excel_bytes(data, cancel_check_fn)
 
     if export_format == OntologyExportFormat.JSON:
         content = json.dumps(data, ensure_ascii=False, indent=2)
@@ -109,7 +114,9 @@ def format_data(data: list, export_format: str) -> bytes:
                 '| ' + ' | '.join(headers) + ' |',
                 '| ' + ' | '.join(['---'] * len(headers)) + ' |',
             ]
-            for row in data:
+            for i, row in enumerate(data):
+                if cancel_check_fn and cancel_check_fn():
+                    raise InterruptedError("任务已取消")
                 lines.append('| ' + ' | '.join(str(row.get(h, '')) for h in headers) + ' |')
             return '\n'.join(lines).encode('utf-8')
         return '（无数据）'.encode('utf-8')
@@ -151,8 +158,13 @@ def format_data_to_text(data: list, export_format: str) -> str:
     return json.dumps(data, ensure_ascii=False, indent=2)
 
 
-def _to_excel_bytes(data: list) -> bytes:
-    """将数据列表转换为Excel二进制内容"""
+def _to_excel_bytes(data: list, cancel_check_fn=None) -> bytes:
+    """将数据列表转换为Excel二进制内容
+
+    Args:
+        data: 行数据列表
+        cancel_check_fn: 可选的取消检查函数 () -> bool
+    """
     from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, PatternFill
 
@@ -176,6 +188,8 @@ def _to_excel_bytes(data: list) -> bytes:
             cell.alignment = header_alignment
 
         for row_idx, row_data in enumerate(data, 2):
+            if cancel_check_fn and cancel_check_fn():
+                raise InterruptedError("任务已取消")
             for col_idx, header in enumerate(headers, 1):
                 cell = ws.cell(row=row_idx, column=col_idx, value=row_data.get(header, ''))
                 cell.alignment = Alignment(vertical='center')
@@ -187,6 +201,10 @@ def _to_excel_bytes(data: list) -> bytes:
                 cell_val = str(row_data.get(header, ''))
                 max_len = max(max_len, len(cell_val))
             ws.column_dimensions[ws.cell(row=1, column=col_idx).column_letter].width = min(max_len + 2, 50)
+
+    # 保存文件前再检查一次
+    if cancel_check_fn and cancel_check_fn():
+        raise InterruptedError("任务已取消")
 
     buffer = io.BytesIO()
     wb.save(buffer)

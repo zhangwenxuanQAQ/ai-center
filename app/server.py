@@ -1905,6 +1905,14 @@ async def chat_event_lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"[TASK_CENTER] 恢复任务状态失败: {e}")
 
+    # 启动结果文件过期清理线程，并立即清理上次运行遗留的过期文件
+    try:
+        from app.utils.file_utils import cleanup_expired_files, start_cleanup_scheduler
+        cleanup_expired_files()
+        start_cleanup_scheduler()
+    except Exception as e:
+        logger.warning(f"[FILE] 启动结果文件过期清理线程失败: {e}")
+
     yield
 
     logger.info("[CHAT] 应用关闭")
@@ -1979,6 +1987,7 @@ CORS_ALLOW_ORIGINS = ["*"]
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = ["*"]
 CORS_ALLOW_HEADERS = ["*"]
+CORS_EXPOSE_HEADERS = ["Content-Disposition", "Content-Length"]
 
 app.add_middleware(
     CORSMiddleware,
@@ -1986,6 +1995,7 @@ app.add_middleware(
     allow_credentials=CORS_ALLOW_CREDENTIALS,
     allow_methods=CORS_ALLOW_METHODS,
     allow_headers=CORS_ALLOW_HEADERS,
+    expose_headers=CORS_EXPOSE_HEADERS,
 )
 
 @app.middleware("http")
@@ -2181,6 +2191,8 @@ def _apply_cors_headers(response: JSONResponse, request: Request) -> JSONRespons
         headers.add_vary_header("Origin")
     if CORS_ALLOW_CREDENTIALS:
         headers["Access-Control-Allow-Credentials"] = "true"
+    if CORS_EXPOSE_HEADERS:
+        headers["Access-Control-Expose-Headers"] = ", ".join(CORS_EXPOSE_HEADERS)
     return response
 
 async def general_exception_handler(request: Request, exc: Exception):

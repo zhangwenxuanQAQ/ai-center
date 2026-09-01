@@ -32,6 +32,21 @@ class OntologyExportFormat:
     MARKDOWN = "markdown"
 
 
+class OntologyQueryMode:
+    """查询方式"""
+    ALL = "all"            # 全量查询（一次性查出所有数据）
+    PAGINATED = "paginated"  # 分页查询（按页查询，逐页写入结果文件）
+
+
+ONTOLOGY_QUERY_MODE_LABELS = {
+    OntologyQueryMode.ALL: "全量查询",
+    OntologyQueryMode.PAGINATED: "分页查询",
+}
+
+# 分页查询默认每页行数
+ONTOLOGY_PAGINATION_DEFAULT_PAGE_SIZE = 10000
+
+
 ONTOLOGY_EXPORT_FORMAT_LABELS = {
     OntologyExportFormat.JSON: "JSON",
     OntologyExportFormat.EXCEL: "Excel",

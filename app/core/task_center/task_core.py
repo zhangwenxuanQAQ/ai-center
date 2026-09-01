@@ -178,6 +178,12 @@ class TaskCenterCore:
             return bool(entry and entry["cancel"])
 
     @staticmethod
+    def _raise_if_cancelled(task_id: str) -> None:
+        """如果任务已请求取消则抛出异常，让上层捕获并设 CANCEL 状态"""
+        if TaskCenterCore._is_cancelled(task_id):
+            raise InterruptedError("任务已被用户取消")
+
+    @staticmethod
     def _cleanup_running(task_id: str) -> None:
         """清理运行中任务注册表"""
         with TaskCenterCore._running_tasks_lock:
@@ -277,9 +283,15 @@ class TaskCenterCore:
                 TaskCenterCore._update_progress(task_id, log_id, 0, f"不支持的任务类型: {task.task_type}")
                 TaskCenterCore._finish_task(task_id, log_id, TaskStatus.FAIL)
         except Exception as e:
-            logger.error(f"任务执行异常: task_id={task_id}, error={e}", exc_info=True)
-            TaskCenterCore._update_progress(task_id, log_id, 1, f"任务执行异常: {e}")
-            TaskCenterCore._finish_task(task_id, log_id, TaskStatus.FAIL)
+            # 区分取消 vs 真正失败
+            if TaskCenterCore._is_cancelled(task_id):
+                logger.info(f"任务已取消: task_id={task_id}")
+                TaskCenterCore._update_progress(task_id, log_id, 0, "任务已取消")
+                TaskCenterCore._finish_task(task_id, log_id, TaskStatus.CANCEL)
+            else:
+                logger.error(f"任务执行异常: task_id={task_id}, error={e}", exc_info=True)
+                TaskCenterCore._update_progress(task_id, log_id, 1, f"任务执行异常: {e}")
+                TaskCenterCore._finish_task(task_id, log_id, TaskStatus.FAIL)
 
     # ==================== 接口调用任务执行器 ====================
 
@@ -488,6 +500,7 @@ class TaskCenterCore:
             body = body or None
 
             TaskCenterCore._update_progress(task_id, log_id, 0.5, "正在通过内置工具api_call请求API接口...")
+            TaskCenterCore._raise_if_cancelled(task_id)
             tool_result = api_call_tool.run(
                 server_url=server.url or '',
                 path=path,
@@ -498,11 +511,14 @@ class TaskCenterCore:
                 body=body,
                 timeout=timeout,
             )
+            TaskCenterCore._raise_if_cancelled(task_id)
             TaskCenterCore._finish_api_result(
                 task_id, log_id, tool_result,
                 path=path, method=method, server_name=server.name,
                 parameters=parameters, export_format=export_format, export_contents=export_contents,
             )
+        except InterruptedError:
+            raise  # 取消异常上抛，由 _execute 统一处理 CANCEL 状态
         except Exception as e:
             logger.error(f"接口调用任务执行异常: task_id={task_id}, error={e}", exc_info=True)
             TaskCenterCore._update_progress(task_id, log_id, 0.9, f"API请求异常: {e}")
@@ -545,6 +561,9 @@ class TaskCenterCore:
             for idx, group_params in enumerate(parameter_groups):
                 if not isinstance(group_params, dict):
                     continue
+
+                # 检查取消
+                TaskCenterCore._raise_if_cancelled(task_id)
 
                 progress = 0.1 + (idx / max(total_groups, 1)) * 0.7
                 TaskCenterCore._update_progress(
@@ -607,6 +626,8 @@ class TaskCenterCore:
                             'response': resp_body,
                             'error': tool_result.message if not tool_result.success else None,
                         })
+                except InterruptedError:
+                    raise  # 取消异常上抛
                 except Exception as e:
                     fail_count += 1
                     all_results.append({
@@ -665,6 +686,8 @@ class TaskCenterCore:
                 TaskCenterCore._finish_task(task_id, log_id, TaskStatus.DONE, output)
             else:
                 TaskCenterCore._finish_task(task_id, log_id, TaskStatus.FAIL, output)
+        except InterruptedError:
+            raise  # 取消异常上抛，由 _execute 统一处理 CANCEL 状态
         except Exception as e:
             logger.error(f"多参数接口调用任务执行异常: task_id={task_id}, error={e}", exc_info=True)
             TaskCenterCore._update_progress(task_id, log_id, 0.9, f"API请求异常: {e}")
@@ -700,6 +723,7 @@ class TaskCenterCore:
                 return
 
             TaskCenterCore._update_progress(task_id, log_id, 0.5, "正在通过内置工具api_call请求API接口...")
+            TaskCenterCore._raise_if_cancelled(task_id)
             tool_result = api_call_tool.run(
                 server_url=url,
                 path='',
@@ -708,11 +732,14 @@ class TaskCenterCore:
                 body=body,
                 timeout=timeout,
             )
+            TaskCenterCore._raise_if_cancelled(task_id)
             TaskCenterCore._finish_api_result(
                 task_id, log_id, tool_result,
                 path=url, method=method,
                 parameters=[], export_format=export_format, export_contents=export_contents,
             )
+        except InterruptedError:
+            raise  # 取消异常上抛
         except Exception as e:
             logger.error(f"接口调用任务执行异常: task_id={task_id}, error={e}", exc_info=True)
             TaskCenterCore._update_progress(task_id, log_id, 0.9, f"API请求异常: {e}")
@@ -869,7 +896,7 @@ class TaskCenterCore:
 
     @staticmethod
     def _save_api_result_file(task_id: str, result_data: dict, export_format: str, file_name: str) -> Optional[dict]:
-        """将接口调用任务结果保存为文件（存Redis，base64编码，24小时过期）
+        """将接口调用任务结果保存为临时文件（不再使用base64/Redis存储文件内容）
 
         result_data: 单参数模式含 status/error/path/params/status_code/response；
                      多参数模式含 summary/results
@@ -877,14 +904,17 @@ class TaskCenterCore:
         file_name: 结果文件名
 
         Returns:
-            dict: 保存的文件信息（file_name/format/executed_at/expire_at），失败返回None
+            dict: 保存的文件信息（file_path/file_name/format/executed_at/expire_at），失败返回None
         """
         from io import BytesIO
         from openpyxl import Workbook
+        from app.utils.file_utils import create_result_file, write_bytes
 
         try:
             ext = API_EXPORT_FORMAT_FILE_EXT.get(export_format, 'json')
-            file_bytes: bytes = b''  # 最终要存Redis的二进制内容
+            full_file_name = f"{file_name}.{ext}"
+            file_path = create_result_file(full_file_name)
+            file_bytes: bytes = b''
 
             if export_format == 'json':
                 content = json.dumps(result_data, ensure_ascii=False, indent=2)
@@ -982,18 +1012,19 @@ class TaskCenterCore:
                 content = json.dumps(result_data, ensure_ascii=False, indent=2)
                 file_bytes = content.encode('utf-8')
 
-            # base64编码存Redis（文本与二进制统一处理）
-            file_base64 = base64.b64encode(file_bytes).decode('utf-8')
+            # 写入临时文件（不再使用base64存Redis）
+            write_bytes(file_path, file_bytes)
+
             result_key = f"{API_TASK_RESULT_PREFIX}{task_id}"
             now = datetime.now()
             file_info = {
-                'file_name': f"{file_name}.{ext}",
+                'file_path': file_path,
+                'file_name': full_file_name,
                 'format': export_format,
                 'executed_at': now.strftime('%Y-%m-%d %H:%M:%S'),
                 'expire_at': (now + timedelta(seconds=API_TASK_RESULT_REDIS_EXPIRE)).strftime('%Y-%m-%d %H:%M:%S'),
             }
             redis_utils.set_obj(result_key, {
-                'file_base64': file_base64,
                 'result_data': result_data,
                 **file_info,
             }, exp=API_TASK_RESULT_REDIS_EXPIRE)
@@ -1089,16 +1120,21 @@ class TaskCenterCore:
         api_result_file = TaskCenterCore._get_api_result_file(task_id)
         source_result = None
         if api_result_file:
+            # 检查文件是否存在
+            from app.utils.file_utils import file_exists
+            file_path = api_result_file.get('file_path', '')
+            has_file = bool(file_path) and file_exists(file_path)
             source_result = {
                 'status': task.task_status,
                 'status_label': TASK_STATUS_LABELS.get(task.task_status, task.task_status),
-                'has_result': True,
+                'has_result': has_file,
                 'file_name': api_result_file.get('file_name', ''),
                 'format': api_result_file.get('format', ''),
-                'file_base64': api_result_file.get('file_base64', ''),
+                'file_path': file_path,
                 'row_count': 1,
                 'executed_at': api_result_file.get('executed_at', ''),
                 'expire_at': api_result_file.get('expire_at', ''),
+                'message': '' if has_file else '结果文件不存在或已过期',
             }
         else:
             source_result = {

@@ -4,9 +4,8 @@
 
 import logging
 import asyncio
-import base64
 from fastapi import APIRouter, Query
-from fastapi.responses import StreamingResponse, Response
+from fastapi.responses import StreamingResponse
 
 from app.services.task_center.dto import TaskInfoCreate, TaskInfoUpdate
 from app.services.task_center.service import TaskCenterService
@@ -295,7 +294,9 @@ def get_task_result(task_id: str):
 
 @router.get("/task/{task_id}/download", summary="下载任务结果文件")
 def download_task_result(task_id: str):
-    """下载任务结果文件（接口调用/数据抽取任务，从Redis读取base64解码为二进制，含过期判断）"""
+    """下载任务结果文件（接口调用/数据抽取任务，从临时文件流式读取，支持大文件下载）"""
+    from app.utils.file_utils import stream_file_chunks, file_exists, get_file_size
+
     task = TaskInfo.select().where(
         TaskInfo.id == task_id,
         TaskInfo.deleted == False
@@ -318,10 +319,13 @@ def download_task_result(task_id: str):
     elif task.task_type == TaskType.API:
         file_info = TaskCenterCore._get_api_result_file(task_id)
 
-    if not file_info or not file_info.get('file_base64'):
+    if not file_info or not file_info.get('file_path'):
         return ResponseUtil.not_found(message="结果文件不存在或已过期")
 
-    file_bytes = base64.b64decode(file_info['file_base64'])
+    file_path = file_info['file_path']
+    if not file_exists(file_path):
+        return ResponseUtil.not_found(message="结果文件不存在或已过期")
+
     file_name = file_info.get('file_name', 'result')
     # file_name已含扩展名（如api_result_xxx.xlsx）；无后缀时按导出格式映射补全
     if '.' in file_name:
@@ -338,11 +342,17 @@ def download_task_result(task_id: str):
         'sql': 'application/sql',
     }
     media_type = mime_map.get(ext, 'application/octet-stream')
+    file_size = get_file_size(file_path)
 
-    return Response(
-        content=file_bytes,
+    return StreamingResponse(
+        stream_file_chunks(file_path),
         media_type=media_type,
-        headers={'Content-Disposition': f'attachment; filename="{file_name}"'}
+        headers={
+            'Content-Disposition': f'attachment; filename="{file_name}"',
+            'Content-Length': str(file_size),
+            'Transfer-Encoding': 'chunked',
+            'Connection': 'keep-alive',
+        }
     )
 
 

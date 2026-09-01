@@ -50,7 +50,7 @@ const DataExtractResult: React.FC<DataExtractResultProps> = ({ open, result, loa
       return <Tag color={isSuccess ? 'success' : 'error'}>{value}</Tag>;
     }
     if (name === 'result_file') {
-      if ((source as any)?.file_base64) {
+      if ((source as any)?.has_result) {
         return <Link onClick={handleDownloadResult}>{value}</Link>;
       }
       return <Text>{value}</Text>;

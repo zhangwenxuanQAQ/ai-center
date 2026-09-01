@@ -160,9 +160,11 @@ export const ontologyService = {
   // ==================== 数据抽取任务 ====================
 
   /** 获取任务列表 */
-  getTasks: async (name?: string, page: number = 1, pageSize: number = 20): Promise<{ data: OntologyTask[]; total: number }> => {
+  getTasks: async (name?: string, page: number = 1, pageSize: number = 20, datasourceId?: string, taskStatus?: string): Promise<{ data: OntologyTask[]; total: number }> => {
     let params = [`page=${page}`, `page_size=${pageSize}`];
     if (name) params.push(`name=${encodeURIComponent(name)}`);
+    if (datasourceId) params.push(`datasource_id=${datasourceId}`);
+    if (taskStatus) params.push(`task_status=${taskStatus}`);
     return http.get(`/aicenter/v1/ontology/task/list?${params.join('&')}`);
   },
 

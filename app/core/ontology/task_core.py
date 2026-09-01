@@ -4,36 +4,45 @@
 """
 
 import json
-import base64
+import os
 import logging
-import re
 import time
-from datetime import datetime, date, timedelta
+from datetime import datetime, timedelta
 from threading import Thread, Lock
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from app.database.models import OntologyTask, OntologyObject
 from app.services.datasource.service import DatasourceService
 from app.database.redis_utils import redis_utils
 from app.constants.ontology_constants import (
-    OntologyTaskStatus, OntologyExportFormat,
+    OntologyTaskStatus, OntologyExportFormat, OntologyQueryMode,
     ONTOLOGY_TASK_STREAM_PREFIX, ONTOLOGY_TASK_STATUS_PREFIX,
     ONTOLOGY_TASK_RESULT_PREFIX, ONTOLOGY_TASK_REDIS_EXPIRE,
     ONTOLOGY_TASK_EVENTS_CHANNEL,
     ONTOLOGY_TASK_QUEUE_KEY,
     ONTOLOGY_TASK_MAX_CONCURRENT, ONTOLOGY_TASK_QUEUE_POLL_INTERVAL,
     ONTOLOGY_EXPORT_FORMAT_FILE_EXT,
+    ONTOLOGY_PAGINATION_DEFAULT_PAGE_SIZE,
 )
 from app.core.ontology.utils import ontology_object_to_dict, task_to_dict
 from app.core.datasource.utils import quote_ident, normalize_rows, format_data
 from app.core.hooks.ontology_task_hook import OntologyTaskHook
 from app.core.hooks.task_info_hook import TaskInfoHook
+from app.utils.file_utils import (
+    create_result_file, write_bytes, append_bytes, write_text, append_text,
+    read_file_bytes, delete_file, file_exists, get_temp_dir,
+    cleanup_expired_files,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class OntologyTaskCore:
     """数据抽取任务核心服务"""
+
+    # 运行中任务取消标志：task_id -> True（请求取消）
+    _running_cancels: Dict[str, bool] = {}
+    _running_cancels_lock = Lock()
 
     @staticmethod
     def _publish_task_event(task) -> None:
@@ -103,6 +112,33 @@ class OntologyTaskCore:
             OntologyTask.deleted == False
         ).first()
         return task_to_dict(task) if task else None
+
+    # ==================== 任务取消管理 ====================
+
+    @staticmethod
+    def _register_running(task_id: str) -> None:
+        """注册任务为运行中"""
+        with OntologyTaskCore._running_cancels_lock:
+            OntologyTaskCore._running_cancels[task_id] = False
+
+    @staticmethod
+    def _unregister_running(task_id: str) -> None:
+        """取消注册运行中任务"""
+        with OntologyTaskCore._running_cancels_lock:
+            OntologyTaskCore._running_cancels.pop(task_id, None)
+
+    @staticmethod
+    def _is_cancelled(task_id: str) -> bool:
+        """检查任务是否请求了取消"""
+        with OntologyTaskCore._running_cancels_lock:
+            return OntologyTaskCore._running_cancels.get(task_id, False)
+
+    @staticmethod
+    def _request_cancel(task_id: str) -> None:
+        """请求取消任务"""
+        with OntologyTaskCore._running_cancels_lock:
+            if task_id in OntologyTaskCore._running_cancels:
+                OntologyTaskCore._running_cancels[task_id] = True
 
     # ==================== 任务执行（队列调度） ====================
 
@@ -177,6 +213,9 @@ class OntologyTaskCore:
         stream_key = f"{ONTOLOGY_TASK_STREAM_PREFIX}{task_id}"
         status_key = f"{ONTOLOGY_TASK_STATUS_PREFIX}{task_id}"
 
+        # 注册任务为运行中
+        OntologyTaskCore._register_running(task_id)
+
         def _push_progress(msg: str, progress: float = None):
             """推送进度消息到Redis流"""
             data = {'type': 'progress', 'message': msg}
@@ -186,6 +225,7 @@ class OntologyTaskCore:
 
         def _finalize(status: str, error_msg: str = ''):
             """写入耗时（毫秒）并更新任务状态"""
+            OntologyTaskCore._unregister_running(task_id)
             try:
                 t = OntologyTask.select().where(OntologyTask.id == task_id).first()
                 if t and t.task_begin_at:
@@ -207,6 +247,8 @@ class OntologyTaskCore:
                 logger.error(f"任务结束状态写入失败: task_id={task_id}, error={ex}")
             redis_utils.set(status_key, status, exp=ONTOLOGY_TASK_REDIS_EXPIRE)
 
+        result_file_path = None
+
         try:
             # 更新状态为运行中
             OntologyTaskCore.update_task_status(task_id, OntologyTaskStatus.RUNNING)
@@ -215,12 +257,19 @@ class OntologyTaskCore:
             _push_progress("任务开始执行", 0.0)
             OntologyTaskCore.update_task_progress(task_id, 0.0, "任务开始执行")
 
+            # 启动时清理过期文件
+            try:
+                cleanup_expired_files()
+            except Exception:
+                pass
+
             # 解析configs
             configs = json.loads(task.configs) if task.configs else {}
             ontology_object_id = configs.get('ontology_object_id', '')
             custom_sql = configs.get('custom_sql', '')
             export_format = configs.get('export_format', OntologyExportFormat.JSON)
             selected_columns = configs.get('columns', [])
+            query_mode = configs.get('query_mode', OntologyQueryMode.PAGINATED)
 
             # 构建SQL
             _push_progress("正在构建查询SQL", 0.1)
@@ -252,63 +301,228 @@ class OntologyTaskCore:
             hook = OntologyTaskHook()
             hook.before(sql=sql)
 
-            _push_progress("正在执行数据查询", 0.3)
-            OntologyTaskCore.update_task_progress(task_id, 0.3, "开始执行数据查询")
+            # 检查取消标志
+            if OntologyTaskCore._is_cancelled(task_id):
+                raise Exception("任务已被用户取消")
 
-            # 执行查询
-            result = DatasourceService.execute_query(task.datasource_id, sql)
+            # 生成结果文件名
+            file_ext = ONTOLOGY_EXPORT_FORMAT_FILE_EXT.get(export_format, export_format)
+            file_name = f"{task.name}.{file_ext}"
+            result_file_path = create_result_file(file_name)
 
-            if not result.get('success'):
-                raise Exception(result.get('message', '查询执行失败'))
-
-            data = result.get('data')
-            # execute_query 返回的 data 为 {columns, rows, total}，兼容直接返回列表的情况
-            if isinstance(data, dict):
-                rows = data.get('rows', []) or []
-                row_count = data.get('total', len(rows))
-            elif isinstance(data, list):
-                rows = data
-                row_count = len(rows)
+            if query_mode == OntologyQueryMode.PAGINATED:
+                # ===== 分页查询模式 =====
+                _push_progress("正在执行分页查询", 0.3)
+                OntologyTaskCore.update_task_progress(task_id, 0.3, "开始分页查询")
+                row_count, exported_rows = OntologyTaskCore._execute_paginated_query(
+                    task_id, task.datasource_id, sql, export_format,
+                    result_file_path, file_name, _push_progress
+                )
             else:
-                rows = []
-                row_count = 0
-            # 将 datetime/date 等非JSON可序列化值转为字符串，保证导出文件正常生成
-            rows = normalize_rows(rows)
-            _push_progress(f"查询完成，共获取 {row_count} 条数据", 0.5)
-            OntologyTaskCore.update_task_progress(task_id, 0.5, f"查询完成，共获取 {row_count} 条数据")
+                # ===== 全量查询模式 =====
+                _push_progress("正在执行数据查询", 0.3)
+                OntologyTaskCore.update_task_progress(task_id, 0.3, "开始执行数据查询")
 
-            _push_progress("正在格式化数据", 0.7)
-            OntologyTaskCore.update_task_progress(task_id, 0.7, "正在格式化数据")
-            file_content = format_data(rows, export_format)
+                # 检查取消标志
+                if OntologyTaskCore._is_cancelled(task_id):
+                    raise Exception("任务已被用户取消")
 
-            _push_progress("正在生成结果文件", 0.85)
-            # _format_data 现在统一返回 bytes，直接 base64 编码即可
-            file_base64 = base64.b64encode(file_content).decode('utf-8')
+                # 执行查询
+                result = DatasourceService.execute_query(task.datasource_id, sql)
+
+                if not result.get('success'):
+                    raise Exception(result.get('message', '查询执行失败'))
+
+                data = result.get('data')
+                # execute_query 返回的 data 为 {columns, rows, total}，兼容直接返回列表的情况
+                if isinstance(data, dict):
+                    rows = data.get('rows', []) or []
+                    row_count = data.get('total', len(rows))
+                elif isinstance(data, list):
+                    rows = data
+                    row_count = len(rows)
+                else:
+                    rows = []
+                    row_count = 0
+                # 将 datetime/date 等非JSON可序列化值转为字符串，保证导出文件正常生成
+                rows = normalize_rows(rows)
+                _push_progress(f"查询完成，共获取 {row_count} 条数据", 0.5)
+                OntologyTaskCore.update_task_progress(task_id, 0.5, f"查询完成，共获取 {row_count} 条数据")
+
+                # 检查取消标志
+                if OntologyTaskCore._is_cancelled(task_id):
+                    raise Exception("任务已被用户取消")
+
+                _push_progress("正在格式化数据", 0.7)
+                OntologyTaskCore.update_task_progress(task_id, 0.7, "正在格式化数据")
+
+                # 再检查一次取消标志（format_data 内部也会周期性检查）
+                if OntologyTaskCore._is_cancelled(task_id):
+                    raise Exception("任务已被用户取消")
+
+                file_content = format_data(
+                    rows, export_format,
+                    cancel_check_fn=lambda: OntologyTaskCore._is_cancelled(task_id)
+                )
+
+                # 写文件前再检查一次
+                if OntologyTaskCore._is_cancelled(task_id):
+                    raise Exception("任务已被用户取消")
+
+                _push_progress("正在生成结果文件", 0.85)
+                write_bytes(result_file_path, file_content)
+                exported_rows = row_count
+
+            # 保存结果文件元数据到Redis（不再存储base64）
+            _push_progress("正在保存结果文件", 0.9)
             result_key = f"{ONTOLOGY_TASK_RESULT_PREFIX}{task_id}"
+            now = datetime.now()
             redis_utils.set_obj(result_key, {
-                'file_base64': file_base64,
+                'file_path': result_file_path,
+                'file_name': file_name,
                 'format': export_format,
-                'file_name': f"{task.name}.{ONTOLOGY_EXPORT_FORMAT_FILE_EXT.get(export_format, export_format)}",
                 'row_count': row_count,
-                'executed_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'expire_at': (datetime.now() + timedelta(hours=24)).strftime('%Y-%m-%d %H:%M:%S'),
+                'exported_rows': exported_rows,
+                'total_rows': row_count,
+                'executed_at': now.strftime('%Y-%m-%d %H:%M:%S'),
+                'expire_at': (now + timedelta(seconds=ONTOLOGY_TASK_REDIS_EXPIRE)).strftime('%Y-%m-%d %H:%M:%S'),
             }, exp=ONTOLOGY_TASK_REDIS_EXPIRE)
 
             _push_progress("任务执行完成", 1.0)
-            OntologyTaskCore.update_task_progress(task_id, 1.0, "任务执行完成")
+            OntologyTaskCore.update_task_progress(task_id, 1.0, f"任务执行完成，共导出 {exported_rows}/{row_count} 行数据")
             _finalize(OntologyTaskStatus.DONE)
             redis_utils.client.rpush(stream_key, json.dumps(
                 {'type': 'done', 'message': '任务执行完成'}, ensure_ascii=False
             ))
 
         except Exception as e:
-            logger.error(f"任务执行失败: task_id={task_id}, error={e}")
-            _push_progress(f"执行失败: {str(e)}", 0)
-            OntologyTaskCore.update_task_progress(task_id, 0, f"执行失败: {str(e)}")
-            _finalize(OntologyTaskStatus.FAIL, str(e))
+            # 区分取消 vs 真正失败
+            is_cancelled = (
+                OntologyTaskCore._is_cancelled(task_id)
+                or isinstance(e, InterruptedError)
+                or "取消" in str(e)
+            )
+            if is_cancelled:
+                logger.info(f"任务已取消: task_id={task_id}")
+                _push_progress("任务已取消", 0)
+                OntologyTaskCore.update_task_progress(task_id, 0, "任务已取消")
+                status = OntologyTaskStatus.CANCEL
+            else:
+                logger.error(f"任务执行失败: task_id={task_id}, error={e}")
+                _push_progress(f"执行失败: {str(e)}", 0)
+                OntologyTaskCore.update_task_progress(task_id, 0, f"执行失败: {str(e)}")
+                status = OntologyTaskStatus.FAIL
+
+            # 任务失败/取消时清理临时文件
+            if result_file_path:
+                delete_file(result_file_path)
+            _finalize(status, str(e))
+            event_type = 'cancel' if is_cancelled else 'error'
             redis_utils.client.rpush(stream_key, json.dumps(
-                {'type': 'error', 'message': str(e)}, ensure_ascii=False
+                {'type': event_type, 'message': str(e)}, ensure_ascii=False
             ))
+
+    @staticmethod
+    def _execute_paginated_query(
+        task_id: str, datasource_id: str, base_sql: str, export_format: str,
+        result_file_path: str, file_name: str, _push_progress
+    ) -> tuple:
+        """执行分页查询，逐页写入结果文件
+
+        Args:
+            task_id: 任务ID
+            datasource_id: 数据源ID
+            base_sql: 基础SQL（不含LIMIT/OFFSET）
+            export_format: 导出格式
+            result_file_path: 结果文件路径
+            file_name: 结果文件名
+            _push_progress: 进度推送函数
+
+        Returns:
+            tuple: (总行数, 已导出行数)
+        """
+        from app.core.datasource.utils import normalize_row_value
+
+        page_size = ONTOLOGY_PAGINATION_DEFAULT_PAGE_SIZE
+
+        # 1. 查询总行数
+        count_sql = f"SELECT COUNT(*) AS total_count FROM ({base_sql}) AS _count_wrapper"
+        _push_progress("正在查询总行数", 0.3)
+        count_result = DatasourceService.execute_query(datasource_id, count_sql)
+        if not count_result.get('success'):
+            raise Exception(count_result.get('message', '查询总行数失败'))
+
+        count_data = count_result.get('data')
+        if isinstance(count_data, dict):
+            rows_data = count_data.get('rows', [])
+            total_rows = int(rows_data[0].get('total_count', 0)) if rows_data else 0
+        elif isinstance(count_data, list) and count_data:
+            total_rows = int(count_data[0].get('total_count', 0))
+        else:
+            total_rows = 0
+
+        _push_progress(f"总行数: {total_rows}", 0.32)
+        OntologyTaskCore.update_task_progress(task_id, 0.32, f"总行数: {total_rows}，每页 {page_size} 行")
+
+        if total_rows == 0:
+            # 无数据，写入空结果文件
+            file_content = format_data([], export_format)
+            write_bytes(result_file_path, file_content)
+            return 0, 0
+
+        # 2. 初始化结果文件写入器
+        writer = _ResultFileWriter(result_file_path, export_format)
+        writer.init()
+
+        # 3. 分页查询并逐页写入
+        exported_rows = 0
+        current_page = 0
+
+        while True:
+            # 检查取消标志
+            if OntologyTaskCore._is_cancelled(task_id):
+                writer.abort()
+                raise Exception("任务已被用户取消")
+
+            offset = current_page * page_size
+            page_sql = f"{base_sql} LIMIT {page_size} OFFSET {offset}"
+
+            page_result = DatasourceService.execute_query(datasource_id, page_sql)
+            if not page_result.get('success'):
+                writer.abort()
+                raise Exception(page_result.get('message', f'第{current_page + 1}页查询失败'))
+
+            data = page_result.get('data')
+            if isinstance(data, dict):
+                rows = data.get('rows', []) or []
+            elif isinstance(data, list):
+                rows = data
+            else:
+                rows = []
+
+            if not rows:
+                break
+
+            rows = normalize_rows(rows)
+            writer.write_page(rows, is_first_page=(current_page == 0))
+            exported_rows += len(rows)
+
+            # 更新进度
+            progress = 0.35 + min(exported_rows / max(total_rows, 1), 1.0) * 0.55
+            msg = f"已导出 {exported_rows}/{total_rows} 行 (第{current_page + 1}页)"
+            _push_progress(msg, progress)
+            OntologyTaskCore.update_task_progress(task_id, progress, msg)
+
+            if len(rows) < page_size:
+                break
+
+            current_page += 1
+
+        # 4. 完成结果文件
+        writer.finalize(total_rows)
+        _push_progress(f"结果文件写入完成，共导出 {exported_rows} 行", 0.92)
+
+        return total_rows, exported_rows
 
     @staticmethod
     def stop_task(task_id: str) -> bool:
@@ -319,6 +533,9 @@ class OntologyTaskCore:
         ).first()
         if not task or task.status not in (OntologyTaskStatus.RUNNING, OntologyTaskStatus.WAITING):
             return False
+
+        # 设置取消标志（运行中线程会在下次检查点退出）
+        OntologyTaskCore._request_cancel(task_id)
 
         OntologyTaskCore.update_task_status(task_id, OntologyTaskStatus.CANCEL)
         status_key = f"{ONTOLOGY_TASK_STATUS_PREFIX}{task_id}"
@@ -335,10 +552,18 @@ class OntologyTaskCore:
 
     @staticmethod
     def _get_result_file(task_id: str) -> Optional[dict]:
-        """获取任务结果文件信息（从Redis读取，过期返回None）"""
+        """获取任务结果文件信息（从Redis读取元数据，检查文件是否存在）"""
         try:
             result_key = f"{ONTOLOGY_TASK_RESULT_PREFIX}{task_id}"
-            return redis_utils.get_obj(result_key) if redis_utils.is_available else None
+            result = redis_utils.get_obj(result_key) if redis_utils.is_available else None
+            if not result:
+                return None
+            # 检查文件是否存在
+            file_path = result.get('file_path', '')
+            if file_path and not file_exists(file_path):
+                logger.warning(f"结果文件不存在: {file_path}, task_id={task_id}")
+                return None
+            return result
         except Exception:
             return None
 
@@ -352,7 +577,13 @@ class OntologyTaskCore:
         result_key = f"{ONTOLOGY_TASK_RESULT_PREFIX}{task_id}"
         result = redis_utils.get_obj(result_key) if redis_utils.is_available else None
 
-        if not result:
+        # 检查文件是否存在
+        has_result = False
+        if result:
+            file_path = result.get('file_path', '')
+            has_result = bool(file_path) and file_exists(file_path)
+
+        if not result or not has_result:
             return {
                 'status': task['status'],
                 'status_label': task['status_label'],
@@ -363,6 +594,8 @@ class OntologyTaskCore:
                 'task_begin_at': task['task_begin_at'],
                 'task_end_at': task['task_end_at'],
                 'task_duration': task['task_duration'],
+                'exported_rows': (result.get('exported_rows', 0) if result else 0),
+                'total_rows': (result.get('total_rows', 0) if result else 0),
             }
 
         return {
@@ -371,8 +604,10 @@ class OntologyTaskCore:
             'has_result': True,
             'file_name': result.get('file_name', ''),
             'format': result.get('format', ''),
-            'file_base64': result.get('file_base64', ''),
+            'file_path': result.get('file_path', ''),
             'row_count': result.get('row_count', 0),
+            'exported_rows': result.get('exported_rows', 0),
+            'total_rows': result.get('total_rows', 0),
             'executed_at': result.get('executed_at', ''),
             'expire_at': result.get('expire_at', ''),
             'task_progress': task['task_progress'],
@@ -399,3 +634,113 @@ class OntologyTaskCore:
             OntologyObject.deleted == False
         ).first()
         return ontology_object_to_dict(obj) if obj else None
+
+
+class _ResultFileWriter:
+    """结果文件增量写入器（支持JSON/Markdown/Excel格式）"""
+
+    def __init__(self, file_path: str, export_format: str):
+        self.file_path = file_path
+        self.export_format = export_format
+        self._first_row_written = False
+        self._headers = None
+        self._excel_wb = None
+        self._excel_ws = None
+
+    def init(self):
+        """初始化文件（写入头部内容）"""
+        if self.export_format == OntologyExportFormat.JSON:
+            write_text(self.file_path, '[')
+        elif self.export_format == OntologyExportFormat.MARKDOWN:
+            # Markdown头部在第一页数据时写入（需要字段名）
+            pass
+        elif self.export_format == OntologyExportFormat.EXCEL:
+            from openpyxl import Workbook
+            self._excel_wb = Workbook(write_only=True)
+            self._excel_ws = self._excel_wb.active
+            self._excel_ws.title = '数据抽取结果'
+
+    def write_page(self, rows: list, is_first_page: bool):
+        """写入一页数据到结果文件
+
+        Args:
+            rows: 本页数据行（字典列表）
+            is_first_page: 是否为第一页
+        """
+        if not rows:
+            return
+
+        if self.export_format == OntologyExportFormat.JSON:
+            self._write_json_page(rows)
+        elif self.export_format == OntologyExportFormat.MARKDOWN:
+            self._write_markdown_page(rows, is_first_page)
+        elif self.export_format == OntologyExportFormat.EXCEL:
+            self._write_excel_page(rows, is_first_page)
+
+    def _write_json_page(self, rows: list):
+        """写入JSON格式的一页数据"""
+        parts = []
+        for row in rows:
+            if self._first_row_written:
+                parts.append(',')
+            parts.append('\n  ')
+            parts.append(json.dumps(row, ensure_ascii=False))
+            self._first_row_written = True
+        if parts:
+            append_text(self.file_path, ''.join(parts))
+
+    def _write_markdown_page(self, rows: list, is_first_page: bool):
+        """写入Markdown格式的一页数据"""
+        if is_first_page:
+            # 第一页：写入表头
+            self._headers = list(rows[0].keys())
+            header_line = '| ' + ' | '.join(self._headers) + ' |\n'
+            separator_line = '| ' + ' | '.join(['---'] * len(self._headers)) + ' |\n'
+            write_text(self.file_path, header_line + separator_line)
+        elif not self._headers:
+            # 兜底：之前没有数据，这是第一页
+            self._headers = list(rows[0].keys())
+            header_line = '| ' + ' | '.join(self._headers) + ' |\n'
+            separator_line = '| ' + ' | '.join(['---'] * len(self._headers)) + ' |\n'
+            write_text(self.file_path, header_line + separator_line)
+
+        # 写入数据行
+        parts = []
+        for row in rows:
+            values = [str(row.get(h, '')) for h in (self._headers or [])]
+            parts.append('| ' + ' | '.join(values) + ' |\n')
+        if parts:
+            append_text(self.file_path, ''.join(parts))
+
+    def _write_excel_page(self, rows: list, is_first_page: bool):
+        """写入Excel格式的一页数据（使用write_only模式）"""
+        if is_first_page:
+            # 第一页：写入表头
+            self._headers = list(rows[0].keys())
+            self._excel_ws.append(self._headers)
+        elif not self._headers:
+            self._headers = list(rows[0].keys())
+            self._excel_ws.append(self._headers)
+
+        # 写入数据行
+        for row in rows:
+            row_values = [row.get(h, '') for h in (self._headers or [])]
+            self._excel_ws.append(row_values)
+
+    def finalize(self, total_rows: int):
+        """完成结果文件（写入尾部内容并关闭）"""
+        if self.export_format == OntologyExportFormat.JSON:
+            append_text(self.file_path, '\n]')
+        elif self.export_format == OntologyExportFormat.EXCEL:
+            if self._excel_wb:
+                self._excel_wb.save(self.file_path)
+                self._excel_wb = None
+                self._excel_ws = None
+
+    def abort(self):
+        """异常终止写入（清理资源）"""
+        if self.export_format == OntologyExportFormat.EXCEL:
+            self._excel_wb = None
+            self._excel_ws = None
+        # 删除不完整的文件
+        delete_file(self.file_path)

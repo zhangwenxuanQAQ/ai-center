@@ -41,6 +41,8 @@ const OntologyTaskPage: React.FC = () => {
   const [searchName, setSearchName] = useState('');
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const [pageSize, setPageSize] = useState(20);
+  const [filterDatasourceId, setFilterDatasourceId] = useState<string | undefined>(undefined);
+  const [filterTaskStatus, setFilterTaskStatus] = useState<string | undefined>(undefined);
 
   // 创建任务弹窗
   const [createVisible, setCreateVisible] = useState(false);
@@ -68,20 +70,28 @@ const OntologyTaskPage: React.FC = () => {
   const [resultVisible, setResultVisible] = useState(false);
   const [resultData, setResultData] = useState<TaskResult | null>(null);
   const [resultLoading, setResultLoading] = useState(false);
+  const [resultTaskId, setResultTaskId] = useState<string>('');
 
   const loadTasks = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await ontologyService.getTasks(searchName || undefined, page, pageSize);
+      const res = await ontologyService.getTasks(searchName || undefined, page, pageSize, filterDatasourceId, filterTaskStatus);
       setTasks(res.data || []);
       setTotal(res.total || 0);
     } catch (e: any) {
       message.error('加载任务列表失败');
     }
     setLoading(false);
-  }, [searchName, page, pageSize]);
+  }, [searchName, page, pageSize, filterDatasourceId, filterTaskStatus]);
 
   useEffect(() => { loadTasks(); }, [loadTasks]);
+
+  // 页面加载时获取数据源列表（过滤框用）
+  useEffect(() => {
+    datasourceService.getDatasources(undefined, 1, 100, undefined, undefined, 'mysql,postgresql,oracle,sql_server').then(res => {
+      setDatasources(res.data || []);
+    }).catch(() => {});
+  }, []);
 
   // 主题检测
   useEffect(() => {
@@ -217,6 +227,7 @@ const OntologyTaskPage: React.FC = () => {
         ontology_object_id: cfg.ontology_object_id,
         custom_sql: cfg.custom_sql,
         export_format: cfg.export_format,
+        query_mode: cfg.query_mode || 'paginated',
         auto_download: !!cfg.auto_download,
       });
       // 加载数据源（仅关系型数据库）
@@ -451,6 +462,7 @@ const OntologyTaskPage: React.FC = () => {
             export_format: exportFormat,
             ontology_object_id: objId,
           };
+          if (values.query_mode) configs.query_mode = values.query_mode;
           if (values.auto_download) configs.auto_download = true;
           if (selectedCols.length > 0 && selectedCols.length < allCols.length) {
             configs.columns = selectedCols;
@@ -480,6 +492,7 @@ const OntologyTaskPage: React.FC = () => {
         const configs: Record<string, any> = {
           export_format: values.export_format,
         };
+        if (values.query_mode) configs.query_mode = values.query_mode;
         if (values.auto_download) configs.auto_download = true;
         if (taskType === 'object') {
           configs.ontology_object_id = values.ontology_object_id;
@@ -585,6 +598,7 @@ const OntologyTaskPage: React.FC = () => {
 
   // 查看结果
   const handleViewResult = async (record: OntologyTask) => {
+    setResultTaskId(record.id);
     setResultVisible(true);
     setResultLoading(true);
     try {
@@ -596,22 +610,22 @@ const OntologyTaskPage: React.FC = () => {
     setResultLoading(false);
   };
 
-  // 下载结果文件
-  const handleDownloadResult = () => {
-    if (resultData?.file_base64) {
-      const byteChars = atob(resultData.file_base64);
-      const byteNums = new Array(byteChars.length);
-      for (let i = 0; i < byteChars.length; i++) {
-        byteNums[i] = byteChars.charCodeAt(i);
-      }
-      const byteArr = new Uint8Array(byteNums);
-      const blob = new Blob([byteArr]);
+  // 下载结果文件（调用任务中心统一下载接口，流式下载支持大文件）
+  const handleDownloadResult = async () => {
+    if (!resultData?.has_result || !resultTaskId) return;
+    try {
+      const { blob, fileName } = await ontologyService.downloadTaskResult(resultTaskId);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = resultData.file_name || 'result';
+      a.download = fileName || resultData.file_name || 'result';
+      a.style.display = 'none';
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      message.error('下载失败，文件可能已过期');
     }
   };
 
@@ -837,6 +851,22 @@ const OntologyTaskPage: React.FC = () => {
         >
           批量删除 ({selectedRowKeys.length})
         </Button>
+        <Select
+          placeholder="数据源"
+          value={filterDatasourceId}
+          allowClear
+          style={{ width: 160 }}
+          onChange={(v) => { setFilterDatasourceId(v); setPage(1); }}
+          options={datasources.map(ds => ({ label: ds.name, value: ds.id }))}
+        />
+        <Select
+          placeholder="状态"
+          value={filterTaskStatus}
+          allowClear
+          style={{ width: 140 }}
+          onChange={(v) => { setFilterTaskStatus(v); setPage(1); }}
+          options={Object.entries(statusLabelMap).map(([v, l]) => ({ label: l, value: v }))}
+        />
         <Input
           placeholder="搜索任务名称"
           value={searchName}
@@ -897,7 +927,7 @@ const OntologyTaskPage: React.FC = () => {
           showTotal={(t) => `共 ${t} 条记录`}
           showSizeChanger
           showQuickJumper
-          pageSizeOptions={['10', '20', '40', '60', '80']}
+          pageSizeOptions={['10', '20', '40', '60', '80', '100']}
           locale={{
             items_per_page: '条/页',
             jump_to: '前往',
@@ -929,14 +959,14 @@ const OntologyTaskPage: React.FC = () => {
         width={createMode === 'batch' ? 750 : 650}
         footer={[
           <Button key="cancel" onClick={() => setCreateVisible(false)}>取消</Button>,
+          createStep > 0 && !editingTask && (
+            <Button key="back" onClick={() => setCreateStep(createStep - 1)}>上一步</Button>
+          ),
           createStep === 0 && !editingTask && (
             <Button key="next" type="primary" onClick={handleNextStep}>下一步</Button>
           ),
           createStep === 1 && createMode === 'batch' && !editingTask && (
             <Button key="next" type="primary" onClick={handleNextStep}>下一步</Button>
-          ),
-          createStep > 0 && !editingTask && (
-            <Button key="back" onClick={() => setCreateStep(createStep - 1)}>上一步</Button>
           ),
           (!editingTask && createStep === getStepCount() - 1) && (
             <Button key="submit" type="primary" onClick={handleCreateTask}>
@@ -1177,6 +1207,13 @@ const OntologyTaskPage: React.FC = () => {
                   {exportFormats.map(fmt => (
                     <Radio.Button key={fmt.value} value={fmt.value}>{fmt.label}</Radio.Button>
                   ))}
+                </Radio.Group>
+              </Form.Item>
+              <Form.Item name="query_mode" label="查询方式" initialValue="paginated"
+                tooltip="全量查询一次性查出所有数据；分页查询按页查询逐页写入结果文件，适合大数据量表">
+                <Radio.Group>
+                  <Radio.Button value="all">全量查询</Radio.Button>
+                  <Radio.Button value="paginated">分页查询</Radio.Button>
                 </Radio.Group>
               </Form.Item>
               <Form.Item name="auto_download" label="执行完自动下载" valuePropName="checked" initialValue={false}>

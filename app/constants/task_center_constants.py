@@ -58,6 +58,9 @@ TASK_TYPE_CONFIG_FIELDS = {
          "description": "结果导出格式",
          "options": [{"value": "json", "label": "JSON"}, {"value": "excel", "label": "Excel"},
                      {"value": "csv", "label": "CSV"}]},
+        {"key": "query_mode", "label": "查询方式", "type": "select", "required": False,
+         "description": "全量查询一次性查出所有数据；分页查询按页查询逐页写入结果文件，适合大数据量表",
+         "options": [{"value": "all", "label": "全量查询"}, {"value": "paginated", "label": "分页查询"}]},
     ],
     TaskType.API: [
         {"key": "server_id", "label": "API服务ID", "type": "string", "required": True,

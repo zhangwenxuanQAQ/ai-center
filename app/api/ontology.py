@@ -228,10 +228,12 @@ async def task_events():
 def get_tasks(
     name: str = Query(None, description="任务名称（模糊查询）"),
     page: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(20, ge=1, le=100, description="每页数量")
+    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
+    datasource_id: str = Query(None, description="数据源ID过滤"),
+    task_status: str = Query(None, description="任务状态过滤")
 ):
     """获取任务列表"""
-    tasks, total = OntologyService.get_tasks(name, page, page_size)
+    tasks, total = OntologyService.get_tasks(name, page, page_size, datasource_id, task_status)
     return ResponseUtil.success(data={"data": tasks, "total": total})
 
 

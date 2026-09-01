@@ -49,7 +49,7 @@ const ApiTaskResult: React.FC<ApiTaskResultProps> = ({ open, result, loading, th
       return <Tag color={isSuccess ? 'success' : 'error'}>{value}</Tag>;
     }
     if (name === 'result_file') {
-      if ((source as any)?.file_base64) {
+      if ((source as any)?.has_result) {
         return <Link onClick={handleDownloadResult}>{value}</Link>;
       }
       return <Text>{value}</Text>;

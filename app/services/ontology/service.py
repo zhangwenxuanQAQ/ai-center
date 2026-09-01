@@ -209,11 +209,16 @@ class OntologyService:
         )
 
     @staticmethod
-    def get_tasks(name: str = None, page: int = 1, page_size: int = 20) -> Tuple[List[dict], int]:
+    def get_tasks(name: str = None, page: int = 1, page_size: int = 20,
+                  datasource_id: str = None, task_status: str = None) -> Tuple[List[dict], int]:
         """获取任务列表"""
         query = OntologyTask.select().where(OntologyTask.deleted == False)
         if name:
             query = query.where(OntologyTask.name.contains(name))
+        if datasource_id:
+            query = query.where(OntologyTask.datasource_id == datasource_id)
+        if task_status:
+            query = query.where(OntologyTask.status == task_status)
         total = query.count()
         tasks = query.order_by(OntologyTask.created_at.desc(), OntologyTask.id.desc()).paginate(page, page_size)
         task_dicts = [task_to_dict(t) for t in tasks]
