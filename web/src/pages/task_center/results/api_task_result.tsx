@@ -8,6 +8,7 @@ import { Drawer, Descriptions, Tag, Typography, message } from 'antd';
 import { TaskResult, taskCenterService } from '../../../services/taskCenter';
 import { statusColorMap } from '../constants';
 import { FIXED_LABEL_STYLE, sortOutputFields, renderCollapsibleLogItem } from './shared';
+import { triggerBlobDownload } from '../../../utils/download';
 
 const { Text, Link } = Typography;
 
@@ -27,13 +28,8 @@ const ApiTaskResult: React.FC<ApiTaskResultProps> = ({ open, result, loading, th
   const handleDownloadResult = async () => {
     if (!task) return;
     try {
-      const blob = await taskCenterService.downloadTaskResult(task.id);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = source?.file_name || 'result';
-      a.click();
-      URL.revokeObjectURL(url);
+      const { blob, fileName } = await taskCenterService.downloadTaskResult(task.id);
+      triggerBlobDownload(blob, fileName || (source as any)?.file_name || 'result');
     } catch {
       message.error('下载失败，文件可能已过期');
     }

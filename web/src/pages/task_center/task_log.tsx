@@ -6,6 +6,7 @@ import {
 import { ReloadOutlined } from '@ant-design/icons';
 import { taskCenterService, TaskLog, TaskTypeInfo, TaskOutputField } from '../../services/taskCenter';
 import { statusColorMap, taskTypeColorMap, formatDurationSeconds, useTheme } from './constants';
+import { triggerBlobDownload } from '../../utils/download';
 
 const TaskCenterLogPage: React.FC = () => {
   const theme = useTheme();
@@ -274,14 +275,9 @@ const TaskCenterLogPage: React.FC = () => {
               const { Text } = Typography;
               const handleDownload = async () => {
                 try {
-                  const blob = await taskCenterService.downloadTaskResult(detailLog.task_id);
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  const fileName = outputFields.find(f => f.name === 'result_file')?.value || 'result';
-                  a.download = String(fileName);
-                  a.click();
-                  URL.revokeObjectURL(url);
+                  const { blob, fileName: backendName } = await taskCenterService.downloadTaskResult(detailLog.task_id);
+                  const fileName = outputFields.find(f => f.name === 'result_file')?.value || backendName || 'result';
+                  triggerBlobDownload(blob, String(fileName));
                 } catch {
                   message.error('下载失败，文件可能已过期');
                 }

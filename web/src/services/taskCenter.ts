@@ -185,7 +185,7 @@ export const taskCenterService = {
   },
 
   /** 下载任务结果文件（返回二进制Blob，不走统一JSON封装） */
-  downloadTaskResult: async (id: string): Promise<Blob> => {
+  downloadTaskResult: async (id: string): Promise<{ blob: Blob; fileName: string }> => {
     const response = await fetch(`${API_BASE_URL}/aicenter/v1/task_center/task/${id}/download`);
     if (!response.ok) {
       // 后端返回JSON错误信息（文件过期等）
@@ -196,7 +196,15 @@ export const taskCenterService = {
       } catch {}
       throw new Error(errMsg);
     }
-    return response.blob();
+    const blob = await response.blob();
+    // 从Content-Disposition解析后端文件名（含扩展名），作为下载文件名
+    let fileName = '';
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="?([^";]+)"?/i);
+    if (match?.[1]) {
+      try { fileName = decodeURIComponent(match[1]); } catch { fileName = match[1]; }
+    }
+    return { blob, fileName };
   },
 
   /** 获取任务结果文件下载URL（用于直接点击下载，浏览器不弹出保存对话框） */

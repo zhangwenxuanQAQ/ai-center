@@ -6,11 +6,13 @@ import {
 import {
   PlusOutlined, PlayCircleOutlined, PauseCircleOutlined, DeleteOutlined,
   ReloadOutlined, EyeOutlined, RedoOutlined, DownOutlined, HistoryOutlined, EditOutlined,
+  DownloadOutlined,
 } from '@ant-design/icons';
 import { taskCenterService, TaskInfo, TaskLog, TaskTypeInfo, TaskResult, TaskOutputField } from '../../services/taskCenter';
 import { statusColorMap, taskTypeColorMap, formatDurationSeconds, useTheme } from './constants';
 import TaskFormModal from './forms';
 import TaskResultDrawer from './results';
+import { triggerBlobDownload, batchDownloadTaskResults } from '../../utils/download';
 
 const TaskCenterTaskPage: React.FC = () => {
   const theme = useTheme();
@@ -24,6 +26,10 @@ const TaskCenterTaskPage: React.FC = () => {
   const [searchName, setSearchName] = useState('');
   const [filterType, setFilterType] = useState<string | undefined>(undefined);
   const [filterStatus, setFilterStatus] = useState<string | undefined>(undefined);
+
+  // 批量选择与批量下载
+  const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
+  const [batchDownloading, setBatchDownloading] = useState(false);
 
   // 字典（任务类型/状态，来自后端常量）
   const [taskTypes, setTaskTypes] = useState<Record<string, TaskTypeInfo>>({});
@@ -85,16 +91,8 @@ const TaskCenterTaskPage: React.FC = () => {
     if (autoDownloadedRef.current.has(taskId)) return;
     autoDownloadedRef.current.add(taskId);
     try {
-      const blob = await taskCenterService.downloadTaskResult(taskId);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName || 'result';
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      const { blob, fileName: backendName } = await taskCenterService.downloadTaskResult(taskId);
+      triggerBlobDownload(blob, backendName || fileName || 'result');
     } catch (e: any) {
       console.warn('[auto_download] failed:', e);
     }
@@ -270,6 +268,39 @@ const TaskCenterTaskPage: React.FC = () => {
         }
       },
     });
+  };
+
+  // 批量下载选中任务的最新结果文件
+  const handleBatchDownload = async () => {
+    if (selectedRowKeys.length === 0) return;
+    const idNames = new Map(tasks.map(t => [t.id, t.name]));
+    setBatchDownloading(true);
+    try {
+      const summary = await batchDownloadTaskResults(
+        [...selectedRowKeys],
+        id => taskCenterService.downloadTaskResult(id),
+      );
+      const parts: string[] = [];
+      if (summary.success.length > 0) parts.push(`成功 ${summary.success.length} 个`);
+      if (summary.skipped.length > 0) {
+        const names = summary.skipped.map(id => idNames.get(id) || id).join('、');
+        parts.push(`无结果跳过 ${summary.skipped.length} 个（${names}）`);
+      }
+      if (summary.failed.length > 0) {
+        const names = summary.failed.map(f => `${idNames.get(f.id) || f.id}: ${f.reason}`).join('；');
+        parts.push(`失败 ${summary.failed.length} 个（${names}）`);
+      }
+      if (summary.failed.length > 0) {
+        message.warning(`批量下载完成：${parts.join('，')}`);
+      } else if (summary.skipped.length > 0) {
+        message.warning(`批量下载完成：${parts.join('，')}`);
+      } else {
+        message.success(`批量下载完成：${parts.join('，')}`);
+      }
+      setSelectedRowKeys([]);
+    } finally {
+      setBatchDownloading(false);
+    }
   };
 
   const columns = [
@@ -484,6 +515,14 @@ const TaskCenterTaskPage: React.FC = () => {
           style={{ width: 130 }}
           options={Object.entries(taskStatuses).map(([value, label]) => ({ value, label }))}
         />
+        <Button
+          icon={<DownloadOutlined />}
+          onClick={handleBatchDownload}
+          disabled={selectedRowKeys.length === 0}
+          loading={batchDownloading}
+        >
+          批量下载结果 ({selectedRowKeys.length})
+        </Button>
         <Button icon={<ReloadOutlined />} onClick={() => {
           if (page !== 1) {
             setPage(1);
@@ -504,6 +543,11 @@ const TaskCenterTaskPage: React.FC = () => {
           locale={{ emptyText: <Empty description="暂无数据" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
           pagination={false}
           scroll={{ x: 1100, y: 'calc(100vh - 280px)' }}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: (keys) => setSelectedRowKeys(keys as string[]),
+            preserveSelectedRowKeys: true,
+          }}
         />
       </div>
 
@@ -586,14 +630,9 @@ const TaskCenterTaskPage: React.FC = () => {
               const { Text } = Typography;
               const handleDownload = async () => {
                 try {
-                  const blob = await taskCenterService.downloadTaskResult(record.task_id);
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  const fileName = outputFields.find(f => f.name === 'result_file')?.value || 'result';
-                  a.download = String(fileName);
-                  a.click();
-                  URL.revokeObjectURL(url);
+                  const { blob, fileName: backendName } = await taskCenterService.downloadTaskResult(record.task_id);
+                  const fileName = outputFields.find(f => f.name === 'result_file')?.value || backendName || 'result';
+                  triggerBlobDownload(blob, String(fileName));
                 } catch {
                   message.error('下载失败，文件可能已过期');
                 }

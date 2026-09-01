@@ -7,10 +7,11 @@ import {
 import {
   PlusOutlined, PlayCircleOutlined, PauseCircleOutlined, DeleteOutlined,
   ReloadOutlined, EyeOutlined, RedoOutlined, EditOutlined, DownOutlined, TableOutlined,
-  CopyOutlined, RightOutlined
+  CopyOutlined, RightOutlined, DownloadOutlined
 } from '@ant-design/icons';
 import { ontologyService, OntologyTask, OntologyObject, ExportFormat, TaskResult } from '../../services/ontology';
 import { datasourceService, Datasource } from '../../services/datasource';
+import { batchDownloadTaskResults, triggerBlobDownload, isResultMissingError } from '../../utils/download';
 
 const { Text, Link } = Typography;
 
@@ -43,6 +44,7 @@ const OntologyTaskPage: React.FC = () => {
   const [pageSize, setPageSize] = useState(20);
   const [filterDatasourceId, setFilterDatasourceId] = useState<string | undefined>(undefined);
   const [filterTaskStatus, setFilterTaskStatus] = useState<string | undefined>(undefined);
+  const [batchDownloading, setBatchDownloading] = useState(false);
 
   // 创建任务弹窗
   const [createVisible, setCreateVisible] = useState(false);
@@ -129,20 +131,11 @@ const OntologyTaskPage: React.FC = () => {
     for (let attempt = 0; attempt <= maxRetry; attempt++) {
       try {
         const { blob, fileName: backendName } = await ontologyService.downloadTaskResult(ontologyTaskId);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = backendName || fileName || 'result';
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-        console.info(`[ontology_auto_download] ✅ 下载成功 task=${ontologyTaskId} 文件=${a.download}`);
+        triggerBlobDownload(blob, backendName || fileName || 'result');
+        console.info(`[ontology_auto_download] ✅ 下载成功 task=${ontologyTaskId}`);
         return;
       } catch (e: any) {
-        const isNotFound = /404|不存在|已过期/.test(e?.message || '');
-        if (attempt < maxRetry && isNotFound) {
+        if (attempt < maxRetry && isResultMissingError(e?.message || '')) {
           console.info(`[ontology_auto_download] 重试(${attempt + 1}/${maxRetry}) task=${ontologyTaskId}: ${e?.message}`);
           await new Promise(r => setTimeout(r, 1500));
           continue;
@@ -615,15 +608,7 @@ const OntologyTaskPage: React.FC = () => {
     if (!resultData?.has_result || !resultTaskId) return;
     try {
       const { blob, fileName } = await ontologyService.downloadTaskResult(resultTaskId);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName || resultData.file_name || 'result';
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      triggerBlobDownload(blob, fileName || resultData.file_name || 'result');
     } catch {
       message.error('下载失败，文件可能已过期');
     }
@@ -670,6 +655,40 @@ const OntologyTaskPage: React.FC = () => {
         }
       },
     });
+  };
+
+  // 批量下载选中任务的最新结果文件
+  const handleBatchDownload = async () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning('请先勾选要下载的任务');
+      return;
+    }
+    const idNames = new Map(tasks.map(t => [t.id, t.name]));
+    setBatchDownloading(true);
+    try {
+      const summary = await batchDownloadTaskResults(
+        [...selectedRowKeys],
+        id => ontologyService.downloadTaskResult(id),
+      );
+      const parts: string[] = [];
+      if (summary.success.length > 0) parts.push(`成功 ${summary.success.length} 个`);
+      if (summary.skipped.length > 0) {
+        const names = summary.skipped.map(id => idNames.get(id) || id).join('、');
+        parts.push(`无结果跳过 ${summary.skipped.length} 个（${names}）`);
+      }
+      if (summary.failed.length > 0) {
+        const names = summary.failed.map(f => `${idNames.get(f.id) || f.id}: ${f.reason}`).join('；');
+        parts.push(`失败 ${summary.failed.length} 个（${names}）`);
+      }
+      if (summary.failed.length > 0 || summary.skipped.length > 0) {
+        message.warning(`批量下载完成：${parts.join('，')}`);
+      } else {
+        message.success(`批量下载完成：${parts.join('，')}`);
+      }
+      setSelectedRowKeys([]);
+    } finally {
+      setBatchDownloading(false);
+    }
   };
 
   const columns = [
@@ -850,6 +869,14 @@ const OntologyTaskPage: React.FC = () => {
           disabled={selectedRowKeys.length === 0}
         >
           批量删除 ({selectedRowKeys.length})
+        </Button>
+        <Button
+          icon={<DownloadOutlined />}
+          onClick={handleBatchDownload}
+          disabled={selectedRowKeys.length === 0}
+          loading={batchDownloading}
+        >
+          批量下载结果 ({selectedRowKeys.length})
         </Button>
         <Select
           placeholder="数据源"
