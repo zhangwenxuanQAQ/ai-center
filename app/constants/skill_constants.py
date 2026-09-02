@@ -1,4 +1,4 @@
-﻿"""
+"""
 SKILL常量定义
 """
 
@@ -14,18 +14,14 @@ SKILL_MD_FILENAME = 'SKILL.md'
 SKILL_STATUS_ENABLED = True
 SKILL_STATUS_DISABLED = False
 
-# SKILL.md标准内容模板
-DEFAULT_SKILL_MD_TEMPLATE = """# {skill_name}
+# SKILL.md标准内容模板（AGENT SKILL规范，名称和描述为必填项）
+DEFAULT_SKILL_MD_TEMPLATE = """---
+name: {skill_name}
+description: {description}
+{metadata_fields}
+---
 
-## 描述
+## {skill_name}
 
-{description}
-
-## 使用场景
-
--
-
-## 注意事项
-
--
+{content}
 """

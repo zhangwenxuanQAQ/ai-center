@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Layout, Tree, Card, Row, Col, Empty, Spin, Button, Modal, Form, Input, Select,
   Switch, message, Popconfirm, Pagination, Upload, Dropdown, Divider, Space, Tag,
+  Tooltip,
 } from 'antd';
 import type { UploadProps, TreeDataNode, TreeProps } from 'antd';
 import MDEditor from '@uiw/react-md-editor';
@@ -10,7 +11,7 @@ const { Option } = Select;
 const { TextArea } = Input;
 const { Dragger } = Upload;
 import {
-  PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined,
+  PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, MenuFoldOutlined,
   UploadOutlined, FolderOpenOutlined, FileTextOutlined, FolderOutlined,
   CheckCircleOutlined, CloseCircleOutlined, FolderAddOutlined,
   FileOutlined, InboxOutlined, MinusCircleOutlined,
@@ -109,6 +110,72 @@ const AvatarUpload: React.FC<{ value?: string; onChange?: (v: string) => void }>
   </div>
 );
 
+/** 标签配置组件（参考 prompt 提示词配置风格）
+ * 支持：回车/失焦/add 按钮添加、点 x 删除；antd Form 注入 value/onChange 受控
+ */
+interface SkillTagsControlProps {
+  value?: string[];
+  onChange?: (v: string[]) => void;
+}
+const SkillTagsControl: React.FC<SkillTagsControlProps> = ({ value = [], onChange }) => {
+  const tags = Array.isArray(value) ? value : [];
+  const [newTag, setNewTag] = useState('');
+  const [showTagInput, setShowTagInput] = useState(false);
+  const tagInputRef = useRef<any>(null);
+
+  const addTag = () => {
+    const v = newTag.trim();
+    if (v && !tags.includes(v)) onChange?.([...tags, v]);
+    setNewTag('');
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+        {tags.map((tag, index) => (
+          <Tag
+            key={`${tag}-${index}`}
+            closable
+            onClose={() => onChange?.(tags.filter(t => t !== tag))}
+            style={{ marginBottom: 4 }}
+          >
+            {tag}
+          </Tag>
+        ))}
+        {showTagInput ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Input
+              ref={tagInputRef}
+              type="text"
+              size="small"
+              value={newTag}
+              onChange={(e) => setNewTag(e.target.value)}
+              onEnterPress={addTag}
+              onBlur={addTag}
+              placeholder="输入标签"
+              style={{ width: 120, height: 24 }}
+            />
+            <Button size="small" onClick={addTag} style={{ height: 24 }}>添加</Button>
+            <Button size="small" onClick={() => setShowTagInput(false)} style={{ height: 24 }}>取消</Button>
+          </div>
+        ) : (
+          <Button
+            type="dashed"
+            icon={<PlusOutlined />}
+            onClick={() => {
+              setShowTagInput(true);
+              setTimeout(() => tagInputRef.current?.focus(), 100);
+            }}
+            style={{ borderStyle: 'dashed', height: 24, minWidth: 80 }}
+          >
+            添加标签
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+};
+
 interface SkillManagementProps {
   theme: 'light' | 'dark';
 }
@@ -147,6 +214,11 @@ const SkillManagement: React.FC<SkillManagementProps> = ({ theme }) => {
   // 文件抽屉
   const [fileDrawerOpen, setFileDrawerOpen] = useState(false);
   const [drawerSkill, setDrawerSkill] = useState<Skill | null>(null);
+  // 抽屉挂载到内容容器，避免从 body 全屏覆盖
+  const contentRef = useRef<HTMLDivElement>(null);
+  // antd Drawer 的 getContainer 需要真正的 DOM 元素；用 state 确保 ready 后再传入
+  const [drawerContainer, setDrawerContainer] = useState<HTMLElement | null>(null);
+  useEffect(() => { setDrawerContainer(contentRef.current); }, [fileDrawerOpen]);
 
   useEffect(() => { fetchCategories(); }, []);
 
@@ -213,7 +285,6 @@ const SkillManagement: React.FC<SkillManagementProps> = ({ theme }) => {
         </div>
       ),
       key: `category-${cat.id}`,
-      icon: cat.is_default ? <FolderOpenOutlined /> : <FolderOutlined />,
       children: cat.children && cat.children.length > 0 ? cat.children.map(child => buildCategoryNode(child)) : undefined,
     });
     return [allNode, ...categories.map(c => buildCategoryNode(c))];
@@ -301,23 +372,104 @@ const SkillManagement: React.FC<SkillManagementProps> = ({ theme }) => {
     fetchSkills(1, pageSize);
   };
 
+  // 标签管理（参考 prompt 提示词配置：tag 卡片 + 添加按钮，回车/失焦可添加）
+  const [skillTags, setSkillTags] = useState<string[]>([]);
+  const [newTag, setNewTag] = useState<string>('');
+  const [showTagInput, setShowTagInput] = useState(false);
+  const tagInputRef = useRef<any>(null);
+
+  const handleAddTag = () => {
+    const v = newTag.trim();
+    if (v && !skillTags.includes(v)) {
+      setSkillTags([...skillTags, v]);
+    }
+    setNewTag('');
+  };
+
+  const handleTagClose = (removedTag: string) => {
+    setSkillTags(skillTags.filter(tag => tag !== removedTag));
+  };
+
+  const resetSkillTags = () => {
+    setSkillTags([]);
+    setNewTag('');
+    setShowTagInput(false);
+  };
+
+  const cardTags = (tags: string[] = []) => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+        {tags.map((tag, index) => (
+          <Tag
+            key={`${tag}-${index}`}
+            closable
+            onClose={() => handleTagClose(tag)}
+            style={{ marginBottom: 4 }}
+          >
+            {tag}
+          </Tag>
+        ))}
+        {showTagInput ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Input
+              ref={tagInputRef}
+              type="text"
+              size="small"
+              value={newTag}
+              onChange={(e) => setNewTag(e.target.value)}
+              onEnterPress={() => handleAddTag()}
+              onBlur={handleAddTag}
+              placeholder="输入标签"
+              style={{ width: 120, height: 24 }}
+            />
+            <Button size="small" onClick={handleAddTag} style={{ height: 24 }}>添加</Button>
+            <Button size="small" onClick={() => setShowTagInput(false)} style={{ height: 24 }}>取消</Button>
+          </div>
+        ) : (
+          <Button
+            type="dashed"
+            icon={<PlusOutlined />}
+            onClick={() => {
+              setShowTagInput(true);
+              setTimeout(() => tagInputRef.current?.focus(), 100);
+            }}
+            style={{ borderStyle: 'dashed', height: 24, minWidth: 80 }}
+          >
+            添加标签
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+
   const openSkillModal = (mode: 'create' | 'edit', skill?: Skill) => {
     setSkillModalMode(mode);
     if (mode === 'edit' && skill) {
       setEditingSkill(skill);
+      setSkillTags(skill.tags || []);
       skillForm.setFieldsValue({
-        name: skill.name, title: skill.title, description: skill.description,
-        tags: skill.tags || [], avatar: skill.avatar,
+        name: skill.name, description: skill.description,
+        tags: skill.tags || [],
+        avatar: skill.avatar,
+        status: !!skill.status,
         content: skill.content || skill.skill_md_content || '',
         metadata: Object.entries(skill.metadata || {}).map(([key, value]) => ({ key, value })),
       });
     } else {
       setEditingSkill(null);
+      setSkillTags([]);
       skillForm.setFieldsValue({
-        name: '', title: '', description: '', tags: [], avatar: '', content: '', metadata: [],
+        name: '', description: '', tags: [], avatar: '', content: '', metadata: [], status: true,
       });
     }
+    setNewTag('');
+    setShowTagInput(false);
     setSkillModalOpen(true);
+  };
+
+  const resetSkillTagsOnOpen = () => {
+    setNewTag('');
+    setShowTagInput(false);
   };
 
   /** 将Form.List的元数据数组转换为对象 */
@@ -345,6 +497,7 @@ const SkillManagement: React.FC<SkillManagementProps> = ({ theme }) => {
       }
       setSkillModalOpen(false);
       skillForm.resetFields();
+      resetSkillTags();
       fetchSkills();
     } catch (e: any) {
       message.error(e && e.message || '操作失败');
@@ -366,7 +519,7 @@ const SkillManagement: React.FC<SkillManagementProps> = ({ theme }) => {
       const result = await skillService.prepareUpload();
       setUploadDirectory(result.directory);
       uploadForm.setFieldsValue({
-        name: '', title: '', description: '', tags: [], avatar: '', content: '', metadata: [],
+        name: '', description: '', tags: [], avatar: '', content: '', metadata: [], status: true,
       });
       setUploadModalOpen(true);
     } catch (e: any) {
@@ -449,19 +602,7 @@ const SkillManagement: React.FC<SkillManagementProps> = ({ theme }) => {
         <Input placeholder="为技能填写名称，将作为技能所属目录名称" />
       </Form.Item>
       <Form.Item label="描述" name="description" rules={[{ required: true, message: '请输入描述' }]}>
-        <TextArea rows={2} placeholder="技能是什么，应该在何时使用。" />
-      </Form.Item>
-      <Form.Item label="标题" name="title">
-        <Input placeholder="请输入技能标题" />
-      </Form.Item>
-      <Form.Item label="内容" name="content">
-        <MDEditor height={mdHeight} preview="edit" textareaProps={{ placeholder: '请详细填写技能指令' }} />
-      </Form.Item>
-      <Form.Item label="标签" name="tags">
-        <Select mode="tags" placeholder="输入标签后按回车" style={{ width: '100%' }} />
-      </Form.Item>
-      <Form.Item label="头像" name="avatar">
-        <AvatarUpload />
+        <TextArea rows={4} placeholder="技能是什么，应该在何时使用。" />
       </Form.Item>
       <Form.Item label="元数据">
         <Form.List name="metadata">
@@ -492,6 +633,15 @@ const SkillManagement: React.FC<SkillManagementProps> = ({ theme }) => {
             </>
           )}
         </Form.List>
+      </Form.Item>
+      <Form.Item label="内容" name="content">
+        <MDEditor height={mdHeight} preview="edit" textareaProps={{ placeholder: '请详细填写技能指令' }} />
+      </Form.Item>
+      <Form.Item label="标签" name="tags">
+        <SkillTagsControl />
+      </Form.Item>
+      <Form.Item label="头像" name="avatar">
+        <AvatarUpload />
       </Form.Item>
       <Form.Item label="所属分类" name="category_id">
         <Select placeholder="请选择分类" allowClear>
@@ -526,8 +676,8 @@ const SkillManagement: React.FC<SkillManagementProps> = ({ theme }) => {
         />
       </LeftSider>
 
-      <Content className={`toolkit-content ${theme === 'dark' ? 'dark' : 'light'}`}
-        style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '16px 24px', boxSizing: 'border-box' }}>
+      <Content ref={contentRef} className={`toolkit-content ${theme === 'dark' ? 'dark' : 'light'}`}
+        style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '16px 24px', boxSizing: 'border-box', position: 'relative' }}>
         {/* 工具栏 */}
         <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap', alignItems: 'center', padding: 16 }}>
           <Dropdown menu={{
@@ -536,9 +686,9 @@ const SkillManagement: React.FC<SkillManagementProps> = ({ theme }) => {
               { key: 'upload', icon: <UploadOutlined />, label: '上传文件/文件夹新建', onClick: openUploadModal },
             ]
           }}>
-            <Button type="primary" icon={<PlusOutlined />}
+            <Button type="primary" icon={<MenuFoldOutlined />}
               style={{ background: 'linear-gradient(135deg, #5a6fd6 0%, #8a9eef 100%)', border: 'none', borderRadius: '18px', padding: '0 20px', height: '36px' }}>
-              新建技能
+              新增技能
             </Button>
           </Dropdown>
           <Input
@@ -577,8 +727,8 @@ const SkillManagement: React.FC<SkillManagementProps> = ({ theme }) => {
               {skills.map((s, index) => (
                 <Col key={s.id} xs={24} sm={12} md={8} lg={6}
                   style={{ animationDelay: `${index * 0.1}s`, animationFillMode: 'both' }}>
-                  <Card hoverable className={`mcp-card ${theme === 'dark' ? 'dark' : 'light'}`}
-                    bodyStyle={{ padding: '16px' }}>
+                  <Card hoverable className={`mcp-card skill-card ${theme === 'dark' ? 'dark' : 'light'}`}
+                    bodyStyle={{ padding: '16px', display: 'flex', flexDirection: 'column' }}>
                     {/* 头部：图标 + 名称 + 状态 */}
                     <div className="card-header">
                       <div className="card-icon" style={{ background: 'linear-gradient(135deg, #5a6fd6 0%, #8a9eef 100%)' }}>
@@ -592,40 +742,71 @@ const SkillManagement: React.FC<SkillManagementProps> = ({ theme }) => {
                         <div className="card-title">{s.title || s.name}</div>
                         <div className="card-subtitle">{s.name}</div>
                       </div>
-                      <Switch size="small" checked={!!s.status} checkedChildren="启用" unCheckedChildren="停用"
+                      <Switch checked={!!s.status} checkedChildren="启用" unCheckedChildren="停用"
                         onChange={checked => {
+                          // 本地立即更新，不刷新整个列表
+                          setSkills(prev => prev.map(x => (x.id === s.id ? { ...x, status: checked } : x)));
                           skillService.updateSkill(s.id, { status: checked })
-                            .then(() => { message.success('状态更新成功'); fetchSkills(); })
-                            .catch(e => message.error(e && e.message || '更新失败'));
+                            .then(() => message.success('状态更新成功'))
+                            .catch(e => {
+                              message.error(e && e.message || '更新失败');
+                              // 失败时回滚
+                              setSkills(prev => prev.map(x => (x.id === s.id ? { ...x, status: !checked } : x)));
+                            });
                         }} />
                     </div>
-                    {/* 标签 */}
-                    <div className="card-tags">
-                      <span className="card-tag">{s.category_name || '未分类'}</span>
-                      <span className="card-tag"
-                        style={{
-                          background: s.status ? 'rgba(82, 196, 26, 0.1)' : 'rgba(255, 77, 79, 0.1)',
-                          color: s.status ? '#52c41a' : '#ff4d4f',
-                          borderColor: s.status ? 'rgba(82, 196, 26, 0.3)' : 'rgba(255, 77, 79, 0.3)',
-                        }}>
-                        {s.status ? '启用' : '停用'}
-                      </span>
-                      {s.tags && s.tags.map((t, i) => (
-                        <Tag key={i} style={{ fontSize: 11 }}>{t}</Tag>
+                    {/* 标签 + 启用/停用状态（同一行） */}
+                    <div className="card-tags" style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: 4,
+                      marginBottom: 8,
+                    }}>
+                      {s.tags && s.tags.length > 0 && s.tags.map((t, i) => (
+                        <Tag key={i} style={{ fontSize: 11, margin: 0 }}>{t}</Tag>
                       ))}
+                      <span className="card-tag" style={{
+                        background: s.status === false ? 'rgba(255, 77, 79, 0.1)' : 'rgba(82, 196, 26, 0.1)',
+                        color: s.status === false ? '#ff4d4f' : '#52c41a',
+                        borderColor: s.status === false ? 'rgba(255, 77, 79, 0.3)' : 'rgba(82, 196, 26, 0.3)',
+                      }}>
+                        {s.status === false ? '停用' : '启用'}
+                      </span>
                     </div>
-                    {/* 描述 */}
-                    {s.description && <div className="card-desc">{s.description}</div>}
+                    {/* 描述（Tooltip 显示完整内容，样式对齐内置工具卡片工具描述） */}
+                    <div className="card-desc-wrap" style={{ padding: '0 2px' }}>
+                      <Tooltip title={s.description} placement="topLeft"
+                        mouseEnterDelay={0.4}>
+                        <div
+                          style={{
+                            fontSize: '12px',
+                            color: theme === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)',
+                            overflow: 'hidden',
+                            display: '-webkit-box',
+                            WebkitLineClamp: 3,
+                            WebkitBoxOrient: 'vertical',
+                            textOverflow: 'ellipsis',
+                            lineHeight: '1.5',
+                          }}>{s.description || '暂无描述'}</div>
+                      </Tooltip>
+                    </div>
                     {/* 底部：创建时间 + 操作按钮 */}
                     <div className="card-footer">
                       <div className="card-time">
-                        <CheckCircleOutlined /> 创建: {formatDate(s.created_at)}
+                        <CheckCircleOutlined /> 创建时间: {formatDate(s.created_at)}
                       </div>
                       <div className="card-actions-bottom">
                         <Button icon={<EditOutlined />} onClick={() => openSkillModal('edit', s)}
                           className="action-btn edit" title="编辑"><span>编辑</span></Button>
                         <Button icon={<FolderOpenOutlined />} onClick={() => openFileDrawer(s)}
-                          className="action-btn" title="查看文件目录"><span>文件目录</span></Button>
+          className="action-btn file-dir"
+          style={{
+            color: '#13c2c2',
+            background: 'rgba(19, 194, 194, 0.08)',
+            borderColor: 'rgba(19, 194, 194, 0.4)',
+          }}
+          title="查看文件目录"><span>文件目录</span></Button>
                         <Popconfirm title="确认删除" description="删除技能记录及对应文件目录？"
                           onConfirm={() => handleDeleteSkill(s.id)} okText="删除" cancelText="取消" okType="danger">
                           <Button icon={<DeleteOutlined />} danger className="action-btn delete" title="删除"><span>删除</span></Button>
@@ -714,6 +895,7 @@ const SkillManagement: React.FC<SkillManagementProps> = ({ theme }) => {
         onClose={() => { setFileDrawerOpen(false); setDrawerSkill(null); }}
         onEditSkill={(s) => { setFileDrawerOpen(false); setDrawerSkill(null); openSkillModal('edit', s); }}
         theme={theme}
+        getContainer={drawerContainer}
       />
     </>
   );

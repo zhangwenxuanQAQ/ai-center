@@ -1920,13 +1920,14 @@ const ToolkitManagement: React.FC = () => {
       <Drawer
         title="工具详情"
         placement="right"
-        width={500}
+        width={600}
+        getContainer={() => pageContainerRef.current!}
         open={viewDrawerVisible}
         onClose={() => setViewDrawerVisible(false)}
-        className={`toolkit-modal ${theme === 'dark' ? 'dark' : 'light'}`}
+        rootClassName={`toolkit-drawer ${theme === 'dark' ? 'dark' : 'light'}`}
         styles={{
           header: { background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fff', color: theme === 'dark' ? '#fff' : '#000' },
-          body: { background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5', color: theme === 'dark' ? '#fff' : '#000' },
+          body: { background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5', color: theme === 'dark' ? '#fff' : '#000', padding: '24px' },
         }}
       >
         {currentTool && (

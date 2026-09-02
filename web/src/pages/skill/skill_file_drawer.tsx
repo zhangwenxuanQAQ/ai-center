@@ -8,7 +8,10 @@ const { TextArea } = Input;
 import {
   FolderOpenOutlined, FileOutlined, FolderOutlined,
   UploadOutlined, FolderAddOutlined, ReloadOutlined,
-  ArrowLeftOutlined, SaveOutlined, DeleteOutlined, EditOutlined,
+  ArrowLeftOutlined, SaveOutlined, DeleteOutlined,
+  FileMarkdownOutlined, FileTextOutlined, FileImageOutlined,
+  FilePdfOutlined, FileZipOutlined, FileExclamationOutlined,
+  SearchOutlined,
 } from '@ant-design/icons';
 import {
   skillService, Skill, FileNode, FileContent,
@@ -21,10 +24,11 @@ interface SkillFileDrawerProps {
   onClose: () => void;
   onEditSkill?: (skill: Skill) => void;
   theme: 'light' | 'dark';
+  getContainer?: HTMLElement | null;
 }
 
 const SkillFileDrawer: React.FC<SkillFileDrawerProps> = ({
-  skill, open, onClose, onEditSkill, theme,
+  skill, open, onClose, onEditSkill, theme, getContainer,
 }) => {
   const [fileList, setFileList] = useState<FileNode[]>([]);
   const [currentPath, setCurrentPath] = useState('');
@@ -33,6 +37,9 @@ const SkillFileDrawer: React.FC<SkillFileDrawerProps> = ({
   const [editingFile, setEditingFile] = useState<FileContent | null>(null);
   const [fileEditSaving, setFileEditSaving] = useState(false);
   const [fileLoading, setFileLoading] = useState(false);
+  const [fileSearchKeyword, setFileSearchKeyword] = useState('');
+  const [filePage, setFilePage] = useState(1);
+  const FILE_PAGE_SIZE = 10;
 
   useEffect(() => {
     if (open && skill) {
@@ -40,6 +47,8 @@ const SkillFileDrawer: React.FC<SkillFileDrawerProps> = ({
       setPathHistory(['']);
       setHistoryIndex(0);
       setEditingFile(null);
+      setFileSearchKeyword('');
+      setFilePage(1);
       loadFileList(skill.id, '');
     }
   }, [open, skill]);
@@ -173,18 +182,152 @@ const SkillFileDrawer: React.FC<SkillFileDrawerProps> = ({
     return items;
   };
 
+  const renderFileIcon = (item: FileNode): { icon: JSX.Element; bg: string } => {
+    if (item.is_dir) {
+      return { icon: <FolderOpenOutlined style={{ fontSize: 22, color: '#fff' }} />, bg: 'linear-gradient(135deg, #faad14 0%, #ffc53d 100%)' };
+    }
+    const ext = (item.name.split('.').pop() || '').toLowerCase();
+    const map: Record<string, { icon: JSX.Element; bg: string }> = {
+      md: { icon: <FileMarkdownOutlined style={{ fontSize: 22, color: '#fff' }} />, bg: 'linear-gradient(135deg, #5a6fd6 0%, #8a9eef 100%)' },
+      markdown: { icon: <FileMarkdownOutlined style={{ fontSize: 22, color: '#fff' }} />, bg: 'linear-gradient(135deg, #5a6fd6 0%, #8a9eef 100%)' },
+      txt: { icon: <FileTextOutlined style={{ fontSize: 22, color: '#fff' }} />, bg: 'linear-gradient(135deg, #13c2c2 0%, #36cfc9 100%)' },
+      json: { icon: <FileTextOutlined style={{ fontSize: 22, color: '#fff' }} />, bg: 'linear-gradient(135deg, #fa8c16 0%, #ffc069 100%)' },
+      yaml: { icon: <FileTextOutlined style={{ fontSize: 22, color: '#fff' }} />, bg: 'linear-gradient(135deg, #eb2f96 0%, #ff85c0 100%)' },
+      yml: { icon: <FileTextOutlined style={{ fontSize: 22, color: '#fff' }} />, bg: 'linear-gradient(135deg, #eb2f96 0%, #ff85c0 100%)' },
+      py: { icon: <FileTextOutlined style={{ fontSize: 22, color: '#fff' }} />, bg: 'linear-gradient(135deg, #1890ff 0%, #69c0ff 100%)' },
+      js: { icon: <FileTextOutlined style={{ fontSize: 22, color: '#fff' }} />, bg: 'linear-gradient(135deg, #fadb14 0%, #fff566 100%)' },
+      ts: { icon: <FileTextOutlined style={{ fontSize: 22, color: '#fff' }} />, bg: 'linear-gradient(135deg, #2f54eb 0%, #85a5ff 100%)' },
+      html: { icon: <FileTextOutlined style={{ fontSize: 22, color: '#fff' }} />, bg: 'linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%)' },
+      css: { icon: <FileTextOutlined style={{ fontSize: 22, color: '#fff' }} />, bg: 'linear-gradient(135deg, #722ed1 0%, #b37feb 100%)' },
+      pdf: { icon: <FilePdfOutlined style={{ fontSize: 22, color: '#fff' }} />, bg: 'linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%)' },
+      zip: { icon: <FileZipOutlined style={{ fontSize: 22, color: '#fff' }} />, bg: 'linear-gradient(135deg, #faad14 0%, #ffd666 100%)' },
+      tar: { icon: <FileZipOutlined style={{ fontSize: 22, color: '#fff' }} />, bg: 'linear-gradient(135deg, #faad14 0%, #ffd666 100%)' },
+      gz: { icon: <FileZipOutlined style={{ fontSize: 22, color: '#fff' }} />, bg: 'linear-gradient(135deg, #faad14 0%, #ffd666 100%)' },
+      png: { icon: <FileImageOutlined style={{ fontSize: 22, color: '#fff' }} />, bg: 'linear-gradient(135deg, #52c41a 0%, #95de64 100%)' },
+      jpg: { icon: <FileImageOutlined style={{ fontSize: 22, color: '#fff' }} />, bg: 'linear-gradient(135deg, #52c41a 0%, #95de64 100%)' },
+      jpeg: { icon: <FileImageOutlined style={{ fontSize: 22, color: '#fff' }} />, bg: 'linear-gradient(135deg, #52c41a 0%, #95de64 100%)' },
+      gif: { icon: <FileImageOutlined style={{ fontSize: 22, color: '#fff' }} />, bg: 'linear-gradient(135deg, #52c41a 0%, #95de64 100%)' },
+      webp: { icon: <FileImageOutlined style={{ fontSize: 22, color: '#fff' }} />, bg: 'linear-gradient(135deg, #52c41a 0%, #95de64 100%)' },
+    };
+    return map[ext] || { icon: <FileExclamationOutlined style={{ fontSize: 22, color: '#fff' }} />, bg: 'linear-gradient(135deg, #8c8c8c 0%, #bfbfbf 100%)' };
+  };
+
+  const formatFileSize = (size?: number | null): string => {
+    if (size === undefined || size === null) return '';
+    if (size < 1024) return size + ' B';
+    if (size < 1048576) return (size / 1024).toFixed(1) + ' KB';
+    return (size / 1048576).toFixed(2) + ' MB';
+  };
+
+  // 过滤 + 分页后的可见文件（目录在前、按名称升序由后端保证）
+  const visibleFiles = (() => {
+    if (!fileSearchKeyword) return fileList;
+    const kw = fileSearchKeyword.toLowerCase();
+    return fileList.filter(f => f.name.toLowerCase().includes(kw));
+  })();
+  const fileTotalPage = Math.max(1, Math.ceil(visibleFiles.length / FILE_PAGE_SIZE));
+  const safePage = Math.min(filePage, fileTotalPage);
+  const pagedFiles = visibleFiles.slice((safePage - 1) * FILE_PAGE_SIZE, safePage * FILE_PAGE_SIZE);
+
+  const renderFileList = () => {
+    if (fileLoading) {
+      return <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}><Spin size="large" /></div>;
+    }
+    if (fileList.length === 0) {
+      return <Empty description={fileSearchKeyword ? '未找到匹配的文件或目录' : '暂无文件'} />;
+    }
+    return (
+      <div>
+        {/* 文件列表 */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {pagedFiles.map(item => {
+            const isDir = !!item.is_dir;
+            return (
+              <div
+                key={item.path}
+                onClick={() => handleFileItemClick(item)}
+                style={{
+                  padding: 12,
+                  borderRadius: 4,
+                  background: isDir
+                    ? (theme === 'dark' ? 'rgba(102,126,234,0.1)' : 'rgba(102,126,234,0.05)')
+                    : (theme === 'dark' ? 'rgba(255,255,255,0.02)' : '#fff'),
+                  border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}`,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={e => {
+                  (e.currentTarget as HTMLElement).style.transform = 'translateX(4px)';
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLElement).style.transform = 'none';
+                }}
+              >
+                {isDir
+                  ? <FolderOutlined style={{ color: 'var(--primary-color)', fontSize: 18 }} />
+                  : <FileOutlined style={{ color: theme === 'dark' ? '#8a9eef' : '#5a6fd6', fontSize: 18 }} />}
+                <span style={{
+                  flex: 1,
+                  color: theme === 'dark' ? '#e0e0e0' : '#333',
+                  fontSize: 14,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }} title={item.name}>
+                  {item.name}
+                </span>
+                <span style={{ color: theme === 'dark' ? '#888' : '#999', fontSize: 12 }}>
+                  {isDir ? '文件夹' : formatFileSize(item.size)}
+                </span>
+                <Popconfirm
+                  title={`确认删除 ${item.name}?`}
+                  onConfirm={(e) => { e?.stopPropagation(); handleDeleteFileItem(item); }}
+                  onCancel={(e) => e?.stopPropagation()}
+                  okText="删除" cancelText="取消" okType="danger"
+                >
+                  <Button type="text" size="small" danger icon={<DeleteOutlined />}
+                    onClick={(e) => e.stopPropagation()} />
+                </Popconfirm>
+              </div>
+            );
+          })}
+          {/* 分页 */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginTop: 12,
+            paddingTop: 12,
+            borderTop: `1px dashed ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#d9d9d9'}`,
+          }}>
+            <span style={{ color: theme === 'dark' ? '#888' : '#999', fontSize: 12 }}>共 {visibleFiles.length} 项</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Button size="small" disabled={safePage === 1}
+                onClick={() => setFilePage(safePage - 1)}>上一页</Button>
+              <span style={{ color: theme === 'dark' ? '#ccc' : '#666', fontSize: 12 }}>
+                第 {safePage} / {fileTotalPage} 页
+              </span>
+              <Button size="small" disabled={safePage >= fileTotalPage}
+                onClick={() => setFilePage(safePage + 1)}>下一页</Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <Drawer
+      className="skill-file-drawer"
+      getContainer={getContainer || null}
       title={skill ? `${skill.name} - 文件目录` : '技能文件目录'}
       width={720}
       open={open}
       onClose={() => { onClose(); setEditingFile(null); }}
       destroyOnClose
-      extra={skill && onEditSkill && (
-        <Space>
-          <Button icon={<EditOutlined />} onClick={() => onEditSkill(skill)}>编辑技能信息</Button>
-        </Space>
-      )}
     >
       <div className="file-drawer-content" style={{ height: 'calc(100vh - 140px)' }}>
         <div className="file-toolbar">
@@ -204,39 +347,32 @@ const SkillFileDrawer: React.FC<SkillFileDrawerProps> = ({
         </div>
 
         <div className="file-list-area">
-          <Spin spinning={fileLoading}>
-            {fileList.length === 0 ? (
-              <div className="empty-dir">
-                <FolderOutlined style={{ fontSize: 40, opacity: 0.4 }} />
-                <div>此目录为空</div>
-              </div>
-            ) : (
-              fileList.map(item => (
-                <div className="file-item" key={item.path}>
-                  {item.is_dir
-                    ? <FolderOpenOutlined style={{ color: '#faad14' }} />
-                    : <FileOutlined style={{ color: '#5a6fd6' }} />}
-                  <span className="file-name" onClick={() => handleFileItemClick(item)}>{item.name}</span>
-                  {!item.is_dir && item.size !== undefined && item.size !== null && (
-                    <span className="file-size">
-                      {item.size < 1024 ? item.size + ' B'
-                        : item.size < 1048576 ? (item.size / 1024).toFixed(1) + ' KB'
-                        : (item.size / 1048576).toFixed(2) + ' MB'}
-                    </span>
-                  )}
-                  <div className="file-actions">
-                    <Popconfirm
-                      title={`确认删除 ${item.name}?`}
-                      onConfirm={() => handleDeleteFileItem(item)}
-                      okText="删除" cancelText="取消" okType="danger"
-                    >
-                      <Button type="text" size="small" danger icon={<DeleteOutlined />} />
-                    </Popconfirm>
-                  </div>
-                </div>
-              ))
-            )}
-          </Spin>
+          {/* 搜索框 */}
+          <div style={{ marginBottom: 8 }}>
+            <Input
+              placeholder="搜索文件或目录名称"
+              value={fileSearchKeyword}
+              onChange={(e) => {
+                setFileSearchKeyword(e.target.value);
+                setFilePage(1);
+              }}
+              prefix={<SearchOutlined />}
+              style={{ width: '100%' }}
+              allowClear
+            />
+          </div>
+          {/* 文件列表容器 */}
+          <div style={{
+            width: '100%',
+            flex: 1,
+            overflowY: 'auto',
+            padding: 16,
+            borderRadius: 8,
+            background: theme === 'dark' ? 'rgba(255,255,255,0.04)' : '#fafafa',
+            border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}`,
+          }}>
+            {renderFileList()}
+          </div>
         </div>
 
         {editingFile && (
