@@ -18,6 +18,7 @@ import ChatbotSetting from './pages/chatbot/chatbot_setting.tsx';
 import MCP from './pages/mcp/mcp.tsx';
 import MCPSetting from './pages/mcp/mcp_setting.tsx';
 import Toolkit from './pages/toolkit/toolkit.tsx';
+import SkillDetail from './pages/skill/skill_detail.tsx';
 import ApiSetting from './pages/api_server/api_setting.tsx';
 import Knowledgebase from './pages/knowledgebase/knowledgebase.tsx';
 import KnowledgebaseCreate from './pages/knowledgebase/knowledgebase_create.tsx';
@@ -51,6 +52,7 @@ const routeModuleMap: Record<string, string> = {
   '/mcps': 'mcp',
   '/mcp/setting/:id': 'mcp',
   '/toolkit': 'toolkit',
+  '/skill/setting/:id': 'skill',
   '/api/setting/:id': 'api',
   '/knowledgebases': 'knowledgebase',
   '/knowledgebase/create': 'knowledgebase',
@@ -79,6 +81,7 @@ const routeComponents: Record<string, React.ComponentType> = {
   '/mcps': MCP,
   '/mcp/setting/:id': MCPSetting,
   '/toolkit': Toolkit,
+  '/skill/setting/:id': SkillDetail,
   '/api/setting/:id': ApiSetting,
   '/knowledgebases': Knowledgebase,
   '/knowledgebase/create': KnowledgebaseCreate,
@@ -107,6 +110,7 @@ const breadcrumbMap: Record<string, { title: string; path?: string }[]> = {
   '/mcps': [{ title: '首页', path: '/' }, { title: 'MCP' }],
   '/mcp/setting/:id': [{ title: '首页', path: '/' }, { title: 'MCP', path: '/mcps' }, { title: 'MCP配置' }],
   '/toolkit': [{ title: '首页', path: '/' }, { title: '工具箱' }],
+  '/skill/setting/:id': [{ title: '首页', path: '/' }, { title: '工具箱', path: '/toolkit' }, { title: '技能详情' }],
   '/api/setting/:id': [{ title: '首页', path: '/' }, { title: '工具箱', path: '/toolkit' }, { title: 'API配置' }],
   '/knowledgebases': [{ title: '首页', path: '/' }, { title: '知识库' }],
   '/knowledgebase/create': [{ title: '首页', path: '/' }, { title: '知识库', path: '/knowledgebases' }, { title: '新增知识库' }],
@@ -266,7 +270,7 @@ function AppContent({ theme, toggleTheme, versionInfo, loading }: AppContentProp
      
       <Layout style={{ height: 'calc(100vh - 64px)', overflow: 'hidden' }}>
         <Sider 
-          width={220} 
+          width={250} 
           collapsedWidth={60} 
           className={theme === 'dark' ? 'dark-theme-sider' : 'light-theme-sider'}
           collapsed={collapsed}
@@ -319,6 +323,7 @@ function AppContent({ theme, toggleTheme, versionInfo, loading }: AppContentProp
             icon={<ArrowLeftOutlined />}
             onClick={() => navigate(-1)}
             style={{ 
+              display: 'none', // 隐藏返回按钮
               color: theme === 'dark' ? '#a0a0b0' : '#666666',
               marginLeft: 10,
               padding: '6px 12px',
