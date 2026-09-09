@@ -15,7 +15,8 @@ RUN npm run build
 FROM ubuntu:24.04
 
 LABEL maintainer="AI Center Team"
-LABEL version="aihub_v2_beta_0.1"
+ARG VERSION=aihub_v2_beta_0.1.2
+LABEL version="${VERSION}"
 LABEL description="大模型AI服务中心 - 集成多种AI功能的管理系统"
 
 ENV DEBIAN_FRONTEND=noninteractive

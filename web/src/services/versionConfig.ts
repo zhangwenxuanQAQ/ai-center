@@ -108,6 +108,11 @@ function getDefaultVersionInfo(): VersionInfo {
       menu_keys: ['agent'], dependencies: ['user', 'llm_model', 'prompt', 'knowledgebase', 'mcp', 'toolkit', 'chatbot']
     },
     {
+      name: 'skill', display_name: 'SKILL管理', description: 'AGENT SKILL插件管理与文件目录',
+      required: false, api_prefixes: ['/skill', '/skill_category'], frontend_routes: ['/skills', '/skill/setting/:id'],
+      menu_keys: ['skill'], dependencies: []
+    },
+    {
       name: 'system_monitor', display_name: '系统监控', description: '系统运行状态监控',
       required: false, api_prefixes: ['/system'], frontend_routes: ['/system/monitor'],
       menu_keys: ['system_monitor'], dependencies: ['user']
@@ -235,6 +240,7 @@ export function getAvailableMenus(versionInfo: VersionInfo | null): MenuItemConf
       { key: 'chatbot', label: '机器人', icon: 'RobotOutlined', path: '/chatbots', moduleName: 'chatbot' },
       { key: 'knowledgebase', label: '知识库', icon: 'BookOutlined', path: '/knowledgebases', moduleName: 'knowledgebase' },
       { key: 'agent', label: '智能体', icon: 'ApartmentOutlined', path: '/agents', moduleName: 'agent' },
+      { key: 'skill', label: 'SKILL管理', icon: 'FileTextOutlined', path: '/skills', moduleName: 'skill' },
       { key: 'toolkit', label: '工具箱', icon: 'DatabaseOutlined', path: '/toolkit', moduleName: 'toolkit' },
       { key: 'prompt', label: '提示词', icon: 'CommentOutlined', path: '/prompts', moduleName: 'prompt' },
       { key: 'llm_model', label: '模型管理', icon: 'SettingOutlined', path: '/llm_models', moduleName: 'llm_model' },

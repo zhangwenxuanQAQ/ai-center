@@ -105,7 +105,7 @@ def build_skill_md(skill_name: str, description: str, metadata: dict = None, bod
 
     名称、描述填入 frontmatter 的 name/description（模板已预置占位符）
     额外元数据字段追加在 frontmatter 中（自动跳过 name/description，跳过空值）
-    body_content 写入正文（frontmatter 之后）
+    body_content 写入正文（frontmatter 之后），**保留原文**，不自动追加二级标题
     """
     meta_lines = []
     for key, value in (metadata or {}).items():
@@ -114,17 +114,19 @@ def build_skill_md(skill_name: str, description: str, metadata: dict = None, bod
         if value is None or value == '':
             continue
         meta_lines.append(f"{key}: {value}")
+    # 正文保留原文：去掉首尾空白即可，不再前置 "## {skill_name}\n\n"
+    # （历史上曾在这里前置 skill_name 二级标题，会导致每次 update 重复叠加）
     body = (body_content or '').strip()
-    # 正文为空时不默认填充 skill_name 作为二级标题
-    section = f"## {skill_name}\n\n{body}\n" if body else ""
-    return (
+    head = (
         "---\n"
         f"name: {skill_name}\n"
         f"description: {description}\n"
         f"{chr(10).join(meta_lines) + chr(10) if meta_lines else ''}"
-        "---\n\n"
-        f"{section}"
+        "---\n"
     )
+    if body:
+        return head + "\n\n" + body + "\n"
+    return head + "\n"
 
 
 def sanitize_dir_name(name: str) -> str:

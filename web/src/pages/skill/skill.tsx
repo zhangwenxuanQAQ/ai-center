@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Layout, Tree, Card, Row, Col, Empty, Spin, Button, Modal, Form, Input, Select,
   Switch, message, Popconfirm, Pagination, Upload, Dropdown, Divider, Space, Tag,
@@ -19,7 +20,6 @@ import {
 import {
   skillService, SkillCategory, Skill,
 } from '../../services/skill';
-import SkillFileDrawer from './skill_file_drawer';
 import '../../styles/common.css';
 import './skill.less';
 
@@ -176,11 +176,8 @@ const SkillTagsControl: React.FC<SkillTagsControlProps> = ({ value = [], onChang
   );
 };
 
-interface SkillManagementProps {
-  theme: 'light' | 'dark';
-}
-
-const SkillManagement: React.FC<SkillManagementProps> = ({ theme }) => {
+const SkillManagement: React.FC = () => {
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [categories, setCategories] = useState<SkillCategory[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedKeys, setSelectedKeys] = useState<string[]>(['all']);
@@ -211,14 +208,21 @@ const SkillManagement: React.FC<SkillManagementProps> = ({ theme }) => {
   const [editingCat, setEditingCat] = useState<SkillCategory | null>(null);
   const [catForm] = Form.useForm();
 
-  // 文件抽屉
-  const [fileDrawerOpen, setFileDrawerOpen] = useState(false);
-  const [drawerSkill, setDrawerSkill] = useState<Skill | null>(null);
-  // 抽屉挂载到内容容器，避免从 body 全屏覆盖
-  const contentRef = useRef<HTMLDivElement>(null);
-  // antd Drawer 的 getContainer 需要真正的 DOM 元素；用 state 确保 ready 后再传入
-  const [drawerContainer, setDrawerContainer] = useState<HTMLElement | null>(null);
-  useEffect(() => { setDrawerContainer(contentRef.current); }, [fileDrawerOpen]);
+  const navigate = useNavigate();
+
+  // 跟随全局主题切换（参考 agent 页面）
+  useEffect(() => {
+    const currentTheme = document.body.getAttribute('data-theme') || 'dark';
+    setTheme(currentTheme as 'light' | 'dark');
+
+    const observer = new MutationObserver(() => {
+      const newTheme = document.body.getAttribute('data-theme') || 'dark';
+      setTheme(newTheme as 'light' | 'dark');
+    });
+
+    observer.observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => { fetchCategories(); }, []);
 
@@ -581,9 +585,8 @@ const SkillManagement: React.FC<SkillManagementProps> = ({ theme }) => {
     }
   };
 
-  const openFileDrawer = (skill: Skill) => {
-    setDrawerSkill(skill);
-    setFileDrawerOpen(true);
+  const openSkillDetail = (skill: Skill) => {
+    navigate(`/skill/setting/${skill.id}`, { state: { from: '/skills' } });
   };
 
   const formatDate = (dateString: string): string => {
@@ -655,7 +658,8 @@ const SkillManagement: React.FC<SkillManagementProps> = ({ theme }) => {
   );
 
   return (
-    <>
+    <div className={`page-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+      <Layout className="skill-layout">
       <LeftSider width={260} className={`category-sider ${theme === 'dark' ? 'dark' : 'light'}`}>
         <div className={`sider-header ${theme === 'dark' ? 'dark' : 'light'}`}
           style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -676,7 +680,7 @@ const SkillManagement: React.FC<SkillManagementProps> = ({ theme }) => {
         />
       </LeftSider>
 
-      <Content ref={contentRef} className={`toolkit-content ${theme === 'dark' ? 'dark' : 'light'}`}
+      <Content className={`skill-content ${theme === 'dark' ? 'dark' : 'light'}`}
         style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '16px 24px', boxSizing: 'border-box', position: 'relative' }}>
         {/* 工具栏 */}
         <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap', alignItems: 'center', padding: 16 }}>
@@ -728,7 +732,9 @@ const SkillManagement: React.FC<SkillManagementProps> = ({ theme }) => {
                 <Col key={s.id} xs={24} sm={12} md={8} lg={6}
                   style={{ animationDelay: `${index * 0.1}s`, animationFillMode: 'both' }}>
                   <Card hoverable className={`mcp-card skill-card ${theme === 'dark' ? 'dark' : 'light'}`}
-                    bodyStyle={{ padding: '16px', display: 'flex', flexDirection: 'column' }}>
+                    style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+                    bodyStyle={{ padding: '16px', display: 'flex', flexDirection: 'column', flex: 1 }}
+                    onClick={() => openSkillDetail(s)}>
                     {/* 头部：图标 + 名称 + 状态 */}
                     <div className="card-header">
                       <div className="card-icon" style={{ background: 'linear-gradient(135deg, #5a6fd6 0%, #8a9eef 100%)' }}>
@@ -743,6 +749,7 @@ const SkillManagement: React.FC<SkillManagementProps> = ({ theme }) => {
                         <div className="card-subtitle">{s.name}</div>
                       </div>
                       <Switch checked={!!s.status} checkedChildren="启用" unCheckedChildren="停用"
+                        onClick={(_checked, e) => e.stopPropagation()}
                         onChange={checked => {
                           // 本地立即更新，不刷新整个列表
                           setSkills(prev => prev.map(x => (x.id === s.id ? { ...x, status: checked } : x)));
@@ -761,10 +768,11 @@ const SkillManagement: React.FC<SkillManagementProps> = ({ theme }) => {
                       alignItems: 'center',
                       flexWrap: 'wrap',
                       gap: 4,
+                      padding: '8px 0',
                       marginBottom: 8,
                     }}>
                       {s.tags && s.tags.length > 0 && s.tags.map((t, i) => (
-                        <Tag key={i} style={{ fontSize: 11, margin: 0 }}>{t}</Tag>
+                        <Tag key={i} style={{ marginBottom: 0 }}>{t}</Tag>
                       ))}
                       <span className="card-tag" style={{
                         background: s.status === false ? 'rgba(255, 77, 79, 0.1)' : 'rgba(82, 196, 26, 0.1)',
@@ -797,19 +805,82 @@ const SkillManagement: React.FC<SkillManagementProps> = ({ theme }) => {
                         <CheckCircleOutlined /> 创建时间: {formatDate(s.created_at)}
                       </div>
                       <div className="card-actions-bottom">
-                        <Button icon={<EditOutlined />} onClick={() => openSkillModal('edit', s)}
-                          className="action-btn edit" title="编辑"><span>编辑</span></Button>
-                        <Button icon={<FolderOpenOutlined />} onClick={() => openFileDrawer(s)}
-          className="action-btn file-dir"
-          style={{
-            color: '#13c2c2',
-            background: 'rgba(19, 194, 194, 0.08)',
-            borderColor: 'rgba(19, 194, 194, 0.4)',
-          }}
-          title="查看文件目录"><span>文件目录</span></Button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); openSkillModal('edit', s); }}
+                          className="action-btn edit"
+                          title="编辑"
+                          style={{
+                            flex: 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            padding: '10px 16px',
+                            border: 'none',
+                            borderRadius: '10px',
+                            fontSize: '13px',
+                            fontWeight: '500',
+                            background: 'rgba(46, 164, 79, 0.08)',
+                            color: '#2ea44f',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          <EditOutlined />
+                          编辑
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); openSkillDetail(s); }}
+                          className="action-btn file-dir"
+                          title="查看文件目录"
+                          style={{
+                            flex: 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            padding: '10px 16px',
+                            border: 'none',
+                            borderRadius: '10px',
+                            fontSize: '13px',
+                            fontWeight: '500',
+                            background: 'rgba(90, 111, 214, 0.08)',
+                            color: '#5a6fd6',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          <FolderOpenOutlined />
+                          详情
+                        </button>
                         <Popconfirm title="确认删除" description="删除技能记录及对应文件目录？"
-                          onConfirm={() => handleDeleteSkill(s.id)} okText="删除" cancelText="取消" okType="danger">
-                          <Button icon={<DeleteOutlined />} danger className="action-btn delete" title="删除"><span>删除</span></Button>
+                          onConfirm={(e) => { e?.stopPropagation(); handleDeleteSkill(s.id); }}
+                          onCancel={(e) => e?.stopPropagation()}
+                          okText="删除" cancelText="取消" okType="danger">
+                          <button
+                            onClick={(e) => e.stopPropagation()}
+                            className="action-btn delete"
+                            title="删除"
+                            style={{
+                              flex: 1,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '6px',
+                              padding: '10px 16px',
+                              border: 'none',
+                              borderRadius: '10px',
+                              fontSize: '13px',
+                              fontWeight: '500',
+                              background: 'rgba(255, 102, 102, 0.08)',
+                              color: '#ff6666',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease'
+                            }}
+                          >
+                            <DeleteOutlined />
+                            删除
+                          </button>
                         </Popconfirm>
                       </div>
                     </div>
@@ -840,6 +911,7 @@ const SkillManagement: React.FC<SkillManagementProps> = ({ theme }) => {
           </div>
         )}
       </Content>
+      </Layout>
 
       {/* 手动新建/编辑技能弹窗 */}
       <Modal title={skillModalMode === 'create' ? '手动新建技能' : '编辑技能'}
@@ -887,17 +959,7 @@ const SkillManagement: React.FC<SkillManagementProps> = ({ theme }) => {
           <Form.Item label="描述" name="description"><TextArea rows={2} /></Form.Item>
         </Form>
       </Modal>
-
-      {/* 文件目录抽屉（独立组件） */}
-      <SkillFileDrawer
-        skill={drawerSkill}
-        open={fileDrawerOpen}
-        onClose={() => { setFileDrawerOpen(false); setDrawerSkill(null); }}
-        onEditSkill={(s) => { setFileDrawerOpen(false); setDrawerSkill(null); openSkillModal('edit', s); }}
-        theme={theme}
-        getContainer={drawerContainer}
-      />
-    </>
+    </div>
   );
 };
 

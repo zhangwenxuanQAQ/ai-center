@@ -8,6 +8,7 @@
 
 1. **机器人管理**：支持创建和管理多个智能对话机器人，可配置不同的模型、提示词和知识库，支持绑定知识库、配置第三方插件集成
 2. **MCP管理**：集成MCP（Model Context Protocol）协议，支持自定义工具和API调用
+3. **SKILL管理**：符合AGENT SKILL规范的技能管理，支持分类树、手动创建与文件/文件夹上传；文件目录浏览、在线编辑；SKILL.md规范校验；skill文件存储于 data/skill/ 目录
 3. **内置工具**：大模型支持内置工具调用，包括网络搜索（web_search）等工具，可在对话中自动搜索实时信息
 4. **知识库管理**：支持多种文档格式的上传、解析和向量化检索，包括PDF、Word、Excel、PPT等；支持智能提取知识、元数据关联、知识库转化为大模型工具（react模式）
 5. **模型管理**：统一管理多种大语言模型，支持OpenAI、DeepSeek、GLM、Qwen等主流模型
@@ -66,6 +67,8 @@ ai-center/
 │   │   ├── knowledgebase.py       # 知识库管理接口
 │   │   ├── llm_model.py           # 模型管理接口
 │   │   ├── mcp.py                 # MCP管理接口
+│   │   ├── skill.py               # SKILL管理接口
+│   │   ├── skill_category.py      # SKILL分类管理接口
 │   │   ├── prompt.py              # 提示词管理接口
 │   │   ├── datasource.py          # 数据源管理接口
 │   │   └── user.py                # 用户管理接口
@@ -82,6 +85,8 @@ ai-center/
 │   │   │   └── rag/               # RAG检索增强
 │   │   ├── llm_model/             # 模型调用封装
 │   │   ├── mcp/                   # MCP协议实现
+│   │   ├── skill/                 # SKILL核心逻辑
+│   │   ├── skill_category/        # SKILL分类服务
 │   │   ├── prompt/                # 提示词处理
 │   │   └── user/                  # 用户核心逻辑
 │   ├── database/                  # 数据库管理
@@ -98,6 +103,8 @@ ai-center/
 │   │   ├── knowledgebase/         # 知识库服务
 │   │   ├── llm_model/             # 模型服务
 │   │   ├── mcp/                   # MCP服务
+│   │   ├── skill/                 # SKILL服务（文件上传、目录、编辑）
+│   │   ├── skill_category/        # SKILL分类服务
 │   │   ├── prompt/                # 提示词服务
 │   │   ├── datasource/            # 数据源服务
 │   │   └── user/                  # 用户服务
@@ -114,6 +121,7 @@ ai-center/
 │   │   │   ├── knowledgebase/     # 知识库管理页面
 │   │   │   ├── llm_model/         # 模型管理页面
 │   │   │   ├── mcp/               # MCP管理页面
+│   │   │   ├── skill/             # SKILL管理页面
 │   │   │   ├── prompt/            # 提示词管理页面
 │   │   │   ├── datasource/        # 数据源管理页面
 │   │   │   ├── user/              # 用户管理页面
@@ -401,7 +409,6 @@ cp docker/aicenter.conf /opt/ai-center/config/
 # 启动容器，挂载配置文件
 docker run -d \
   --name ai-center \
-  --restart unless-stopped \
   -p 8000:80 \
   -p 8081:8081 \
   -p 8082:8082 \

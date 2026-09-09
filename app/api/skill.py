@@ -195,6 +195,16 @@ def list_files(skill_id: str, sub_path: Optional[str] = None):
         return ResponseUtil.error(message=str(e))
 
 
+@router.get("/{skill_id}/files/tree", response_model=ApiResponse)
+def list_files_tree(skill_id: str, sub_path: Optional[str] = None):
+    """递归列出skill目录下的完整目录树"""
+    try:
+        result = SkillService.list_directory_tree(skill_id, sub_path)
+        return ResponseUtil.success(data=result, message="获取文件目录树成功")
+    except ValueError as e:
+        return ResponseUtil.error(message=str(e))
+
+
 @router.get("/{skill_id}/file/content", response_model=ApiResponse)
 def get_file_content(skill_id: str, path: str):
     """读取文件内容"""
@@ -238,5 +248,33 @@ def create_sub_directory(skill_id: str, body: dict):
     try:
         SkillService.create_directory(skill_id, parent_path or '', dir_name)
         return ResponseUtil.success(message="文件夹创建成功")
+    except ValueError as e:
+        return ResponseUtil.error(message=str(e))
+
+
+@router.post("/{skill_id}/file/rename", response_model=ApiResponse)
+def rename_file_or_dir(skill_id: str, body: dict):
+    """重命名文件或文件夹（根目录 SKILL.md 禁止重命名）"""
+    path = body.get('path') if isinstance(body, dict) else None
+    new_name = body.get('new_name') if isinstance(body, dict) else None
+    if not path or not new_name:
+        return ResponseUtil.error(message="缺少path或new_name参数")
+    try:
+        SkillService.rename_file_or_dir(skill_id, path, new_name)
+        return ResponseUtil.success(message="重命名成功")
+    except ValueError as e:
+        return ResponseUtil.error(message=str(e))
+
+
+@router.post("/{skill_id}/files/check-conflicts", response_model=ApiResponse)
+def check_upload_conflicts(skill_id: str, body: dict):
+    """检查上传条目是否与目标目录同名冲突，返回冲突名称列表"""
+    sub_path = (body.get('sub_path') or '') if isinstance(body, dict) else ''
+    names = body.get('names') if isinstance(body, dict) else None
+    if not names or not isinstance(names, list):
+        return ResponseUtil.error(message="缺少names参数")
+    try:
+        conflicts = SkillService.check_upload_conflicts(skill_id, sub_path, names)
+        return ResponseUtil.success(data={"conflicts": conflicts}, message="校验完成")
     except ValueError as e:
         return ResponseUtil.error(message=str(e))

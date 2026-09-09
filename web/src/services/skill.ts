@@ -56,6 +56,7 @@ export interface FileContent {
   name: string;
   content: string;
   is_text: boolean;
+  modified_at?: string;
 }
 
 export const skillService = {
@@ -114,11 +115,12 @@ export const skillService = {
     return http.postForm('/aicenter/v1/skill/upload/prepare', form);
   },
 
-  uploadFile: async (directory: string, file: File, subPath?: string): Promise<void> => {
+  uploadFile: async (directory: string, file: File, subPath?: string, fileName?: string): Promise<void> => {
     const form = new FormData();
     form.append('directory', directory);
     if (subPath) form.append('sub_path', subPath);
-    form.append('file', file);
+    // fileName 用于文件夹上传时保留相对路径结构（如 mydir/sub/a.txt）
+    form.append('file', file, fileName || file.name);
     return http.postForm('/aicenter/v1/skill/upload/file', form);
   },
 
@@ -156,6 +158,13 @@ export const skillService = {
     return http.get<FileNode[]>(`/aicenter/v1/skill/${skillId}/files${qs ? '?' + qs : ''}`);
   },
 
+  listFilesTree: async (skillId: string, subPath?: string): Promise<FileNode[]> => {
+    const query = new URLSearchParams();
+    if (subPath) query.set('sub_path', subPath);
+    const qs = query.toString();
+    return http.get<FileNode[]>(`/aicenter/v1/skill/${skillId}/files/tree${qs ? '?' + qs : ''}`);
+  },
+
   getFileContent: async (skillId: string, path: string): Promise<FileContent> => {
     return http.get<FileContent>(`/aicenter/v1/skill/${skillId}/file/content?path=${encodeURIComponent(path)}`);
   },
@@ -166,6 +175,18 @@ export const skillService = {
 
   deleteFileOrDir: async (skillId: string, path: string): Promise<void> => {
     return http.post(`/aicenter/v1/skill/${skillId}/file/delete`, { path });
+  },
+
+  renameFileOrDir: async (skillId: string, path: string, newName: string): Promise<void> => {
+    return http.post(`/aicenter/v1/skill/${skillId}/file/rename`, { path, new_name: newName });
+  },
+
+  checkUploadConflicts: async (skillId: string, subPath: string, names: string[]): Promise<string[]> => {
+    const res = await http.post<{ conflicts: string[] }>(`/aicenter/v1/skill/${skillId}/files/check-conflicts`, {
+      sub_path: subPath,
+      names,
+    });
+    return res?.conflicts || [];
   },
 
   createDirectory: async (skillId: string, parentPath: string, dirName: string): Promise<void> => {

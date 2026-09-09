@@ -174,6 +174,21 @@ export async function post<T = any>(
 }
 
 /**
+ * POST表单请求（FormData 文件上传等，不做 JSON 序列化）
+ */
+export async function postForm<T = any>(
+  url: string,
+  form: FormData,
+  config?: RequestConfig
+): Promise<T> {
+  return request<T>(url, {
+    ...config,
+    method: 'POST',
+    body: form,
+  });
+}
+
+/**
  * PUT请求
  */
 export async function put<T = any>(
@@ -205,6 +220,7 @@ export default {
   request,
   get,
   post,
+  postForm,
   put,
   del,
 };

@@ -297,10 +297,10 @@ modules:
       - "/skill_category"
     frontend_routes:
       - "/skills"
+      - "/skill/setting/:id"
     menu_keys:
       - "skill"
     database_tables:
       - "skill"
       - "skill_category"
-    dependencies:
-      - "toolkit"
+    dependencies: []

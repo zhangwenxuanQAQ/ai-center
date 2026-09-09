@@ -92,6 +92,8 @@ def save_uploaded_file(relative_dir: str, file_name: str, file_content: bytes, s
         abs_dir = resolve_absolute_path(abs_dir, sub_path)
     os.makedirs(abs_dir, exist_ok=True)
     abs_dir = resolve_absolute_path(abs_dir, os.path.dirname(file_name) or '.').replace(os.sep, os.sep)
+    # 文件名可能携带多级目录（文件夹上传），逐级创建父目录
+    os.makedirs(abs_dir, exist_ok=True)
     # 防止文件名包含路径分隔符
     safe_file_name = os.path.basename(file_name)
     file_path = os.path.join(abs_dir, safe_file_name)
@@ -234,6 +236,42 @@ def list_directory(skill_directory: str, sub_path: str = None) -> list:
     return result
 
 
+def list_directory_tree(skill_directory: str, sub_path: str = None) -> list:
+    """递归列出 skill 目录下的完整目录树（children 嵌套，文件夹在前按名称升序）"""
+    root_abs = get_skill_abs_dir(skill_directory)
+    abs_dir = resolve_absolute_path(root_abs, sub_path) if sub_path else root_abs
+    if not os.path.exists(abs_dir) or not os.path.isdir(abs_dir):
+        return []
+
+    def _walk(dir_abs: str) -> list:
+        try:
+            entries = sorted(os.listdir(dir_abs))
+        except Exception:
+            return []
+        nodes = []
+        for entry in entries:
+            full_path = os.path.join(dir_abs, entry)
+            try:
+                is_dir = os.path.isdir(full_path)
+                stat_info = os.stat(full_path)
+                rel_path = os.path.relpath(full_path, root_abs).replace('\\', '/')
+                node = {
+                    'name': entry,
+                    'path': rel_path,
+                    'is_dir': is_dir,
+                    'size': None if is_dir else stat_info.st_size,
+                    'modified_at': datetime.fromtimestamp(stat_info.st_mtime),
+                    'children': _walk(full_path) if is_dir else None,
+                }
+                nodes.append(node)
+            except Exception:
+                continue
+        nodes.sort(key=lambda x: (0 if x['is_dir'] else 1, x['name'].lower()))
+        return nodes
+
+    return _walk(abs_dir)
+
+
 def read_file_content(skill_directory: str, file_path: str) -> dict:
     """
     读取 skill 目录下的文件内容
@@ -275,6 +313,7 @@ def read_file_content(skill_directory: str, file_path: str) -> dict:
         'name': name,
         'content': content,
         'is_text': text_mode,
+        'modified_at': datetime.fromtimestamp(os.path.getmtime(abs_file_path)).isoformat(),
     }
 
 
@@ -330,6 +369,65 @@ def create_directory(skill_directory: str, parent_path: str, dir_name: str) -> b
         raise ValueError(f"文件夹 '{dir_name}' 已存在")
     os.makedirs(target_dir, exist_ok=True)
     return True
+
+
+def rename_file_or_dir(skill_directory: str, path: str, new_name: str) -> bool:
+    """
+    重命名 skill 目录下的文件或文件夹（同目录内改名）
+
+    - 禁止重命名根目录 SKILL.md（技能必要文件）
+    - 新名称含路径分隔符或非法字符时抛 ValueError
+    - 目标已存在时抛 ValueError
+    - 重命名根目录下一级目录时，若目录与技能名不一致则同步技能目录名（可选，保持简单：仅重命名物理目录）
+    """
+    base_dir = get_skill_abs_dir(skill_directory)
+    abs_path = resolve_absolute_path(base_dir, path)
+
+    if not os.path.exists(abs_path):
+        raise ResourceNotFoundError(message=f"路径 '{path}' 不存在")
+
+    new_name = (new_name or '').strip()
+    if not new_name:
+        raise ValueError("新名称不能为空")
+    if '/' in new_name or '\\' in new_name:
+        raise ValueError("新名称不能包含路径分隔符")
+    if new_name in ('.', '..'):
+        raise ValueError("非法名称")
+
+    normalized = (path or '').replace('\\', '/').strip('/')
+    if normalized == SKILL_MD_FILENAME:
+        raise ValueError("根目录下的 SKILL.md 为技能必要文件，不能重命名")
+
+    abs_new = os.path.join(os.path.dirname(abs_path), new_name)
+    if os.path.normpath(abs_new) == os.path.normpath(abs_path):
+        return True  # 名称未变化
+    if os.path.exists(abs_new):
+        raise ValueError(f"名称 '{new_name}' 已被占用")
+
+    os.rename(abs_path, abs_new)
+    return True
+
+
+def check_upload_conflicts(skill_directory: str, sub_path: str, names: list) -> list:
+    """
+    检查上传条目（文件/文件夹名列表）与目标目录是否同名冲突
+
+    返回冲突的名称列表（文件夹上传时整个文件夹名作为一个条目）
+    """
+    base_dir = get_skill_abs_dir(skill_directory)
+    abs_dir = resolve_absolute_path(base_dir, sub_path) if sub_path else base_dir
+    if not os.path.isdir(abs_dir):
+        return []
+
+    conflicts = []
+    for name in names:
+        if not name:
+            continue
+        # 文件夹上传时浏览器可能带上 webkitRelativePath 前缀，取顶层名称
+        top = name.replace('\\', '/').split('/')[0]
+        if os.path.exists(os.path.join(abs_dir, top)):
+            conflicts.append(top)
+    return conflicts
 
 
 class FileUploadManager:

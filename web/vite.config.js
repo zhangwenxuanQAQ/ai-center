@@ -12,7 +12,7 @@ export default defineConfig(({ mode }) => {
       port: 8000,
       proxy: {
         '/aicenter': {
-          target: env.VITE_API_BASE_URL || 'http://localhost:8081',
+          target: env.VITE_API_BASE_URL || 'http://localhost:8001',
           changeOrigin: true,
           ws: true,
           timeout: 300000,

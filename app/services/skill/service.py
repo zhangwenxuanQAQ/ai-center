@@ -8,6 +8,7 @@ app.core.skill 模块（skill_builder / file_manager / skill_file_utils）。
 import os
 import json
 import logging
+import shutil
 from datetime import datetime
 from app.database.models import Skill, SkillCategory
 from app.services.skill.dto import SkillCreate, SkillCreateWithUpload, SkillUpdate
@@ -19,14 +20,19 @@ from app.core.skill.skill_builder import (
     ensure_skill_root,
     build_skill_md,
     sanitize_dir_name,
+    split_skill_md,
+    read_skill_md,
 )
 from app.core.skill.file_manager import (
     FileUploadManager,
     list_directory,
+    list_directory_tree,
     read_file_content,
     write_file_content,
     delete_file_or_dir,
     create_directory,
+    rename_file_or_dir,
+    check_upload_conflicts,
 )
 from app.core.skill.skill_file_utils import (
     build_category_map,
@@ -36,6 +42,31 @@ from app.core.skill.skill_file_utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _split_frontmatter_md(content: str) -> tuple:
+    """
+    从 markdown 开头解析 --- frontmatter --- 分隔的 (frontmatter原文, 正文)
+    兼容 CRLF / 空行，找不到则 frontmatter 原文为空字符串
+    """
+    if not content:
+        return '', ''
+    s = content.lstrip()
+    if not s.startswith('---'):
+        return '', content
+    first_new = s.find('\n')
+    if first_new == -1:
+        return '', content
+    # 找到第二个 ---
+    end_idx = s.find('---', first_new + 1)
+    if end_idx == -1:
+        return '', content
+    fm_raw = s[first_new + 1:end_idx]
+    # 跳过 end --- 后面的换行
+    after = s[end_idx + 3:]
+    # after 可能以 \n 或 \r\n 开头
+    after = after.lstrip('\r\n')
+    return fm_raw, after
 
 
 class SkillCategoryService_:
@@ -189,7 +220,9 @@ class SkillService:
     def update_skill(skill_id: str, skill_data: SkillUpdate):
         """
         更新技能基本信息
-        只要 name/description/metadata/content 任一变更，就按标准模板重新生成 SKILL.md
+        - 仅 body 变更：保留 SKILL.md 文件中的 frontmatter，只替换正文
+        - name/description/metadata 变更：按标准模板重建 SKILL.md 的 frontmatter
+        - name 变更时同步重命名目录，保证技能名称和目录名称一致
         """
         try:
             db_skill = Skill.get_by_id(skill_id)
@@ -202,6 +235,31 @@ class SkillService:
             update_data['tags'] = serialize_tags(update_data['tags'])
         if 'metadata' in update_data:
             update_data['metadata'] = serialize_metadata(update_data['metadata'])
+
+        # name 变更时重命名目录，保证技能名称和目录名称一致
+        if 'name' in update_data and update_data['name'] and update_data['name'] != db_skill.name:
+            new_name = update_data['name']
+            if ' ' in new_name:
+                raise ValueError("技能名称不能包含空格")
+            new_dir = sanitize_dir_name(new_name)
+            # 检查新目录是否已被其他技能占用
+            existing = Skill.select().where(
+                (Skill.directory == new_dir) & (Skill.deleted == False) & (Skill.id != skill_id)
+            ).first()
+            if existing:
+                raise ValueError(f"已存在同名技能目录 '{new_dir}'，请使用其他名称")
+            old_dir = db_skill.directory
+            old_abs = get_skill_abs_dir(old_dir)
+            new_abs = get_skill_abs_dir(new_dir)
+            if old_dir != new_dir and os.path.exists(old_abs):
+                if os.path.exists(new_abs):
+                    raise ValueError(f"目录 '{new_dir}' 已存在，无法重命名")
+                shutil.move(old_abs, new_abs)
+            update_data['directory'] = new_dir
+
+        # name 变更时同步 title，保证两者一致
+        if 'name' in update_data and update_data['name']:
+            update_data['title'] = update_data['name']
 
         keys_affect_md = ('name', 'description', 'metadata', 'content')
         if any(k in update_data for k in keys_affect_md):
@@ -226,20 +284,73 @@ class SkillService:
                                 merged_meta[k] = v
                     except (ValueError, TypeError):
                         pass
+            update_data['metadata'] = merged_meta  # 全量赋值，确保 SQLAlchemy 标记为 dirty
 
-            body_content = (update_data['content'] if 'content' in update_data else (db_skill.content or '')).strip()
-            skill_md_path = os.path.join(get_skill_abs_dir(db_skill.directory), SKILL_MD_FILENAME)
-            with open(skill_md_path, 'w', encoding='utf-8') as f:
-                f.write(build_skill_md(
-                    skill_name=merged_name,
-                    description=merged_desc,
-                    metadata=merged_meta,
-                    body_content=body_content,
-                ))
-            update_data['content'] = body_content
+            dir_for_md = update_data.get('directory') or db_skill.directory
+            existing_md = read_skill_md(dir_for_md)
+
+            if 'name' not in update_data and 'description' not in update_data \
+                    and 'metadata' not in update_data and 'content' in update_data:
+                # 仅更新了 content（正文）：保留 SKILL.md 文件中已有的 frontmatter，
+                # 只替换正文，避免从数据库读取正文时引入脏数据
+                if existing_md:
+                    fm_and_rest = existing_md.strip()
+                    first_end = fm_and_rest.find('---', 3)
+                    if first_end != -1:
+                        fm_part = fm_and_rest[:first_end + 3]
+                        new_body = (update_data['content'] or '').strip()
+                        with open(os.path.join(get_skill_abs_dir(dir_for_md), SKILL_MD_FILENAME), 'w', encoding='utf-8') as f:
+                            f.write(fm_part + '\n' + (('\n' + new_body + '\n') if new_body else ''))
+                        update_data['content'] = new_body
+                    else:
+                        # 文件没有 frontmatter，按标准模板重建
+                        body_content = (update_data['content'] or '').strip()
+                        with open(os.path.join(get_skill_abs_dir(dir_for_md), SKILL_MD_FILENAME), 'w', encoding='utf-8') as f:
+                            f.write(build_skill_md(
+                                skill_name=merged_name,
+                                description=merged_desc,
+                                metadata=merged_meta,
+                                body_content=body_content,
+                            ))
+                        update_data['content'] = body_content
+                else:
+                    # SKILL.md 不存在，按标准模板重建
+                    body_content = (update_data['content'] or '').strip()
+                    with open(os.path.join(get_skill_abs_dir(dir_for_md), SKILL_MD_FILENAME), 'w', encoding='utf-8') as f:
+                        f.write(build_skill_md(
+                            skill_name=merged_name,
+                            description=merged_desc,
+                            metadata=merged_meta,
+                            body_content=body_content,
+                        ))
+                    update_data['content'] = body_content
+            else:
+                # name/description/metadata 有变更：按标准模板重建 frontmatter
+                # 正文优先取现有文件中的 body，避免从 DB 读取可能已污染的 content
+                if 'content' in update_data:
+                    body_content = (update_data['content'] or '').strip()
+                elif existing_md:
+                    _, body_content = split_skill_md(existing_md)
+                    body_content = body_content.strip()
+                else:
+                    body_content = (db_skill.content or '').strip()
+                skill_md_path = os.path.join(get_skill_abs_dir(dir_for_md), SKILL_MD_FILENAME)
+                with open(skill_md_path, 'w', encoding='utf-8') as f:
+                    f.write(build_skill_md(
+                        skill_name=merged_name,
+                        description=merged_desc,
+                        metadata=merged_meta,
+                        body_content=body_content,
+                    ))
+                update_data['content'] = body_content
 
         for field, value in update_data.items():
-            setattr(db_skill, field, value)
+            if field == 'metadata':
+                # metadata 是 TextField，需要 JSON 序列化后存储
+                value = json.dumps(value, ensure_ascii=False) if value else None
+                setattr(db_skill, field, value)
+            else:
+                setattr(db_skill, field, value)
         db_skill.updated_at = datetime.now()
         db_skill.save()
         return skill_to_dict(db_skill, with_md=True)
@@ -293,21 +404,116 @@ class SkillService:
         return list_directory(skill.directory, sub_path)
 
     @staticmethod
+    def list_directory_tree(skill_id: str, sub_path: str = None) -> list:
+        """递归列出技能目录下的完整目录树"""
+        skill = _get_or_404(skill_id)
+        return list_directory_tree(skill.directory, sub_path)
+
+    @staticmethod
     def read_file_content(skill_id: str, file_path: str) -> dict:
         """读取技能目录下的文件内容"""
         skill = _get_or_404(skill_id)
         return read_file_content(skill.directory, file_path)
 
     @staticmethod
+    @handle_transaction
     def write_file_content(skill_id: str, file_path: str, content: str) -> bool:
-        """写入技能目录下的文件内容"""
+        """
+        写入技能目录下的文件内容
+
+        若写入的是技能根目录下的 SKILL.md，则同步更新 Skill 表：
+        - content 字段：SKILL.md 的正文部分（去 frontmatter）
+        - 其它 frontmatter 字段不回写（只更新 content，updated_at 由 BaseModel.save 自动更新）
+        """
         skill = _get_or_404(skill_id)
-        return write_file_content(skill.directory, file_path, content)
+        ok = write_file_content(skill.directory, file_path, content)
+        if ok and os.path.basename((file_path or '').replace('\\', '/')) == SKILL_MD_FILENAME:
+            normalized_path = (file_path or '').replace('\\', '/').strip('/')
+            # 仅当为根目录下的 SKILL.md 时同步（子目录的同名文件不影响技能元信息）
+            if normalized_path == SKILL_MD_FILENAME:
+                # 解析 SKILL.md 开头 --- 之间的 frontmatter 原始部分 + 正文部分
+                frontmatter_text, body = _split_frontmatter_md(content or '')
+                # 解析 frontmatter：name/description 取顶层 key/value；
+                # metadata 块 = "metadata:" 之后所有行（含顶层 install: 等空 block 键），
+                # 直到下一个 "name:" / "description:" 才结束。
+                front_flat: dict = {}
+                meta_lines = []
+                in_meta = False
+                _stop_keys = {'name', 'description', 'text'}
+                for raw in frontmatter_text.splitlines():
+                    if not raw.strip():
+                        if in_meta:
+                            meta_lines.append('')
+                        continue
+                    indent = len(raw) - len(raw.lstrip())
+                    stripped_line = raw.strip()
+                    if stripped_line.startswith('#'):
+                        continue
+                    if indent == 0 and ':' in stripped_line:
+                        key = stripped_line.partition(':')[0].strip().strip('"').strip("'")
+                        value = stripped_line.partition(':')[2].strip()
+                        # 遇到 top-level name/description 等 key 退出 metadata 块
+                        if in_meta and key in _stop_keys:
+                            in_meta = False
+                        if in_meta:
+                            meta_lines.append(raw)
+                            continue
+                        if key == 'metadata':
+                            in_meta = True
+                            if value:
+                                meta_lines.append(value)
+                            continue
+                        if key in ('name', 'description'):
+                            front_flat[key] = value
+                        continue
+                    # 缩进行（如 metadata 嵌套子键）
+                    if in_meta:
+                        meta_lines.append(raw)
+                # metadata 原文：保留 YAML 缩进/结构与 install 等顶层块
+                metadata_value = None
+                if meta_lines:
+                    block = '\n'.join(meta_lines).strip()
+                    if block:
+                        metadata_value = block
+                touched = False
+                if front_flat.get('name'):
+                    new_name = str(front_flat['name']).strip().strip('"').strip("'")
+                    skill.name = new_name
+                    skill.title = new_name
+                    touched = True
+                    # name 变更且目录名不一致时，重命名目录保证技能名称和目录名称一致
+                    new_dir = sanitize_dir_name(new_name)
+                    if skill.directory != new_dir:
+                        old_abs = get_skill_abs_dir(skill.directory)
+                        new_abs = get_skill_abs_dir(new_dir)
+                        # 检查新目录是否已被其他技能占用（排除当前技能自身）
+                        existing = Skill.select().where(
+                            (Skill.directory == new_dir) & (Skill.deleted == False) & (Skill.id != skill.id)
+                        ).first()
+                        if existing:
+                            raise ValueError(f"已存在同名技能目录 '{new_dir}'，无法重命名")
+                        if os.path.exists(old_abs) and not os.path.exists(new_abs):
+                            shutil.move(old_abs, new_abs)
+                        skill.directory = new_dir
+                if front_flat.get('description'):
+                    skill.description = str(front_flat['description']).strip().strip('"').strip("'")
+                    touched = True
+                if metadata_value:
+                    skill.metadata = metadata_value
+                    touched = True
+                skill.content = body
+                touched = True
+                if touched:
+                    skill.save()
+        return ok
 
     @staticmethod
     def delete_file_or_dir(skill_id: str, path: str) -> bool:
-        """删除技能目录下的文件或文件夹"""
+        """删除技能目录下的文件或文件夹（根目录 SKILL.md 禁止删除）"""
         skill = _get_or_404(skill_id)
+        normalized = (path or '').replace('\\', '/').strip('/')
+        if normalized == SKILL_MD_FILENAME:
+            raise ValueError("根目录下的 SKILL.md 为技能必要文件，不能删除")
         return delete_file_or_dir(skill.directory, path)
 
     @staticmethod
@@ -315,6 +521,18 @@ class SkillService:
         """在技能目录下创建子文件夹"""
         skill = _get_or_404(skill_id)
         return create_directory(skill.directory, parent_path, dir_name)
+
+    @staticmethod
+    def rename_file_or_dir(skill_id: str, path: str, new_name: str) -> bool:
+        """重命名技能目录下的文件或文件夹（根目录 SKILL.md 禁止重命名）"""
+        skill = _get_or_404(skill_id)
+        return rename_file_or_dir(skill.directory, path, new_name)
+
+    @staticmethod
+    def check_upload_conflicts(skill_id: str, sub_path: str, names: list) -> list:
+        """检查上传条目是否与目标目录同名冲突，返回冲突名称列表"""
+        skill = _get_or_404(skill_id)
+        return check_upload_conflicts(skill.directory, sub_path, names)
 
 
 def _get_or_404(skill_id: str) -> Skill:

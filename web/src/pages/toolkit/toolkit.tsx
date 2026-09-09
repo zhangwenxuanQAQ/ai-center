@@ -4,14 +4,13 @@ import type { UploadProps } from 'antd';
 const { TextArea } = Input;
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UpOutlined, DownOutlined, ApiOutlined, ApiTwoTone, UploadOutlined, ToolOutlined, ThunderboltOutlined, CodeOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, ClockCircleOutlined, EyeOutlined, SettingOutlined, ClearOutlined, SendOutlined, StopOutlined, BulbOutlined, RightOutlined, PlayCircleOutlined, InfoCircleOutlined, ReloadOutlined, CopyOutlined } from '@ant-design/icons';
 import type { TreeDataNode, TreeProps } from 'antd';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import ChatMarkdown from '../../components/ChatMarkdown';
 import { toolkitService, BuiltinTool, BuiltinToolParam } from '../../services/toolkit';
 import { datasourceService, Datasource } from '../../services/datasource';
 import { llmModelService, LLMModel } from '../../services/llm_model';
 import { mcpService, MCPServer, MCPCategory } from '../../services/mcp';
 import ApiTool from './api_tool';
-import SkillManagement from '../skill/skill';
 import '../../styles/common.css';
 import './toolkit.less';
 import '../prompt/prompt_setting.less';
@@ -27,7 +26,6 @@ const TOOL_TYPE_ICON: Record<string, React.ReactNode> = {
   api: <ThunderboltOutlined />,
   code_script: <CodeOutlined />,
   builtin_tool: <ToolOutlined />,
-  skill: <ToolOutlined />,
 };
 
 // 工具调用步骤
@@ -49,13 +47,17 @@ const TOOL_TYPE_COLOR: Record<string, string> = {
   api: '#52c41a',
   code_script: '#fa8c16',
   builtin_tool: '#eb2f96',
-  skill: '#13c2c2',
 };
 
 const ToolkitManagement: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [mcpCategories, setMcpCategories] = useState<MCPCategory[]>([]);
-  const [selectedToolType, setSelectedToolType] = useState<string>('mcp');
+  const [selectedToolType, setSelectedToolType] = useState<string>(() => {
+    // 优先读 URL ?tab=，否则默认 mcp
+    const tab = new URLSearchParams(window.location.search).get('tab');
+    return tab && ['mcp', 'api', 'code_script', 'builtin_tool'].includes(tab) ? tab : 'mcp';
+  });
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedKeys, setSelectedKeys] = useState<string[]>(['all']);
   const [loading, setLoading] = useState(false);
@@ -116,6 +118,15 @@ const ToolkitManagement: React.FC = () => {
   const thinkingStartTimeRef = useRef<Record<string, number>>({});
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState('');
+
+  // 监听 URL query ?tab=<type>：从详情页返回 / 浏览器刷新后自动恢复工具类型
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && ['mcp', 'api', 'code_script', 'builtin_tool'].includes(tab)) {
+      setSelectedToolType(tab);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // MCP服务编辑相关状态
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -525,6 +536,10 @@ const ToolkitManagement: React.FC = () => {
   // 顶部工具类型点击
   const handleToolTypeClick = (type: string) => {
     setSelectedToolType(type);
+    // 切换工具类型时，同步写 URL ?tab=<type>，刷新页面可恢复选中
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', type);
+    setSearchParams(next, { replace: true });
     setSelectedCategory(null);
     setSelectedKeys(['all']);
   };
@@ -1319,14 +1334,12 @@ const ToolkitManagement: React.FC = () => {
   const showMcpList = selectedToolType === 'mcp';
   const showApiList = selectedToolType === 'api';
   const showBuiltinTools = selectedToolType === 'builtin_tool';
-  const showSkillPage = selectedToolType === 'skill';
 
   // 工具类型列表（内置工具放最后）
   const toolTypes = [
     { key: 'mcp', name: 'MCP服务', icon: TOOL_TYPE_ICON.mcp, color: TOOL_TYPE_COLOR.mcp },
     { key: 'api', name: 'API接口', icon: TOOL_TYPE_ICON.api, color: TOOL_TYPE_COLOR.api },
     { key: 'code_script', name: '代码脚本', icon: TOOL_TYPE_ICON.code_script, color: TOOL_TYPE_COLOR.code_script },
-    { key: 'skill', name: 'SKILL技能', icon: TOOL_TYPE_ICON.skill, color: TOOL_TYPE_COLOR.skill },
     { key: 'builtin_tool', name: '内置工具', icon: TOOL_TYPE_ICON.builtin_tool, color: TOOL_TYPE_COLOR.builtin_tool },
   ];
 
@@ -1362,8 +1375,6 @@ const ToolkitManagement: React.FC = () => {
         <Layout className="toolkit-main">
           {showApiList ? (
             <ApiTool theme={theme} />
-          ) : showSkillPage ? (
-            <SkillManagement theme={theme} />
           ) : (
             <>
           {showMcpList && (
@@ -1672,7 +1683,6 @@ const ToolkitManagement: React.FC = () => {
               <Option value="api">API接口</Option>
               <Option value="code_script">代码脚本</Option>
               <Option value="builtin_tool">内置工具</Option>
-              <Option value="skill">SKILL技能</Option>
             </Select>
           </Form.Item>
           <Form.Item name="description" label="分类描述">
@@ -1699,7 +1709,6 @@ const ToolkitManagement: React.FC = () => {
               <Option value="api">API接口</Option>
               <Option value="code_script">代码脚本</Option>
               <Option value="builtin_tool">内置工具</Option>
-              <Option value="skill">SKILL技能</Option>
             </Select>
           </Form.Item>
           <Form.Item name="description" label="分类描述">

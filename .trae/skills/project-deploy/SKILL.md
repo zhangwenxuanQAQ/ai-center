@@ -21,12 +21,10 @@ description: 项目打包以及部署需要实现的功能以及操作
 
 ## 说明
 - app是后端目录，web是前端目录，configs/server_config.yaml为配置项文件
-- PROJECT_VERSION文件内容时版本号
 - pyproject.toml以及uv.lock为项目需要的pyhon依赖
 
 ## 需要遵守
 - 基础镜像需要选择Ubuntu24.04， 需要使用nginx访问前端
-- 镜像名称需要来自PROJECT_VERSION
 - 不要把test目录打包进镜像
 - 需要使用uv安装python依赖
 - 需要额外安装py-spy （RUN uv pip install py-spy）

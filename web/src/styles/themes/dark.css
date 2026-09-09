@@ -1297,12 +1297,19 @@ body[data-theme="dark"] .md-editor-wrapper .w-md-editor-textarea textarea,
 body[data-theme="dark"] .md-editor-container .w-md-editor-textarea textarea {
   color: #ffffff !important;
   background-color: transparent !important;
-}
-
 body[data-theme="dark"] .md-editor-wrapper .w-md-editor-textarea pre,
 body[data-theme="dark"] .md-editor-container .w-md-editor-textarea pre {
   color: #ffffff !important;
-  background-color: transparent !important;
+}
+
+/* 技能文件抽屉 — 文件编辑器 */
+body[data-theme="dark"] .file-editor-area {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+body[data-theme="dark"] .file-editor-area .editor-actions {
+  background: rgba(255, 255, 255, 0.02);
+} background-color: transparent !important;
 }
 
 body[data-theme="dark"] .md-editor-wrapper .w-md-editor-textarea pre code,
