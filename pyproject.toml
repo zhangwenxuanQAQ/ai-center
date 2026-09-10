@@ -63,6 +63,7 @@ dependencies = [
     "vscode-icons>=1.0.0",
     "tavily>=0.3.0",
     "sqlparse",
+    "black>=26.5.1",
 ]
 
 [tool.setuptools.packages.find]

@@ -17,8 +17,8 @@ from app.core.tools.base_tool import BaseTool
 from app.core.tools.builtin_tools.mcp_tool import McpTool
 from app.core.tools.builtin_tools.knowledgebase_search import KnowledgebaseSearch
 
-
 # ========== MCP工具转换 ==========
+
 
 def convert_mcp_tool_to_openai_tool(mcp_tool_config: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -34,7 +34,9 @@ def convert_mcp_tool_to_openai_tool(mcp_tool_config: Dict[str, Any]) -> Dict[str
     return tool.to_openai_tool()
 
 
-def convert_mcp_tools_to_openai_tools(mcp_tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def convert_mcp_tools_to_openai_tools(
+    mcp_tools: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
     """
     批量将MCP工具配置转换为OpenAI tool格式
 
@@ -76,6 +78,7 @@ def convert_db_tools_to_openai_tools(db_tools: List) -> List[Dict[str, Any]]:
 
 # ========== 知识库工具转换 ==========
 
+
 def convert_kb_to_openai_tool(kb) -> Dict[str, Any]:
     """
     将知识库对象转换为OpenAI tool格式
@@ -105,6 +108,7 @@ def convert_kbs_to_openai_tools(kbs: List) -> List[Dict[str, Any]]:
 
 # ========== API工具转换 ==========
 
+
 def build_api_tool_to_openai_tool(server, api, configs: Dict[str, Any]):
     """
     将绑定的API接口转换为OpenAI tool格式及可执行工具实例。
@@ -119,7 +123,9 @@ def build_api_tool_to_openai_tool(server, api, configs: Dict[str, Any]):
     """
     from app.core.tools.custom_tool import CustomTool
     from app.core.tools.builtin_tools.api_call import (
-        api_call, normalize_headers, split_params,
+        api_call,
+        normalize_headers,
+        split_params,
     )
 
     method = (configs.get("method", "GET") or "GET").upper()
@@ -141,14 +147,20 @@ def build_api_tool_to_openai_tool(server, api, configs: Dict[str, Any]):
                 required.append(p["name"])
 
     func_name = (getattr(api, "name", None) or f"api_{api.id}")[:64]
-    description = getattr(api, "description", "") or getattr(api, "title", "") or func_name
+    description = (
+        getattr(api, "description", "") or getattr(api, "title", "") or func_name
+    )
 
     openai_tool = {
         "type": "function",
         "function": {
             "name": func_name,
             "description": description,
-            "parameters": {"type": "object", "properties": properties, "required": required},
+            "parameters": {
+                "type": "object",
+                "properties": properties,
+                "required": required,
+            },
         },
     }
 
@@ -188,9 +200,81 @@ def build_api_tool_to_openai_tool(server, api, configs: Dict[str, Any]):
     return openai_tool, runner
 
 
+def build_code_script_tool_to_openai_tool(
+    script,
+) -> Tuple[Dict[str, Any], "CustomTool"]:
+    """
+    将绑定的代码脚本转换为OpenAI tool格式及可执行工具实例。
+
+    每个脚本封装为一个独立工具：函数名使用 code_script_脚本ID（避免与内置工具重名），
+    参数schema来自脚本保存的入参定义（main形参），执行时复用内置code_script工具
+    （传入script_id执行已保存脚本）。
+
+    Args:
+        script: CodeScript数据库对象
+
+    Returns:
+        tuple: (OpenAI tool格式字典, CustomTool可执行实例)
+    """
+    from app.core.tools.custom_tool import CustomTool
+    from app.core.tools.builtin_tools.code_script import parse_params_json
+
+    func_name = f"code_script_{script.id}"
+    description = getattr(script, "description", "") or f"执行代码脚本：{script.name}"
+
+    # 从脚本保存的入参定义构建参数schema（main形参）
+    param_defs = parse_params_json(getattr(script, "params", None))
+    properties = {}
+    required = []
+    for p in param_defs:
+        if not isinstance(p, dict) or not p.get("name"):
+            continue
+        properties[p["name"]] = {
+            "type": p.get("type", "string"),
+            "description": p.get("description", ""),
+        }
+        if p.get("required"):
+            required.append(p["name"])
+
+    openai_tool = {
+        "type": "function",
+        "function": {
+            "name": func_name,
+            "description": description,
+            "parameters": {
+                "type": "object",
+                "properties": properties,
+                "required": required,
+            },
+        },
+    }
+
+    script_id = script.id
+
+    def _script_callback(**kwargs):
+        # 大模型提供的main形参值 → params字典，交由内置code_script工具执行
+        from app.core.tools import ToolRegistry
+
+        params = {k: v for k, v in kwargs.items()}
+        code_script_tool = ToolRegistry.get_tool("code_script")
+        return code_script_tool.run(script_id=script_id, params=params)
+
+    runner = CustomTool(
+        name=func_name,
+        title=getattr(script, "name", func_name),
+        description=description,
+        params=[],
+        callback=_script_callback,
+    )
+    return openai_tool, runner
+
+
 # ========== 机器人工具绑定转换 ==========
 
-def convert_tool_bindings_to_openai_tools(tool_bindings: List) -> Tuple[List[Dict[str, Any]], Dict[str, BaseTool]]:
+
+def convert_tool_bindings_to_openai_tools(
+    tool_bindings: List,
+) -> Tuple[List[Dict[str, Any]], Dict[str, BaseTool]]:
     """
     将机器人工具绑定(ChatbotTool)列表转换为OpenAI tool格式及可执行工具映射。
 
@@ -198,7 +282,8 @@ def convert_tool_bindings_to_openai_tools(tool_bindings: List) -> Tuple[List[Dic
         - mcp: 从configs.tool_ids加载MCP工具
         - builtin_tool: 从configs.tool_names/tool_ids加载已注册的内置工具
         - api: 从configs.server_id/api_ids加载API接口并封装为可调用工具
-        - code_script / skill: 暂未实现聊天内调用，留作扩展点
+        - code_script: 从configs.tool_ids加载代码脚本并封装为可调用工具
+        - skill: 暂未实现聊天内调用，留作扩展点
 
     Args:
         tool_bindings: ChatbotTool数据库对象列表
@@ -208,7 +293,7 @@ def convert_tool_bindings_to_openai_tools(tool_bindings: List) -> Tuple[List[Dic
     """
     from app.core.tools import ToolRegistry
     from app.core.tools.builtin_tools.mcp_tool import McpTool
-    from app.database.models import MCPTool, ApiServer, Api
+    from app.database.models import MCPTool, ApiServer, Api, CodeScript
 
     openai_tools: List[Dict[str, Any]] = []
     tool_map: Dict[str, BaseTool] = {}
@@ -228,16 +313,20 @@ def convert_tool_bindings_to_openai_tools(tool_bindings: List) -> Tuple[List[Dic
             tool_ids = configs.get("tool_ids", []) or []
             if not tool_ids:
                 continue
-            mcp_tools = list(MCPTool.select().where(
-                (MCPTool.id.in_(tool_ids)) &
-                (MCPTool.deleted == False) &
-                (MCPTool.status == True)
-            ))
+            mcp_tools = list(
+                MCPTool.select().where(
+                    (MCPTool.id.in_(tool_ids))
+                    & (MCPTool.deleted == False)
+                    & (MCPTool.status == True)
+                )
+            )
             openai_tools.extend(convert_db_tools_to_openai_tools(mcp_tools))
             for t in mcp_tools:
                 tool_map[t.name] = McpTool.from_db_tool(t)
         elif tool_type == "builtin_tool":
-            tool_names = configs.get("tool_names", []) or configs.get("tool_ids", []) or []
+            tool_names = (
+                configs.get("tool_names", []) or configs.get("tool_ids", []) or []
+            )
             for name in tool_names:
                 builtin = ToolRegistry.get_tool(name)
                 if not builtin:
@@ -249,9 +338,11 @@ def convert_tool_bindings_to_openai_tools(tool_bindings: List) -> Tuple[List[Dic
             # configs: {server_id, api_ids}
             server_id = configs.get("server_id", "")
             api_ids = configs.get("api_ids", []) or []
-            apis = list(Api.select().where(
-                (Api.id.in_(api_ids)) & (Api.deleted == False)
-            )) if api_ids else []
+            apis = (
+                list(Api.select().where((Api.id.in_(api_ids)) & (Api.deleted == False)))
+                if api_ids
+                else []
+            )
             server = ApiServer.get_by_id(server_id) if server_id else None
             for a in apis:
                 a_configs = a.configs
@@ -262,17 +353,40 @@ def convert_tool_bindings_to_openai_tools(tool_bindings: List) -> Tuple[List[Dic
                         a_configs = {}
                 if not isinstance(a_configs, dict):
                     a_configs = {}
-                _openai_tool, _runner = build_api_tool_to_openai_tool(server, a, a_configs)
+                _openai_tool, _runner = build_api_tool_to_openai_tool(
+                    server, a, a_configs
+                )
                 openai_tools.append(_openai_tool)
                 tool_map[_openai_tool["function"]["name"]] = _runner
-        # code_script / skill：暂未实现聊天内调用，留作扩展点
+        elif tool_type == "code_script":
+            # 代码脚本：将绑定的脚本封装为可调用工具（复用内置code_script工具执行）
+            # configs: {tool_ids: [脚本ID, ...]}
+            script_ids = (
+                configs.get("tool_ids", []) or configs.get("tool_names", []) or []
+            )
+            scripts = (
+                list(
+                    CodeScript.select().where(
+                        (CodeScript.id.in_(script_ids))
+                        & (CodeScript.deleted == False)
+                        & (CodeScript.status == True)
+                    )
+                )
+                if script_ids
+                else []
+            )
+            for s in scripts:
+                _openai_tool, _runner = build_code_script_tool_to_openai_tool(s)
+                openai_tools.append(_openai_tool)
+                tool_map[_openai_tool["function"]["name"]] = _runner
+        # skill：暂未实现聊天内调用，留作扩展点
 
     return openai_tools, tool_map
 
 
-
-
-def _execute_single_tool(tool_call: Dict, tool_map: Dict[str, BaseTool]) -> Dict[str, Any]:
+def _execute_single_tool(
+    tool_call: Dict, tool_map: Dict[str, BaseTool]
+) -> Dict[str, Any]:
     """
     执行单个工具调用，统一使用ToolRunner.call执行
 
@@ -288,9 +402,9 @@ def _execute_single_tool(tool_call: Dict, tool_map: Dict[str, BaseTool]) -> Dict
     """
     from app.core.tools import ToolRunner
 
-    function_name = tool_call.get('function', {}).get('name', '')
-    function_args_str = tool_call.get('function', {}).get('arguments', '{}')
-    tool_call_id = tool_call.get('id', '')
+    function_name = tool_call.get("function", {}).get("name", "")
+    function_args_str = tool_call.get("function", {}).get("arguments", "{}")
+    tool_call_id = tool_call.get("id", "")
 
     start_time = time.time()
 
@@ -299,41 +413,43 @@ def _execute_single_tool(tool_call: Dict, tool_map: Dict[str, BaseTool]) -> Dict
     except json.JSONDecodeError:
         elapsed = int((time.time() - start_time) * 1000)
         return {
-            'tool_call_id': tool_call_id,
-            'tool_name': function_name,
-            'task_name': '',
-            'elapsed_ms': elapsed,
-            'error': f'工具参数解析失败: {function_args_str}'
+            "tool_call_id": tool_call_id,
+            "tool_name": function_name,
+            "task_name": "",
+            "elapsed_ms": elapsed,
+            "error": f"工具参数解析失败: {function_args_str}",
         }
 
-    task_name = function_args.get('task_name', '')
+    task_name = function_args.get("task_name", "")
 
     # 统一使用ToolRunner.call执行所有工具
     result = ToolRunner.call(function_name, function_args, tool_map=tool_map)
     elapsed = int((time.time() - start_time) * 1000)
 
-    if result.get('success'):
+    if result.get("success"):
         return {
-            'tool_call_id': tool_call_id,
-            'tool_name': function_name,
-            'task_name': task_name,
-            'elapsed_ms': elapsed,
-            'result': result.get('result', ''),
-            'message': result.get('message', ''),
-            'parameters': function_args
+            "tool_call_id": tool_call_id,
+            "tool_name": function_name,
+            "task_name": task_name,
+            "elapsed_ms": elapsed,
+            "result": result.get("result", ""),
+            "message": result.get("message", ""),
+            "parameters": function_args,
         }
     else:
         return {
-            'tool_call_id': tool_call_id,
-            'tool_name': function_name,
-            'task_name': task_name,
-            'elapsed_ms': elapsed,
-            'error': result.get('error') or result.get('message') or '工具调用失败',
-            'parameters': function_args
+            "tool_call_id": tool_call_id,
+            "tool_name": function_name,
+            "task_name": task_name,
+            "elapsed_ms": elapsed,
+            "error": result.get("error") or result.get("message") or "工具调用失败",
+            "parameters": function_args,
         }
 
 
-async def process_tool_calls(tool_calls: List[Dict], tool_map: Dict[str, BaseTool], chat_id: str = '') -> AsyncGenerator[Dict[str, Any], None]:
+async def process_tool_calls(
+    tool_calls: List[Dict], tool_map: Dict[str, BaseTool], chat_id: str = ""
+) -> AsyncGenerator[Dict[str, Any], None]:
     """
     处理工具调用，支持并行执行多个工具
 
@@ -365,16 +481,16 @@ async def process_tool_calls(tool_calls: List[Dict], tool_map: Dict[str, BaseToo
 
             # 先yield每个工具的start状态
             for tool_call in tool_calls:
-                function_name = tool_call.get('function', {}).get('name', '')
-                tool_call_id = tool_call.get('id', '')
-                function_args_str = tool_call.get('function', {}).get('arguments', '{}')
-                task_name = ''
-                reasoning_content = ''
+                function_name = tool_call.get("function", {}).get("name", "")
+                tool_call_id = tool_call.get("id", "")
+                function_args_str = tool_call.get("function", {}).get("arguments", "{}")
+                task_name = ""
+                reasoning_content = ""
                 function_args = {}
                 try:
                     function_args = json.loads(function_args_str)
-                    task_name = function_args.get('task_name', '')
-                    reasoning_content = function_args.get('reasoning_content', '')
+                    task_name = function_args.get("task_name", "")
+                    reasoning_content = function_args.get("reasoning_content", "")
                 except json.JSONDecodeError:
                     pass
                 tool_call_task_names[tool_call_id] = task_name
@@ -382,39 +498,49 @@ async def process_tool_calls(tool_calls: List[Dict], tool_map: Dict[str, BaseToo
                 tool_call_parameters[tool_call_id] = function_args
 
                 asyncio.run_coroutine_threadsafe(
-                    queue.put({
-                        'tool_call_id': tool_call_id,
-                        'tool_name': function_name,
-                        'task_name': task_name,
-                        'status': 'start',
-                        'elapsed_ms': 0,
-                        'reasoning_content': reasoning_content,
-                        'parameters': function_args
-                    }),
-                    loop
+                    queue.put(
+                        {
+                            "tool_call_id": tool_call_id,
+                            "tool_name": function_name,
+                            "task_name": task_name,
+                            "status": "start",
+                            "elapsed_ms": 0,
+                            "reasoning_content": reasoning_content,
+                            "parameters": function_args,
+                        }
+                    ),
+                    loop,
                 )
 
             # 并行执行所有工具
-            with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(tool_calls), 10)) as executor:
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=min(len(tool_calls), 10)
+            ) as executor:
                 future_to_tool = {}
                 for tool_call in tool_calls:
-                    function_name = tool_call.get('function', {}).get('name', '')
-                    tool_call_id = tool_call.get('id', '')
+                    function_name = tool_call.get("function", {}).get("name", "")
+                    tool_call_id = tool_call.get("id", "")
 
                     future = executor.submit(_execute_single_tool, tool_call, tool_map)
                     future_to_tool[future] = tool_call
 
                     asyncio.run_coroutine_threadsafe(
-                        queue.put({
-                            'tool_call_id': tool_call_id,
-                            'tool_name': function_name,
-                            'task_name': tool_call_task_names.get(tool_call_id, ''),
-                            'status': 'running',
-                            'elapsed_ms': 0,
-                            'reasoning_content': tool_call_reasoning_contents.get(tool_call_id, ''),
-                            'parameters': tool_call_parameters.get(tool_call_id, {})
-                        }),
-                        loop
+                        queue.put(
+                            {
+                                "tool_call_id": tool_call_id,
+                                "tool_name": function_name,
+                                "task_name": tool_call_task_names.get(tool_call_id, ""),
+                                "status": "running",
+                                "elapsed_ms": 0,
+                                "reasoning_content": tool_call_reasoning_contents.get(
+                                    tool_call_id, ""
+                                ),
+                                "parameters": tool_call_parameters.get(
+                                    tool_call_id, {}
+                                ),
+                            }
+                        ),
+                        loop,
                     )
 
                 try:
@@ -428,27 +554,39 @@ async def process_tool_calls(tool_calls: List[Dict], tool_map: Dict[str, BaseToo
                         try:
                             result = future.result()
                             tool_call = future_to_tool[future]
-                            tool_call_id = tool_call.get('id', '')
-                            result['status'] = 'error' if 'error' in result else 'success'
-                            result['reasoning_content'] = tool_call_reasoning_contents.get(tool_call_id, '')
+                            tool_call_id = tool_call.get("id", "")
+                            result["status"] = (
+                                "error" if "error" in result else "success"
+                            )
+                            result["reasoning_content"] = (
+                                tool_call_reasoning_contents.get(tool_call_id, "")
+                            )
 
                             asyncio.run_coroutine_threadsafe(queue.put(result), loop)
                         except Exception as e:
                             tool_call = future_to_tool[future]
-                            function_name = tool_call.get('function', {}).get('name', '')
-                            tool_call_id = tool_call.get('id', '')
+                            function_name = tool_call.get("function", {}).get(
+                                "name", ""
+                            )
+                            tool_call_id = tool_call.get("id", "")
 
                             asyncio.run_coroutine_threadsafe(
-                                queue.put({
-                                    'tool_call_id': tool_call_id,
-                                    'tool_name': function_name,
-                                    'task_name': tool_call_task_names.get(tool_call_id, ''),
-                                    'status': 'error',
-                                    'elapsed_ms': 0,
-                                    'error': str(e),
-                                    'reasoning_content': tool_call_reasoning_contents.get(tool_call_id, '')
-                                }),
-                                loop
+                                queue.put(
+                                    {
+                                        "tool_call_id": tool_call_id,
+                                        "tool_name": function_name,
+                                        "task_name": tool_call_task_names.get(
+                                            tool_call_id, ""
+                                        ),
+                                        "status": "error",
+                                        "elapsed_ms": 0,
+                                        "error": str(e),
+                                        "reasoning_content": tool_call_reasoning_contents.get(
+                                            tool_call_id, ""
+                                        ),
+                                    }
+                                ),
+                                loop,
                             )
                 finally:
                     for pending_future in future_to_tool:

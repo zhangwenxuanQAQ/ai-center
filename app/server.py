@@ -1787,6 +1787,76 @@ try:
     except Exception as e:
         logger.error(f"[MIGRATION]   创建 skill 表失败: {e}")
 
+    # 创建 code_script 表
+    logger.info("\n[MIGRATION] 创建 code_script 表...")
+    try:
+        cursor = db.execute_sql("SHOW TABLES LIKE 'code_script';")
+        if not cursor.fetchone():
+            db.execute_sql("""
+                CREATE TABLE code_script (
+                    id CHAR(36) NOT NULL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    content TEXT,
+                    params TEXT,
+                    category_id CHAR(36),
+                    status TINYINT DEFAULT 1,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    create_user_id VARCHAR(40) DEFAULT NULL,
+                    update_user_id VARCHAR(40) DEFAULT NULL,
+                    deleted TINYINT DEFAULT 0,
+                    deleted_at DATETIME DEFAULT NULL,
+                    deleted_user_id VARCHAR(36) DEFAULT NULL,
+                    INDEX idx_name (name),
+                    INDEX idx_category_id (category_id),
+                    INDEX idx_deleted (deleted)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            """)
+            logger.info("[MIGRATION]   成功创建 code_script 表")
+        else:
+            logger.info("[MIGRATION]   code_script 表已存在，检查字段...")
+            # 补充 params 入参定义字段
+            cursor = db.execute_sql("SHOW COLUMNS FROM code_script LIKE 'params';")
+            if not cursor.fetchone():
+                db.execute_sql("ALTER TABLE code_script ADD COLUMN params TEXT COMMENT '入参定义（JSON数组：name/type/description/required/default）' AFTER content;")
+                logger.info("[MIGRATION]   成功添加 code_script.params 字段")
+            else:
+                logger.info("[MIGRATION]   params 字段已存在，跳过")
+    except Exception as e:
+        logger.error(f"[MIGRATION]   创建 code_script 表失败: {e}")
+
+    # 创建 code_script_category 表
+    logger.info("\n[MIGRATION] 创建 code_script_category 表...")
+    try:
+        cursor = db.execute_sql("SHOW TABLES LIKE 'code_script_category';")
+        if not cursor.fetchone():
+            db.execute_sql("""
+                CREATE TABLE code_script_category (
+                    id CHAR(36) NOT NULL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    parent_id CHAR(36),
+                    sort_order INT DEFAULT 0,
+                    is_default TINYINT DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    create_user_id VARCHAR(40) DEFAULT NULL,
+                    update_user_id VARCHAR(40) DEFAULT NULL,
+                    deleted TINYINT DEFAULT 0,
+                    deleted_at DATETIME DEFAULT NULL,
+                    deleted_user_id VARCHAR(36) DEFAULT NULL,
+                    INDEX idx_name (name),
+                    INDEX idx_parent_id (parent_id),
+                    INDEX idx_deleted (deleted)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            """)
+            logger.info("[MIGRATION]   成功创建 code_script_category 表")
+        else:
+            logger.info("[MIGRATION]   code_script_category 表已存在，跳过")
+    except Exception as e:
+        logger.error(f"[MIGRATION]   创建 code_script_category 表失败: {e}")
+
     logger.info("\n[MIGRATION] ✅ 数据库迁移完成")
 except Exception as e:
     logger.error(f"\n[MIGRATION] ❌ 数据库迁移失败: {e}")

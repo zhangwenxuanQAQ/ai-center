@@ -866,6 +866,43 @@ class Skill(SoftDeleteModel):
         table_name = 'skill'
 
 
+class CodeScriptCategory(SoftDeleteModel):
+    """
+    代码脚本分类模型
+
+    存储代码脚本分类信息，支持树形结构
+    """
+    name = CharField(max_length=255, index=True, verbose_name="分类名称")
+    description = TextField(null=True, verbose_name="分类描述")
+    parent_id = CharField(max_length=40, null=True, index=True, verbose_name="父分类ID")
+    sort_order = IntegerField(default=0, verbose_name="排序序号")
+    is_default = BooleanField(default=False, verbose_name="是否默认分类")
+
+    class Meta:
+        table_name = 'code_script_category'
+        indexes = (
+            (('parent_id', 'sort_order'), False),
+        )
+
+
+class CodeScript(SoftDeleteModel):
+    """
+    代码脚本模型
+
+    存储代码脚本信息，暂时只支持Python代码，必须包含main方法作为执行入口，
+    main函数可声明入参，执行时按参数定义注入参数值
+    """
+    name = CharField(max_length=255, index=True, verbose_name="脚本名称")
+    description = TextField(null=True, verbose_name="脚本描述")
+    content = TextField(null=True, verbose_name="Python代码内容")
+    params = TextField(null=True, verbose_name="入参定义（JSON数组：name/type/description/required/default）")
+    category_id = CharField(max_length=40, null=True, index=True, verbose_name="分类ID")
+    status = BooleanField(default=True, verbose_name="状态：True启用，False禁用")
+
+    class Meta:
+        table_name = 'code_script'
+
+
 def create_tables(enabled_tables: set = None):
     """
     创建所有数据表
@@ -914,6 +951,8 @@ def create_tables(enabled_tables: set = None):
         TaskLog,
         SkillCategory,
         Skill,
+        CodeScriptCategory,
+        CodeScript,
     ]
     
     for table in tables:

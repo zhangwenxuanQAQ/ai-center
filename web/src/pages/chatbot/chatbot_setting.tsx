@@ -19,6 +19,7 @@ import { mcpService, MCPServer } from '../../services/mcp';
 import { llmModelService, LLMModel } from '../../services/llm_model';
 import { apiService as apiServerService } from '../../services/api_server';
 import { toolkitService } from '../../services/toolkit';
+import { codeScriptService } from '../../services/code_script';
 import { buildToolTypeOptions, getToolTypeIcon, getToolTypeColor, ToolTypeOption } from '../../constants/toolTypes';
 import { integrationService, IntegrationConfig, IntegrationConfigsDetail, IntegrationConfigParam } from '../../services/integration';
 import '../../styles/common.css';
@@ -387,10 +388,20 @@ const ChatbotSetting: React.FC = () => {
           avatar: '',
           tools: (result.data || []).map((t: any) => ({ ...t, id: t.name, title: t.title || t.name, name: t.name, description: t.description }))
         }]);
+      } else if (type === 'code_script') {
+        const result = await codeScriptService.getScripts(1, 100, undefined, undefined, 'true');
+        // 代码脚本无服务概念，统一放入一个虚拟分组（仅启用状态的脚本）
+        setMcpServersWithTools([{
+          id: '__code_script__',
+          name: '代码脚本',
+          code: '',
+          avatar: '',
+          tools: (result.data || []).map((s: any) => ({ ...s, id: s.id, title: s.name, name: s.name, description: s.description }))
+        }]);
       } else {
-        // code_script / skill 暂未实现加载
-        setMcpServersWithTools([]);
-      }
+          // skill 暂未实现加载
+          setMcpServersWithTools([]);
+        }
     } catch (error) {
       console.error(`Failed to fetch ${type} tools:`, error);
       message.error('获取工具列表失败');
@@ -426,6 +437,9 @@ const ChatbotSetting: React.FC = () => {
         : [...prev, serverId]
     );
   };
+
+  // 无服务器概念的类型（工具直接平铺展示，不使用展开收起）
+  const isServerlessToolType = (toolType: string) => toolType === 'builtin_tool' || toolType === 'code_script';
 
   const handleToolSelect = (serverId: string, toolId: string) => {
     setSelectedTools(prev => {
@@ -471,6 +485,24 @@ const ChatbotSetting: React.FC = () => {
     if (!chatbot) return;
     try {
       await chatbotService.unbindToolFromChatbot(chatbot.id, toolBindingId);
+      message.success('工具解绑成功');
+      fetchBoundTools(chatbot.id);
+    } catch (error) {
+      console.error('Failed to unbind tool:', error);
+      message.error('工具解绑失败');
+    }
+  };
+
+  // 无服务器概念类型（内置工具/代码脚本）的单个工具解绑：解绑整组后重绑剩余
+  const handleUnbindServerlessTool = async (bindingId: string, toolType: string, configs: any, toolId: string) => {
+    if (!chatbot) return;
+    try {
+      const key = toolType === 'builtin_tool' ? 'tool_names' : 'tool_ids';
+      const remaining = (configs?.[key] || []).filter((id: string) => id !== toolId);
+      await chatbotService.unbindToolFromChatbot(chatbot.id, bindingId);
+      if (remaining.length > 0) {
+        await chatbotService.bindToolToChatbot(chatbot.id, toolType, { [key]: remaining });
+      }
       message.success('工具解绑成功');
       fetchBoundTools(chatbot.id);
     } catch (error) {
@@ -2508,7 +2540,55 @@ const ChatbotSetting: React.FC = () => {
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {boundTools.map(server => (
+                {boundTools.map(server => {
+                  // 无服务器概念的类型：每个工具直接作为一行显示（无分组栏、无展开收起）
+                  if (isServerlessToolType(server.tool_type)) {
+                    return (
+                      <React.Fragment key={server.id}>
+                        {server.tools.map((tool: any, idx: number) => (
+                          <div key={tool.tool_id || idx} style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '12px',
+                            border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8',
+                            borderRadius: '4px',
+                            background: theme === 'dark' ? 'rgba(255, 255, 255, 0.02)' : '#fff'
+                          }}>
+                            <Avatar
+                              size={24}
+                              icon={getToolTypeIcon(server.tool_type)}
+                              style={{ backgroundColor: getToolTypeColor(server.tool_type), flexShrink: 0 }}
+                            />
+                            <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', whiteSpace: 'nowrap' }}>
+                                {tool.tool_title || tool.tool_name}
+                              </div>
+                              {tool.tool_description && (
+                                <Tooltip title={tool.tool_description}>
+                                  <div style={{ fontSize: '11px', color: theme === 'dark' ? '#aaa' : '#999', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {tool.tool_description.length > 20 ? tool.tool_description.slice(0, 20) + '...' : tool.tool_description}
+                                  </div>
+                                </Tooltip>
+                              )}
+                              <Tag color={getToolTypeColor(server.tool_type)} style={{ marginInlineEnd: 0, fontSize: '11px', lineHeight: '18px' }}>
+                                {getToolTypeIcon(server.tool_type)} {getToolTypeName(server.tool_type)}
+                              </Tag>
+                            </div>
+                            <Button
+                              type="text"
+                              icon={<DeleteOutlined />}
+                              size="small"
+                              danger
+                              onClick={() => handleUnbindServerlessTool(server.id, server.tool_type, server.configs, tool.tool_id)}
+                              title="解绑该工具"
+                            />
+                          </div>
+                        ))}
+                      </React.Fragment>
+                    );
+                  }
+                  return (
                   <div key={server.id} style={{
                     border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8',
                     borderRadius: '4px',
@@ -2521,7 +2601,7 @@ const ChatbotSetting: React.FC = () => {
                         gap: '8px',
                         padding: '12px',
                         cursor: 'pointer',
-                        borderBottom: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8'
+                        borderBottom: expandedServers.includes(server.id) ? (theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8') : 'none'
                       }}
                       onClick={() => handleToggleServerExpand(server.id)}
                     >
@@ -2594,7 +2674,8 @@ const ChatbotSetting: React.FC = () => {
                       </div>
                     )}
                   </div>
-                ))}
+                  );
+                })}
                 <Button
                   type="primary"
                   icon={<PlusOutlined />}
@@ -3939,6 +4020,45 @@ const ChatbotSetting: React.FC = () => {
                   return null;
                 }
                 
+                // 无服务器概念的类型：不渲染分组栏，工具直接平铺为独立行
+                if (isServerlessToolType(toolSelectType)) {
+                  return (
+                    <React.Fragment key={server.id}>
+                      {filteredTools.map((tool: any) => (
+                        <div key={tool.id} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '12px',
+                          border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.05)' : '1px solid #f0f0f0',
+                          borderRadius: '4px',
+                          background: theme === 'dark' ? 'rgba(255, 255, 255, 0.02)' : '#fafafa'
+                        }}>
+                          <input
+                            type="checkbox"
+                            checked={(selectedTools[server.id] || []).includes(tool.id)}
+                            onChange={() => handleToolSelect(server.id, tool.id)}
+                            style={{
+                              accentColor: 'var(--primary-color)',
+                              flexShrink: 0
+                            }}
+                          />
+                          <div style={{ fontSize: '13px', fontWeight: 500, color: theme === 'dark' ? '#fff' : '#000', whiteSpace: 'nowrap' }}>
+                            {tool.title || tool.name}
+                          </div>
+                          {(tool.description || tool.tool_description) && (
+                            <Tooltip title={tool.description || tool.tool_description}>
+                              <div style={{ flex: 1, minWidth: 0, fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#999', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}>
+                                {(tool.description || tool.tool_description).length > 20 ? (tool.description || tool.tool_description).slice(0, 20) + '...' : (tool.description || tool.tool_description)}
+                              </div>
+                            </Tooltip>
+                          )}
+                        </div>
+                      ))}
+                    </React.Fragment>
+                  );
+                }
+                
                 return (
                   <div key={server.id} style={{
                     border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8',
@@ -3952,7 +4072,7 @@ const ChatbotSetting: React.FC = () => {
                         gap: '8px',
                         padding: '12px',
                         cursor: 'pointer',
-                        borderBottom: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8'
+                        borderBottom: expandedModalServers.includes(server.id) ? (theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e8e8e8') : 'none'
                       }}
                       onClick={() => setExpandedModalServers(prev => 
                         prev.includes(server.id) 

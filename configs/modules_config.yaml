@@ -147,6 +147,7 @@ modules:
     required: false
     api_prefixes:
       - "/api_server"
+      - "/code_script"
     frontend_routes:
       - "/toolkit"
       - "/api/setting/:id"
@@ -156,6 +157,8 @@ modules:
       - "api_server_category"
       - "api_server"
       - "api"
+      - "code_script"
+      - "code_script_category"
     dependencies: []
 
   chatbot:

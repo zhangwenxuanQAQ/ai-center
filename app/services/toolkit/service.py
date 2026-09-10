@@ -4,7 +4,7 @@
 
 from datetime import datetime
 from typing import List, Optional
-from app.database.models import ToolkitCategory, MCPServer, MCPTool
+from app.database.models import ToolkitCategory, MCPServer, MCPTool, CodeScript
 from app.services.toolkit.dto import ToolkitCategoryCreate, ToolkitCategoryUpdate
 from app.database.db_utils import handle_transaction
 from app.core.exceptions import ResourceNotFoundError, DuplicateResourceError
@@ -161,6 +161,12 @@ class ToolkitCategoryService:
             return MCPServer.select().where(
                 (MCPServer.category_id.in_(all_ids)) &
                 (MCPServer.deleted == False)
+            ).count()
+        if tool_type == "code_script":
+            # 统计代码脚本数量
+            return CodeScript.select().where(
+                (CodeScript.category_id.in_(all_ids)) &
+                (CodeScript.deleted == False)
             ).count()
         # 其他类型暂无对应数据表，返回0
         return 0

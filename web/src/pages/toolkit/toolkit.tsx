@@ -6,16 +6,20 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, UpOutlined,
 import type { TreeDataNode, TreeProps } from 'antd';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import ChatMarkdown from '../../components/ChatMarkdown';
+import CodeEditor from '../../components/CodeEditor';
 import { toolkitService, BuiltinTool, BuiltinToolParam } from '../../services/toolkit';
 import { datasourceService, Datasource } from '../../services/datasource';
 import { llmModelService, LLMModel } from '../../services/llm_model';
 import { mcpService, MCPServer, MCPCategory } from '../../services/mcp';
 import ApiTool from './api_tool';
+import CodeScriptTool from './code_script_tool';
 import '../../styles/common.css';
 import './toolkit.less';
 import '../prompt/prompt_setting.less';
 import { getDefaultAvatar } from '../../utils/avatar';
-import JsonViewer from '../../components/JsonViewer';
+import ToolTestResult from '../../components/ToolTestResult';
+import type { ToolTestResultData } from '../../components/ToolTestResult';
+import ParamValueInput from '../../components/ParamValueInput';
 
 const { Sider: LeftSider, Content } = Layout;
 const { Option } = Select;
@@ -47,6 +51,62 @@ const TOOL_TYPE_COLOR: Record<string, string> = {
   api: '#52c41a',
   code_script: '#fa8c16',
   builtin_tool: '#eb2f96',
+};
+
+// 代码脚本测试默认代码模板（必须包含main方法，支持入参与**kwargs透传）
+const CODE_SCRIPT_DEFAULT_CODE = `def main(a=1, b=2, **kwargs):
+    # 代码必须包含 main 方法作为执行入口
+    # main函数的形参与params入参字典的键对应，执行时自动注入
+    # **kwargs 可接收用户传入的其余参数
+    # 仅允许导入安全模块（json/math/re/datetime/pandas/numpy等）
+    # 禁止文件读写、系统命令、网络请求等危险操作
+    return {"sum": a + b, "extra": kwargs}
+`;
+
+/**
+ * 根据main形参的默认值文本推断参数类型
+ *
+ * 1→integer，2.5→number，True/False→boolean，"text"→string，[...]→array，{...}→object
+ */
+const inferParamType = (defaultText: string | undefined): string => {
+  if (defaultText === undefined) return 'string';
+  const t = defaultText.trim();
+  if (t === 'True' || t === 'False') return 'boolean';
+  if (/^-?\d+$/.test(t)) return 'integer';
+  if (/^-?\d*\.\d+$/.test(t)) return 'number';
+  if (t.startsWith('[') && t.endsWith(']')) return 'array';
+  if (t.startsWith('{') && t.endsWith('}')) return 'object';
+  return 'string';
+};
+
+/**
+ * 从代码中解析main函数的形参列表（轻量正则实现，配合后端校验兜底）
+ *
+ * 匹配 def main(a, b=1, *args, **kwargs)，返回 [
+ *   {name: 'a', type: 'string', required: true},
+ *   {name: 'b', type: 'integer', required: false, default: '1'}
+ * ]
+ */
+const parseMainArgs = (code: string): { name: string; type: string; required: boolean; default?: any }[] => {
+  const match = code.match(/def\s+main\s*\(([^)]*)\)/);
+  if (!match) return [];
+  return match[1]
+    .split(',')
+    .map(s => s.trim())
+    .filter(s => s && !s.startsWith('*'))
+    .map(s => {
+      const eqIdx = s.indexOf('=');
+      const namePart = (eqIdx >= 0 ? s.slice(0, eqIdx) : s).trim();
+      const defaultPart = eqIdx >= 0 ? s.slice(eqIdx + 1).trim() : undefined;
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(namePart)) return null;
+      return {
+        name: namePart,
+        type: inferParamType(defaultPart),
+        required: defaultPart === undefined,
+        default: defaultPart,
+      };
+    })
+    .filter(Boolean) as { name: string; type: string; required: boolean; default?: any }[];
 };
 
 const ToolkitManagement: React.FC = () => {
@@ -86,7 +146,7 @@ const ToolkitManagement: React.FC = () => {
   const [viewDrawerVisible, setViewDrawerVisible] = useState(false);
   const [currentTool, setCurrentTool] = useState<BuiltinTool | null>(null);
   const [paramValues, setParamValues] = useState<Record<string, any>>({});
-  const [paramTestResult, setParamTestResult] = useState<{ status: 'success' | 'error'; result: any; message: string; error?: string } | null>(null);
+  const [paramTestResult, setParamTestResult] = useState<ToolTestResultData | null>(null);
   const [paramTesting, setParamTesting] = useState(false);
 
   // 数据抽取工具相关状态
@@ -621,6 +681,18 @@ const ToolkitManagement: React.FC = () => {
     const onChange = (v: any) => setParamValues({ ...paramValues, [param.name]: v });
     const isDataExtraction = currentTool?.name === 'data_extraction';
 
+    // 代码脚本工具的code参数使用代码编辑器
+    if (currentTool?.name === 'code_script' && param.name === 'code') {
+      return (
+        <CodeEditor
+          value={value}
+          onChange={onChange}
+          theme={theme}
+          showValidateButton
+        />
+      );
+    }
+
     // 数据抽取工具的特殊参数渲染
     if (isDataExtraction) {
       if (param.name === 'datasource_id') {
@@ -791,6 +863,33 @@ const ToolkitManagement: React.FC = () => {
         processedParams[param.name] = val;
       }
 
+      // code_script：将main形参的输入值组装进params字典（覆盖JSON输入方式）
+      if (currentTool.name === 'code_script') {
+        const mainParams: Record<string, any> = {};
+        let hasInvalidJson = false;
+        for (const mainParam of parseMainArgs(paramValues['code'] || '')) {
+          const val = paramValues[mainParam.name];
+          if (val === undefined || val === null || val === '') continue;
+          if (typeof val === 'string' && (mainParam.type === 'array' || mainParam.type === 'object')) {
+            try { mainParams[mainParam.name] = JSON.parse(val); } catch {
+              message.warning(`参数 "${mainParam.name}" 须为合法JSON`);
+              hasInvalidJson = true;
+            }
+          } else {
+            mainParams[mainParam.name] = val;
+          }
+        }
+        if (hasInvalidJson) {
+          setParamTesting(false);
+          return;
+        }
+        if (Object.keys(mainParams).length > 0) {
+          processedParams['params'] = mainParams;
+        } else {
+          delete processedParams['params'];
+        }
+      }
+
       const response = await fetch('/aicenter/v1/toolkit/builtin_tools/' + currentTool.name + '/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -918,10 +1017,11 @@ const ToolkitManagement: React.FC = () => {
 
   // 打开各种抽屉
   const openViewDrawer = (tool: BuiltinTool) => { setCurrentTool(tool); setViewDrawerVisible(true); };
-  const openParamTestDrawer = (tool: BuiltinTool) => { 
-    setCurrentTool(tool); 
-    setParamValues({}); 
-    setParamTestResult(null); 
+  const openParamTestDrawer = (tool: BuiltinTool) => {
+    setCurrentTool(tool);
+    // code_script 工具默认填充main函数模板
+    setParamValues(tool.name === 'code_script' ? { code: CODE_SCRIPT_DEFAULT_CODE } : {});
+    setParamTestResult(null);
     setParamTestDrawerVisible(true);
     // 如果是数据抽取工具，加载数据源列表
     if (tool.name === 'data_extraction') {
@@ -1333,6 +1433,7 @@ const ToolkitManagement: React.FC = () => {
   // 判断当前选中的工具类型
   const showMcpList = selectedToolType === 'mcp';
   const showApiList = selectedToolType === 'api';
+  const showCodeScriptList = selectedToolType === 'code_script';
   const showBuiltinTools = selectedToolType === 'builtin_tool';
 
   // 工具类型列表（内置工具放最后）
@@ -1375,6 +1476,8 @@ const ToolkitManagement: React.FC = () => {
         <Layout className="toolkit-main">
           {showApiList ? (
             <ApiTool theme={theme} />
+          ) : showCodeScriptList ? (
+            <CodeScriptTool theme={theme} />
           ) : (
             <>
           {showMcpList && (
@@ -1605,66 +1708,51 @@ const ToolkitManagement: React.FC = () => {
               <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>{currentTool.title || currentTool.name}</h3>
               <div style={{ fontSize: 13, color: theme === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)' }}>{currentTool.description}</div>
             </div>
+            {/* code_script：params按main形参逐个输入（与新增脚本界面一致的组件，置于code之前） */}
+            {currentTool.name === 'code_script' && parseMainArgs(paramValues['code'] || '').length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ marginBottom: 8, fontWeight: 500, textAlign: 'left' }}>入参设置（与main函数形参对应）：</div>
+                {parseMainArgs(paramValues['code'] || '').map(param => (
+                  <ParamValueInput
+                    key={param.name}
+                    param={param}
+                    value={paramValues[param.name]}
+                    onChange={(v) => setParamValues({ ...paramValues, [param.name]: v })}
+                    theme={theme}
+                  />
+                ))}
+              </div>
+            )}
             <Form layout="vertical">
-              {currentTool.params.map(param => (
-                <Form.Item
-                  key={param.name}
-                  label={
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span>{param.name}</span>
-                      {param.required && <span style={{ color: '#ff4d4f' }}>*</span>}
-                      <Tooltip title={param.description}>
-                        <EyeOutlined style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)', cursor: 'pointer' }} />
-                      </Tooltip>
-                    </div>
-                  }
-                  required={false}
-                >
-                  {renderParamInput(param)}
-                </Form.Item>
-              ))}
+              {currentTool.params.map(param => {
+                // code_script的params按main形参逐个输入（见上方渲染区）
+                if (currentTool.name === 'code_script' && param.name === 'params') return null;
+                return (
+                  <Form.Item
+                    key={param.name}
+                    label={
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span>{param.name}</span>
+                        {param.required && <span style={{ color: '#ff4d4f' }}>*</span>}
+                        <Tooltip title={param.description}>
+                          <EyeOutlined style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)', cursor: 'pointer' }} />
+                        </Tooltip>
+                      </div>
+                    }
+                    required={false}
+                  >
+                    {renderParamInput(param)}
+                  </Form.Item>
+                );
+              })}
             </Form>
             <Button type="primary" icon={paramTesting ? <LoadingOutlined /> : <PlayCircleOutlined />} onClick={handleParamTest} loading={paramTesting} style={{ width: '100%', marginBottom: 16 }}>
               {paramTesting ? '执行中...' : '执行测试'}
             </Button>
             {paramTestResult !== null && (
-              <div>
-                <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontWeight: 500 }}>执行结果:</span>
-                  {paramTestResult.status === 'success' ? (
-                    <Tag color="success" icon={<CheckCircleOutlined />}>执行成功</Tag>
-                  ) : (
-                    <Tag color="error" icon={<CloseCircleOutlined />}>执行失败</Tag>
-                  )}
-                  {paramTestResult.message && (
-                    <span style={{ fontSize: 12, color: theme === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)' }}>
-                      {paramTestResult.message}
-                    </span>
-                  )}
-                </div>
-                <div style={{ position: 'relative' }}>
-                  <Tooltip title="复制结果">
-                    <Button
-                      size="small"
-                      type="text"
-                      icon={<CopyOutlined />}
-                      onClick={() => {
-                        const value = paramTestResult.status === 'success'
-                          ? (typeof paramTestResult.result === 'string' ? paramTestResult.result : JSON.stringify(paramTestResult.result, null, 2))
-                          : (paramTestResult.error || paramTestResult.message || '未知错误');
-                        copyToClipboard(value, '结果');
-                      }}
-                      style={{ position: 'absolute', top: 8, right: 8, zIndex: 1, color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)' }}
-                    />
-                  </Tooltip>
-                  <div style={{ padding: 12, borderRadius: 8, background: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#f5f5f5', border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'}`, overflow: 'auto', maxHeight: 400, fontSize: 13 }}>
-                    {paramTestResult.status === 'success' ? (
-                      <JsonViewer data={paramTestResult.result} theme={theme} />
-                    ) : (
-                      <JsonViewer data={paramTestResult.error || paramTestResult.message || '未知错误'} theme={theme} />
-                    )}
-                  </div>
-                </div>
+              <div style={{ marginTop: 16 }}>
+                <div style={{ marginBottom: 8, fontWeight: 500, textAlign: 'left' }}>执行结果:</div>
+                <ToolTestResult testResult={paramTestResult} theme={theme} />
               </div>
             )}
           </div>
