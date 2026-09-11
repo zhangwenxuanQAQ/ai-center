@@ -200,75 +200,6 @@ def build_api_tool_to_openai_tool(server, api, configs: Dict[str, Any]):
     return openai_tool, runner
 
 
-def build_code_script_tool_to_openai_tool(
-    script,
-) -> Tuple[Dict[str, Any], "CustomTool"]:
-    """
-    将绑定的代码脚本转换为OpenAI tool格式及可执行工具实例。
-
-    每个脚本封装为一个独立工具：函数名使用 code_script_脚本ID（避免与内置工具重名），
-    参数schema来自脚本保存的入参定义（main形参），执行时复用内置code_script工具
-    （传入script_id执行已保存脚本）。
-
-    Args:
-        script: CodeScript数据库对象
-
-    Returns:
-        tuple: (OpenAI tool格式字典, CustomTool可执行实例)
-    """
-    from app.core.tools.custom_tool import CustomTool
-    from app.core.tools.builtin_tools.code_script import parse_params_json
-
-    func_name = f"code_script_{script.id}"
-    description = getattr(script, "description", "") or f"执行代码脚本：{script.name}"
-
-    # 从脚本保存的入参定义构建参数schema（main形参）
-    param_defs = parse_params_json(getattr(script, "params", None))
-    properties = {}
-    required = []
-    for p in param_defs:
-        if not isinstance(p, dict) or not p.get("name"):
-            continue
-        properties[p["name"]] = {
-            "type": p.get("type", "string"),
-            "description": p.get("description", ""),
-        }
-        if p.get("required"):
-            required.append(p["name"])
-
-    openai_tool = {
-        "type": "function",
-        "function": {
-            "name": func_name,
-            "description": description,
-            "parameters": {
-                "type": "object",
-                "properties": properties,
-                "required": required,
-            },
-        },
-    }
-
-    script_id = script.id
-
-    def _script_callback(**kwargs):
-        # 大模型提供的main形参值 → params字典，交由内置code_script工具执行
-        from app.core.tools import ToolRegistry
-
-        params = {k: v for k, v in kwargs.items()}
-        code_script_tool = ToolRegistry.get_tool("code_script")
-        return code_script_tool.run(script_id=script_id, params=params)
-
-    runner = CustomTool(
-        name=func_name,
-        title=getattr(script, "name", func_name),
-        description=description,
-        params=[],
-        callback=_script_callback,
-    )
-    return openai_tool, runner
-
-
 # ========== 机器人工具绑定转换 ==========
 
 
@@ -293,6 +224,7 @@ def convert_tool_bindings_to_openai_tools(
     """
     from app.core.tools import ToolRegistry
     from app.core.tools.builtin_tools.mcp_tool import McpTool
+    from app.core.tools.builtin_tools.code_script import code_script
     from app.database.models import MCPTool, ApiServer, Api, CodeScript
 
     openai_tools: List[Dict[str, Any]] = []
@@ -376,9 +308,9 @@ def convert_tool_bindings_to_openai_tools(
                 else []
             )
             for s in scripts:
-                _openai_tool, _runner = build_code_script_tool_to_openai_tool(s)
-                openai_tools.append(_openai_tool)
-                tool_map[_openai_tool["function"]["name"]] = _runner
+                script_tool = code_script.from_db_script(s)
+                openai_tools.append(script_tool.to_openai_tool())
+                tool_map[script_tool.name] = script_tool
         # skill：暂未实现聊天内调用，留作扩展点
 
     return openai_tools, tool_map

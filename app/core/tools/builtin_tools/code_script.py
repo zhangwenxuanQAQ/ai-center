@@ -730,3 +730,52 @@ class code_script(BaseTool):
             params=params,
             param_definitions=param_definitions,
         )
+
+    @classmethod
+    def from_db_script(cls, script) -> "code_script":
+        """
+        从数据库CodeScript记录创建绑定到该脚本的工具实例（供机器人聊天链路使用）
+
+        在内置code_script工具类基础上定制实例属性：
+            - name: code_script_脚本ID（避免与内置工具重名）
+            - title/description: 脚本名称/描述
+            - params: 脚本保存的入参定义（main形参），公共参数由to_openai_tool统一注入
+            - _run: 注入script_id执行该脚本，大模型只需提供main形参值
+
+        Args:
+            script: CodeScript数据库对象
+
+        Returns:
+            code_script: 绑定到指定脚本的工具实例
+        """
+        tool = cls()
+        tool.name = f"code_script_{script.id}"
+        tool.title = getattr(script, "name", "") or f"code_script_{script.id}"
+        tool.description = (
+            getattr(script, "description", "") or f"执行代码脚本：{script.name}"
+        )
+        tool.params = [
+            BaseToolParam(
+                name=p.get("name", ""),
+                type=p.get("type", "string"),
+                description=p.get("description", ""),
+                required=bool(p.get("required")),
+            )
+            for p in parse_params_json(getattr(script, "params", None))
+            if isinstance(p, dict) and p.get("name")
+        ]
+
+        script_id = str(script.id)
+        original_run = tool._run
+
+        def _script_run(**kwargs):
+            # 过滤公共参数（task_name/reasoning_content），main形参值组装为params
+            params = {
+                k: v
+                for k, v in kwargs.items()
+                if k not in ("task_name", "reasoning_content")
+            }
+            return original_run(script_id=script_id, params=params)
+
+        tool._run = _script_run
+        return tool
