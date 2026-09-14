@@ -55,6 +55,14 @@ RUN uv pip install py-spy --index-url https://mirrors.aliyun.com/pypi/simple/
 
 RUN uv pip install -r pyproject.toml --index-url https://mirrors.aliyun.com/pypi/simple/
 
+# 安装 hermes-agent 智能体引擎 CLI（PyPI 发版，--no-deps 与主项目依赖解耦）
+# 说明：hermes-agent 核心依赖（openai/pyyaml/pydantic/fastapi/httpx 等）已包含在主项目依赖中，
+# 版本冲突的依赖通过 --no-deps 规避，与本地开发环境安装方式一致
+RUN uv pip install "hermes-agent==0.19.0" --no-deps --index-url https://mirrors.aliyun.com/pypi/simple/
+
+# 智能体运行时目录（HERMES_HOME 默认指向容器内持久化目录）
+RUN mkdir -p /aicenter/data/hermes
+
 COPY app/ ./app/
 COPY configs/ ./configs/
 COPY app/core/knowledgebase/rag/res/nltk_data /root/nltk_data

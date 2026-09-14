@@ -34,6 +34,8 @@ import Datasource from './pages/datasource/datasource.tsx';
 import SystemMonitor from './pages/system/monitor/monitor.tsx';
 import Agent from './pages/agent/agent.tsx';
 import AgentSetting from './pages/agent/agent_setting.tsx';
+import HermesAgentList from './pages/agent/hermes_agent_list.tsx';
+import HermesAgentDetail from './pages/agent/hermes_agent_detail.tsx';
 import IntegrationChatPage from './integration/chat/index.tsx';
 import IntegrationSidebarPage from './integration/sidebar/index.tsx';
 import IntegrationPreviewPage from './integration/preview/index.tsx';
@@ -69,6 +71,7 @@ const routeModuleMap: Record<string, string> = {
   '/system/monitor': 'system_monitor',
   '/agents': 'agent',
   '/agent/setting/:id': 'agent',
+  '/hermes/agent/:name': 'agent',
   '/ontology/objects': 'ontology',
   '/ontology/tasks': 'ontology',
   '/task_center/tasks': 'task_center',
@@ -97,8 +100,9 @@ const routeComponents: Record<string, React.ComponentType> = {
   '/chats': Chat,
   '/datasources': Datasource,
   '/system/monitor': SystemMonitor,
-  '/agents': Agent,
+  '/agents': HermesAgentList,
   '/agent/setting/:id': AgentSetting,
+  '/hermes/agent/:name': HermesAgentDetail,
   '/ontology/objects': OntologyObject,
   '/ontology/tasks': OntologyTask,
   '/task_center/tasks': TaskCenterTask,
@@ -129,6 +133,7 @@ const breadcrumbMap: Record<string, { title: string; path?: string }[]> = {
   '/system/monitor': [{ title: '首页', path: '/' }, { title: '系统监控' }],
   '/agents': [{ title: '首页', path: '/' }, { title: '智能体' }],
   '/agent/setting/:id': [{ title: '首页', path: '/' }, { title: '智能体', path: '/agents' }, { title: '智能体配置' }],
+  '/hermes/agent/:name': [{ title: '首页', path: '/' }, { title: '智能体', path: '/agents' }, { title: '智能体详情' }],
   '/ontology/objects': [{ title: '首页', path: '/' }, { title: '本体工作台', path: '/ontology/objects' }, { title: '本体对象' }],
   '/ontology/tasks': [{ title: '首页', path: '/' }, { title: '本体工作台', path: '/ontology/objects' }, { title: '数据抽取' }],
   '/task_center/tasks': [{ title: '首页', path: '/' }, { title: '任务中心', path: '/task_center/tasks' }, { title: '任务列表' }],
@@ -137,8 +142,8 @@ const breadcrumbMap: Record<string, { title: string; path?: string }[]> = {
 
 const getBreadcrumbItems = (path: string) => {
   const matchedKey = Object.keys(breadcrumbMap).find(key => {
-    if (key.includes(':id')) {
-      const regex = new RegExp(`^${key.replace(':id', '[^/]+')}$`);
+    if (key.includes(':id') || key.includes(':name')) {
+      const regex = new RegExp(`^${key.replace(/:id|:name/g, '[^/]+')}$`);
       return regex.test(path);
     }
     return key === path;
@@ -359,6 +364,7 @@ function AppContent({ theme, toggleTheme, versionInfo, loading }: AppContentProp
               padding: 16,
               margin: 16,
               height: '100%',
+              background: theme === 'dark' ? 'linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%)' : '#f5f7fa',
               color: theme === 'dark' ? '#e0e0e0' : '#333333',
               display: 'flex',
               flexDirection: 'column',

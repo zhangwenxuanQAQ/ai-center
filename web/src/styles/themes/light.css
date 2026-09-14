@@ -73,7 +73,7 @@ body[data-theme="light"] .ant-card:not([data-card-type="model"]) {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
 }
 
-body[data-theme="light"] .ant-card:not([data-card-type="model"]):hover {
+body[data-theme="light"] .ant-card:not([data-card-type="model"]):not(.no-hover-card):hover {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08) !important;
   transform: translateY(-3px) !important;
   border-color: #e0e0e0 !important;

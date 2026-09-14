@@ -85,3 +85,7 @@ tavily>=0.3.0
 
 # SQL解析
 sqlparse
+
+# 智能体引擎（PyPI 发版，与主项目依赖存在版本冲突，不可直接声明为依赖）
+# 安装方式：uv pip install "hermes-agent==0.19.0" --no-deps
+# 详见 docker/Dockerfile 中的安装说明

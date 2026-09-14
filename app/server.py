@@ -1866,19 +1866,24 @@ logger.info("\n" + "=" * 80)
 logger.info("[阶段3/4] 注册智能体组件")
 logger.info("=" * 80)
 
-logger.info("\n[COMPONENT] 正在注册智能体组件...")
-try:
-    from app.core.agent.component import register_components
-    
-    result = register_components()
-    logger.info(f"[COMPONENT] 组件注册完成:")
-    logger.info(f"  - 新增组件: {result['added']} 个")
-    logger.info(f"  - 更新组件: {result['updated']} 个")
-    logger.info(f"  - 失败组件: {result['failed']} 个")
-    logger.info(f"  - 扫描组件总数: {result['total']} 个")
-    logger.info("[COMPONENT] ✅ 智能体组件注册成功")
-except Exception as e:
-    logger.error(f"[COMPONENT] ❌ 智能体组件注册失败: {e}")
+# 智能体引擎已切换为 hermes_agent，旧组件注册逻辑保留但不再启动时执行
+# 如需恢复旧组件注册，取消下方注释即可
+logger.info("\n[COMPONENT] 智能体引擎已切换为 hermes_agent，跳过旧组件注册")
+_OLD_COMPONENT_REGISTER_ENABLED = False
+if _OLD_COMPONENT_REGISTER_ENABLED:
+    logger.info("\n[COMPONENT] 正在注册智能体组件...")
+    try:
+        from app.core.agent.component import register_components
+
+        result = register_components()
+        logger.info(f"[COMPONENT] 组件注册完成:")
+        logger.info(f"  - 新增组件: {result['added']} 个")
+        logger.info(f"  - 更新组件: {result['updated']} 个")
+        logger.info(f"  - 失败组件: {result['failed']} 个")
+        logger.info(f"  - 扫描组件总数: {result['total']} 个")
+        logger.info("[COMPONENT] ✅ 智能体组件注册成功")
+    except Exception as e:
+        logger.error(f"[COMPONENT] ❌ 智能体组件注册失败: {e}")
 
 # MCP服务和文档切片任务执行器将由启动脚本启动
 mcp_enabled = config.config.get('mcp', {}).get('enabled', False)

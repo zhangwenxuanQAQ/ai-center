@@ -30,6 +30,7 @@ from .ontology import router as ontology_router
 from .task_center import router as task_center_router
 from .skill import router as skill_router
 from .skill_category import router as skill_category_router
+from .hermes_agent import router as hermes_agent_router
 
 # 版本配置路由（始终注册，不依赖任何模块）
 _version_router = APIRouter()
@@ -60,7 +61,7 @@ _module_routes = {
     'chat': [(chat_router, "/chat", "chat")],
     'datasource': [(datasource_router, "/datasource", "datasource"), (datasource_category_router, "/datasource_category", "datasource_category")],
     'system_monitor': [(system_monitor_router, "/system", "system")],
-    'agent': [(agent_router, "/agent", "agent")],
+    'agent': [(agent_router, "/agent", "agent"), (hermes_agent_router, "/agent", "hermes_agent")],
     'integration': [(integration_management_router, "/integration", "integration")],
     'ontology': [(ontology_router, "/ontology", "ontology")],
     'task_center': [(task_center_router, "/task_center", "task_center")],

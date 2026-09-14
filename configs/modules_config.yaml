@@ -205,13 +205,14 @@ modules:
 
   agent:
     name: "智能体"
-    description: "Agent工作流编排"
+    description: "智能体管理（hermes_agent 引擎）"
     required: false
     api_prefixes:
       - "/agent"
     frontend_routes:
       - "/agents"
       - "/agent/setting/:id"
+      - "/hermes/agent/:name"
     menu_keys:
       - "agent"
     database_tables:

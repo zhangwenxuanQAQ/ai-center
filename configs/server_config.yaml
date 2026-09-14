@@ -34,6 +34,10 @@ rustfs:
   password: 'rustfsadmin'
   host: '10.9.44.5'
   port: 9000
+agent_engine:
+  hermes_agent:
+    hermes_home: 'F:\hermes_data'   # hermes 智能体根目录（HERMES_HOME）
+    hermes_bin: ''                  # hermes CLI 路径，留空则使用 .venv\Scripts\hermes.exe
 web_search_engine:
   host: '10.9.44.5'
   port: 18080

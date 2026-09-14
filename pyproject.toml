@@ -65,6 +65,10 @@ dependencies = [
     "sqlparse",
     "black>=26.5.1",
 ]
+# 注意：智能体引擎 hermes-agent 从 PyPI 安装（--no-deps 与主项目依赖解耦），
+# 因其部分锁定版本与本项目依赖冲突，不可声明为直接依赖。
+# 安装方式（本地开发与 Docker 镜像构建均适用）：
+#   uv pip install "hermes-agent==0.19.0" --no-deps
 
 [tool.setuptools.packages.find]
 where = ["app"]

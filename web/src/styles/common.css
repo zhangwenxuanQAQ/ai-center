@@ -61,7 +61,72 @@ body[data-theme="dark"] .page-container {
 }
 
 body[data-theme="light"] .page-container {
+  background: var(--light-bg-card);
+}
+
+/* 页面通过 dark/light class 指定主题时的背景色 */
+.page-container.dark {
+  background: linear-gradient(rgb(26, 26, 46) 0%, rgb(15, 15, 26) 100%);
+}
+
+.page-container.light {
+  background: var(--light-bg-card);
+}
+
+/* 智能体列表内容区（卡片/表格容器，可滚动，分页栏固定底部） */
+.agent-list-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.agent-list-body .ant-spin-nested-loading,
+.agent-list-body .ant-spin-container {
+  height: 100%;
+}
+
+.list-spin {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.list-spin .ant-spin-nested-loading {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.list-spin .ant-spin-container {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 智能体列表分页栏（居中固定底部，带主题背景色与上边框） */
+.agent-list-pagination {
+  padding: 12px 24px;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.agent-list-pagination.dark {
+  background: linear-gradient(rgb(26, 26, 46) 0%, rgb(15, 15, 26) 100%);
+  border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+.agent-list-pagination.light {
   background: var(--light-bg-primary);
+  border-top-color: rgba(0, 0, 0, 0.08);
+}
+
+/* 智能体详情页头像悬停遮罩（显示上传图标） */
+.page-container .ant-upload-wrapper:hover .avatar-hover-mask,
+.page-container .ant-upload-wrapper .ant-upload:hover .avatar-hover-mask {
+  opacity: 1;
 }
 
 .ant-layout-content{
@@ -184,6 +249,13 @@ body[data-theme="dark"] .ant-tree {
   align-items: center;
   background: transparent !important;
   padding: 0 8px !important;
+}
+
+/* 展开收起图标与节点名称垂直居中对齐（treenode 高 36px 时默认 line-height 24px 会导致图标偏上） */
+.ant-tree-switcher {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
 }
 
 .tree-row {
@@ -373,16 +445,23 @@ body[data-theme="dark"] .ant-card:not([data-card-type="model"]) {
   border-width: 1px;
 }
 
-body[data-theme="light"] .ant-card:not([data-card-type="model"]):hover {
+body[data-theme="light"] .ant-card:not([data-card-type="model"]):not(.no-hover-card):hover {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
   transform: translateY(-3px);
   border-color: #e0e0e0;
 }
 
-body[data-theme="dark"] .ant-card:not([data-card-type="model"]):hover {
+body[data-theme="dark"] .ant-card:not([data-card-type="model"]):not(.no-hover-card):hover {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
   transform: translateY(-3px);
   border-color: rgba(90, 111, 214, 0.3);
+}
+
+/* 详情页头像上传：去除夜间主题下 Upload 默认边框（className 加在 wrapper 上） */
+body[data-theme="dark"] .page-container .ant-upload-wrapper.avatar-upload .ant-upload,
+body[data-theme="dark"] .page-container .ant-upload-wrapper.avatar-upload .ant-upload:hover {
+  background: transparent !important;
+  border: none !important;
 }
 
 body .ant-card[data-card-type="model"] {

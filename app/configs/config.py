@@ -58,10 +58,21 @@ class Config:
             'port': 'RUSTFS_PORT'
         })
         
+        self.agent_engine = self._get_section('agent_engine', {
+        })
+
         self.logging = self._get_section('logging', {
             'level': 'LOG_LEVEL',
             'format': 'LOG_FORMAT'
         })
+
+        # hermes 智能体引擎配置（agent_engine.hermes_agent.*）
+        hermes_cfg = self.agent_engine.get('hermes_agent', {}) or {}
+        self.hermes_agent = {
+            'hermes_home': hermes_cfg.get('hermes_home') or os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data', 'hermes'),
+            'hermes_bin': hermes_cfg.get('hermes_bin') or '',
+        }
     
     def _get_section(self, section_name, env_mapping):
         """
