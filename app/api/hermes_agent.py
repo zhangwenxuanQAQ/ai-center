@@ -59,6 +59,23 @@ class HermesSkillNodeRename(BaseModel):
     new_name: str = Field(..., min_length=1, max_length=255, description="新名称（仅名称部分）")
 
 
+class HermesSkillToggle(BaseModel):
+    """停用/启用技能 DTO"""
+    enabled: bool = Field(..., description="true=启用 false=停用")
+
+
+class HermesToolToggle(BaseModel):
+    """停用/启用工具集 DTO"""
+    enabled: bool = Field(..., description="true=启用 false=停用")
+
+
+class HermesSkillCreate(BaseModel):
+    """新增技能 DTO"""
+    name: str = Field(..., min_length=1, max_length=64, description="技能名称（作为目录名与 frontmatter name）")
+    category: Optional[str] = Field(None, max_length=64, description="技能分类（skills 下的一级目录名，空则使用 custom）")
+    description: Optional[str] = Field(None, max_length=500, description="技能描述")
+
+
 def _handle_error(e: Exception) -> ApiResponse:
     """统一异常处理"""
     if isinstance(e, HermesAgentError):
@@ -255,6 +272,47 @@ def list_hermes_skills(agent_name: str):
         return _handle_error(e)
 
 
+@router.post("/hermes/agents/{agent_name}/skills/create", response_model=ApiResponse)
+def create_hermes_skill(agent_name: str, body: HermesSkillCreate):
+    """
+    新增技能（创建 skills/<category>/<name>/SKILL.md）
+    """
+    try:
+        data = hermes_service.create_skill(
+            name=agent_name,
+            skill_dir=body.name,
+            category=body.category,
+            description=body.description,
+        )
+        return ResponseUtil.success(data=data, message="技能创建成功")
+    except Exception as e:
+        return _handle_error(e)
+
+
+@router.post("/hermes/agents/{agent_name}/skills/{category}/{skill}/toggle", response_model=ApiResponse)
+def toggle_hermes_skill(agent_name: str, category: str, skill: str, body: HermesSkillToggle):
+    """
+    停用/启用技能（写入 config.yaml 的 skills.disabled）
+    """
+    try:
+        data = hermes_service.toggle_skill(agent_name, category, skill, body.enabled)
+        return ResponseUtil.success(data=data, message="技能状态更新成功")
+    except Exception as e:
+        return _handle_error(e)
+
+
+@router.post("/hermes/agents/{agent_name}/skills/{category}/{skill}/remove", response_model=ApiResponse)
+def delete_hermes_skill(agent_name: str, category: str, skill: str):
+    """
+    删除技能（移除整个技能目录并清理停用列表）
+    """
+    try:
+        data = hermes_service.delete_skill(agent_name, category, skill)
+        return ResponseUtil.success(data=data, message="技能删除成功")
+    except Exception as e:
+        return _handle_error(e)
+
+
 # ==================== 技能文件接口 ====================
 
 @router.get("/hermes/agents/{agent_name}/skills/{category}/{skill}/tree", response_model=ApiResponse)
@@ -358,5 +416,17 @@ def list_hermes_tools(agent_name: str):
     """
     try:
         return ResponseUtil.success(data=hermes_service.list_tools(agent_name), message="获取工具集列表成功")
+    except Exception as e:
+        return _handle_error(e)
+
+
+@router.post("/hermes/agents/{agent_name}/tools/{tool_name}/toggle", response_model=ApiResponse)
+def toggle_hermes_tool(agent_name: str, tool_name: str, body: HermesToolToggle):
+    """
+    停用/启用工具集（写入 config.yaml 的 platform_toolsets）
+    """
+    try:
+        data = hermes_service.toggle_tool(agent_name, tool_name, body.enabled)
+        return ResponseUtil.success(data=data, message="工具状态更新成功")
     except Exception as e:
         return _handle_error(e)

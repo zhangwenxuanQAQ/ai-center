@@ -146,6 +146,7 @@ body[data-theme="light"] .ant-layout-content {
   height: 100% !important;
   min-height: 0 !important;
   flex: 1 !important;
+  overflow-y: auto;
 }
 
 .ant-tabs-tabpane {
@@ -158,6 +159,37 @@ body[data-theme="light"] .ant-layout-content {
   height: 100% !important;
   min-height: 0 !important;
   flex: 1 !important;
+}
+
+/* 详情页 Tabs 容器：tabpane 内容纵向滚动（MDEditor 等固定高度组件不滚动） */
+.detail-tabs-scroll > .ant-tabs {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-tabs-scroll > .ant-tabs > .ant-tabs-nav {
+  flex-shrink: 0;
+}
+
+.detail-tabs-scroll .ant-tabs-content-holder {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.detail-tabs-scroll .ant-tabs-content {
+  display: flex;
+  flex-direction: column;
+  height: auto !important;
+  overflow: visible;
+}
+
+/* tabpane 内容容器内边距 */
+.detail-tabs-scroll .ant-tabs-tabpane {
+  padding: 5px;
+  box-sizing: border-box;
 }
 
 .pagination {

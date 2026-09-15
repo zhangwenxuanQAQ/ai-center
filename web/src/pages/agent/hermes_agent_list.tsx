@@ -9,6 +9,7 @@ import {
   AppstoreOutlined, BarsOutlined, LockOutlined, CheckCircleOutlined,
   ClockCircleOutlined, RobotOutlined, ThunderboltOutlined,
   AppstoreAddOutlined, FolderOpenOutlined, UploadOutlined, PictureOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons';
 import type { UploadProps } from 'antd';
 import { hermesAgentService, HermesAgent } from '../../services/hermes_agent';
@@ -16,6 +17,18 @@ import { getProviderAvatar } from '../../utils/avatar';
 
 const { Option } = Select;
 const { TextArea } = Input;
+
+/**
+ * 列表数据缓存（模块级，跨路由挂载保留）：
+ * 从详情页返回主页时直接复用上次的查询结果，避免重新请求；
+ * 点击刷新按钮或增删改后强制重查并更新缓存
+ */
+const agentListCache = {
+  loaded: false,
+  name: '' as string | undefined,
+  desc: '' as string | undefined,
+  data: [] as HermesAgent[],
+};
 
 /**
  * Hermes 智能体列表页
@@ -42,6 +55,8 @@ const HermesAgentList: React.FC = () => {
   const [editForm] = Form.useForm();
   // 记录上次搜索条件，失焦时仅在内容变化才触发查询
   const lastSearchRef = useRef({ name: '', desc: '' });
+  // 初始化 effect 是否已执行（防 StrictMode 双执行）
+  const initEffectDoneRef = useRef(false);
 
   // 主题监听（与模型管理页一致）
   useEffect(() => {
@@ -55,15 +70,18 @@ const HermesAgentList: React.FC = () => {
     return () => observer.disconnect();
   }, []);
 
-  /** 加载智能体列表 */
+  /** 加载智能体列表（成功后写入模块级缓存） */
   const loadAgents = async (name?: string, desc?: string) => {
     setLoading(true);
     try {
-      const data = await hermesAgentService.getAgents(
-        name ?? (searchName || undefined),
-        desc ?? (searchDesc || undefined)
-      );
+      const nameQuery = name ?? (searchName || undefined);
+      const descQuery = desc ?? (searchDesc || undefined);
+      const data = await hermesAgentService.getAgents(nameQuery, descQuery);
       setAgents(data);
+      agentListCache.loaded = true;
+      agentListCache.name = nameQuery;
+      agentListCache.desc = descQuery;
+      agentListCache.data = data;
     } catch (e) {
       // request 工具已统一提示错误
     } finally {
@@ -72,7 +90,18 @@ const HermesAgentList: React.FC = () => {
   };
 
   useEffect(() => {
-    loadAgents();
+    // StrictMode 下 effect 会执行两次，ref 在双执行间保留，避免重复请求/重复回填
+    if (initEffectDoneRef.current) return;
+    initEffectDoneRef.current = true;
+    if (agentListCache.loaded) {
+      // 复用缓存（从详情页返回），不重新请求
+      setAgents(agentListCache.data);
+      if (agentListCache.name) setSearchName(agentListCache.name);
+      if (agentListCache.desc) setSearchDesc(agentListCache.desc);
+      lastSearchRef.current = { name: agentListCache.name || '', desc: agentListCache.desc || '' };
+    } else {
+      loadAgents();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -510,6 +539,13 @@ const HermesAgentList: React.FC = () => {
           />
         </Space>
         <Space>
+          <Tooltip title="刷新列表">
+            <Button
+              icon={<ReloadOutlined />}
+              loading={loading}
+              onClick={() => loadAgents()}
+            />
+          </Tooltip>
           <Segmented
             value={viewMode}
             onChange={(v) => setViewMode(v as 'table' | 'card')}

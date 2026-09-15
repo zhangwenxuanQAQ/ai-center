@@ -12,6 +12,7 @@ import os
 import re
 import subprocess
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
 
@@ -129,21 +130,60 @@ class HermesAgentService:
         from datetime import datetime
         return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
 
-    def _get_tool_count(self, agent_dir: Path) -> int:
+    def _list_toolsets_inproc(self, agent_dir: Path):
         """
-        统计智能体工具集数量（通过 CLI 输出，与 list_tools 解析逻辑一致）
+        进程内解析智能体的工具集列表（避免 CLI 子进程冷启动开销约 2s/次）
 
-        CLI 失败时降级为 0（不影响列表展示）
+        与 hermes CLI `tools list` 输出保持一致：
+        有效可配置工具集（built-in + plugin）按 platform 过滤，
+        enabled 通过 _get_platform_tools 解析 config.yaml 得到。
+
+        Returns:
+            list[dict]: [{"name", "description", "enabled", "sub_tools"}, ...]，异常时返回 None
         """
         try:
-            output = self.run_hermes(["tools", "list"], home=str(agent_dir), timeout=30)
-        except HermesAgentError:
-            return 0
-        count = 0
-        for line in output.splitlines():
-            if re.match(r"^[✓✗]\s+(enabled|disabled)\s+\S+\s+", line.strip()):
-                count += 1
-        return count
+            from hermes_cli.tools_config import (
+                _get_effective_configurable_toolsets,
+                _get_platform_tools,
+                _toolset_allowed_for_platform,
+            )
+        except ImportError:
+            return None
+
+        try:
+            with self._with_agent_home(agent_dir):
+                from hermes_cli.config import load_config
+                config = load_config()
+
+                # 与 CLI tools list 一致：统一按 cli 平台过滤与解析 enabled
+                platform = "cli"
+                enabled_toolsets = set(
+                    _get_platform_tools(
+                        config, platform, include_default_mcp_servers=False
+                    )
+                )
+                tools = [
+                    {
+                        "name": ts_key,
+                        "description": label,
+                        "enabled": ts_key in enabled_toolsets,
+                        "sub_tools": subs,
+                    }
+                    for ts_key, label, subs in _get_effective_configurable_toolsets()
+                    if _toolset_allowed_for_platform(ts_key, platform)
+                ]
+                return tools
+        except Exception:
+            return None
+
+    def _get_tool_count(self, agent_dir: Path) -> int:
+        """
+        统计智能体工具集数量（进程内解析，与 list_tools 逻辑一致）
+
+        解析失败时降级为 0（不影响列表展示）
+        """
+        tools = self._list_toolsets_inproc(agent_dir)
+        return len(tools) if tools is not None else 0
 
     def agent_exists(self, name: str) -> bool:
         """检查智能体是否存在"""
@@ -164,6 +204,25 @@ class HermesAgentService:
             raise HermesAgentError(f"智能体名称不合法：{name}（仅允许小写字母、数字、连字符）")
         if name == DEFAULT_AGENT_NAME:
             raise HermesAgentError("default 为保留名称，不可使用")
+
+    @contextmanager
+    def _with_agent_home(self, agent_dir):
+        """
+        临时将 HERMES_HOME 指向智能体目录的上下文管理器
+
+        使 hermes_cli 的进程内调用（load_config/list_profiles 等）
+        读写该智能体的 config.yaml 等文件，结束后恢复原值。
+        """
+        env_backup = os.environ.get("HERMES_HOME")
+        os.environ["HERMES_HOME"] = str(agent_dir)
+        try:
+            yield
+        finally:
+            if env_backup is None:
+                os.environ.pop("HERMES_HOME", None)
+            else:
+                os.environ["HERMES_HOME"] = env_backup
+
 
     def run_hermes(self, args: list, home: Optional[str] = None, timeout: int = 60) -> str:
         """
@@ -242,30 +301,30 @@ class HermesAgentService:
         """
         获取智能体列表（含描述、模型、统计信息）
 
-        解析 `hermes profile list` 表格输出获取基础列表，
-        再通过文件系统直接补充详情字段（避免逐个调用 CLI 详情）
+        进程内直接调用 hermes_cli.profiles.list_profiles（避免 CLI 子进程
+        冷启动开销约 2s/次）；CLI 模块不可用时降级为目录扫描。
+        active 状态读取 hermes root 的 active_profile 文件。
         """
         try:
-            output = self.run_hermes(["profile", "list"])
-        except HermesAgentError:
-            # CLI 不可用时降级为目录扫描
+            from hermes_cli import profiles as hermes_profiles
+        except ImportError:
             return self._list_agents_from_fs()
 
-        agents = []
-        # 表格行格式： "◆default         —   stopped   —   —" 或 " test_zwx  Qwen3.8-27B ..."
-        for line in output.splitlines():
-            line = line.rstrip()
-            if not line.strip():
-                continue
-            active = line.strip().startswith("◆")
-            stripped = line.strip().lstrip("◆").strip()
-            if not stripped or stripped.startswith("Profile") or stripped.startswith("─"):
-                continue
-            name = stripped.split()[0] if stripped.split() else ""
-            if not name or name == "Profile":
-                continue
-            agents.append(self._build_agent_summary(name, active))
-        return agents
+        with self._with_agent_home(self.hermes_home):
+            try:
+                infos = hermes_profiles.list_profiles()
+                try:
+                    active_name = hermes_profiles.get_active_profile()
+                except Exception:
+                    active_name = ""
+            except Exception:
+                # CLI 内部异常时降级为目录扫描
+                return self._list_agents_from_fs()
+
+        return [
+            self._build_agent_summary(info.name, info.name == active_name)
+            for info in infos
+        ]
 
     def _build_agent_summary(self, name: str, is_active: bool = False) -> dict:
         """组装单个智能体的摘要信息（列表页展示用）"""
@@ -563,7 +622,8 @@ class HermesAgentService:
 
         技能目录为两级结构 skills/<category>/<skill>/SKILL.md，
         直接扫描文件系统读取（profile 下 CLI 不返回 builtin 技能，且需要分类信息）；
-        SKILL.md 的 frontmatter 中解析 name/description 作为展示信息。
+        SKILL.md 的 frontmatter 中解析 name/description 作为展示信息，
+        停用状态读取 config.yaml 的 skills.disabled（按技能名称匹配）。
         """
         self._check_agent_exists(name)
         skills = []
@@ -571,6 +631,7 @@ class HermesAgentService:
         if not skills_dir.is_dir():
             return skills
 
+        disabled = self._get_disabled_skills(name)
         for skill_md in sorted(skills_dir.rglob("SKILL.md")):
             # .hub 为技能市场索引缓存，跳过
             if ".hub" in skill_md.parts:
@@ -578,17 +639,26 @@ class HermesAgentService:
             rel = skill_md.relative_to(skills_dir)
             if len(rel.parts) != 3:
                 continue
-            category, skill_name, _ = rel.parts
+            category, dir_name, _ = rel.parts
             meta = self._parse_skill_meta(skill_md)
+            display_name = meta.get("name") or dir_name
+            try:
+                # ctime 在 Windows 为创建时间，Linux 为 inode 变更时间，均作近似
+                created_at = skill_md.stat().st_ctime
+            except OSError:
+                created_at = 0.0
             skills.append({
-                "name": meta.get("name") or skill_name,
-                "dir_name": skill_name,
+                "name": display_name,
+                "dir_name": dir_name,
                 "category": category,
                 "description": meta.get("description", ""),
                 "source": "local",
                 "trust": "",
-                "status": "enabled",
+                "status": "disabled" if display_name in disabled else "enabled",
+                "created_at": self._format_ts(created_at),
             })
+        # 按创建时间倒序（新创建的排前面），无时间的按名称排后面
+        skills.sort(key=lambda s: (s.get("created_at") or "", s.get("name") or ""), reverse=True)
         return skills
 
     @staticmethod
@@ -614,42 +684,187 @@ class HermesAgentService:
 
     def list_tools(self, name: str) -> list:
         """
-        获取智能体工具集列表
+        获取智能体工具集列表（进程内解析，与 CLI tools list 输出一致）
 
-        通过 HERMES_HOME 指向智能体目录执行 hermes tools list；
-        名称/描述/子工具从 CLI 的 CONFIGURABLE_TOOLSETS 注册表补全。
+        失败/模块不可用时返回空列表。
         """
         self._check_agent_exists(name)
+        tools = self._list_toolsets_inproc(self.get_agent_dir(name))
+        return tools if tools is not None else []
+
+    # ==================== 技能/工具停用启用 ====================
+
+    @staticmethod
+    def _normalize_skill_names(values) -> set:
+        """将配置值规范化为技能名称集合（None=空，标量=单项）"""
+        if values is None:
+            return set()
+        if isinstance(values, str):
+            values = [values]
+        try:
+            return {str(v).strip() for v in values if str(v).strip()}
+        except TypeError:
+            return set()
+
+    def _get_disabled_skills(self, name: str) -> set:
+        """读取 config.yaml 的 skills.disabled（全局停用列表）"""
+        data = self._read_model_config(name)
+        skills_cfg = data.get("skills") or {}
+        if not isinstance(skills_cfg, dict):
+            return set()
+        return self._normalize_skill_names(skills_cfg.get("disabled"))
+
+    def toggle_skill(self, name: str, category: str, skill_dir: str, enabled: bool) -> dict:
+        """
+        停用/启用技能（读写 config.yaml 的 skills.disabled）
+
+        停用列表按 SKILL.md frontmatter 中的技能名称（展示名）匹配，
+        与 hermes CLI 的 get_disabled_skills 机制保持一致。
+        """
+        self._check_agent_exists(name)
+        skill_root = self.get_agent_dir(name) / "skills" / category / skill_dir
+        if not skill_root.is_dir():
+            raise ResourceNotFoundError(f"技能 {category}/{skill_dir} 不存在")
+        meta = self._parse_skill_meta(skill_root / "SKILL.md")
+        display_name = meta.get("name") or skill_dir
+
+        data = self._read_model_config(name)
+        skills_cfg = data.setdefault("skills", {})
+        if not isinstance(skills_cfg, dict):
+            skills_cfg = {}
+            data["skills"] = skills_cfg
+        disabled = self._normalize_skill_names(skills_cfg.get("disabled"))
+        if enabled:
+            disabled.discard(display_name)
+        else:
+            disabled.add(display_name)
+        skills_cfg["disabled"] = sorted(disabled)
+
+        target = self.get_agent_dir(name) / "config.yaml"
+        target.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+        return {"name": display_name, "enabled": enabled}
+
+    def toggle_tool(self, name: str, tool_name: str, enabled: bool) -> dict:
+        """
+        停用/启用工具集（读写 config.yaml 的 platform_toolsets）
+
+        与 hermes CLI / 官方 Web 端的 tools toggle 机制保持一致：
+        通过 _get_platform_tools 读取当前启用集合（含平台默认展开），
+        增删目标工具后经 _save_platform_tools 写回（保留 MCP 条目等）。
+        """
+        self._check_agent_exists(name)
+        try:
+            from hermes_cli.tools_config import (
+                _get_effective_configurable_toolsets,
+                _get_platform_tools,
+                _save_platform_tools,
+                _toolset_configuration_platform,
+            )
+        except ImportError as e:
+            raise HermesAgentError(f"hermes CLI 模块不可用：{e}")
+
+        valid = {ts_key for ts_key, _, _ in _get_effective_configurable_toolsets()}
+        if tool_name not in valid:
+            raise HermesAgentError(f"未知的工具集：{tool_name}")
+
         agent_dir = self.get_agent_dir(name)
-        try:
-            output = self.run_hermes(["tools", "list"], home=str(agent_dir), timeout=30)
-        except HermesAgentError:
-            return []
+        # HERMES_HOME 指向智能体目录，使 load_config/save_config 读写其 config.yaml
+        with self._with_agent_home(agent_dir):
+            from hermes_cli.config import load_config
+            data = load_config()
+            platform = _toolset_configuration_platform(tool_name)
+            enabled_set = set(
+                _get_platform_tools(data, platform, include_default_mcp_servers=False)
+            )
+            if enabled:
+                enabled_set.add(tool_name)
+            else:
+                enabled_set.discard(tool_name)
+            _save_platform_tools(data, platform, enabled_set)
+        return {"name": tool_name, "enabled": enabled}
 
-        # 工具集注册表：key -> (label, sub_tools 描述)
-        registry: dict = {}
-        try:
-            from hermes_cli.tools_config import CONFIGURABLE_TOOLSETS
-            registry = {key: (label, subs) for key, label, subs in CONFIGURABLE_TOOLSETS}
-        except Exception:
-            registry = {}
+    # ==================== 技能新增/删除 ====================
 
-        tools = []
-        # 行格式： "✓ enabled  web  🔍 Web Search & Scraping" 或 "✗ disabled  video  🎬 Video Analysis"
-        for line in output.splitlines():
-            stripped = line.strip()
-            m = re.match(r"^[✓✗]\s+(enabled|disabled)\s+(\S+)\s+(.*)$", stripped)
-            if not m:
-                continue
-            enabled = m.group(1) == "enabled"
-            tool_key = m.group(2)
-            tools.append({
-                "name": tool_key,
-                "description": m.group(3).strip(),
-                "enabled": enabled,
-                "sub_tools": registry.get(tool_key, ("", ""))[1],
-            })
-        return tools
+    # 技能目录名规则（与 hermes CLI 的 VALID_NAME_RE 一致）
+    SKILL_NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+
+    def create_skill(self, name: str, skill_dir: str, category: str, description: str) -> dict:
+        """
+        新增技能（创建 skills/<category>/<skill_dir>/SKILL.md）
+
+        目录名按 hermes CLI 规则校验（小写字母、数字、点、下划线、连字符）；
+        SKILL.md 写入 name/description frontmatter 与正文模板。
+        """
+        self._check_agent_exists(name)
+        skill_dir = (skill_dir or "").strip()
+        if not skill_dir:
+            raise HermesAgentError("技能名称不能为空")
+        if len(skill_dir) > 64:
+            raise HermesAgentError("技能名称超过 64 个字符")
+        if not self.SKILL_NAME_PATTERN.match(skill_dir):
+            raise HermesAgentError(
+                f"技能名称不合法：{skill_dir}（仅允许小写字母、数字、点、下划线、连字符，且以字母或数字开头）"
+            )
+        category = (category or "").strip()
+        if category:
+            if "/" in category or "\\" in category:
+                raise HermesAgentError("技能分类必须是单个目录名")
+            if len(category) > 64 or not self.SKILL_NAME_PATTERN.match(category):
+                raise HermesAgentError(
+                    f"技能分类不合法：{category}（仅允许小写字母、数字、点、下划线、连字符）"
+                )
+
+        skill_root = self.get_agent_dir(name) / "skills" / (category or "custom") / skill_dir
+        if skill_root.exists():
+            raise HermesAgentError(f"同名技能已存在：{(category or 'custom')}/{skill_dir}")
+
+        description = (description or "").strip()
+        skill_md = [
+            "---",
+            f"name: {skill_dir}",
+            f"description: {description or skill_dir}",
+            "---",
+            "",
+            f"# {skill_dir}",
+            "",
+            description or "在此编写技能的具体指令与流程。",
+            "",
+        ]
+        skill_root.mkdir(parents=True, exist_ok=True)
+        (skill_root / "SKILL.md").write_text("\n".join(skill_md), encoding="utf-8")
+        return {
+            "name": skill_dir,
+            "dir_name": skill_dir,
+            "category": category or "custom",
+            "description": description,
+        }
+
+    def delete_skill(self, name: str, category: str, skill_dir: str) -> dict:
+        """删除技能目录（含停用列表清理）"""
+        self._check_agent_exists(name)
+        skill_root = self.get_agent_dir(name) / "skills" / category / skill_dir
+        if not skill_root.is_dir():
+            raise ResourceNotFoundError(f"技能 {category}/{skill_dir} 不存在")
+        meta = self._parse_skill_meta(skill_root / "SKILL.md")
+        display_name = meta.get("name") or skill_dir
+
+        import shutil
+        shutil.rmtree(skill_root)
+        # 清理空的分类目录
+        category_dir = skill_root.parent
+        if category_dir.parent.name == "skills" and category_dir.exists() and not any(category_dir.iterdir()):
+            category_dir.rmdir()
+        # 从停用列表移除已删除的技能名
+        data = self._read_model_config(name)
+        skills_cfg = data.get("skills")
+        if isinstance(skills_cfg, dict):
+            disabled = self._normalize_skill_names(skills_cfg.get("disabled"))
+            if display_name in disabled:
+                disabled.discard(display_name)
+                skills_cfg["disabled"] = sorted(disabled)
+                target = self.get_agent_dir(name) / "config.yaml"
+                target.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+        return {"name": display_name, "category": category, "deleted": True}
 
     # ==================== 文件内容读写 ====================
 

@@ -40,6 +40,8 @@ export interface HermesSkill {
   source?: string;
   trust?: string;
   status?: string;
+  /** 创建时间（ISO8601 字符串，用于排序） */
+  created_at?: string;
 }
 
 /** 技能目录树节点 */
@@ -174,6 +176,36 @@ export const hermesAgentService = {
   },
 
   /**
+   * 新增技能（创建 skills/<category>/<name>/SKILL.md）
+   */
+  createSkill: async (name: string, data: { name: string; category?: string; description?: string }): Promise<HermesSkill> => {
+    return http.post<HermesSkill>(
+      `/aicenter/v1/agent/hermes/agents/${encodeURIComponent(name)}/skills/create`,
+      data
+    );
+  },
+
+  /**
+   * 停用/启用技能
+   */
+  toggleSkill: async (name: string, category: string, skill: string, enabled: boolean): Promise<{ name: string; enabled: boolean }> => {
+    return http.post<{ name: string; enabled: boolean }>(
+      `/aicenter/v1/agent/hermes/agents/${encodeURIComponent(name)}/skills/${encodeURIComponent(category)}/${encodeURIComponent(skill)}/toggle`,
+      { enabled }
+    );
+  },
+
+  /**
+   * 删除技能（移除整个技能目录）
+   */
+  deleteSkill: async (name: string, category: string, skill: string): Promise<{ name: string; category: string; deleted: boolean }> => {
+    return http.post<{ name: string; category: string; deleted: boolean }>(
+      `/aicenter/v1/agent/hermes/agents/${encodeURIComponent(name)}/skills/${encodeURIComponent(category)}/${encodeURIComponent(skill)}/remove`,
+      {}
+    );
+  },
+
+  /**
    * 获取技能文件目录树（含默认展示的 SKILL.md 路径）
    */
   getSkillTree: async (name: string, category: string, skill: string): Promise<HermesSkillTree> => {
@@ -253,6 +285,16 @@ export const hermesAgentService = {
     return http.get<HermesTool[]>(
       `/aicenter/v1/agent/hermes/agents/${encodeURIComponent(name)}/tools`
     ) || [];
+  },
+
+  /**
+   * 停用/启用工具集
+   */
+  toggleTool: async (name: string, toolName: string, enabled: boolean): Promise<{ name: string; enabled: boolean }> => {
+    return http.post<{ name: string; enabled: boolean }>(
+      `/aicenter/v1/agent/hermes/agents/${encodeURIComponent(name)}/tools/${encodeURIComponent(toolName)}/toggle`,
+      { enabled }
+    );
   },
 
   /**

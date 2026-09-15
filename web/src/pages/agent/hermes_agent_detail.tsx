@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Button, Empty, Input, message, Spin,
   Table, Tabs, Tag, Tooltip, Modal, Form, Space, Upload,
+  Popconfirm, Switch, Select,
 } from 'antd';
 import {
   SaveOutlined, HeartOutlined, ToolOutlined,
@@ -10,7 +11,7 @@ import {
   LockOutlined, CheckCircleOutlined, RobotOutlined, AppstoreAddOutlined,
   ThunderboltOutlined, ClockCircleOutlined, FolderOpenOutlined,
   SearchOutlined, CloudDownloadOutlined, UploadOutlined, EyeOutlined,
-  CaretRightOutlined, DownOutlined,
+  CaretRightOutlined, DownOutlined, PlusOutlined, DeleteOutlined, StopOutlined,
 } from '@ant-design/icons';
 import type { UploadProps } from 'antd';
 import MDEditor from '@uiw/react-md-editor';
@@ -54,6 +55,12 @@ const HermesAgentDetail: React.FC = () => {
   const [activeSkill, setActiveSkill] = useState<HermesSkill | null>(null);
   /** 工具详情弹窗 */
   const [toolDetail, setToolDetail] = useState<HermesTool | null>(null);
+  /** 停用/启用切换中的项（技能 name 或工具 name），防止重复提交 */
+  const [togglingKey, setTogglingKey] = useState<string | null>(null);
+  /** 新增技能弹窗 */
+  const [skillCreateOpen, setSkillCreateOpen] = useState(false);
+  const [creatingSkill, setCreatingSkill] = useState(false);
+  const [skillForm] = Form.useForm();
 
   const isDark = theme === 'dark';
   const secondaryText = isDark ? 'rgba(255, 255, 255, 0.55)' : '#8f959e';
@@ -232,11 +239,41 @@ const HermesAgentDetail: React.FC = () => {
     },
   };
 
-  /** 技能按分类分组（保持技能列表原始顺序） */
+  /** 技能/工具搜索关键字与状态过滤（空串表示不过滤） */
+  const [skillSearch, setSkillSearch] = useState('');
+  const [skillStatusFilter, setSkillStatusFilter] = useState<string>('all');
+  const [toolSearch, setToolSearch] = useState('');
+  const [toolStatusFilter, setToolStatusFilter] = useState<string>('all');
+
+  /** 名称/描述关键字匹配（不区分大小写，空关键字全匹配） */
+  const matchesKeyword = (keyword: string, name?: string, description?: string) => {
+    const kw = keyword.trim().toLowerCase();
+    if (!kw) return true;
+    return (
+      (name || '').toLowerCase().includes(kw)
+      || (description || '').toLowerCase().includes(kw)
+    );
+  };
+
+  /** 技能列表：按名称/描述关键字 + 启用停用状态过滤 */
+  const filteredSkills = useMemo(() => skills.filter((s) => {
+    if (!matchesKeyword(skillSearch, s.name, s.description)) return false;
+    if (skillStatusFilter !== 'all' && (s.status === 'disabled') !== (skillStatusFilter === 'disabled')) return false;
+    return true;
+  }), [skills, skillSearch, skillStatusFilter]);
+
+  /** 工具列表：按名称/描述关键字 + 启用停用状态过滤 */
+  const filteredTools = useMemo(() => tools.filter((t) => {
+    if (!matchesKeyword(toolSearch, t.name, t.description)) return false;
+    if (toolStatusFilter !== 'all' && t.enabled !== (toolStatusFilter === 'enabled')) return false;
+    return true;
+  }), [tools, toolSearch, toolStatusFilter]);
+
+  /** 技能按分类分组（保持技能列表原始顺序，先按关键字与状态过滤） */
   const skillGroups = useMemo(() => {
     const groups: { category: string; skills: HermesSkill[] }[] = [];
     const indexMap = new Map<string, number>();
-    skills.forEach((s) => {
+    filteredSkills.forEach((s) => {
       const category = s.category || '未分类';
       let idx = indexMap.get(category);
       if (idx === undefined) {
@@ -247,7 +284,7 @@ const HermesAgentDetail: React.FC = () => {
       groups[idx].skills.push(s);
     });
     return groups;
-  }, [skills]);
+  }, [filteredSkills]);
 
   /** 技能分组展开状态（默认全部展开） */
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -258,13 +295,128 @@ const HermesAgentDetail: React.FC = () => {
     setSkillModalOpen(true);
   };
 
+  /** 停用/启用技能（阻止冒泡，避免触发卡片点击打开详情） */
+  const handleToggleSkill = async (skill: HermesSkill, enabled: boolean, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!agentName || !skill.category || !skill.dir_name) return;
+    const key = `skill:${skill.category}/${skill.dir_name}`;
+    setTogglingKey(key);
+    try {
+      await hermesAgentService.toggleSkill(agentName, skill.category, skill.dir_name, enabled);
+      message.success(`技能「${skill.name}」已${enabled ? '启用' : '停用'}`);
+      setSkills((prev) => prev.map((s) => (
+        s.category === skill.category && s.dir_name === skill.dir_name
+          ? { ...s, status: enabled ? 'enabled' : 'disabled' }
+          : s
+      )));
+    } catch (err: any) {
+      message.error(err?.message || '技能状态更新失败');
+    } finally {
+      setTogglingKey(null);
+    }
+  };
+
+  /** 删除技能（移除整个技能目录） */
+  const handleDeleteSkill = async (skill: HermesSkill, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!agentName || !skill.category || !skill.dir_name) return;
+    try {
+      await hermesAgentService.deleteSkill(agentName, skill.category, skill.dir_name);
+      message.success(`技能「${skill.name}」已删除`);
+      setSkills((prev) => prev.filter((s) => !(s.category === skill.category && s.dir_name === skill.dir_name)));
+    } catch (err: any) {
+      message.error(err?.message || '技能删除失败');
+    }
+  };
+
+  /** 停用/启用工具集 */
+  const handleToggleTool = async (tool: HermesTool, enabled: boolean, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!agentName) return;
+    const key = `tool:${tool.name}`;
+    setTogglingKey(key);
+    try {
+      await hermesAgentService.toggleTool(agentName, tool.name, enabled);
+      message.success(`工具「${tool.name}」已${enabled ? '启用' : '停用'}`);
+      setTools((prev) => prev.map((t) => (t.name === tool.name ? { ...t, enabled } : t)));
+    } catch (err: any) {
+      message.error(err?.message || '工具状态更新失败');
+    } finally {
+      setTogglingKey(null);
+    }
+  };
+
+  /** 新增技能 */
+  const handleCreateSkill = async () => {
+    if (!agentName) return;
+    try {
+      const values = await skillForm.validateFields();
+      setCreatingSkill(true);
+      // 分类为 tags 模式 Select，取第一个值
+      const category = Array.isArray(values.category) ? values.category[0] : values.category;
+      await hermesAgentService.createSkill(agentName, {
+        name: values.name,
+        category,
+        description: values.description,
+      });
+      message.success('技能创建成功');
+      setSkillCreateOpen(false);
+      skillForm.resetFields();
+      loadCapabilities();
+    } catch (e: any) {
+      if (e?.errorFields) return; // 表单校验错误
+      message.error(e?.message || '技能创建失败');
+    } finally {
+      setCreatingSkill(false);
+    }
+  };
+
+  /** 搜索过滤工具栏（技能/工具 tab 共用：关键字搜索 + 启用停用过滤） */
+  const renderFilterBar = (
+    search: string,
+    onSearch: (v: string) => void,
+    statusFilter: string,
+    onStatusFilter: (v: string) => void,
+  ) => (
+    <>
+      <Input
+        allowClear
+        prefix={<SearchOutlined style={{ color: secondaryText }} />}
+        placeholder="搜索名称或描述"
+        value={search}
+        onChange={(e) => onSearch(e.target.value)}
+        style={{ width: 240 }}
+      />
+      <Select
+        value={statusFilter}
+        onChange={onStatusFilter}
+        style={{ width: 100 }}
+        options={[
+          { value: 'all', label: '全部' },
+          { value: 'enabled', label: '已启用' },
+          { value: 'disabled', label: '已停用' },
+        ]}
+      />
+    </>
+  );
+
   /** 渲染技能分组列表（按分类分组，可收起展开，卡片点击打开详情弹窗） */
   const renderSkillGroups = () => {
-    if (!skills.length) {
-      return <Empty description="暂无技能" style={{ marginTop: 60 }} />;
-    }
     return (
       <div>
+        {/* 工具栏：新增技能 + 搜索过滤 */}
+        <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setSkillCreateOpen(true)}>
+            新增技能
+          </Button>
+          {renderFilterBar(skillSearch, setSkillSearch, skillStatusFilter, setSkillStatusFilter)}
+        </div>
+        {!skills.length ? (
+          <Empty description="暂无技能" style={{ marginTop: 40 }} />
+        ) : null}
+        {!!skills.length && !skillGroups.length ? (
+          <Empty description="没有符合条件的技能" style={{ marginTop: 40 }} />
+        ) : null}
         {skillGroups.map((group) => {
           const collapsed = collapsedGroups.has(group.category);
           return (
@@ -296,7 +448,10 @@ const HermesAgentDetail: React.FC = () => {
                   gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
                   gap: 12, marginTop: 4,
                 }}>
-                  {group.skills.map((skill) => (
+                  {group.skills.map((skill) => {
+                    const skillEnabled = skill.status !== 'disabled';
+                    const toggleKey = `skill:${group.category}/${skill.dir_name}`;
+                    return (
                     <div
                       key={`${group.category}/${skill.dir_name || skill.name}`}
                       role="button"
@@ -313,23 +468,41 @@ const HermesAgentDetail: React.FC = () => {
                         padding: '14px 16px',
                         borderRadius: 12,
                         cursor: 'pointer',
-                        background: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.02)',
-                        border: isDark ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid rgba(0, 0, 0, 0.04)',
+                        /* 停用技能：降透明度 + 虚线灰边框，与启用卡片区分 */
+                        background: skillEnabled
+                          ? (isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.02)')
+                          : (isDark ? 'rgba(255, 255, 255, 0.015)' : 'rgba(0, 0, 0, 0.008)'),
+                        border: skillEnabled
+                          ? (isDark ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid rgba(0, 0, 0, 0.04)')
+                          : `1px dashed ${isDark ? 'rgba(255, 255, 255, 0.18)' : 'rgba(0, 0, 0, 0.18)'}`,
+                        opacity: skillEnabled ? 1 : 0.62,
                         transition: 'border-color 0.2s, background 0.2s',
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.borderColor = isDark ? 'rgba(90, 111, 214, 0.5)' : '#c0c6e8';
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)';
+                        e.currentTarget.style.borderColor = skillEnabled
+                          ? (isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)')
+                          : `1px dashed ${isDark ? 'rgba(255, 255, 255, 0.18)' : 'rgba(0, 0, 0, 0.18)'}`;
                       }}
                     >
                       <div style={{
-                        fontSize: 14, fontWeight: 600, marginBottom: 6,
-                        color: isDark ? '#ffffff' : '#1f2329',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                        marginBottom: 6,
                       }}>
-                        {skill.name}
+                        <div style={{
+                          fontSize: 14, fontWeight: 600,
+                          color: isDark ? '#ffffff' : '#1f2329',
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          display: 'flex', alignItems: 'center', gap: 6, minWidth: 0,
+                        }}>
+                          <BookOutlined style={{ color: skillEnabled ? '#5a6fd6' : secondaryText, flexShrink: 0 }} />
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{skill.name}</span>
+                        </div>
+                        {!skillEnabled && (
+                          <Tag icon={<StopOutlined />} style={{ borderRadius: 10, marginBottom: 0, flexShrink: 0 }}>已停用</Tag>
+                        )}
                       </div>
                       <Tooltip title={skill.description || '暂无描述'}>
                         <div style={{
@@ -339,8 +512,44 @@ const HermesAgentDetail: React.FC = () => {
                           {skill.description || '暂无描述'}
                         </div>
                       </Tooltip>
+                      {/* 卡片操作：停用/启用开关 + 删除 */}
+                      <div
+                        style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          marginTop: 10, paddingTop: 8,
+                          borderTop: isDark ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid rgba(0, 0, 0, 0.06)',
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Space size={4}>
+                          <Switch
+                            size="small"
+                            checked={skillEnabled}
+                            loading={togglingKey === toggleKey}
+                            onChange={(checked, e) => handleToggleSkill(skill, checked, e as any)}
+                          />
+                          <span style={{ fontSize: 12, color: secondaryText }}>{skillEnabled ? '启用' : '停用'}</span>
+                        </Space>
+                        <Popconfirm
+                          title="确定删除该技能吗？"
+                          description="删除后技能目录将被移除，不可恢复"
+                          onConfirm={(e) => { e?.stopPropagation(); handleDeleteSkill(skill); }}
+                          onCancel={(e) => e?.stopPropagation()}
+                          okText="删除"
+                          cancelText="取消"
+                        >
+                          <Button
+                            type="text"
+                            size="small"
+                            danger
+                            icon={<DeleteOutlined />}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </Popconfirm>
+                      </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -357,15 +566,24 @@ const HermesAgentDetail: React.FC = () => {
     }
     return (
       <div>
-        <div style={{ color: secondaryText, fontSize: 13, marginBottom: 12 }}>
-          共 {tools.length} 个工具，点击卡片查看详情
+        {/* 工具栏：搜索过滤 + 统计信息 */}
+        <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          {renderFilterBar(toolSearch, setToolSearch, toolStatusFilter, setToolStatusFilter)}
+          <span style={{ color: secondaryText, fontSize: 13, flexShrink: 0 }}>
+            共 {tools.length} 个工具，点击卡片查看详情
+          </span>
         </div>
+        {!filteredTools.length ? (
+          <Empty description="没有符合条件的工具" style={{ marginTop: 40 }} />
+        ) : null}
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
           gap: 12,
         }}>
-          {tools.map((tool) => (
+          {filteredTools.map((tool) => {
+            const toggleKey = `tool:${tool.name}`;
+            return (
             <div
               key={tool.name}
               role="button"
@@ -381,15 +599,23 @@ const HermesAgentDetail: React.FC = () => {
                 padding: '14px 16px',
                 borderRadius: 12,
                 cursor: 'pointer',
-                background: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.02)',
-                border: isDark ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid rgba(0, 0, 0, 0.04)',
+                /* 停用工具：降透明度 + 虚线灰边框，与启用卡片区分 */
+                background: tool.enabled
+                  ? (isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.02)')
+                  : (isDark ? 'rgba(255, 255, 255, 0.015)' : 'rgba(0, 0, 0, 0.008)'),
+                border: tool.enabled
+                  ? (isDark ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid rgba(0, 0, 0, 0.04)')
+                  : `1px dashed ${isDark ? 'rgba(255, 255, 255, 0.18)' : 'rgba(0, 0, 0, 0.18)'}`,
+                opacity: tool.enabled ? 1 : 0.62,
                 transition: 'border-color 0.2s, background 0.2s',
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.borderColor = isDark ? 'rgba(90, 111, 214, 0.5)' : '#c0c6e8';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)';
+                e.currentTarget.style.borderColor = tool.enabled
+                  ? (isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)')
+                  : `1px dashed ${isDark ? 'rgba(255, 255, 255, 0.18)' : 'rgba(0, 0, 0, 0.18)'}`;
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
@@ -397,10 +623,14 @@ const HermesAgentDetail: React.FC = () => {
                   fontSize: 14, fontWeight: 600,
                   color: isDark ? '#ffffff' : '#1f2329',
                   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  display: 'flex', alignItems: 'center', gap: 6, minWidth: 0,
                 }}>
-                  <ToolOutlined style={{ marginRight: 6, color: '#fa8c16' }} />{tool.name}
+                  <ToolOutlined style={{ color: tool.enabled ? '#fa8c16' : secondaryText, flexShrink: 0 }} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{tool.name}</span>
                 </div>
-                {tool.enabled ? <Tag color="success" style={{ borderRadius: 10, marginBottom: 0 }}>启用</Tag> : <Tag color="default" style={{ borderRadius: 10, marginBottom: 0 }}>禁用</Tag>}
+                {!tool.enabled && (
+                  <Tag icon={<StopOutlined />} style={{ borderRadius: 10, marginBottom: 0, flexShrink: 0 }}>已停用</Tag>
+                )}
               </div>
               <Tooltip title={tool.description || '暂无描述'}>
                 <div style={{
@@ -410,8 +640,28 @@ const HermesAgentDetail: React.FC = () => {
                   {tool.description || '暂无描述'}
                 </div>
               </Tooltip>
+              {/* 卡片操作：停用/启用开关 */}
+              <div
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  marginTop: 10, paddingTop: 8,
+                  borderTop: isDark ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid rgba(0, 0, 0, 0.06)',
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Space size={4}>
+                  <Switch
+                    size="small"
+                    checked={tool.enabled}
+                    loading={togglingKey === toggleKey}
+                    onChange={(checked, e) => handleToggleTool(tool, checked, e as any)}
+                  />
+                  <span style={{ fontSize: 12, color: secondaryText }}>{tool.enabled ? '启用' : '停用'}</span>
+                </Space>
+              </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     );
@@ -617,7 +867,7 @@ const HermesAgentDetail: React.FC = () => {
       <div style={{ height: 1, flexShrink: 0, background: isDark ? 'rgba(255, 255, 255, 0.08)' : '#e8eaed' }} />
 
       {/* 内容标签页（配置区域，可竖向滚动） */}
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '0 8px' }}>
+      <div className="detail-tabs-scroll" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '0 8px' }}>
         <Tabs
           activeKey={activeTab}
           onChange={setActiveTab}
@@ -655,6 +905,70 @@ const HermesAgentDetail: React.FC = () => {
         isDark={isDark}
         onChanged={() => loadCapabilities()}
       />
+
+      {/* 新增技能弹窗（创建 skills/<category>/<name>/SKILL.md） */}
+      <Modal
+        title={<span><BookOutlined style={{ marginRight: 8, color: '#5a6fd6' }} />新增技能</span>}
+        open={skillCreateOpen}
+        onCancel={() => {
+          setSkillCreateOpen(false);
+          skillForm.resetFields();
+        }}
+        onOk={handleCreateSkill}
+        confirmLoading={creatingSkill}
+        okText="创建"
+        cancelText="取消"
+        width={520}
+        destroyOnClose
+      >
+        <Form form={skillForm} layout="vertical" preserve={false} style={{ marginTop: 12 }}>
+          <Form.Item
+            name="name"
+            label="技能名称"
+            rules={[
+              { required: true, message: '请输入技能名称' },
+              { pattern: /^[a-z0-9][a-z0-9._-]*$/, message: '仅支持小写字母、数字、点、下划线、连字符，且以字母或数字开头' },
+            ]}
+          >
+            <Input placeholder="如 pdf-exporter" maxLength={64} allowClear />
+          </Form.Item>
+          <Form.Item
+            name="category"
+            label="分类"
+            rules={[
+              { required: true, type: 'array', message: '请输入技能分类' },
+              {
+                validator: async (rule, value: string[]) => {
+                  const v = Array.isArray(value) ? value[0] : value;
+                  if (v && !/^[a-z0-9][a-z0-9._-]*$/.test(v)) {
+                    throw new Error('分类仅支持小写字母、数字、点、下划线、连字符');
+                  }
+                },
+              },
+            ]}
+          >
+            <Select
+              mode="tags"
+              maxCount={1}
+              placeholder="选择已有分类或输入新分类，如 custom"
+              options={[{ value: 'custom', label: 'custom' }, ...skillGroups.map((g) => ({ value: g.category, label: g.category }))]}
+              allowClear
+            />
+          </Form.Item>
+          <Form.Item
+            name="description"
+            label="描述"
+            rules={[{ required: true, message: '请输入技能描述' }]}
+          >
+            <Input.TextArea
+              placeholder="简要描述技能的用途，如：将对话内容导出为 PDF 文件"
+              maxLength={500}
+              showCount
+              autoSize={{ minRows: 2, maxRows: 4 }}
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       {/* 工具详情弹窗（名称、描述、所需参数等） */}
       <Modal
