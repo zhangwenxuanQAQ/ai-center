@@ -93,6 +93,16 @@ function getDefaultVersionInfo(): VersionInfo {
       menu_keys: ['toolkit'], dependencies: []
     },
     {
+      name: 'api', display_name: 'API接口', description: 'API服务分类、配置与接口管理',
+      required: false, api_prefixes: ['/api_server'], frontend_routes: ['/toolkit', '/api/setting/:id'],
+      menu_keys: ['api'], dependencies: []
+    },
+    {
+      name: 'code_script', display_name: '代码脚本', description: '代码脚本管理、校验与测试执行',
+      required: false, api_prefixes: ['/code_script'], frontend_routes: ['/toolkit'],
+      menu_keys: ['code_script'], dependencies: []
+    },
+    {
       name: 'chatbot', display_name: '机器人', description: 'AI机器人创建与配置',
       required: false, api_prefixes: ['/chatbot', '/chatbot_category'], frontend_routes: ['/chatbots', '/chatbot/setting/:id'],
       menu_keys: ['chatbot'], dependencies: ['user', 'llm_model', 'prompt', 'knowledgebase', 'mcp', 'toolkit']

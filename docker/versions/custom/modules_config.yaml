@@ -14,12 +14,16 @@ description: "自定义功能版 - 仅包含指定的功能模块"
 # - knowledgebase: 知识库
 # - mcp: MCP服务
 # - toolkit: 工具箱
+# - api: API接口
+# - code_script: 代码脚本
 # - chatbot: 机器人
 # - chat: 聊天
 # - agent: 智能体
 # - system_monitor: 系统监控
 # - integration: 插件集成
 # - ontology: 本体工作台
+# - task_center: 任务中心
+# - skill: SKILL管理
 
 # 示例：仅启用基础功能（用户管理 + 模型管理 + 提示词）
 enabled_modules:

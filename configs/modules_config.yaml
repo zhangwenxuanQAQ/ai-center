@@ -23,6 +23,7 @@ version:
     - toolkit
     - api
     - skill
+    - code_script
 
 # 模块定义
 modules:
@@ -147,7 +148,6 @@ modules:
     required: false
     api_prefixes:
       - "/api_server"
-      - "/code_script"
     frontend_routes:
       - "/toolkit"
       - "/api/setting/:id"
@@ -157,6 +157,19 @@ modules:
       - "api_server_category"
       - "api_server"
       - "api"
+    dependencies: []
+
+  code_script:
+    name: "代码脚本"
+    description: "代码脚本管理、校验与测试执行"
+    required: false
+    api_prefixes:
+      - "/code_script"
+    frontend_routes:
+      - "/toolkit"
+    menu_keys:
+      - "code_script"
+    database_tables:
       - "code_script"
       - "code_script_category"
     dependencies: []

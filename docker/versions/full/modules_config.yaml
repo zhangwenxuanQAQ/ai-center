@@ -13,6 +13,8 @@ enabled_modules:
   - knowledgebase
   - mcp
   - toolkit
+  - api
+  - code_script
   - chatbot
   - chat
   - agent
@@ -20,6 +22,7 @@ enabled_modules:
   - integration
   - ontology
   - task_center
+  - skill
 
 # 说明：
 # - 此配置文件用于指定镜像中启用的功能模块
@@ -34,9 +37,13 @@ enabled_modules:
 # - knowledgebase: 知识库
 # - mcp: MCP服务
 # - toolkit: 工具箱
+# - api: API接口
+# - code_script: 代码脚本
 # - chatbot: 机器人
 # - chat: 聊天
 # - agent: 智能体
 # - system_monitor: 系统监控
 # - integration: 插件集成
 # - ontology: 本体工作台
+# - task_center: 任务中心
+# - skill: SKILL管理
