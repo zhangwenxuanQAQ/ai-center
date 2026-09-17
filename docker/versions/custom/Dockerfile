@@ -62,6 +62,8 @@ RUN uv pip install "hermes-agent==0.19.0" --no-deps --index-url https://mirrors.
 
 # 智能体运行时目录（HERMES_HOME 默认指向容器内持久化目录）
 RUN mkdir -p /aicenter/data/hermes
+# SKILL技能文件目录（持久化挂载）
+RUN mkdir -p /aicenter/data/skill
 
 # 复制后端代码
 COPY app/ ./app/

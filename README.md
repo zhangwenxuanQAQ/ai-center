@@ -400,6 +400,8 @@ docker-compose -f docker-compose-app.yml down
 mkdir -p /opt/ai-center/config
 # 创建 hermes 智能体数据目录
 mkdir -p /opt/ai-center/hermes
+# 创建 skill 技能文件数据目录
+mkdir -p /opt/ai-center/skill
 
 # 复制配置文件（根据需要修改）
 cp configs/server_config.yaml /opt/ai-center/config/
@@ -408,7 +410,7 @@ cp docker/aicenter.conf /opt/ai-center/config/
 # 修改配置文件中的数据库连接信息
 # vi /opt/ai-center/config/server_config.yaml
 
-# 启动容器，挂载配置文件和 hermes 智能体数据目录
+# 启动容器，挂载配置文件、hermes智能体数据目录和skill技能数据目录
 docker run -d \
   --name ai-center \
   -p 8000:80 \
@@ -416,6 +418,7 @@ docker run -d \
   -p 8082:8082 \
   -v /opt/ai-center/config/server_config.yaml:/aicenter/configs/server_config.yaml:ro \
   -v /opt/ai-center/hermes:/aicenter/data/hermes \
+  -v /opt/ai-center/skill:/aicenter/data/skill \
   ai-center:aihub_v2_beta_0.1.2
 ```
 
@@ -428,7 +431,7 @@ docker run -d \
 **适用于需要灵活配置的场景，环境变量优先级高于配置文件**
 
 ```bash
-# 启动容器，通过环境变量配置（-v 挂载 hermes 智能体数据目录以持久化）
+# 启动容器，通过环境变量配置（-v 挂载 hermes 与 skill 数据目录以持久化）
 docker run -d \
   --name ai-center \
   --restart unless-stopped \
@@ -436,6 +439,7 @@ docker run -d \
   -p 8081:8081 \
   -p 8082:8082 \
   -v /opt/ai-center/hermes:/aicenter/data/hermes \
+  -v /opt/ai-center/skill:/aicenter/data/skill \
   -e SERVER_HOST=0.0.0.0 \
   -e SERVER_PORT=8081 \
   -e MYSQL_HOST=your-mysql-host \
@@ -583,6 +587,16 @@ docker run -d \
 **说明**：hermes 智能体的数据（智能体配置、技能、工具配置等）存储在容器内 `/aicenter/data/hermes` 目录（默认 default 智能体位于根目录，其他智能体位于 `profiles/<name>` 下）。挂载该目录可实现智能体数据持久化，容器升级或重建后数据不丢失。
 
 **注意**：使用方式二（挂载配置文件）时，需确保 `server_config.yaml` 中 `agent_engine.hermes_agent.hermes_home` 指向容器内路径 `/aicenter/data/hermes`（或删除该项使用默认值），不能使用宿主机路径。
+
+#### 挂载skill技能文件数据目录
+```bash
+docker run -d \
+  --name ai-center \
+  -v /opt/ai-center/skill:/aicenter/data/skill \
+  ai-center:aihub_v2_beta_0.1.2
+```
+
+**说明**：SKILL 技能的文件（SKILL.md、资源文件等）存储在容器内 `/aicenter/data/skill` 目录。挂载该目录可实现技能文件持久化，容器升级或重建后数据不丢失。
 
 #### 使用docker-compose挂载
 ```yaml
