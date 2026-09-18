@@ -9,12 +9,16 @@ Hermes 智能体服务类
 import asyncio
 import json
 import os
+import queue
 import re
 import subprocess
 import sys
+import threading
+import time
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Optional
+from typing import Generator, Optional
 
 import yaml
 
@@ -23,6 +27,9 @@ from app.core.exceptions import ResourceNotFoundError
 
 # 默认智能体名称（hermes_home 根目录即 default，不可删除）
 DEFAULT_AGENT_NAME = "default"
+
+# 控制台会话来源标识（写入 state.db 的 sessions.source）
+CONVERSATION_SOURCE = "aicenter"
 
 # hermes profile create 的名称规则：小写字母、数字、连字符
 PROFILE_NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
@@ -1082,3 +1089,277 @@ class HermesAgentService:
             "new_path": new_target.relative_to(self._resolve_skill_path(name, category, skill, ".")).as_posix(),
             "renamed": True,
         }
+
+    # ==================== 对话（官方 SDK） ====================
+
+    def _resolve_agent_runtime(self, name: str) -> dict:
+        """
+        解析智能体运行时（provider/base_url/api_key/api_mode）
+
+        优先使用智能体自身 config.yaml 的模型凭据；子 profile 未配置凭据时
+        继承 default 的凭据（模型名称仍使用子 profile 自身的），
+        最终通过官方 SDK resolve_runtime_provider 得到运行时配置。
+        """
+        from hermes_cli.runtime_provider import resolve_runtime_provider
+
+        model_cfg = self.get_model_config(name)
+        model = model_cfg.get("model") or ""
+        api_key = model_cfg.get("api_key") or ""
+        url = model_cfg.get("url") or ""
+
+        # 子 profile 缺少凭据时继承 default
+        if (not api_key or not url) and name != DEFAULT_AGENT_NAME:
+            fallback = self.get_model_config(DEFAULT_AGENT_NAME)
+            api_key = api_key or fallback.get("api_key") or ""
+            url = url or fallback.get("url") or ""
+            if not model:
+                model = fallback.get("model") or ""
+
+        if not url or not api_key:
+            raise HermesAgentError(f"智能体 {name} 未配置模型凭据（api_key/base_url），请先完成模型配置")
+
+        with self._with_agent_home(self.get_agent_dir(name)):
+            runtime = resolve_runtime_provider(
+                requested="custom",
+                target_model=model or None,
+                explicit_base_url=url,
+                explicit_api_key=api_key,
+            )
+        return runtime
+
+    def _get_platform_config(self, name: str) -> dict:
+        """读取智能体平台配置（用于构建 AIAgent）"""
+        from hermes_cli.config import load_config
+        from hermes_cli.fallback_config import get_fallback_chain
+        from hermes_cli.tools_config import _get_platform_tools
+
+        with self._with_agent_home(self.get_agent_dir(name)):
+            cfg = load_config()
+            toolsets = sorted(_get_platform_tools(cfg, "cli"))
+            fallback = get_fallback_chain(cfg)
+        return {"config": cfg, "toolsets": toolsets, "fallback": fallback}
+
+    def _open_conversation_db(self, name: str) -> "object":
+        """打开智能体会话数据库（state.db，不存在时创建）"""
+        from hermes_state import SessionDB
+
+        db_path = self.get_agent_dir(name) / "state.db"
+        return SessionDB(db_path=db_path)
+
+    def create_conversation(self, name: str, title: Optional[str] = None) -> dict:
+        """
+        新建对话
+
+        生成会话 id 并写入智能体的 state.db，返回会话基本信息。
+        """
+        self._check_agent_exists(name)
+        session_id = f"api_{int(time.time())}_{uuid.uuid4().hex[:8]}"
+        model = self.get_model_config(name).get("model") or ""
+        db = self._open_conversation_db(name)
+        try:
+            db.create_session(
+                session_id=session_id,
+                source=CONVERSATION_SOURCE,
+                model=model or None,
+                profile_name=name,
+                cwd=str(self.get_agent_dir(name)),
+            )
+            if title:
+                db.set_session_title(session_id, title)
+        finally:
+            db.close()
+        return {
+            "session_id": session_id,
+            "title": title or "新对话",
+            "model": model,
+            "agent": name,
+        }
+
+    def list_conversations(self, name: str, limit: int = 20, offset: int = 0,
+                           search: Optional[str] = None) -> dict:
+        """
+        查询会话列表
+
+        按最近活跃时间倒序返回智能体的会话（含标题、消息数、预览）。
+        """
+        self._check_agent_exists(name)
+        db_path = self.get_agent_dir(name) / "state.db"
+        if not db_path.exists():
+            return {"data": [], "total": 0}
+        db = self._open_conversation_db(name)
+        try:
+            sessions = db.list_sessions_rich(
+                source=CONVERSATION_SOURCE,
+                limit=limit,
+                offset=offset,
+                order_by_last_active=True,
+                search_query=search or None,
+                compact_rows=True,
+            )
+        finally:
+            db.close()
+        data = [
+            {
+                "session_id": item.get("id"),
+                "title": item.get("title") or item.get("preview") or "新对话",
+                "preview": item.get("preview") or "",
+                "model": item.get("model") or "",
+                "message_count": item.get("message_count") or 0,
+                "started_at": item.get("started_at"),
+                "last_active": item.get("last_active"),
+            }
+            for item in sessions
+        ]
+        return {"data": data, "total": len(data)}
+
+    def get_conversation_messages(self, name: str, session_id: str,
+                                  limit: Optional[int] = None, offset: int = 0) -> dict:
+        """
+        查询会话历史消息
+
+        返回指定会话的消息列表（仅 user/assistant 展示用内容）。
+        """
+        self._check_agent_exists(name)
+        db_path = self.get_agent_dir(name) / "state.db"
+        if not db_path.exists():
+            return {"data": [], "total": 0}
+        db = self._open_conversation_db(name)
+        try:
+            resolved = db.resolve_session_id(session_id) or session_id
+            messages = db.get_messages(resolved, limit=limit, offset=offset)
+        finally:
+            db.close()
+        data = [
+            {
+                "id": msg.get("id"),
+                "role": msg.get("role"),
+                "content": msg.get("content") or "",
+                "timestamp": msg.get("timestamp"),
+            }
+            for msg in messages
+            if msg.get("role") in ("user", "assistant")
+        ]
+        return {"data": data, "total": len(data)}
+
+    def delete_conversation(self, name: str, session_id: str) -> dict:
+        """删除对话（同时删除其历史消息与磁盘记录）"""
+        self._check_agent_exists(name)
+        db = self._open_conversation_db(name)
+        try:
+            resolved = db.resolve_session_id(session_id) or session_id
+            deleted = db.delete_session(resolved, sessions_dir=self.get_agent_dir(name) / "sessions")
+        finally:
+            db.close()
+        if not deleted:
+            raise ResourceNotFoundError(f"会话不存在：{session_id}")
+        return {"session_id": session_id, "deleted": True}
+
+    def chat_stream(self, name: str, session_id: str,
+                    message: str) -> Generator[str, None, None]:
+        """
+        流式对话（使用官方 SDK AIAgent 运行，逐段返回模型输出）
+
+        工作线程内运行 AIAgent（SDK 内部为同步阻塞调用），
+        通过队列将增量文本实时传回当前生成器，实现 SSE 流式输出。
+        """
+        self._check_agent_exists(name)
+        if not message or not message.strip():
+            raise HermesAgentError("消息内容不能为空")
+
+        runtime = self._resolve_agent_runtime(name)
+        platform_cfg = self._get_platform_config(name)
+        model = self.get_model_config(name).get("model") or ""
+
+        agent_dir = self.get_agent_dir(name)
+        chunk_queue: "queue.Queue" = queue.Queue()
+        done_marker = object()
+        error_box: list = []
+
+        with self._with_agent_home(agent_dir):
+            from run_agent import AIAgent
+
+            db = self._open_conversation_db(name)
+            resolved = db.resolve_session_id(session_id) or session_id
+            history = db.get_messages_as_conversation(resolved, repair_alternation=True)
+
+            agent = AIAgent(
+                api_key=runtime.get("api_key"),
+                base_url=runtime.get("base_url"),
+                provider=runtime.get("provider"),
+                api_mode=runtime.get("api_mode"),
+                model=model,
+                enabled_toolsets=platform_cfg["toolsets"],
+                quiet_mode=True,
+                platform="cli",
+                session_db=db,
+                session_id=resolved,
+                credential_pool=runtime.get("credential_pool"),
+                fallback_model=platform_cfg["fallback"] or None,
+                clarify_callback=self._chat_clarify_callback,
+            )
+            # 静默运行，仅通过 stream_callback 输出文本增量
+            agent.suppress_status_output = True
+            agent.stream_delta_callback = None
+            agent.tool_gen_callback = None
+
+            def _on_delta(text):
+                if text:
+                    chunk_queue.put(text)
+
+            def _worker():
+                try:
+                    result = agent.run_conversation(
+                        user_message=message,
+                        conversation_history=history or None,
+                        stream_callback=_on_delta,
+                    )
+                    # SDK 运行失败时不抛异常，而是返回 failed 标记，需显式转为异常
+                    if isinstance(result, dict) and result.get("failed"):
+                        detail = (
+                            result.get("error")
+                            or result.get("failure_reason")
+                            or result.get("final_response")
+                            or "未知错误"
+                        )
+                        error_box.append(HermesAgentError(str(detail)))
+                except Exception as exc:  # noqa: BLE001
+                    error_box.append(exc)
+                finally:
+                    chunk_queue.put(done_marker)
+
+            worker = threading.Thread(target=_worker, daemon=True)
+            worker.start()
+
+            try:
+                while True:
+                    chunk = chunk_queue.get()
+                    if chunk is done_marker:
+                        break
+                    yield chunk
+            finally:
+                worker.join(timeout=5)
+                try:
+                    session_messages = getattr(agent, "_session_messages", None)
+                    if isinstance(session_messages, list):
+                        agent.shutdown_memory_provider(session_messages)
+                    else:
+                        agent.shutdown_memory_provider()
+                except Exception:
+                    pass
+                try:
+                    agent.close()
+                except Exception:
+                    pass
+                db.close()
+
+        if error_box:
+            raise HermesAgentError(f"对话执行失败：{error_box[0]}")
+
+    @staticmethod
+    def _chat_clarify_callback(question: str, choices=None) -> str:
+        """澄清回调：无交互终端时让智能体自行决策并继续"""
+        if choices:
+            return (
+                f"[控制台模式：无用户可交互。请从 {choices} 中选择最合适的选项并继续。]"
+            )
+        return "[控制台模式：无用户可交互。请做出最合理的假设并继续。]"

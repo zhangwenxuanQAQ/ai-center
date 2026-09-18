@@ -1,6 +1,6 @@
 import logging
 import requests
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Generator, List, Optional
 from bs4 import BeautifulSoup
 
 from app.core.tools import BaseTool, BaseToolParam, ToolRegistry, ToolResult
@@ -73,6 +73,10 @@ class web_search(BaseTool):
             return f"(网页抓取失败: {str(e)})"
         except Exception as e:
             return f"(网页解析失败: {str(e)})"
+
+    def _run_stream(self, **kwargs) -> Generator[ToolResult, None, None]:
+        """流式执行工具，直接复用非流式的_run结果作为唯一分片"""
+        yield self._run(**kwargs)
 
     def _run(self, **kwargs) -> ToolResult:
         query = kwargs.get("query", "")

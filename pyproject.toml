@@ -63,6 +63,8 @@ dependencies = [
     "vscode-icons>=1.0.0",
     "tavily>=0.3.0",
     "sqlparse",
+    # hermes-agent 在 Windows 下的日志依赖（hermes_logging 导入需要）
+    "concurrent-log-handler>=0.9.29; sys_platform == 'win32'",
     "black>=26.5.1",
 ]
 # 注意：智能体引擎 hermes-agent 从 PyPI 安装（--no-deps 与主项目依赖解耦），

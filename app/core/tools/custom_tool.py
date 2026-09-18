@@ -4,7 +4,7 @@
 支持通过callback函数注入实际工具执行逻辑
 """
 
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Generator, Optional
 
 from app.core.tools.base_tool import BaseTool, BaseToolParam
 
@@ -97,3 +97,7 @@ class CustomTool(BaseTool):
         raise NotImplementedError(
             "CustomTool must either be initialized with a callback or have _run() overridden"
         )
+
+    def _run_stream(self, **kwargs) -> Generator[Any, None, None]:
+        """流式执行工具，直接复用非流式的_run结果作为唯一分片"""
+        yield self._run(**kwargs)

@@ -23,6 +23,7 @@ dependencies = [
     { name = "black" },
     { name = "boto3" },
     { name = "chardet" },
+    { name = "concurrent-log-handler", marker = "sys_platform == 'win32'" },
     { name = "elasticsearch" },
     { name = "email-validator" },
     { name = "fastapi" },
@@ -85,6 +86,7 @@ requires-dist = [
     { name = "black", specifier = ">=26.5.1" },
     { name = "boto3", specifier = ">=1.28.0" },
     { name = "chardet" },
+    { name = "concurrent-log-handler", marker = "sys_platform == 'win32'", specifier = ">=0.9.29" },
     { name = "elasticsearch", specifier = ">=8.0.0" },
     { name = "email-validator" },
     { name = "fastapi" },
@@ -773,6 +775,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d8/53/6f443c9a4a8358a93a6792e2acffb9d9d5cb0a5cfd8802644b7b1c9a02e4/colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44", size = 27697 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6", size = 25335 },
+]
+
+[[package]]
+name = "concurrent-log-handler"
+version = "0.9.29"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "portalocker", marker = "python_full_version < '3.11' or sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9c/2c/ba185acc438cff6b58cd8f8dec27e7f4fcabf6968a1facbb6d0cacbde7fe/concurrent_log_handler-0.9.29.tar.gz", hash = "sha256:bc37a76d3f384cbf4a98f693ebd770543edc0f4cd5c6ab6bc70e9e1d7d582265", size = 42114 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4a/f3/3e3188fdb3e53c6343fd1c7de41c55d4db626f07db3877eae77b28d58bd2/concurrent_log_handler-0.9.29-py3-none-any.whl", hash = "sha256:0d6c077fbaef2dae49a25975dcf72a602fe0a6a4ce80a3b7c37696d37e10459a", size = 32052 },
 ]
 
 [[package]]
@@ -2795,6 +2809,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/0a/4e/897a720fa723d84964f0f466f1f163c93c8c9a39d4af74cb830f93a18f24/playhouse-0.1.0.tar.gz", hash = "sha256:98e375b2ec649ad454e3af91c6cb243a37709250062a53559de3ec54044c8a28", size = 866 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/13/22/2a61be98f9dace4604aec97eb6cae085354f04babb91de3e5b0fc3b6cc5a/playhouse-0.1.0-py3-none-any.whl", hash = "sha256:ba6b851f8bba7cf083b0289f64729b717f4e8bd552d2ba3dfc6fc1f76fdd40a1", size = 1080 },
+]
+
+[[package]]
+name = "portalocker"
+version = "4.3.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ea/7a/6371904c17aba3c455eda47001db923d77ba02a858919424d52f56f1e618/portalocker-4.3.2.tar.gz", hash = "sha256:8de4a1330f55b3c9a1d50ab1b70a765f2f136d6399ae206411117ed98c3b8e2b", size = 302990 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b8/b6/3ed645ea033d5eb16e42481fc2b4719bd3a4e36b818006f34e14cf938dce/portalocker-4.3.2-py3-none-any.whl", hash = "sha256:42f0362e7343af78b25eb095c0cde300e746a0ab6647a835cc30764918490c93", size = 128984 },
 ]
 
 [[package]]

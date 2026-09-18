@@ -11,7 +11,7 @@ API调用内置工具
 import json
 import logging
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Generator, List, Optional, Tuple
 
 import requests
 
@@ -219,6 +219,10 @@ class api_call(BaseTool):
             default=DEFAULT_TIMEOUT,
         ),
     ]
+
+    def _run_stream(self, **kwargs) -> Generator[ToolResult, None, None]:
+        """流式执行工具，直接复用非流式的_run结果作为唯一分片"""
+        yield self._run(**kwargs)
 
     def _run(self, **kwargs) -> ToolResult:
         server_url = kwargs.get("server_url", "")

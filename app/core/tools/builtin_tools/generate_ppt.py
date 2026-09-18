@@ -7,7 +7,7 @@ import logging
 import os
 import uuid
 from io import BytesIO
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Generator, List, Optional
 
 from pptx import Presentation
 from pptx.util import Inches, Pt, Emu
@@ -318,6 +318,10 @@ class generate_ppt(BaseTool):
             required=False,
         ),
     ]
+
+    def _run_stream(self, **kwargs) -> Generator[ToolResult, None, None]:
+        """流式执行工具，直接复用非流式的_run结果作为唯一分片"""
+        yield self._run(**kwargs)
 
     def _run(self, **kwargs) -> ToolResult:
         title = kwargs.get("title", "未命名演示文稿")

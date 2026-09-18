@@ -139,6 +139,8 @@ const ToolkitManagement: React.FC = () => {
   const [builtinToolPage, setBuiltinToolPage] = useState<number>(1);
   const [builtinToolPageSize, setBuiltinToolPageSize] = useState<number>(12);
   const [builtinToolSearchName, setBuiltinToolSearchName] = useState<string>('');
+  // 内置工具分类折叠状态（key 为分类名，value 为是否收起）
+  const [collapsedBuiltinCategories, setCollapsedBuiltinCategories] = useState<Record<string, boolean>>({});
 
   // 内置工具测试相关状态
   const [paramTestDrawerVisible, setParamTestDrawerVisible] = useState(false);
@@ -148,6 +150,14 @@ const ToolkitManagement: React.FC = () => {
   const [paramValues, setParamValues] = useState<Record<string, any>>({});
   const [paramTestResult, setParamTestResult] = useState<ToolTestResultData | null>(null);
   const [paramTesting, setParamTesting] = useState(false);
+
+  // 智能体对话工具（hermes_agent_chat）参数测试：聊天式交互状态
+  const [agentChatMessages, setAgentChatMessages] = useState<{ id: string; role: 'user' | 'assistant'; content: string; timestamp: Date; stopped?: boolean; error?: boolean }[]>([]);
+  const [agentChatInput, setAgentChatInput] = useState('');
+  const [agentChatGenerating, setAgentChatGenerating] = useState(false);
+  const [agentChatLoadingHistory, setAgentChatLoadingHistory] = useState(false);
+  const agentChatAbortRef = useRef<AbortController | null>(null);
+  const agentChatContainerRef = useRef<HTMLDivElement>(null);
 
   // 数据抽取工具相关状态
   const [dsDatasources, setDsDatasources] = useState<Datasource[]>([]);
@@ -1023,11 +1033,137 @@ const ToolkitManagement: React.FC = () => {
     setParamValues(tool.name === 'code_script' ? { code: CODE_SCRIPT_DEFAULT_CODE } : {});
     setParamTestResult(null);
     setParamTestDrawerVisible(true);
+    // 智能体对话工具：重置聊天状态
+    if (tool.name === 'hermes_agent_chat') {
+      setAgentChatMessages([]);
+      setAgentChatInput('');
+      setAgentChatGenerating(false);
+    }
     // 如果是数据抽取工具，加载数据源列表
     if (tool.name === 'data_extraction') {
       loadDatasources();
     }
   };
+
+  // ===== 智能体对话工具（hermes_agent_chat）参数测试 =====
+
+  // 加载指定会话的历史消息
+  const loadAgentChatHistory = async () => {
+    const agent = paramValues['agent'] || 'default';
+    const sessionId = (paramValues['session_id'] || '').trim();
+    if (!sessionId) {
+      message.warning('请先填写 session_id');
+      return;
+    }
+    setAgentChatLoadingHistory(true);
+    try {
+      const res = await fetch(`/aicenter/v1/agent/hermes/agents/${encodeURIComponent(agent)}/conversations/${encodeURIComponent(sessionId)}/messages`);
+      const result = await res.json();
+      if (result.code === 200 && result.data) {
+        const list = (result.data.data || []) as { id: any; role: string; content: string; timestamp?: string }[];
+        setAgentChatMessages(list.map((m, idx) => ({
+          id: `history-${m.id ?? idx}`,
+          role: m.role === 'user' ? 'user' : 'assistant',
+          content: m.content || '',
+          timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
+        })));
+        if (list.length === 0) message.info('该会话暂无历史消息');
+      } else {
+        message.error(result.message || '加载历史消息失败');
+      }
+    } catch (e: any) {
+      message.error(e.message || '加载历史消息失败');
+    } finally {
+      setAgentChatLoadingHistory(false);
+    }
+  };
+
+  // 发送消息并流式接收智能体回答
+  const handleAgentChatSend = async () => {
+    const text = agentChatInput.trim();
+    if (!text || agentChatGenerating) return;
+    const agent = paramValues['agent'] || 'default';
+    let sessionId = (paramValues['session_id'] || '').trim();
+
+    const userMsgId = `u-${Date.now()}`;
+    const assistantMsgId = `a-${Date.now() + 1}`;
+    setAgentChatMessages(prev => [
+      ...prev,
+      { id: userMsgId, role: 'user', content: text, timestamp: new Date() },
+      { id: assistantMsgId, role: 'assistant', content: '', timestamp: new Date() },
+    ]);
+    setAgentChatInput('');
+    setAgentChatGenerating(true);
+
+    try {
+      agentChatAbortRef.current = new AbortController();
+      const response = await fetch(`/aicenter/v1/toolkit/builtin_tools/${encodeURIComponent(currentTool.name)}/run_stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agent, message: text, session_id: sessionId || '' }),
+        signal: agentChatAbortRef.current.signal,
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      if (!reader) throw new Error('No reader available');
+
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6);
+          if (data === '[DONE]') break;
+          try {
+            const parsed = JSON.parse(data);
+            // 回传的 session_id：写入参数并展示
+            if (parsed.session_id) {
+              sessionId = parsed.session_id;
+              setParamValues(prev => ({ ...prev, session_id: parsed.session_id }));
+            }
+            if (parsed.content) {
+              setAgentChatMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, content: m.content + parsed.content } : m));
+            }
+            if (parsed.error) {
+              setAgentChatMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, content: `错误：${parsed.error}`, error: true } : m));
+            }
+          } catch (e) { console.error('Failed to parse SSE data:', e); }
+        }
+      }
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        setAgentChatMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, stopped: true } : m));
+      } else {
+        setAgentChatMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, content: '请求异常：' + error.message, error: true } : m));
+      }
+    } finally {
+      setAgentChatGenerating(false);
+    }
+  };
+
+  // 停止智能体回答
+  const handleAgentChatStop = () => {
+    if (agentChatAbortRef.current) agentChatAbortRef.current.abort();
+    setAgentChatGenerating(false);
+  };
+
+  // 智能体对话：发送问题后强制滚动到底部；流式输出时若已在底部则跟随滚动
+  useEffect(() => {
+    if (currentTool?.name !== 'hermes_agent_chat') return;
+    const container = agentChatContainerRef.current;
+    if (!container) return;
+    const lastMsg = agentChatMessages[agentChatMessages.length - 1];
+    const threshold = 100;
+    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
+    if (lastMsg?.role === 'user' || isAtBottom) {
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [agentChatMessages, agentChatGenerating]);
 
   // 数据抽取工具：加载关系型数据源列表
   const loadDatasources = async () => {
@@ -1436,6 +1572,31 @@ const ToolkitManagement: React.FC = () => {
   const showCodeScriptList = selectedToolType === 'code_script';
   const showBuiltinTools = selectedToolType === 'builtin_tool';
 
+  // 内置工具按分类分组（用于分组展示卡片）
+  const builtinToolGroups = (() => {
+    const groups: { category: string; tools: BuiltinTool[] }[] = [];
+    const indexMap: Record<string, number> = {};
+    builtinTools.forEach(tool => {
+      const category = tool.category || 'default';
+      if (indexMap[category] === undefined) {
+        indexMap[category] = groups.length;
+        groups.push({ category, tools: [] });
+      }
+      groups[indexMap[category]].tools.push(tool);
+    });
+    // 默认分类排最后
+    return groups.sort((a, b) => {
+      if (a.category === 'default') return 1;
+      if (b.category === 'default') return -1;
+      return a.category.localeCompare(b.category);
+    });
+  })();
+
+  // 切换内置工具分类的展开/收起
+  const toggleBuiltinCategory = (category: string) => {
+    setCollapsedBuiltinCategories(prev => ({ ...prev, [category]: !prev[category] }));
+  };
+
   // 工具类型列表（内置工具放最后）
   const toolTypes = [
     { key: 'mcp', name: 'MCP服务', icon: TOOL_TYPE_ICON.mcp, color: TOOL_TYPE_COLOR.mcp },
@@ -1624,35 +1785,65 @@ const ToolkitManagement: React.FC = () => {
                   ) : builtinTools.length === 0 ? (
                     <Empty description="暂无内置工具" className={`empty-container ${theme === 'dark' ? 'dark' : 'light'}`} />
                   ) : (
-                    <Row gutter={[16, 16]}>
-                      {builtinTools.map((tool, index) => (
-                        <Col key={tool.name} xs={24} sm={12} md={8} lg={6} style={{ animationDelay: `${index * 0.1}s`, animationFillMode: 'both' }}>
-                          <Card hoverable className={`mcp-card ${theme === 'dark' ? 'dark' : 'light'}`} bodyStyle={{ padding: '0' }}>
-                            <div className="card-content" style={{ height: 262, display: 'flex', flexDirection: 'column' }}>
-                              <div className="card-header">
-                                <div className="card-icon">
-                                  <ToolOutlined style={{ fontSize: '24px', color: '#fff' }} />
-                                </div>
-                                <div className="card-info">
-                                  <div className="card-title" style={{ fontSize: '17px', fontWeight: 600 }}>{tool.title || tool.name}</div>
-                                  <div className="card-subtitle" style={{ fontSize: '13px' }}>{tool.name}</div>
-                                </div>
-                              </div>
-                              <div style={{ flex: 1, fontSize: '12px', color: theme === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', textOverflow: 'ellipsis', lineHeight: '1.5', marginBottom: '12px' }}>
-                                {tool.description}
-                              </div>
-                              <div className="card-footer">
-                                <div className="card-actions-bottom">
-                                  <Button icon={<EyeOutlined />} onClick={() => openViewDrawer(tool)} className="action-btn test" title="查看"><span>查看</span></Button>
-                                  <Button icon={<ToolOutlined />} onClick={() => openParamTestDrawer(tool)} className="action-btn edit" title="参数测试"><span>参数测试</span></Button>
-                                  <Button icon={<PlayCircleOutlined />} onClick={() => openModelTestDrawer(tool)} className="action-btn delete" title="模型测试" style={{ background: 'rgba(90, 111, 214, 0.08) !important', color: '#5a6fd6 !important' }}><span>模型测试</span></Button>
-                                </div>
-                              </div>
-                            </div>
-                          </Card>
-                        </Col>
-                      ))}
-                    </Row>
+                    builtinToolGroups.map(group => {
+                      const collapsed = !!collapsedBuiltinCategories[group.category];
+                      return (
+                        <div key={group.category} style={{ marginBottom: '24px' }}>
+                          <div
+                            onClick={() => toggleBuiltinCategory(group.category)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'flex-start',
+                              textAlign: 'left',
+                              cursor: 'pointer',
+                              userSelect: 'none',
+                              marginBottom: collapsed ? 0 : '12px',
+                              fontSize: '15px',
+                              fontWeight: 600,
+                              color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.85)',
+                            }}
+                          >
+                            <span style={{ marginRight: '6px', display: 'inline-flex', fontSize: '12px', color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)' }}>
+                              {collapsed ? <RightOutlined /> : <DownOutlined />}
+                            </span>
+                            <span>{group.category}</span>
+                            <span style={{ marginLeft: '8px', fontSize: '12px', fontWeight: 400, color: theme === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)' }}>{group.tools.length}</span>
+                          </div>
+                          {!collapsed && (
+                            <Row gutter={[16, 16]}>
+                              {group.tools.map((tool, index) => (
+                                <Col key={tool.name} xs={24} sm={12} md={8} lg={6} style={{ animationDelay: `${index * 0.1}s`, animationFillMode: 'both' }}>
+                                  <Card hoverable className={`mcp-card ${theme === 'dark' ? 'dark' : 'light'}`} bodyStyle={{ padding: '0' }}>
+                                    <div className="card-content" style={{ height: 262, display: 'flex', flexDirection: 'column' }}>
+                                      <div className="card-header">
+                                        <div className="card-icon">
+                                          <ToolOutlined style={{ fontSize: '24px', color: '#fff' }} />
+                                        </div>
+                                        <div className="card-info">
+                                          <div className="card-title" style={{ fontSize: '17px', fontWeight: 600 }}>{tool.title || tool.name}</div>
+                                          <div className="card-subtitle" style={{ fontSize: '13px' }}>{tool.name}</div>
+                                        </div>
+                                      </div>
+                                      <div style={{ flex: 1, fontSize: '12px', color: theme === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', textOverflow: 'ellipsis', lineHeight: '1.5', marginBottom: '12px' }}>
+                                        {tool.description}
+                                      </div>
+                                      <div className="card-footer">
+                                        <div className="card-actions-bottom">
+                                          <Button icon={<EyeOutlined />} onClick={() => openViewDrawer(tool)} className="action-btn test" title="查看"><span>查看</span></Button>
+                                          <Button icon={<ToolOutlined />} onClick={() => openParamTestDrawer(tool)} className="action-btn edit" title="参数测试"><span>参数测试</span></Button>
+                                          <Button icon={<PlayCircleOutlined />} onClick={() => openModelTestDrawer(tool)} className="action-btn delete" title="模型测试" style={{ background: 'rgba(90, 111, 214, 0.08) !important', color: '#5a6fd6 !important' }}><span>模型测试</span></Button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </Card>
+                                </Col>
+                              ))}
+                            </Row>
+                          )}
+                        </div>
+                      );
+                    })
                   )}
                 </div>
 
@@ -1699,11 +1890,15 @@ const ToolkitManagement: React.FC = () => {
         rootClassName={`toolkit-drawer ${theme === 'dark' ? 'dark' : 'light'}`}
         styles={{
           header: { background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fff', color: theme === 'dark' ? '#fff' : '#000' },
-          body: { background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5', color: theme === 'dark' ? '#fff' : '#000', padding: '24px' },
+          body: currentTool?.name === 'hermes_agent_chat'
+            ? { background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5', color: theme === 'dark' ? '#fff' : '#000', padding: 0, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }
+            : { background: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5', color: theme === 'dark' ? '#fff' : '#000', padding: '24px' },
         }}
       >
         {currentTool && (
-          <div>
+          <div style={currentTool.name === 'hermes_agent_chat' ? { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 } : {}}>
+            {/* 顶部区：工具信息 + 参数（智能体对话时固定在上方并可独立滚动） */}
+            <div style={currentTool.name === 'hermes_agent_chat' ? { flexShrink: 0, maxHeight: '45%', overflowY: 'auto', padding: '16px 24px 0' } : {}}>
             <div style={{ marginBottom: 16 }}>
               <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>{currentTool.title || currentTool.name}</h3>
               <div style={{ fontSize: 13, color: theme === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)' }}>{currentTool.description}</div>
@@ -1727,6 +1922,9 @@ const ToolkitManagement: React.FC = () => {
               {currentTool.params.map(param => {
                 // code_script的params按main形参逐个输入（见上方渲染区）
                 if (currentTool.name === 'code_script' && param.name === 'params') return null;
+                // 智能体对话工具：message 通过下方聊天输入框发送，不在此渲染
+                if (currentTool.name === 'hermes_agent_chat' && param.name === 'message') return null;
+                const isAgentChatSession = currentTool.name === 'hermes_agent_chat' && param.name === 'session_id';
                 return (
                   <Form.Item
                     key={param.name}
@@ -1741,19 +1939,106 @@ const ToolkitManagement: React.FC = () => {
                     }
                     required={false}
                   >
-                    {renderParamInput(param)}
+                    {isAgentChatSession ? (
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <div style={{ flex: 1 }}>{renderParamInput(param)}</div>
+                        <Button onClick={loadAgentChatHistory} loading={agentChatLoadingHistory} icon={<ClockCircleOutlined />}>加载历史</Button>
+                      </div>
+                    ) : (
+                      renderParamInput(param)
+                    )}
                   </Form.Item>
                 );
               })}
             </Form>
-            <Button type="primary" icon={paramTesting ? <LoadingOutlined /> : <PlayCircleOutlined />} onClick={handleParamTest} loading={paramTesting} style={{ width: '100%', marginBottom: 16 }}>
-              {paramTesting ? '执行中...' : '执行测试'}
-            </Button>
-            {paramTestResult !== null && (
-              <div style={{ marginTop: 16 }}>
-                <div style={{ marginBottom: 8, fontWeight: 500, textAlign: 'left' }}>执行结果:</div>
-                <ToolTestResult testResult={paramTestResult} theme={theme} />
+            </div>
+            {currentTool.name === 'hermes_agent_chat' ? (
+              /* 智能体对话工具：聊天一问一答式流式交互 */
+              <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '12px 24px 0' }}>
+                {paramValues['session_id'] && (
+                  <div style={{ flexShrink: 0, marginBottom: 8, fontSize: 12, color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)', textAlign: 'left', wordBreak: 'break-all' }}>
+                    session_id：{paramValues['session_id']}
+                  </div>
+                )}
+                <div
+                  ref={agentChatContainerRef}
+                  className={`chat-messages ${theme === 'dark' ? 'dark' : 'light'}`}
+                  style={{ flex: 1, minHeight: 0, overflowY: 'auto', borderRadius: 8, padding: '12px' }}
+                >
+                  {agentChatMessages.length === 0 ? (
+                    <div style={{ textAlign: 'center', color: theme === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.35)', padding: '40px 0' }}>
+                      <ToolOutlined style={{ fontSize: 40, opacity: 0.3 }} />
+                      <p>输入消息开始与智能体对话</p>
+                    </div>
+                  ) : (
+                    agentChatMessages.map(msg => (
+                      <div key={msg.id} className={`message ${msg.role}`}>
+                        <div className="message-avatar">
+                          {msg.role === 'user' ? '👤' : <img src={getDefaultAvatar()} alt="AI" className="avatar-image" />}
+                        </div>
+                        <div className="message-content">
+                          {msg.role === 'user' ? (
+                            <div className="user-message-text">{msg.content}</div>
+                          ) : (
+                            <>
+                              {msg.error ? (
+                                <div style={{ color: '#ff4d4f', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.content}</div>
+                              ) : (
+                                msg.content && (
+                                  <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                                    <ChatMarkdown source={msg.content} className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`} />
+                                  </div>
+                                )
+                              )}
+                              {/* 已发送问题、回答尚未开始时显示"思考中" */}
+                              {agentChatGenerating && msg.id === agentChatMessages[agentChatMessages.length - 1].id && !msg.content && (
+                                <div className="thinking-indicator" style={{ padding: 0 }}>
+                                  <LoadingOutlined spin />
+                                  <span>正在思考中</span>
+                                </div>
+                              )}
+                              {msg.stopped && <div style={{ fontSize: 12, color: '#ff4d4f', marginTop: 4, fontStyle: 'italic' }}>[已停止回答]</div>}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div style={{ flexShrink: 0, position: 'relative', padding: '12px 0 16px' }}>
+                  <TextArea
+                    placeholder="输入消息... (Ctrl/Shift+Enter换行，Enter发送)"
+                    value={agentChatInput}
+                    onChange={(e) => setAgentChatInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
+                        e.preventDefault();
+                        handleAgentChatSend();
+                      }
+                    }}
+                    autoSize={{ minRows: 2, maxRows: 6 }}
+                    className={`chat-input ${theme === 'dark' ? 'dark' : 'light'}`}
+                    style={{ background: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff', color: theme === 'dark' ? '#fff' : '#000', borderRadius: 12, resize: 'none', paddingRight: 50, paddingBottom: 32 }}
+                  />
+                  {agentChatGenerating ? (
+                    <Button type="primary" icon={<StopOutlined />} onClick={handleAgentChatStop} style={{ position: 'absolute', right: 8, bottom: 24, borderRadius: 8 }} title="停止回答" />
+                  ) : (
+                    <Button type="primary" icon={<SendOutlined />} onClick={handleAgentChatSend} disabled={!agentChatInput.trim()} style={{ position: 'absolute', right: 8, bottom: 24, borderRadius: 8 }} />
+                  )}
+                </div>
               </div>
+            ) : (
+              <>
+                <Button type="primary" icon={paramTesting ? <LoadingOutlined /> : <PlayCircleOutlined />} onClick={handleParamTest} loading={paramTesting} style={{ width: '100%', marginBottom: 16 }}>
+                  {paramTesting ? '执行中...' : '执行测试'}
+                </Button>
+                {paramTestResult !== null && (
+                  <div style={{ marginTop: 16 }}>
+                    <div style={{ marginBottom: 8, fontWeight: 500, textAlign: 'left' }}>执行结果:</div>
+                    <ToolTestResult testResult={paramTestResult} theme={theme} />
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

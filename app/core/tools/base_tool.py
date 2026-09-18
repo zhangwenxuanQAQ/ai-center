@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, Generator, List, Optional, Union
 
 if TYPE_CHECKING:
     from app.core.hooks.base_hook import BaseHook
@@ -121,6 +121,7 @@ class BaseTool(ABC):
     name: str = ""
     title: str = ""
     description: str = ""
+    category: str = "default"
     params: List[BaseToolParam] = []
     hooks: List["BaseHook"] = []
 
@@ -168,6 +169,44 @@ class BaseTool(ABC):
 
         return result
 
+    def run_stream(self, **kwargs) -> Generator[Union[ToolResult, Any], None, None]:
+        """
+        流式执行工具（模板方法）
+
+        与非流式的run方法保持一致的hook处理顺序，逐个产出流式分片：
+        1. 调用所有hooks的before方法，处理并可能修改工具调用参数
+        2. 调用_run_stream方法执行实际工具逻辑，逐个产出分片
+        3. 对每个分片调用所有hooks的after方法
+
+        Args:
+            **kwargs: 工具调用参数
+
+        Yields:
+            Union[ToolResult, Any]: 工具执行结果分片（推荐使用ToolResult）
+        """
+        # 1. 执行before hooks，处理入参
+        for hook in self.hooks:
+            try:
+                kwargs = hook.before(**kwargs)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(
+                    f"hook.before 执行失败: {e}", exc_info=True
+                )
+
+        # 2. 执行实际工具逻辑并逐个产出分片，每个分片经过after hooks处理
+        for chunk in self._run_stream(**kwargs):
+            # 3. 执行after hooks，处理出参
+            for hook in self.hooks:
+                try:
+                    chunk = hook.after(chunk)
+                except Exception as e:
+                    import logging
+                    logging.getLogger(__name__).error(
+                        f"hook.after 执行失败: {e}", exc_info=True
+                    )
+            yield chunk
+
     def _success(self, result: Any = None, message: str = "", **metadata) -> ToolResult:
         """创建成功的工具执行结果（便捷方法）"""
         return ToolResult.ok(result=result, message=message, **metadata)
@@ -188,6 +227,21 @@ class BaseTool(ABC):
             Union[ToolResult, Any]: 工具执行结果，推荐返回ToolResult实例
         """
         raise NotImplementedError("Subclass must implement _run()")
+
+    def _run_stream(self, **kwargs) -> Generator[Union[ToolResult, Any], None, None]:
+        """
+        流式执行实际工具逻辑（由子类按需重写）
+
+        默认实现直接调用非流式_run方法，并将完整结果作为唯一分片产出。
+        子类若需要真正的增量输出，可重写本方法逐个产出分片。
+
+        Args:
+            **kwargs: 工具调用参数
+
+        Yields:
+            Union[ToolResult, Any]: 工具执行结果分片
+        """
+        yield self._run(**kwargs)
 
     def get_required_params(self) -> List[str]:
         return [p.name for p in self.params if p.required]

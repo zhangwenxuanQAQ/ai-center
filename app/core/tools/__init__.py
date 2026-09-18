@@ -28,6 +28,11 @@ def _load_builtin_tools():
         from app.core.tools.builtin_tools.clarify import clarify  # noqa: F401
         from app.core.tools.builtin_tools.data_extraction import data_extraction  # noqa: F401
         from app.core.tools.builtin_tools.api_call import api_call  # noqa: F401
+        from app.core.tools.builtin_tools.agent import (  # noqa: F401
+            hermes_agent_chat,
+            hermes_agent_conversations,
+            hermes_agent_messages,
+        )
         import logging
         logging.getLogger(__name__).info("builtin tools loaded")
     except Exception as e:

@@ -5,7 +5,7 @@
 
 import logging
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Dict, Generator
 
 from app.core.tools import BaseTool, BaseToolParam, ToolRegistry, ToolResult
 from app.services.datasource.service import DatasourceService
@@ -60,6 +60,10 @@ class data_extraction(BaseTool):
             enum=["json", "markdown"],
         ),
     ]
+
+    def _run_stream(self, **kwargs) -> Generator[ToolResult, None, None]:
+        """流式执行工具，直接复用非流式的_run结果作为唯一分片"""
+        yield self._run(**kwargs)
 
     def _run(self, **kwargs) -> ToolResult:
         datasource_id = kwargs.get("datasource_id", "")

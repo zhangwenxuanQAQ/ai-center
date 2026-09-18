@@ -32,6 +32,7 @@ export interface BuiltinTool {
   name: string;
   title: string;
   description: string;
+  category?: string;
   created_at?: string;
   params: BuiltinToolParam[];
 }

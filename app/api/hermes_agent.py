@@ -5,7 +5,7 @@ Hermes 智能体控制器，提供基于 hermes CLI 的智能体管理 API 接�
 from fastapi import APIRouter, Query, UploadFile, File
 from fastapi.responses import FileResponse
 from pathlib import Path
-from starlette.responses import Response
+from starlette.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Optional
 
@@ -74,6 +74,17 @@ class HermesSkillCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=64, description="技能名称（作为目录名与 frontmatter name）")
     category: Optional[str] = Field(None, max_length=64, description="技能分类（skills 下的一级目录名，空则使用 custom）")
     description: Optional[str] = Field(None, max_length=500, description="技能描述")
+
+
+class HermesConversationCreate(BaseModel):
+    """新建对话 DTO"""
+    title: Optional[str] = Field(None, max_length=200, description="对话标题")
+
+
+class HermesChatRequest(BaseModel):
+    """对话请求 DTO（流式输出）"""
+    message: str = Field(..., min_length=1, description="用户消息内容")
+    session_id: Optional[str] = Field(None, description="会话 id，不传则自动新建")
 
 
 def _handle_error(e: Exception) -> ApiResponse:
@@ -430,3 +441,101 @@ def toggle_hermes_tool(agent_name: str, tool_name: str, body: HermesToolToggle):
         return ResponseUtil.success(data=data, message="工具状态更新成功")
     except Exception as e:
         return _handle_error(e)
+
+
+# ==================== 对话接口（官方 SDK） ====================
+
+@router.post("/hermes/agents/{agent_name}/conversations", response_model=ApiResponse)
+def create_hermes_conversation(agent_name: str, body: HermesConversationCreate):
+    """
+    新建对话（在智能体 state.db 中创建会话记录）
+    """
+    try:
+        data = hermes_service.create_conversation(agent_name, title=body.title)
+        return ResponseUtil.success(data=data, message="对话创建成功")
+    except Exception as e:
+        return _handle_error(e)
+
+
+@router.get("/hermes/agents/{agent_name}/conversations", response_model=ApiResponse)
+def list_hermes_conversations(
+    agent_name: str,
+    limit: int = Query(20, ge=1, le=100, description="每页数量"),
+    offset: int = Query(0, ge=0, description="偏移量"),
+    search: str = Query(None, description="标题/会话 id 模糊查询"),
+):
+    """
+    查询会话列表（按最近活跃时间倒序）
+    """
+    try:
+        data = hermes_service.list_conversations(agent_name, limit=limit, offset=offset, search=search)
+        return ResponseUtil.success(data=data, message="获取会话列表成功")
+    except Exception as e:
+        return _handle_error(e)
+
+
+@router.get("/hermes/agents/{agent_name}/conversations/{session_id}/messages", response_model=ApiResponse)
+def get_hermes_conversation_messages(
+    agent_name: str,
+    session_id: str,
+    limit: int = Query(None, ge=1, description="数量限制"),
+    offset: int = Query(0, ge=0, description="偏移量"),
+):
+    """
+    查询会话历史消息
+    """
+    try:
+        data = hermes_service.get_conversation_messages(agent_name, session_id, limit=limit, offset=offset)
+        return ResponseUtil.success(data=data, message="获取历史消息成功")
+    except Exception as e:
+        return _handle_error(e)
+
+
+@router.post("/hermes/agents/{agent_name}/conversations/{session_id}/delete", response_model=ApiResponse)
+def delete_hermes_conversation(agent_name: str, session_id: str):
+    """
+    删除对话（同时删除历史消息）
+    """
+    try:
+        data = hermes_service.delete_conversation(agent_name, session_id)
+        return ResponseUtil.success(data=data, message="对话删除成功")
+    except Exception as e:
+        return _handle_error(e)
+
+
+@router.post("/hermes/agents/{agent_name}/chat")
+def chat_hermes_agent(agent_name: str, body: HermesChatRequest):
+    """
+    流式对话（官方 SDK 运行，SSE 逐段返回模型输出）
+
+    未传 session_id 时自动新建会话；响应格式：
+    data: {"content": "..."} / data: {"session_id": "..."} / data: [DONE]
+    """
+    try:
+        session_id = body.session_id
+        if not session_id:
+            session_id = hermes_service.create_conversation(agent_name)["session_id"]
+    except Exception as e:
+        return _handle_error(e)
+
+    def generate():
+        import json as _json
+        try:
+            yield f"data: {_json.dumps({'session_id': session_id}, ensure_ascii=False)}\n\n"
+            for chunk in hermes_service.chat_stream(agent_name, session_id, body.message):
+                yield f"data: {_json.dumps({'content': chunk}, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            yield f"data: {_json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
+        finally:
+            yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Transfer-Encoding": "chunked",
+        },
+    )

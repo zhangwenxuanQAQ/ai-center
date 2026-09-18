@@ -9,7 +9,7 @@
 """
 
 import logging
-from typing import Any
+from typing import Any, Generator
 
 from app.core.tools import BaseTool, BaseToolParam, ToolRegistry, ToolResult
 
@@ -95,6 +95,10 @@ class clarify(BaseTool):
             default=False
         ),
     ]
+
+    def _run_stream(self, **kwargs) -> Generator[ToolResult, None, None]:
+        """流式执行工具，直接复用非流式的_run结果作为唯一分片"""
+        yield self._run(**kwargs)
 
     def _run(self, **kwargs) -> ToolResult:
         """执行澄清工具，返回包含问题和选项的结构化结果。

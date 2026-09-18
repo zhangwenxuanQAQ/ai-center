@@ -16,7 +16,7 @@ import logging
 import re
 import time
 import traceback
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Generator, List, Optional
 
 from app.core.tools import BaseTool, BaseToolParam, ToolRegistry, ToolResult
 
@@ -693,6 +693,10 @@ class code_script(BaseTool):
             default=DEFAULT_TIMEOUT,
         ),
     ]
+
+    def _run_stream(self, **kwargs) -> Generator[ToolResult, None, None]:
+        """流式执行工具，直接复用非流式的_run结果作为唯一分片"""
+        yield self._run(**kwargs)
 
     def _run(self, **kwargs) -> ToolResult:
         code = kwargs.get("code", "")

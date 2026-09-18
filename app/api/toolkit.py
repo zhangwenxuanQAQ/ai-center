@@ -4,6 +4,9 @@
 
 from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel
+from starlette.responses import StreamingResponse
+import json
+
 from app.services.toolkit.service import ToolkitCategoryService
 from app.services.toolkit.dto import ToolkitCategoryCreate, ToolkitCategoryUpdate, ToolkitCategory
 from app.constants.toolkit_constants import TOOL_TYPE, TOOL_TYPE_NAME
@@ -139,6 +142,7 @@ def _tool_to_dict(tool) -> dict:
         "name": tool.name,
         "title": tool.title,
         "description": tool.description,
+        "category": getattr(tool, "category", "default"),
         "created_at": getattr(tool, 'created_at', None),
         "params": [
             {
@@ -245,3 +249,63 @@ async def run_builtin_tool(tool_name: str, request: Request):
         return ResponseUtil.success(data=result, message="工具执行成功")
     except Exception as e:
         return ResponseUtil.error(message=f"工具执行失败: {str(e)}")
+
+
+@router.post("/builtin_tools/{tool_name}/run_stream")
+async def run_builtin_tool_stream(tool_name: str, request: Request):
+    """
+    流式执行内置工具（SSE 逐段返回执行分片）
+
+    响应格式：
+        data: {"content": "...", "session_id": "...", "done": false}
+        data: {"error": "..."}
+        data: [DONE]
+
+    Args:
+        tool_name: 工具名称
+        request: 包含工具参数的请求体
+
+    Returns:
+        StreamingResponse: text/event-stream 流式响应
+    """
+    tool = ToolRegistry.get_tool(tool_name)
+    if tool is None:
+        return ResponseUtil.not_found(message=f"内置工具 {tool_name} 不存在")
+
+    body = await request.json()
+    # 校验必填参数
+    error = tool.validate_params(**body)
+    if error:
+        return ResponseUtil.error(message=error)
+
+    def generate():
+        try:
+            for chunk in tool.run_stream(**body):
+                if isinstance(chunk, ToolResult):
+                    if not chunk.success:
+                        yield f"data: {json.dumps({'error': chunk.error or chunk.message}, ensure_ascii=False)}\n\n"
+                        break
+                    payload = {
+                        "content": chunk.result if isinstance(chunk.result, str) else "",
+                        "message": chunk.message,
+                        "done": False,
+                    }
+                    payload.update(chunk.metadata or {})
+                    yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+                else:
+                    yield f"data: {json.dumps({'content': chunk if isinstance(chunk, str) else '', 'done': False}, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
+        finally:
+            yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Transfer-Encoding": "chunked",
+        },
+    )
