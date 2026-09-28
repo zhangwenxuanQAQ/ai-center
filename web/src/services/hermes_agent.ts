@@ -59,12 +59,21 @@ export interface HermesSkillTree {
   skill_md: string;
 }
 
-export interface HermesTool {
+/** 工具集中的子工具（单个可调用方法） */
+export interface HermesSubTool {
   name: string;
   description?: string;
+}
+
+export interface HermesTool {
+  name: string;
+  /** 卡片标题（如 "🔌 Logicflow" / "🔍 Web Search & Scraping"） */
+  label?: string;
+  /** 真实描述（插件=plugin.yaml 的 description，内置=label） */
+  description?: string;
   enabled: boolean;
-  /** 子工具/能力描述（如 "web_search, web_extract"） */
-  sub_tools?: string;
+  /** 子工具列表 */
+  sub_tools?: HermesSubTool[];
 }
 
 export const hermesAgentService = {

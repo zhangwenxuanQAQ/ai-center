@@ -36,7 +36,13 @@ class hermes_agent_chat(BaseTool):
     ]
 
     def _run_stream(self, **kwargs) -> Generator[ToolResult, None, None]:
-        """流式执行工具，将对话增量文本逐段产出"""
+        """
+        流式执行工具：文本增量走 result，工具调用事件走 metadata
+
+        事件 payload（metadata.tool_event）：
+            { type: "start",  tool_call_id, name, arguments }
+            { type: "result", tool_call_id, name, arguments, result }
+        """
         agent = kwargs.get("agent") or "default"
         message = kwargs.get("message", "")
         session_id = kwargs.get("session_id") or ""
@@ -46,20 +52,37 @@ class hermes_agent_chat(BaseTool):
         try:
             if not session_id:
                 session_id = hermes_service.create_conversation(agent)["session_id"]
-            for chunk in hermes_service.chat_stream(agent, session_id, message):
-                yield self._success(result=chunk, message="", session_id=session_id)
+            for event in hermes_service.chat_stream(agent, session_id, message):
+                if isinstance(event, tuple):
+                    kind, data = event
+                    if kind == "text":
+                        yield self._success(result=data, message="", session_id=session_id)
+                    elif kind == "tool_start":
+                        yield self._success(
+                            result="", message="",
+                            session_id=session_id,
+                            tool_event={"type": "start", **data},
+                        )
+                    elif kind == "tool_result":
+                        yield self._success(
+                            result="", message="",
+                            session_id=session_id,
+                            tool_event={"type": "result", **data},
+                        )
+                else:  # 兼容：直接 yield str
+                    yield self._success(result=event, message="", session_id=session_id)
         except Exception as e:
             logger.error(f"智能体对话失败: {e}", exc_info=True)
             yield self._error(message=f"智能体对话失败: {e}", error=str(e), session_id=session_id)
 
     def _run(self, **kwargs) -> ToolResult:
-        """执行对话，聚合所有流式分片为完整回复"""
+        """执行对话，聚合所有流式分片为完整回复（忽略工具事件，只累加文本）"""
         parts = []
         session_id = kwargs.get("session_id") or ""
         for chunk in self._run_stream(**kwargs):
             if not chunk.success:
                 return chunk
-            if isinstance(chunk.result, str):
+            if isinstance(chunk.result, str) and chunk.result:
                 parts.append(chunk.result)
             session_id = chunk.metadata.get("session_id", session_id)
         return self._success(

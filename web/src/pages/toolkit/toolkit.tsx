@@ -152,7 +152,12 @@ const ToolkitManagement: React.FC = () => {
   const [paramTesting, setParamTesting] = useState(false);
 
   // 智能体对话工具（hermes_agent_chat）参数测试：聊天式交互状态
-  const [agentChatMessages, setAgentChatMessages] = useState<{ id: string; role: 'user' | 'assistant'; content: string; timestamp: Date; stopped?: boolean; error?: boolean }[]>([]);
+  /** 工具调用事件（start 发出 + result 补齐，按 tool_call_id 关联） */
+  const [agentChatMessages, setAgentChatMessages] = useState<{
+    id: string; role: 'user' | 'assistant'; content: string; timestamp: Date;
+    stopped?: boolean; error?: boolean;
+    toolEvents?: { id: string; name: string; arguments?: any; result?: any; status: 'running' | 'done' }[];
+  }[]>([]);
   const [agentChatInput, setAgentChatInput] = useState('');
   const [agentChatGenerating, setAgentChatGenerating] = useState(false);
   const [agentChatLoadingHistory, setAgentChatLoadingHistory] = useState(false);
@@ -1129,6 +1134,44 @@ const ToolkitManagement: React.FC = () => {
             if (parsed.content) {
               setAgentChatMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, content: m.content + parsed.content } : m));
             }
+            // 工具调用事件：start（push running 事件）/ result（按 id 补 result + status=done）
+            if (parsed.tool_event) {
+              const ev = parsed.tool_event as {
+                type: 'start' | 'result';
+                tool_call_id: string; name: string;
+                arguments?: any; result?: any;
+              };
+              setAgentChatMessages(prev => prev.map(m => {
+                if (m.id !== assistantMsgId) return m;
+                const events = [...(m.toolEvents || [])];
+                if (ev.type === 'start') {
+                  events.push({
+                    id: ev.tool_call_id,
+                    name: ev.name,
+                    arguments: ev.arguments,
+                    status: 'running',
+                  });
+                } else {
+                  const idx = events.findIndex((e) => e.id === ev.tool_call_id);
+                  if (idx >= 0) {
+                    events[idx] = {
+                      ...events[idx],
+                      arguments: ev.arguments ?? events[idx].arguments,
+                      result: ev.result,
+                      status: 'done',
+                    };
+                  } else {
+                    // 兜底：没收到 start 也补一条 done 事件
+                    events.push({
+                      id: ev.tool_call_id, name: ev.name,
+                      arguments: ev.arguments, result: ev.result,
+                      status: 'done',
+                    });
+                  }
+                }
+                return { ...m, toolEvents: events };
+              }));
+            }
             if (parsed.error) {
               setAgentChatMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, content: `错误：${parsed.error}`, error: true } : m));
             }
@@ -1989,6 +2032,69 @@ const ToolkitManagement: React.FC = () => {
                                     <ChatMarkdown source={msg.content} className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`} />
                                   </div>
                                 )
+                              )}
+                              {/* 工具调用事件：调用开始 + 结果，按事件顺序穿插在消息体中 */}
+                              {msg.toolEvents && msg.toolEvents.length > 0 && !msg.error && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+                                  {msg.toolEvents.map((te) => {
+                                    const isRunning = te.status === 'running';
+                                    return (
+                                      <div
+                                        key={te.id}
+                                        style={{
+                                          padding: '6px 10px',
+                                          borderRadius: 6,
+                                          border: theme === 'dark'
+                                            ? '1px solid rgba(255,255,255,0.12)'
+                                            : '1px solid rgba(0,0,0,0.08)',
+                                          background: theme === 'dark'
+                                            ? 'rgba(255,255,255,0.04)'
+                                            : 'rgba(0,0,0,0.02)',
+                                          fontSize: 12,
+                                        }}
+                                      >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                          {isRunning ? <LoadingOutlined spin /> : <CheckCircleOutlined />}
+                                          <code style={{
+                                            fontWeight: 600,
+                                            color: isRunning
+                                              ? (theme === 'dark' ? '#fbbf24' : '#d48806')
+                                              : (theme === 'dark' ? '#8aa0ff' : '#4f5fb8'),
+                                          }}>{te.name}</code>
+                                          <span style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.4)', fontSize: 11 }}>
+                                            {isRunning ? '执行中…' : '执行完成'}
+                                          </span>
+                                        </div>
+                                        {te.arguments != null && (
+                                          <details style={{ marginBottom: 2 }}>
+                                            <summary style={{ cursor: 'pointer', color: theme === 'dark' ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.45)' }}>参数</summary>
+                                            <pre style={{
+                                              margin: '4px 0 0',
+                                              padding: '6px 8px',
+                                              borderRadius: 4,
+                                              background: theme === 'dark' ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.04)',
+                                              whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                                              fontSize: 11,
+                                            }}>{typeof te.arguments === 'string' ? te.arguments : JSON.stringify(te.arguments, null, 2)}</pre>
+                                          </details>
+                                        )}
+                                        {!isRunning && te.result != null && (
+                                          <details>
+                                            <summary style={{ cursor: 'pointer', color: theme === 'dark' ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.45)' }}>结果</summary>
+                                            <pre style={{
+                                              margin: '4px 0 0',
+                                              padding: '6px 8px',
+                                              borderRadius: 4,
+                                              background: theme === 'dark' ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.04)',
+                                              whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                                              fontSize: 11,
+                                            }}>{typeof te.result === 'string' ? te.result : JSON.stringify(te.result, null, 2)}</pre>
+                                          </details>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
                               )}
                               {/* 已发送问题、回答尚未开始时显示"思考中" */}
                               {agentChatGenerating && msg.id === agentChatMessages[agentChatMessages.length - 1].id && !msg.content && (

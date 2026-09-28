@@ -8,6 +8,7 @@ Hermes 智能体服务类
 
 import asyncio
 import json
+import logging
 import os
 import queue
 import re
@@ -24,6 +25,8 @@ import yaml
 
 from app.configs.config import config
 from app.core.exceptions import ResourceNotFoundError
+
+logger = logging.getLogger(__name__)
 
 # 默认智能体名称（hermes_home 根目录即 default，不可删除）
 DEFAULT_AGENT_NAME = "default"
@@ -137,6 +140,25 @@ class HermesAgentService:
         from datetime import datetime
         return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
 
+    @staticmethod
+    def _clear_plugin_module_cache():
+        """
+        清除 hermes_plugins.* 命名空间下所有 Python 模块缓存
+
+        hermes 把目录型插件 import 到 hermes_plugins.<slug>（含子模块），
+        模块通常设有"已注册"全局开关（如 `_REGISTERED`），当同一进程
+        跨 agent 反复 discover 时，子模块因 sys.modules 缓存命中，
+        模块级 _REGISTERED 仍处于 True，register(ctx) 会短路 return，
+        导致该 agent 视角下 plugin toolsets 在新晋 manager 状态中丢失。
+
+        清理方式：移除所有以 hermes_plugins 开头的 module entry，
+        使下次 discover 重新 import，让各 plugin 的全局状态重置。
+        """
+        import sys
+        stale = [m for m in list(sys.modules) if m == "hermes_plugins" or m.startswith("hermes_plugins.")]
+        for m in stale:
+            sys.modules.pop(m, None)
+
     def _list_toolsets_inproc(self, agent_dir: Path):
         """
         进程内解析智能体的工具集列表（避免 CLI 子进程冷启动开销约 2s/次）
@@ -145,42 +167,113 @@ class HermesAgentService:
         有效可配置工具集（built-in + plugin）按 platform 过滤，
         enabled 通过 _get_platform_tools 解析 config.yaml 得到。
 
+        关键：每次切 agent 都先清 plugin module 缓存再 force 重扫，
+        否则会因模块级 "已注册" 单例门导致后一次 sweep 被短路，
+        使 plugin 的 tool 不入 `_plugin_tool_names`，
+        表现为"agent 切换后 plugin 提供的工具集从列表里漂移/消失"。
+
         Returns:
-            list[dict]: [{"name", "description", "enabled", "sub_tools"}, ...]，异常时返回 None
+            list[dict]: [
+                {
+                  "name": toolset key,
+                  "label": 卡片标题（如 "🔌 Logicflow"）,
+                  "description": 真实描述（插件=plugin.yaml 的 description，内置=label）,
+                  "enabled": bool,
+                  "sub_tools": [{"name", "description"}, ...]
+                }, ...
+            ]
+            异常时返回 None
         """
         try:
-            from hermes_cli.tools_config import (
-                _get_effective_configurable_toolsets,
-                _get_platform_tools,
-                _toolset_allowed_for_platform,
-            )
+            from hermes_cli.plugins import discover_plugins
+            from hermes_cli.tools_config import (_get_platform_tools,)
         except ImportError:
             return None
 
         try:
             with self._with_agent_home(agent_dir):
                 from hermes_cli.config import load_config
-                config = load_config()
+                from tools.registry import discover_builtin_tools, registry as _registry
+                from toolsets import get_toolset as _ts_mod_get_toolset
+                from hermes_cli.tools_config import CONFIGURABLE_TOOLSETS
+                from hermes_cli.plugins import get_plugin_toolsets
 
-                # 与 CLI tools list 一致：统一按 cli 平台过滤与解析 enabled
+                cfg = load_config()
+                discover_builtin_tools()
+                # 切 agent 后必须清模块缓存，否则 plugin 的模块级注册
+                # 单例门会让重扫的 plugin 不重新走 register(ctx) 流程
+                self._clear_plugin_module_cache()
+                discover_plugins(force=True)
+
+                # 插件工具集 → (label, desc)
+                plugin_desc_by_ts: dict = {}
+                for ts_key, label, desc in get_plugin_toolsets():
+                    plugin_desc_by_ts.setdefault(ts_key, (label, desc))
+
+                # 工具集标题映射：在插件端代码未注册 toolset 标题时的中文兜底
+                # 当 plugin 提供 toolset_label 时优先使用它（如需扩展请在 plugin.yaml 增加字段）
+                TOOLSET_LABEL_OVERRIDES: dict = {
+                    "logicflow": "🌀 逻辑编排",
+                }
+                for _ts, _lbl in TOOLSET_LABEL_OVERRIDES.items():
+                    if _ts in plugin_desc_by_ts:
+                        _old_label, _desc = plugin_desc_by_ts[_ts]
+                        plugin_desc_by_ts[_ts] = (_lbl, _desc)
+
+                # 子工具：按 toolset key 反射查 registry 取每个 tool 的描述
+                # 内置工具与插件注册在 toolset 内的工具都从这里得到
+                sub_tools_by_ts: dict = {}
+                for entry in list(_registry._tools.values()):
+                    sub_tools_by_ts.setdefault(entry.toolset, []).append({
+                        "name": entry.name,
+                        "description": str(entry.description or ""),
+                    })
+
+                def _resolve_sub_tools(ts_key: str) -> list:
+                    subs = sub_tools_by_ts.get(ts_key)
+                    if subs:
+                        return subs
+                    # 兜底：通过 toolsets.TOOLSETS 静态定义补齐名字
+                    ts_def = _ts_mod_get_toolset(ts_key, include_registry=False) or {}
+                    names = ts_def.get("tools") or []
+                    return [{"name": n, "description": ""} for n in names]
+
                 platform = "cli"
-                enabled_toolsets = set(
-                    _get_platform_tools(
-                        config, platform, include_default_mcp_servers=False
-                    )
+                enabled_toolsets = _get_platform_tools(
+                    cfg, platform, include_default_mcp_servers=False
                 )
-                tools = [
-                    {
+
+                items: list = []
+                seen = set()
+                for ts_key, label, subs in CONFIGURABLE_TOOLSETS:
+                    if ts_key in seen:
+                        continue
+                    seen.add(ts_key)
+                    # 内置工具集无独立 description 字段，使用 label 兼顾标题与描述
+                    items.append({
                         "name": ts_key,
+                        "label": label,
                         "description": label,
                         "enabled": ts_key in enabled_toolsets,
-                        "sub_tools": subs,
-                    }
-                    for ts_key, label, subs in _get_effective_configurable_toolsets()
-                    if _toolset_allowed_for_platform(ts_key, platform)
-                ]
-                return tools
+                        "sub_tools": _resolve_sub_tools(ts_key) or [{
+                            "name": s, "description": ""
+                        } for s in subs.split(",") if s.strip()],
+                    })
+                for ts_key, (label, desc) in plugin_desc_by_ts.items():
+                    if ts_key in seen:
+                        continue
+                    seen.add(ts_key)
+                    items.append({
+                        "name": ts_key,
+                        "label": label,
+                        # 插件 description 来自 plugin.yaml，避免被 label 的语义覆盖
+                        "description": desc or label,
+                        "enabled": ts_key in enabled_toolsets,
+                        "sub_tools": _resolve_sub_tools(ts_key),
+                    })
+                return items
         except Exception:
+            logger.exception("in-process 解析工具集失败 agent_dir=%s", agent_dir)
             return None
 
     def _get_tool_count(self, agent_dir: Path) -> int:
@@ -1255,12 +1348,17 @@ class HermesAgentService:
         return {"session_id": session_id, "deleted": True}
 
     def chat_stream(self, name: str, session_id: str,
-                    message: str) -> Generator[str, None, None]:
+                    message: str) -> Generator[tuple, None, None]:
         """
-        流式对话（使用官方 SDK AIAgent 运行，逐段返回模型输出）
+        流式对话（使用官方 SDK AIAgent 运行，逐段返回模型输出与中间事件）
 
         工作线程内运行 AIAgent（SDK 内部为同步阻塞调用），
-        通过队列将增量文本实时传回当前生成器，实现 SSE 流式输出。
+        通过队列将增量文本与工具调用事件实时传回当前生成器。
+
+        Yields:
+            ("text", chunk_text)          模型输出文本增量
+            ("tool_start", {…})           工具调用开始（tool_call_id, name, arguments）
+            ("tool_result", {…})          工具调用结束（含 result / error）
         """
         self._check_agent_exists(name)
         if not message or not message.strip():
@@ -1275,12 +1373,44 @@ class HermesAgentService:
         done_marker = object()
         error_box: list = []
 
+        def _safe(jsonable):
+            """把任意对象兜成 JSON-safe 结构，避免 callback 传入的形态不一致影响队列"""
+            try:
+                import json as _json
+                _json.dumps(jsonable, ensure_ascii=False, default=str)
+                return jsonable
+            except Exception:
+                return str(jsonable)
+
         with self._with_agent_home(agent_dir):
             from run_agent import AIAgent
 
             db = self._open_conversation_db(name)
             resolved = db.resolve_session_id(session_id) or session_id
             history = db.get_messages_as_conversation(resolved, repair_alternation=True)
+
+            def _on_delta(text):
+                if text:
+                    chunk_queue.put(("text", text))
+
+            def _on_tool_start(tool_call_id, function_name, function_args):
+                chunk_queue.put(("tool_start", _safe({
+                    "tool_call_id": tool_call_id,
+                    "name": function_name,
+                    "arguments": function_args,
+                })))
+
+            def _on_tool_complete(tool_call_id, function_name, function_args, function_result):
+                # 截断过大的 result，避免 SSE 事件膨胀
+                result = function_result
+                if isinstance(result, str) and len(result) > 4000:
+                    result = result[:4000] + f"...（已截断 {len(function_result) - 4000} 字符）"
+                chunk_queue.put(("tool_result", _safe({
+                    "tool_call_id": tool_call_id,
+                    "name": function_name,
+                    "arguments": function_args,
+                    "result": result,
+                })))
 
             agent = AIAgent(
                 api_key=runtime.get("api_key"),
@@ -1296,15 +1426,13 @@ class HermesAgentService:
                 credential_pool=runtime.get("credential_pool"),
                 fallback_model=platform_cfg["fallback"] or None,
                 clarify_callback=self._chat_clarify_callback,
+                tool_start_callback=_on_tool_start,
+                tool_complete_callback=_on_tool_complete,
             )
-            # 静默运行，仅通过 stream_callback 输出文本增量
+            # 静默运行：文本增量走 stream_callback；工具调用走上面两个 callback
             agent.suppress_status_output = True
             agent.stream_delta_callback = None
             agent.tool_gen_callback = None
-
-            def _on_delta(text):
-                if text:
-                    chunk_queue.put(text)
 
             def _worker():
                 try:

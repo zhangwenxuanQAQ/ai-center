@@ -522,8 +522,23 @@ def chat_hermes_agent(agent_name: str, body: HermesChatRequest):
         import json as _json
         try:
             yield f"data: {_json.dumps({'session_id': session_id}, ensure_ascii=False)}\n\n"
-            for chunk in hermes_service.chat_stream(agent_name, session_id, body.message):
-                yield f"data: {_json.dumps({'content': chunk}, ensure_ascii=False)}\n\n"
+            for event in hermes_service.chat_stream(agent_name, session_id, body.message):
+                # 旧格式兼容：直接 yield str 视为文本增量
+                if isinstance(event, str):
+                    payload = {"content": event}
+                elif isinstance(event, tuple) and len(event) == 2:
+                    kind, data = event
+                    if kind == "text":
+                        payload = {"content": data}
+                    elif kind == "tool_start":
+                        payload = {"tool_event": "start", **data}
+                    elif kind == "tool_result":
+                        payload = {"tool_event": "result", **data}
+                    else:
+                        continue
+                else:
+                    continue
+                yield f"data: {_json.dumps(payload, ensure_ascii=False)}\n\n"
         except Exception as e:
             yield f"data: {_json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
         finally:

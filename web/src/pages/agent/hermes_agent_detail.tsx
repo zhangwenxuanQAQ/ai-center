@@ -632,14 +632,35 @@ const HermesAgentDetail: React.FC = () => {
                   <Tag icon={<StopOutlined />} style={{ borderRadius: 10, marginBottom: 0, flexShrink: 0 }}>已停用</Tag>
                 )}
               </div>
-              <Tooltip title={tool.description || '暂无描述'}>
+              {/* 卡片仅显示工具集标题（label），不再渲染"描述"行 */}
+              {/* 子工具行：hover 显示名称 + 描述 */}
+              {tool.sub_tools && tool.sub_tools.length ? (
                 <div style={{
-                  fontSize: 12, color: secondaryText, lineHeight: 1.6, minHeight: 38,
-                  display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                  display: 'flex', flexWrap: 'wrap', gap: 6,
+                  marginTop: 10, maxHeight: 56, overflow: 'hidden',
                 }}>
-                  {tool.description || '暂无描述'}
+                  {tool.sub_tools.slice(0, 6).map((sub) => (
+                    <Tooltip
+                      key={sub.name}
+                      title={sub.description ? (
+                        <div style={{ maxWidth: 320, lineHeight: 1.6 }}>
+                          <div style={{ fontWeight: 600, marginBottom: 2 }}><code>{sub.name}</code></div>
+                          <div>{sub.description}</div>
+                        </div>
+                      ) : (<code>{sub.name}</code>)}
+                    >
+                      <Tag style={{ borderRadius: 6, cursor: 'help', margin: 0 }}>
+                        <code style={{ fontSize: 11 }}>{sub.name}</code>
+                      </Tag>
+                    </Tooltip>
+                  ))}
+                  {tool.sub_tools.length > 6 && (
+                    <Tooltip title={tool.sub_tools.slice(6).map((s) => s.name).join(', ')}>
+                      <Tag style={{ borderRadius: 6, margin: 0 }}>+{tool.sub_tools.length - 6}</Tag>
+                    </Tooltip>
+                  )}
                 </div>
-              </Tooltip>
+              ) : null}
               {/* 卡片操作：停用/启用开关 */}
               <div
                 style={{
@@ -989,17 +1010,34 @@ const HermesAgentDetail: React.FC = () => {
               </div>
             </div>
             <div>
-              <div style={{ fontSize: 13, color: secondaryText, marginBottom: 4 }}>描述</div>
+              <div style={{ fontSize: 13, color: secondaryText, marginBottom: 4 }}>标题</div>
               <div style={{ fontSize: 13, lineHeight: 1.7, color: isDark ? '#e0e0e0' : '#333' }}>
-                {toolDetail.description || '暂无描述'}
+                {toolDetail.label || toolDetail.name}
               </div>
             </div>
             <div>
-              <div style={{ fontSize: 13, color: secondaryText, marginBottom: 4 }}>所需参数（子工具）</div>
-              {toolDetail.sub_tools ? (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {toolDetail.sub_tools.split(',').map((s) => s.trim()).filter(Boolean).map((param) => (
-                    <Tag key={param} style={{ borderRadius: 6 }}><code>{param}</code></Tag>
+              <div style={{ fontSize: 13, color: secondaryText, marginBottom: 4 }}>包含的工具</div>
+              {toolDetail.sub_tools && toolDetail.sub_tools.length ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {toolDetail.sub_tools.map((sub) => (
+                    <div
+                      key={sub.name}
+                      style={{
+                        display: 'flex', alignItems: 'flex-start', gap: 8,
+                        padding: '6px 10px', borderRadius: 8,
+                        background: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.02)',
+                      }}
+                    >
+                      <code style={{
+                        fontSize: 12, fontWeight: 600,
+                        color: isDark ? '#8aa0ff' : '#4f5fb8',
+                        whiteSpace: 'nowrap',
+                      }}>{sub.name}</code>
+                      <span style={{
+                        fontSize: 12, color: secondaryText, lineHeight: 1.6,
+                        wordBreak: 'break-word',
+                      }}>{sub.description || '—'}</span>
+                    </div>
                   ))}
                 </div>
               ) : (
