@@ -157,6 +157,7 @@ const ToolkitManagement: React.FC = () => {
     id: string; role: 'user' | 'assistant'; content: string; timestamp: Date;
     stopped?: boolean; error?: boolean;
     toolEvents?: { id: string; name: string; arguments?: any; result?: any; status: 'running' | 'done' }[];
+    clarify?: { question: string; options: string[]; answered?: boolean } | null;
   }[]>([]);
   const [agentChatInput, setAgentChatInput] = useState('');
   const [agentChatGenerating, setAgentChatGenerating] = useState(false);
@@ -1083,9 +1084,9 @@ const ToolkitManagement: React.FC = () => {
     }
   };
 
-  // 发送消息并流式接收智能体回答
-  const handleAgentChatSend = async () => {
-    const text = agentChatInput.trim();
+  // 发送消息并流式接收智能体回答（presetText 用于澄清场景直接发送选定选项）
+  const handleAgentChatSend = async (presetText?: string) => {
+    const text = (presetText ?? agentChatInput).trim();
     if (!text || agentChatGenerating) return;
     const agent = paramValues['agent'] || 'default';
     let sessionId = (paramValues['session_id'] || '').trim();
@@ -1093,7 +1094,8 @@ const ToolkitManagement: React.FC = () => {
     const userMsgId = `u-${Date.now()}`;
     const assistantMsgId = `a-${Date.now() + 1}`;
     setAgentChatMessages(prev => [
-      ...prev,
+      // 把上一条 assistant 的 clarify 标记为已回答（防止重复展示选择按钮）
+      ...prev.map(m => m.clarify && m.role === 'assistant' ? { ...m, clarify: { ...m.clarify, answered: true } } : m),
       { id: userMsgId, role: 'user', content: text, timestamp: new Date() },
       { id: assistantMsgId, role: 'assistant', content: '', timestamp: new Date() },
     ]);
@@ -1137,13 +1139,18 @@ const ToolkitManagement: React.FC = () => {
             // 工具调用事件：start（push running 事件）/ result（按 id 补 result + status=done）
             if (parsed.tool_event) {
               const ev = parsed.tool_event as {
-                type: 'start' | 'result';
+                type: 'start' | 'result' | 'clarify';
                 tool_call_id: string; name: string;
                 arguments?: any; result?: any;
+                question?: string; options?: string[];
               };
               setAgentChatMessages(prev => prev.map(m => {
                 if (m.id !== assistantMsgId) return m;
                 const events = [...(m.toolEvents || [])];
+                // 澄清事件：写入 clarify 字段供渲染（不进入 toolEvents）
+                if (ev.type === 'clarify') {
+                  return { ...m, clarify: { question: ev.question || '', options: ev.options || [], answered: false } };
+                }
                 if (ev.type === 'start') {
                   events.push({
                     id: ev.tool_call_id,
@@ -2027,77 +2034,120 @@ const ToolkitManagement: React.FC = () => {
                               {msg.error ? (
                                 <div style={{ color: '#ff4d4f', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.content}</div>
                               ) : (
-                                msg.content && (
-                                  <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
-                                    <ChatMarkdown source={msg.content} className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`} />
-                                  </div>
-                                )
-                              )}
-                              {/* 工具调用事件：调用开始 + 结果，按事件顺序穿插在消息体中 */}
-                              {msg.toolEvents && msg.toolEvents.length > 0 && !msg.error && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
-                                  {msg.toolEvents.map((te) => {
-                                    const isRunning = te.status === 'running';
-                                    return (
-                                      <div
-                                        key={te.id}
-                                        style={{
-                                          padding: '6px 10px',
-                                          borderRadius: 6,
-                                          border: theme === 'dark'
-                                            ? '1px solid rgba(255,255,255,0.12)'
-                                            : '1px solid rgba(0,0,0,0.08)',
-                                          background: theme === 'dark'
-                                            ? 'rgba(255,255,255,0.04)'
-                                            : 'rgba(0,0,0,0.02)',
-                                          fontSize: 12,
-                                        }}
-                                      >
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                          {isRunning ? <LoadingOutlined spin /> : <CheckCircleOutlined />}
-                                          <code style={{
-                                            fontWeight: 600,
-                                            color: isRunning
-                                              ? (theme === 'dark' ? '#fbbf24' : '#d48806')
-                                              : (theme === 'dark' ? '#8aa0ff' : '#4f5fb8'),
-                                          }}>{te.name}</code>
-                                          <span style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.4)', fontSize: 11 }}>
-                                            {isRunning ? '执行中…' : '执行完成'}
-                                          </span>
+                                <>
+                                  {/* 中间步骤：工具调用事件（先于最终回答显示） */}
+                                  {msg.toolEvents && msg.toolEvents.length > 0 && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: msg.content ? 8 : 0 }}>
+                                      {msg.toolEvents.map((te) => {
+                                        const isRunning = te.status === 'running';
+                                        return (
+                                          <div
+                                            key={te.id}
+                                            style={{
+                                              padding: '6px 10px',
+                                              borderRadius: 6,
+                                              border: theme === 'dark'
+                                                ? '1px solid rgba(255,255,255,0.12)'
+                                                : '1px solid rgba(0,0,0,0.08)',
+                                              background: theme === 'dark'
+                                                ? 'rgba(255,255,255,0.04)'
+                                                : 'rgba(0,0,0,0.02)',
+                                              fontSize: 12,
+                                            }}
+                                          >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                              {isRunning ? <LoadingOutlined spin /> : <CheckCircleOutlined />}
+                                              <code style={{
+                                                fontWeight: 600,
+                                                color: isRunning
+                                                  ? (theme === 'dark' ? '#fbbf24' : '#d48806')
+                                                  : (theme === 'dark' ? '#8aa0ff' : '#4f5fb8'),
+                                              }}>{te.name}</code>
+                                              <span style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.4)', fontSize: 11 }}>
+                                                {isRunning ? '执行中…' : '执行完成'}
+                                              </span>
+                                            </div>
+                                            {te.arguments != null && (
+                                              <details style={{ marginBottom: 2 }}>
+                                                <summary style={{ cursor: 'pointer', color: theme === 'dark' ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.45)' }}>参数</summary>
+                                                <pre style={{
+                                                  margin: '4px 0 0',
+                                                  padding: '6px 8px',
+                                                  borderRadius: 4,
+                                                  background: theme === 'dark' ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.04)',
+                                                  whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                                                  fontSize: 11,
+                                                }}>{typeof te.arguments === 'string' ? te.arguments : JSON.stringify(te.arguments, null, 2)}</pre>
+                                              </details>
+                                            )}
+                                            {!isRunning && te.result != null && (
+                                              <details>
+                                                <summary style={{ cursor: 'pointer', color: theme === 'dark' ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.45)' }}>结果</summary>
+                                                <pre style={{
+                                                  margin: '4px 0 0',
+                                                  padding: '6px 8px',
+                                                  borderRadius: 4,
+                                                  background: theme === 'dark' ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.04)',
+                                                  whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                                                  fontSize: 11,
+                                                }}>{typeof te.result === 'string' ? te.result : JSON.stringify(te.result, null, 2)}</pre>
+                                              </details>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                  {/* 最终回答：放在所有工具步骤之后 */}
+                                  {msg.content && (
+                                    <div className={`md-editor-container ${theme === 'dark' ? 'dark' : 'light'}`}>
+                                      <ChatMarkdown source={msg.content} className={`md-editor ${theme === 'dark' ? 'dark' : 'light'}`} />
+                                    </div>
+                                  )}
+                                  {/* 澄清选项：仅未回答时显示按钮，点击即以该选项作为下一条消息发送 */}
+                                  {msg.clarify && (
+                                    <div style={{
+                                      marginTop: msg.content ? 8 : (msg.toolEvents && msg.toolEvents.length > 0 ? 8 : 0),
+                                      padding: '8px 10px',
+                                      borderRadius: 8,
+                                      border: theme === 'dark'
+                                        ? '1px solid rgba(255,255,255,0.12)'
+                                        : '1px solid rgba(0,0,0,0.08)',
+                                      background: theme === 'dark'
+                                        ? 'rgba(255,255,255,0.04)'
+                                        : 'rgba(0,0,0,0.02)',
+                                      fontSize: 13,
+                                    }}>
+                                      {!msg.clarify.answered && (
+                                        <div style={{ marginBottom: 8, color: theme === 'dark' ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.85)' }}>
+                                          {msg.clarify.question}
                                         </div>
-                                        {te.arguments != null && (
-                                          <details style={{ marginBottom: 2 }}>
-                                            <summary style={{ cursor: 'pointer', color: theme === 'dark' ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.45)' }}>参数</summary>
-                                            <pre style={{
-                                              margin: '4px 0 0',
-                                              padding: '6px 8px',
-                                              borderRadius: 4,
-                                              background: theme === 'dark' ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.04)',
-                                              whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                                              fontSize: 11,
-                                            }}>{typeof te.arguments === 'string' ? te.arguments : JSON.stringify(te.arguments, null, 2)}</pre>
-                                          </details>
-                                        )}
-                                        {!isRunning && te.result != null && (
-                                          <details>
-                                            <summary style={{ cursor: 'pointer', color: theme === 'dark' ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.45)' }}>结果</summary>
-                                            <pre style={{
-                                              margin: '4px 0 0',
-                                              padding: '6px 8px',
-                                              borderRadius: 4,
-                                              background: theme === 'dark' ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.04)',
-                                              whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                                              fontSize: 11,
-                                            }}>{typeof te.result === 'string' ? te.result : JSON.stringify(te.result, null, 2)}</pre>
-                                          </details>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
+                                      )}
+                                      {msg.clarify.options.length > 0 && (
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                          {msg.clarify.options.map(opt => (
+                                            <Button
+                                              key={opt}
+                                              size="small"
+                                              type={msg.clarify.answered ? 'default' : 'primary'}
+                                              disabled={msg.clarify.answered || agentChatGenerating}
+                                              onClick={() => handleAgentChatSend(opt)}
+                                              style={{ borderRadius: 6 }}
+                                            >{opt}</Button>
+                                          ))}
+                                        </div>
+                                      )}
+                                      {msg.clarify.answered && (
+                                        <div style={{ fontSize: 12, color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)', marginTop: msg.clarify.options.length > 0 ? 6 : 0 }}>
+                                          已收到您的选择，正在继续回答
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </>
                               )}
-                              {/* 已发送问题、回答尚未开始时显示"思考中" */}
-                              {agentChatGenerating && msg.id === agentChatMessages[agentChatMessages.length - 1].id && !msg.content && (
+                              {/* 已发送问题、回答与工具步骤均未开始时显示"思考中" */}
+                              {agentChatGenerating && msg.id === agentChatMessages[agentChatMessages.length - 1].id && !msg.content && !(msg.toolEvents && msg.toolEvents.length > 0) && (
                                 <div className="thinking-indicator" style={{ padding: 0 }}>
                                   <LoadingOutlined spin />
                                   <span>正在思考中</span>

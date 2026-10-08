@@ -534,6 +534,8 @@ def chat_hermes_agent(agent_name: str, body: HermesChatRequest):
                         payload = {"tool_event": "start", **data}
                     elif kind == "tool_result":
                         payload = {"tool_event": "result", **data}
+                    elif kind == "clarify":
+                        payload = {"tool_event": "clarify", **data}
                     else:
                         continue
                 else:

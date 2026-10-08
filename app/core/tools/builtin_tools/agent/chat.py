@@ -69,6 +69,12 @@ class hermes_agent_chat(BaseTool):
                             session_id=session_id,
                             tool_event={"type": "result", **data},
                         )
+                    elif kind == "clarify":
+                        yield self._success(
+                            result="", message="",
+                            session_id=session_id,
+                            tool_event={"type": "clarify", **data},
+                        )
                 else:  # 兼容：直接 yield str
                     yield self._success(result=event, message="", session_id=session_id)
         except Exception as e:

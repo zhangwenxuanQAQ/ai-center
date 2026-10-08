@@ -1359,6 +1359,7 @@ class HermesAgentService:
             ("text", chunk_text)          模型输出文本增量
             ("tool_start", {…})           工具调用开始（tool_call_id, name, arguments）
             ("tool_result", {…})          工具调用结束（含 result / error）
+            ("clarify", {…})              澄清请求（question + options），需由用户选择选项并继续
         """
         self._check_agent_exists(name)
         if not message or not message.strip():
@@ -1393,6 +1394,17 @@ class HermesAgentService:
                 if text:
                     chunk_queue.put(("text", text))
 
+            def _on_clarify(question: str, choices=None):
+                """澄清回调：把澄清请求与选项通过事件推送到前端，由用户选择后再继续"""
+                options = [str(c) for c in (choices or []) if c is not None]
+                chunk_queue.put(("clarify", _safe({"question": question, "options": options})))
+                if options:
+                    return (
+                        f"[交互模式：已向用户抛出澄清问题。用户可选 {options}。"
+                        f"请在收到用户选择之前停止后续步骤，等待用户答复。]"
+                    )
+                return "[交互模式：已向用户抛出澄清问题。请等待用户答复后再继续。]"
+
             def _on_tool_start(tool_call_id, function_name, function_args):
                 chunk_queue.put(("tool_start", _safe({
                     "tool_call_id": tool_call_id,
@@ -1425,9 +1437,13 @@ class HermesAgentService:
                 session_id=resolved,
                 credential_pool=runtime.get("credential_pool"),
                 fallback_model=platform_cfg["fallback"] or None,
-                clarify_callback=self._chat_clarify_callback,
+                clarify_callback=_on_clarify,
                 tool_start_callback=_on_tool_start,
                 tool_complete_callback=_on_tool_complete,
+            )
+            logger.info(
+                "chat_stream agent_start agent=%s session_id=%s toolsets=%s",
+                name, resolved, platform_cfg["toolsets"],
             )
             # 静默运行：文本增量走 stream_callback；工具调用走上面两个 callback
             agent.suppress_status_output = True
@@ -1482,12 +1498,3 @@ class HermesAgentService:
 
         if error_box:
             raise HermesAgentError(f"对话执行失败：{error_box[0]}")
-
-    @staticmethod
-    def _chat_clarify_callback(question: str, choices=None) -> str:
-        """澄清回调：无交互终端时让智能体自行决策并继续"""
-        if choices:
-            return (
-                f"[控制台模式：无用户可交互。请从 {choices} 中选择最合适的选项并继续。]"
-            )
-        return "[控制台模式：无用户可交互。请做出最合理的假设并继续。]"
