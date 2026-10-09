@@ -792,6 +792,45 @@ class HermesAgentService:
         tools = self._list_toolsets_inproc(self.get_agent_dir(name))
         return tools if tools is not None else []
 
+    def get_tool_detail(self, name: str, tool: str) -> Optional[dict]:
+        """
+        查询某个已勾选启用的工具的入参 schema（OpenAI function 格式）
+
+        Returns:
+            {"name": str, "description": str, "toolset": str, "parameters": {"type":"object","properties":{...},"required":[...]}}
+            或 None（工具不存在 / 注册失败）
+        """
+        self._check_agent_exists(name)
+        try:
+            from hermes_cli.plugins import discover_plugins
+            from tools.registry import discover_builtin_tools, registry as _registry
+            with self._with_agent_home(self.get_agent_dir(name)):
+                from hermes_cli.config import load_config
+                from hermes_cli.tools_config import _get_platform_tools
+                discover_builtin_tools()
+                discover_plugins(force=True)
+                cfg = load_config()
+                enabled = _get_platform_tools(cfg, "cli")
+            entry = _registry.get_entry(tool)
+            if entry is None:
+                return None
+            if entry.toolset not in enabled:
+                # 工具未启用，返回 None，前端可据此提示
+                return None
+            schema = dict(entry.schema or {})
+            # 确保 schema 有 name
+            schema.setdefault("name", entry.name)
+            return {
+                "name": entry.name,
+                "description": schema.get("description") or entry.description or "",
+                "toolset": entry.toolset,
+                "emoji": entry.emoji or "",
+                "parameters": schema.get("parameters") or {"type": "object", "properties": {}},
+            }
+        except Exception:
+            logger.exception("query tool detail failed: agent=%s tool=%s", name, tool)
+            return None
+
     # ==================== 技能/工具停用启用 ====================
 
     @staticmethod

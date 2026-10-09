@@ -8,5 +8,6 @@ Hermes 智能体内置工具模块
 from app.core.tools.builtin_tools.agent.chat import hermes_agent_chat
 from app.core.tools.builtin_tools.agent.list_conversations import hermes_agent_conversations
 from app.core.tools.builtin_tools.agent.get_messages import hermes_agent_messages
+from app.core.tools.builtin_tools.agent.invoke_tool import hermes_agent_tool_call
 
-__all__ = ["hermes_agent_chat", "hermes_agent_conversations", "hermes_agent_messages"]
+__all__ = ["hermes_agent_chat", "hermes_agent_conversations", "hermes_agent_messages", "hermes_agent_tool_call"]

@@ -14,7 +14,8 @@ from app.core.tools.builtin_tools.agent import (
     hermes_agent_chat,
     hermes_agent_conversations,
     hermes_agent_messages,
+    hermes_agent_tool_call,
 )
 
 __all__ = ["web_search", "generate_ppt", "clarify", "KnowledgebaseSearch", "McpTool", "data_extraction", "api_call", "code_script",
-           "hermes_agent_chat", "hermes_agent_conversations", "hermes_agent_messages"]
+           "hermes_agent_chat", "hermes_agent_conversations", "hermes_agent_messages", "hermes_agent_tool_call"]

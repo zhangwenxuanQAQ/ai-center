@@ -253,6 +253,27 @@ def get_hermes_model_config(agent_name: str):
         return _handle_error(e)
 
 
+@router.get("/hermes/agents/{agent_name}/tool-detail/{tool_name}", response_model=ApiResponse)
+def get_hermes_tool_detail(agent_name: str, tool_name: str):
+    """
+    查询智能体某个已启用工具的入参 schema（OpenAI function 风格）
+
+    返回 data:
+      {
+        name, description, toolset, emoji,
+        parameters: {"type":"object","properties":{...},"required":[...]}
+      }
+    工具不存在或未启用时 data=null
+    """
+    try:
+        data = hermes_service.get_tool_detail(agent_name, tool_name)
+        if data is None:
+            return ResponseUtil.error(message=f"工具 {tool_name} 不存在或未启用")
+        return ResponseUtil.success(data=data, message="查询成功")
+    except Exception as e:
+        return _handle_error(e)
+
+
 @router.post("/hermes/agents/{agent_name}/model-config", response_model=ApiResponse)
 def update_hermes_model_config(agent_name: str, body: HermesModelConfigUpdate):
     """

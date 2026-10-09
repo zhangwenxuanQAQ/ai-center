@@ -165,6 +165,17 @@ const ToolkitManagement: React.FC = () => {
   const agentChatAbortRef = useRef<AbortController | null>(null);
   const agentChatContainerRef = useRef<HTMLDivElement>(null);
 
+  // 智能体工具调用（hermes_agent_tool_call）参数测试：智能体/工具/schema 动态加载
+  const [toolCallAgents, setToolCallAgents] = useState<{ name: string; description?: string }[]>([]);
+  const [toolCallSelectedAgent, setToolCallSelectedAgent] = useState<string>('default');
+  const [toolCallTools, setToolCallTools] = useState<{ name: string; description?: string; toolset: string; enabled: boolean }[]>([]);
+  const [toolCallSelectedTool, setToolCallSelectedTool] = useState<string>('');
+  const [toolCallSchema, setToolCallSchema] = useState<{ properties: Record<string, any>; required: string[] }>({ properties: {}, required: [] });
+  const [toolCallParams, setToolCallParams] = useState<Record<string, any>>({});
+  const [toolCallLoadingAgents, setToolCallLoadingAgents] = useState(false);
+  const [toolCallLoadingTools, setToolCallLoadingTools] = useState(false);
+  const [toolCallLoadingSchema, setToolCallLoadingSchema] = useState(false);
+
   // 数据抽取工具相关状态
   const [dsDatasources, setDsDatasources] = useState<Datasource[]>([]);
   const [dsTables, setDsTables] = useState<{ table_name: string; table_comment?: string }[]>([]);
@@ -1045,6 +1056,15 @@ const ToolkitManagement: React.FC = () => {
       setAgentChatInput('');
       setAgentChatGenerating(false);
     }
+    // 智能体工具调用：重置并加载 agents 列表
+    if (tool.name === 'hermes_agent_tool_call') {
+      setToolCallSelectedAgent('default');
+      setToolCallTools([]);
+      setToolCallSelectedTool('');
+      setToolCallSchema({ properties: {}, required: [] });
+      setToolCallParams({});
+      loadToolCallAgents();
+    }
     // 如果是数据抽取工具，加载数据源列表
     if (tool.name === 'data_extraction') {
       loadDatasources();
@@ -1081,6 +1101,203 @@ const ToolkitManagement: React.FC = () => {
       message.error(e.message || '加载历史消息失败');
     } finally {
       setAgentChatLoadingHistory(false);
+    }
+  };
+
+  // ===== 智能体工具调用（hermes_agent_tool_call）参数测试 =====
+
+  // 加载可选智能体列表
+  const loadToolCallAgents = async () => {
+    setToolCallLoadingAgents(true);
+    try {
+      const res = await fetch('/aicenter/v1/agent/hermes/agents');
+      const result = await res.json();
+      if (result.code === 200 && Array.isArray(result.data)) {
+        setToolCallAgents(result.data);
+        if (result.data.length > 0 && !result.data.some((a: any) => a.name === toolCallSelectedAgent)) {
+          setToolCallSelectedAgent(result.data[0].name);
+        }
+      } else {
+        message.error(result.message || '加载智能体列表失败');
+      }
+    } catch (e: any) {
+      message.error(e.message || '加载智能体列表失败');
+    } finally {
+      setToolCallLoadingAgents(false);
+    }
+  };
+
+  // 加载所选智能体启用的子工具列表
+  const loadToolCallTools = async (agent: string) => {
+    if (!agent) {
+      setToolCallTools([]);
+      return;
+    }
+    setToolCallLoadingTools(true);
+    setToolCallTools([]);
+    setToolCallSelectedTool('');
+    setToolCallSchema({ properties: {}, required: [] });
+    setToolCallParams({});
+    try {
+      const res = await fetch(`/aicenter/v1/agent/hermes/agents/${encodeURIComponent(agent)}/tools`);
+      const result = await res.json();
+      if (result.code === 200 && Array.isArray(result.data)) {
+        const tools: { name: string; description?: string; toolset: string; enabled: boolean }[] = [];
+        for (const ts of result.data) {
+          if (!ts.enabled) continue;
+          for (const sub of (ts.sub_tools || [])) {
+            tools.push({ name: sub.name, description: sub.description, toolset: ts.name, enabled: true });
+          }
+        }
+        setToolCallTools(tools);
+      } else {
+        message.error(result.message || '加载工具列表失败');
+      }
+    } catch (e: any) {
+      message.error(e.message || '加载工具列表失败');
+    } finally {
+      setToolCallLoadingTools(false);
+    }
+  };
+
+  // 加载所选工具的入参 schema，并按 default 预填参数值
+  const loadToolCallSchema = async (agent: string, tool: string) => {
+    if (!agent || !tool) {
+      setToolCallSchema({ properties: {}, required: [] });
+      setToolCallParams({});
+      return;
+    }
+    setToolCallLoadingSchema(true);
+    setToolCallSchema({ properties: {}, required: [] });
+    setToolCallParams({});
+    try {
+      const res = await fetch(`/aicenter/v1/agent/hermes/agents/${encodeURIComponent(agent)}/tool-detail/${encodeURIComponent(tool)}`);
+      const result = await res.json();
+      if (result.code === 200 && result.data) {
+        const params = result.data.parameters || { type: 'object', properties: {} };
+        setToolCallSchema({ properties: params.properties || {}, required: params.required || [] });
+        const init: Record<string, any> = {};
+        for (const [k, v] of Object.entries<any>(params.properties || {})) {
+          if (v && v.default !== undefined && v.default !== null) init[k] = v.default;
+        }
+        setToolCallParams(init);
+      } else {
+        message.error(result.message || `工具 ${tool} 不存在或未启用`);
+      }
+    } catch (e: any) {
+      message.error(e.message || '加载工具参数 schema 失败');
+    } finally {
+      setToolCallLoadingSchema(false);
+    }
+  };
+
+  // 按 JSON Schema 属性的 type/enum 渲染对应的输入组件
+  const renderToolSchemaParam = (name: string, prop: any) => {
+    const value = toolCallParams[name];
+    const onChange = (v: any) => setToolCallParams({ ...toolCallParams, [name]: v });
+    const enumVals: any[] = Array.isArray(prop?.enum) ? prop.enum : [];
+    if (enumVals.length > 0) {
+      return (
+        <Select value={value ?? undefined} onChange={onChange} style={{ width: '100%' }} allowClear placeholder={`请选择 ${name}`}>
+          {enumVals.map((opt: any, idx) => <Option key={`${opt}-${idx}`} value={opt}>{String(opt)}</Option>)}
+        </Select>
+      );
+    }
+    switch (prop?.type) {
+      case 'integer':
+      case 'number':
+        return <InputNumber value={value ?? undefined} onChange={onChange} style={{ width: '100%' }} placeholder={`请输入 ${name}`} />;
+      case 'boolean':
+        return <Switch checked={!!value} onChange={onChange} />;
+      case 'array':
+        return (
+          <TextArea
+            value={typeof value === 'string' ? value : (value === undefined || value === null ? '' : JSON.stringify(value, null, 2))}
+            onChange={(e) => onChange(e.target.value)}
+            rows={3}
+            placeholder='请输入 JSON 数组，如 ["a","b"]'
+            style={{ width: '100%', fontFamily: 'monospace' }}
+          />
+        );
+      case 'object':
+        return (
+          <TextArea
+            value={typeof value === 'string' ? value : (value === undefined || value === null ? '' : JSON.stringify(value, null, 2))}
+            onChange={(e) => onChange(e.target.value)}
+            rows={4}
+            placeholder='请输入 JSON 对象，如 {"k":"v"}'
+            style={{ width: '100%', fontFamily: 'monospace' }}
+          />
+        );
+      case 'string':
+      default:
+        if (value && typeof value === 'object') {
+          return (
+            <TextArea
+              value={JSON.stringify(value, null, 2)}
+              onChange={(e) => onChange(e.target.value)}
+              rows={3}
+              style={{ width: '100%', fontFamily: 'monospace' }}
+            />
+          );
+        }
+        return <Input value={value ?? ''} onChange={(e) => onChange(e.target.value)} placeholder={`请输入 ${name}`} />;
+    }
+  };
+
+  // 执行工具调用：把 toolCallParams JSON 序列化作为 args
+  const handleToolCallExecute = async () => {
+    const agent = toolCallSelectedAgent;
+    const tool = toolCallSelectedTool;
+    if (!agent) { message.warning('请先选择智能体'); return; }
+    if (!tool) { message.warning('请先选择工具'); return; }
+    // 把可能为对象的值保持原样，把 JSON 字符串尝试解析后再传给后端
+    const argsDict: Record<string, any> = {};
+    for (const [k, v] of Object.entries(toolCallParams || {})) {
+      if (v === undefined || v === null || v === '') continue;
+      if (typeof v === 'string' && ['array', 'object'].includes(toolCallSchema.properties?.[k]?.type || '')) {
+        try { argsDict[k] = JSON.parse(v); } catch { message.error(`参数 ${k} 不是合法 JSON`); return; }
+      } else if (typeof v === 'string' && toolCallSchema.properties?.[k]?.type && ['integer', 'number'].includes(toolCallSchema.properties[k].type)) {
+        const num = Number(v);
+        argsDict[k] = isNaN(num) ? v : num;
+      } else {
+        argsDict[k] = v;
+      }
+    }
+    setParamTesting(true);
+    setParamTestResult(null);
+    try {
+      const res = await fetch('/aicenter/v1/toolkit/builtin_tools/hermes_agent_tool_call/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agent, tool, args: JSON.stringify(argsDict) }),
+      });
+      const result = await res.json();
+      if (result.code === 200 && result.data) {
+        const d = result.data;
+        setParamTestResult({
+          status: d.status || 'success',
+          result: d.result,
+          message: d.message || '',
+          error: d.error,
+        });
+      } else {
+        setParamTestResult({
+          status: 'error',
+          result: null,
+          message: result.message || '执行失败',
+          error: result.message || '执行失败',
+        });
+      }
+    } catch (e: any) {
+      setParamTestResult({
+        status: 'error',
+        result: null,
+        message: e.message || '请求异常',
+        error: e.message || '请求异常',
+      });
+    } finally {
+      setParamTesting(false);
     }
   };
 
@@ -1969,7 +2186,7 @@ const ToolkitManagement: React.FC = () => {
               </div>
             )}
             <Form layout="vertical">
-              {currentTool.params.map(param => {
+              {currentTool.name !== 'hermes_agent_tool_call' && currentTool.params.map(param => {
                 // code_script的params按main形参逐个输入（见上方渲染区）
                 if (currentTool.name === 'code_script' && param.name === 'params') return null;
                 // 智能体对话工具：message 通过下方聊天输入框发送，不在此渲染
@@ -2001,6 +2218,87 @@ const ToolkitManagement: React.FC = () => {
                 );
               })}
             </Form>
+            {/* 智能体工具调用：Select(agent) + Select(tool) + schema 参数行 */}
+            {currentTool.name === 'hermes_agent_tool_call' && (
+              <Form layout="vertical">
+                <Form.Item label="智能体" required>
+                  <Select
+                    showSearch
+                    loading={toolCallLoadingAgents}
+                    value={toolCallSelectedAgent || undefined}
+                    onChange={(v) => {
+                      setToolCallSelectedAgent(v);
+                      loadToolCallTools(v);
+                    }}
+                    optionFilterProp="label"
+                    style={{ width: '100%' }}
+                    placeholder="请选择智能体"
+                  >
+                    {toolCallAgents.map(a => (
+                      <Option key={a.name} value={a.name} label={a.name}>
+                        {a.name} {a.description ? <span style={{ color: '#999', fontSize: 12 }}>({a.description})</span> : null}
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+                <Form.Item label="要调用的工具" required>
+                  <Select
+                    showSearch
+                    loading={toolCallLoadingTools}
+                    value={toolCallSelectedTool || undefined}
+                    onChange={(v) => {
+                      setToolCallSelectedTool(v);
+                      loadToolCallSchema(toolCallSelectedAgent, v);
+                    }}
+                    optionFilterProp="label"
+                    style={{ width: '100%' }}
+                    placeholder={toolCallSelectedAgent ? '请选择该智能体启用的工具' : '请先选择智能体'}
+                    disabled={!toolCallSelectedAgent}
+                  >
+                    {toolCallTools.map(t => (
+                      <Option
+                        key={t.name}
+                        value={t.name}
+                        label={`${t.name} (${t.toolset})`}
+                      >
+                        <Tooltip title={t.description || ''} placement="topLeft">
+                          <span>{t.name} <span style={{ color: '#999', fontSize: 12 }}>({t.toolset})</span></span>
+                        </Tooltip>
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+                {/* 动态渲染 schema 参数，一行一个 */}
+                {toolCallSelectedTool && Object.keys(toolCallSchema.properties || {}).length === 0 && (
+                  <div style={{ fontSize: 12, color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)', textAlign: 'left', marginBottom: 8 }}>
+                    {toolCallLoadingSchema ? '加载工具参数中...' : '该工具无参数'}
+                  </div>
+                )}
+                {Object.entries(toolCallSchema.properties || {}).map(([name, prop]: [string, any]) => {
+                  const isRequired = (toolCallSchema.required || []).includes(name);
+                  return (
+                    <Form.Item
+                      key={name}
+                      label={
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span>{name}</span>
+              {(isRequired || prop.required) && <span style={{ color: '#ff4d4f' }}>*</span>}
+                          <span style={{ fontSize: 11, color: theme === 'dark' ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)' }}>({prop?.type || 'any'})</span>
+                          {(prop?.description || '') && (
+                            <Tooltip title={prop.description}>
+                              <InfoCircleOutlined style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)', cursor: 'pointer' }} />
+                            </Tooltip>
+                          )}
+                        </div>
+                      }
+                      required={false}
+                    >
+                      {renderToolSchemaParam(name, prop)}
+                    </Form.Item>
+                  );
+                })}
+              </Form>
+            )}
             </div>
             {currentTool.name === 'hermes_agent_chat' ? (
               /* 智能体对话工具：聊天一问一答式流式交互 */
@@ -2183,6 +2481,26 @@ const ToolkitManagement: React.FC = () => {
                   )}
                 </div>
               </div>
+            ) : currentTool.name === 'hermes_agent_tool_call' ? (
+              /* 智能体工具调用：执行按钮 + 结果区 */
+              <>
+                <Button
+                  type="primary"
+                  icon={paramTesting ? <LoadingOutlined /> : <PlayCircleOutlined />}
+                  onClick={handleToolCallExecute}
+                  loading={paramTesting}
+                  style={{ width: '100%', marginBottom: 16 }}
+                  disabled={!toolCallSelectedAgent || !toolCallSelectedTool}
+                >
+                  {paramTesting ? '执行中...' : '执行工具调用'}
+                </Button>
+                {paramTestResult !== null && (
+                  <div style={{ marginTop: 16 }}>
+                    <div style={{ marginBottom: 8, fontWeight: 500, textAlign: 'left' }}>执行结果:</div>
+                    <ToolTestResult testResult={paramTestResult} theme={theme} />
+                  </div>
+                )}
+              </>
             ) : (
               <>
                 <Button type="primary" icon={paramTesting ? <LoadingOutlined /> : <PlayCircleOutlined />} onClick={handleParamTest} loading={paramTesting} style={{ width: '100%', marginBottom: 16 }}>

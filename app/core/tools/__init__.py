@@ -32,6 +32,7 @@ def _load_builtin_tools():
             hermes_agent_chat,
             hermes_agent_conversations,
             hermes_agent_messages,
+            hermes_agent_tool_call,
         )
         import logging
         logging.getLogger(__name__).info("builtin tools loaded")
