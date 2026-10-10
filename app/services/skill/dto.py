@@ -9,6 +9,8 @@ from typing import Optional, List, Dict
 
 class SkillBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255, description="技能名称")
+    directory_name: Optional[str] = Field(None, max_length=255,
+                                          description="目录名称：只允许小写字母/数字/点/下划线/连字符，字母或数字开头")
     title: Optional[str] = Field(None, max_length=255, description="技能标题")
     description: Optional[str] = Field(None, description="技能描述")
     tags: Optional[List[str]] = Field(None, description="技能标签")
@@ -27,6 +29,7 @@ class SkillCreate(SkillBase):
 class SkillCreateWithUpload(BaseModel):
     """技能创建DTO - 上传文件/文件夹时使用"""
     name: str = Field(..., min_length=1, max_length=255, description="技能名称")
+    directory_name: Optional[str] = Field(None, max_length=255, description="目录名称：只允许小写字母/数字/点/下划线/连字符，字母或数字开头")
     title: Optional[str] = Field(None, max_length=255, description="技能标题")
     description: Optional[str] = Field(None, description="技能描述")
     tags: Optional[List[str]] = Field(None, description="技能标签")
@@ -39,6 +42,7 @@ class SkillCreateWithUpload(BaseModel):
 
 class SkillUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255, description="技能名称")
+    directory_name: Optional[str] = Field(None, max_length=255, description="目录名称：只允许小写字母/数字/点/下划线/连字符，字母或数字开头")
     title: Optional[str] = Field(None, max_length=255, description="技能标题")
     description: Optional[str] = Field(None, description="技能描述")
     tags: Optional[List[str]] = Field(None, description="技能标签")

@@ -48,6 +48,7 @@ dependencies = [
     "xgboost==3.0.0",
     "huggingface-hub>=1.11.0",
     "pypdf>=6.10.2",
+    "rarfile>=4.0.0",
     "scikit-learn>=1.7.2",
     "requests>=2.33.1",
     "opencv-python>=4.13.0.92",

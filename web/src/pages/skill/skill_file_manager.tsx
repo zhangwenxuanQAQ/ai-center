@@ -20,7 +20,7 @@ import {
 import './skill.less';
 
 interface SkillFileManagerProps {
-  skill: { id: string; name: string; title?: string };
+  skill: { id: string; name: string; title?: string; directory?: string };
   theme: 'light' | 'dark';
   /** 保存/删除等操作后通知父组件（可用于刷新 SKILL.md 相关字段） */
   onFileSaved?: (path: string) => void;
@@ -737,17 +737,17 @@ const SkillFileManager: React.FC<SkillFileManagerProps> = ({
     const withNew = inlineEdit && inlineEdit.isNew
       ? injectNewFolderNode(children, inlineEdit.parentPath || '')
       : children;
-    // 根目录节点（不可选中/拖拽，仅展示）
+    // 根目录节点（不可选中/拖拽，仅展示），使用目录名（与磁盘目录名称一致）
     return [{
       key: ROOT_KEY,
-      title: skill.name,
+      title: skill.directory || skill.name,
       path: '',
       isDir: true,
       icon: <FolderFilled style={{ color: '#f5c518' }} />,
       selectable: false,
       children: withNew,
     } as TreeDataNode];
-  }, [filteredTreeData, inlineEdit, skill.name]);
+  }, [filteredTreeData, inlineEdit, skill.name, skill.directory]);
 
   return (
     <div className="skill-file-manager" ref={containerRef}

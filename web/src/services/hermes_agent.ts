@@ -186,11 +186,46 @@ export const hermesAgentService = {
 
   /**
    * 新增技能（创建 skills/<category>/<name>/SKILL.md）
+   * content 为技能正文（Markdown），为空时后端使用默认模板
    */
-  createSkill: async (name: string, data: { name: string; category?: string; description?: string }): Promise<HermesSkill> => {
+  createSkill: async (name: string, data: { name: string; category?: string; description?: string; content?: string }): Promise<HermesSkill> => {
     return http.post<HermesSkill>(
       `/aicenter/v1/agent/hermes/agents/${encodeURIComponent(name)}/skills/create`,
       data
+    );
+  },
+
+  /**
+   * 从 SKILL 管理库导入技能（复制库中目录，保留 references/scripts 等结构）
+   */
+  importSkillFromLibrary: async (name: string, data: {
+    name: string;
+    directory: string;
+    category?: string;
+    description?: string;
+  }): Promise<HermesSkill> => {
+    return http.post<HermesSkill>(
+      `/aicenter/v1/agent/hermes/agents/${encodeURIComponent(name)}/skills/import`,
+      data
+    );
+  },
+
+  /**
+   * 上传技能（根目录必须含 SKILL.md，从其中解析 name/description）
+   * @param archive  .zip/.rar 压缩包文件（二选一）
+   * @param dirFiles 目录内文件列表（二选一），文件名携带相对路径
+   */
+  uploadSkill: async (name: string, category: string, archive?: File, dirFiles?: File[]): Promise<HermesSkill> => {
+    const form = new FormData();
+    form.append('category', category || '');
+    if (archive) {
+      form.append('files', archive, archive.name);
+    } else if (dirFiles) {
+      dirFiles.forEach((f) => form.append('files', f, (f as any).webkitRelativePath || f.name));
+    }
+    return http.postForm<HermesSkill>(
+      `/aicenter/v1/agent/hermes/agents/${encodeURIComponent(name)}/skills/upload`,
+      form
     );
   },
 

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Button, Empty, Input, message, Spin,
   Table, Tabs, Tag, Tooltip, Modal, Form, Space, Upload,
-  Popconfirm, Switch, Select,
+  Popconfirm, Switch, Select, Radio,
 } from 'antd';
 import {
   SaveOutlined, HeartOutlined, ToolOutlined,
@@ -12,11 +12,13 @@ import {
   ThunderboltOutlined, ClockCircleOutlined, FolderOpenOutlined,
   SearchOutlined, CloudDownloadOutlined, UploadOutlined, EyeOutlined,
   CaretRightOutlined, DownOutlined, PlusOutlined, DeleteOutlined, StopOutlined,
+  InboxOutlined,
 } from '@ant-design/icons';
 import type { UploadProps } from 'antd';
 import MDEditor from '@uiw/react-md-editor';
 import '@uiw/react-md-editor/markdown-editor.css';
 import { hermesAgentService, HermesAgent, HermesSkill, HermesTool } from '../../services/hermes_agent';
+import { skillService, Skill } from '../../services/skill';
 import { llmModelService, LLMModel } from '../../services/llm_model';
 import { getProviderAvatar } from '../../utils/avatar';
 import SkillDetailModal from './skill_detail_modal';
@@ -61,6 +63,20 @@ const HermesAgentDetail: React.FC = () => {
   const [skillCreateOpen, setSkillCreateOpen] = useState(false);
   const [creatingSkill, setCreatingSkill] = useState(false);
   const [skillForm] = Form.useForm();
+  /** 新增方式：manual=手动新增 / import=从SKILL库导入 / upload=上传文件 */
+  const [createMethod, setCreateMethod] = useState<'manual' | 'import' | 'upload'>('manual');
+  /** 切换 createMethod 后 Form 重新挂载（justify vertical preserve=false），每次 useEffect 补默认 custom */
+  useEffect(() => {
+    if (skillCreateOpen) {
+      skillForm.setFieldsValue({ category: ['custom'] });
+    }
+  }, [createMethod, skillCreateOpen]);
+  /** 从 SKILL 管理库导入：可选技能列表 */
+  const [importSkillOptions, setImportSkillOptions] = useState<Skill[]>([]);
+  const [importSkillLoading, setImportSkillLoading] = useState(false);
+  /** 上传文件方式：选中压缩包 / 目录 */
+  const [uploadArchive, setUploadArchive] = useState<File | null>(null);
+  const [uploadDirFiles, setUploadDirFiles] = useState<File[]>([]);
 
   const isDark = theme === 'dark';
   const secondaryText = isDark ? 'rgba(255, 255, 255, 0.55)' : '#8f959e';
@@ -346,22 +362,122 @@ const HermesAgentDetail: React.FC = () => {
     }
   };
 
-  /** 新增技能 */
+  /** 打开新增技能弹窗（重置为默认方式并加载 SKILL 库可选列表） */
+  const openCreateSkillModal = () => {
+    setCreateMethod('manual');
+    setUploadArchive(null);
+    setUploadDirFiles([]);
+    skillForm.resetFields();
+    skillForm.setFieldsValue({ category: ['custom'] });
+    setSkillCreateOpen(true);
+    // 加载 SKILL 管理库列表（供「导入技能」选择）
+    if (!importSkillOptions.length) {
+      loadImportSkillOptions();
+    }
+  };
+
+  /** 加载 SKILL 管理库技能列表（用于导入选择） */
+  const loadImportSkillOptions = async () => {
+    setImportSkillLoading(true);
+    try {
+      const res = await skillService.getSkills(1, 100);
+      setImportSkillOptions(res.data || []);
+    } catch {
+      setImportSkillOptions([]);
+    } finally {
+      setImportSkillLoading(false);
+    }
+  };
+
+  /** 关闭新增技能弹窗并清理状态 */
+  const closeCreateSkillModal = () => {
+    setSkillCreateOpen(false);
+    skillForm.resetFields();
+    setCreateMethod('manual');
+    setUploadArchive(null);
+    setUploadDirFiles([]);
+  };
+
+  /** 手动新增技能（读取 name/category/description/content） */
+  const submitManualSkill = async () => {
+    const values = await skillForm.validateFields();
+    const category = Array.isArray(values.category) ? values.category[0] : (values.category || 'custom');
+    await hermesAgentService.createSkill(agentName, {
+      name: values.name,
+      category,
+      description: values.description,
+      content: values.content || '',
+    });
+  };
+
+  /** 从 SKILL 管理库导入技能（直接使用库中数据，不解析 SKILL.md） */
+  const submitImportSkill = async () => {
+    const values = await skillForm.validateFields();
+    const category = Array.isArray(values.category) ? values.category[0] : (values.category || 'custom');
+    // from_library 存的是 JSON 字符串：{name, directory, description}
+    let payloadName = '';
+    let payloadDirectory = '';
+    let payloadDescription = '';
+    try {
+      const parsed = JSON.parse(values.from_library);
+      if (parsed && typeof parsed === 'object') {
+        payloadName = parsed.name || '';
+        payloadDirectory = parsed.directory || '';
+        payloadDescription = parsed.description || '';
+      }
+    } catch {
+      // 忽略
+    }
+    if (!payloadDirectory) {
+      // 兜底：若 JSON 解析失败但值本身是字符串，视为库目录名
+      payloadDirectory = String(values.from_library || '');
+      payloadName = payloadDirectory;
+    }
+    if (!payloadName) {
+      payloadName = payloadDirectory;
+    }
+    if (!payloadDirectory) {
+      throw new Error('未获取到有效技能');
+    }
+    await hermesAgentService.importSkillFromLibrary(agentName, {
+      name: payloadName,
+      directory: payloadDirectory,
+      category,
+      description: payloadDescription,
+    });
+  };
+
+  /** 上传文件（压缩包 / 目录） */
+  const submitUploadSkill = async () => {
+    if (uploadArchive) {
+      const values = skillForm.getFieldsValue();
+      const category = Array.isArray(values?.category) ? values.category[0] : (values?.category || 'custom');
+      await hermesAgentService.uploadSkill(agentName, category, uploadArchive);
+    } else {
+      if (!uploadDirFiles.length) {
+        message.warning('请先选择目录（目录中需包含 SKILL.md）');
+        return;
+      }
+      const values = skillForm.getFieldsValue();
+      const category = Array.isArray(values?.category) ? values.category[0] : (values?.category || 'custom');
+      await hermesAgentService.uploadSkill(agentName, category, undefined, uploadDirFiles);
+    }
+  };
+
+  /** 新增技能（按所选方式分发） */
   const handleCreateSkill = async () => {
     if (!agentName) return;
+    setCreatingSkill(true);
     try {
-      const values = await skillForm.validateFields();
-      setCreatingSkill(true);
-      // 分类为 tags 模式 Select，取第一个值
-      const category = Array.isArray(values.category) ? values.category[0] : values.category;
-      await hermesAgentService.createSkill(agentName, {
-        name: values.name,
-        category,
-        description: values.description,
-      });
+      if (createMethod === 'manual') {
+        await submitManualSkill();
+      } else if (createMethod === 'import') {
+        await submitImportSkill();
+      } else {
+        await submitUploadSkill();
+      }
       message.success('技能创建成功');
-      setSkillCreateOpen(false);
-      skillForm.resetFields();
+      closeCreateSkillModal();
       loadCapabilities();
     } catch (e: any) {
       if (e?.errorFields) return; // 表单校验错误
@@ -406,7 +522,7 @@ const HermesAgentDetail: React.FC = () => {
       <div>
         {/* 工具栏：新增技能 + 搜索过滤 */}
         <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setSkillCreateOpen(true)}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => openCreateSkillModal()}>
             新增技能
           </Button>
           {renderFilterBar(skillSearch, setSkillSearch, skillStatusFilter, setSkillStatusFilter)}
@@ -927,68 +1043,228 @@ const HermesAgentDetail: React.FC = () => {
         onChanged={() => loadCapabilities()}
       />
 
-      {/* 新增技能弹窗（创建 skills/<category>/<name>/SKILL.md） */}
+      {/* 新增技能弹窗（三种方式可切换：手动新增 / 从SKILL库导入 / 上传文件） */}
       <Modal
         title={<span><BookOutlined style={{ marginRight: 8, color: '#5a6fd6' }} />新增技能</span>}
         open={skillCreateOpen}
-        onCancel={() => {
-          setSkillCreateOpen(false);
-          skillForm.resetFields();
-        }}
+        onCancel={closeCreateSkillModal}
         onOk={handleCreateSkill}
         confirmLoading={creatingSkill}
         okText="创建"
         cancelText="取消"
-        width={520}
+        width={760}
         destroyOnClose
       >
-        <Form form={skillForm} layout="vertical" preserve={false} style={{ marginTop: 12 }}>
-          <Form.Item
-            name="name"
-            label="技能名称"
-            rules={[
-              { required: true, message: '请输入技能名称' },
-              { pattern: /^[a-z0-9][a-z0-9._-]*$/, message: '仅支持小写字母、数字、点、下划线、连字符，且以字母或数字开头' },
-            ]}
-          >
-            <Input placeholder="如 pdf-exporter" maxLength={64} allowClear />
-          </Form.Item>
-          <Form.Item
-            name="category"
-            label="分类"
-            rules={[
-              { required: true, type: 'array', message: '请输入技能分类' },
-              {
-                validator: async (rule, value: string[]) => {
-                  const v = Array.isArray(value) ? value[0] : value;
-                  if (v && !/^[a-z0-9][a-z0-9._-]*$/.test(v)) {
-                    throw new Error('分类仅支持小写字母、数字、点、下划线、连字符');
-                  }
+        <Radio.Group
+          value={createMethod}
+          onChange={(e) => setCreateMethod(e.target.value)}
+          style={{ width: '100%', marginBottom: 16 }}
+          options={[
+            { label: '手动新增', value: 'manual' },
+            { label: '导入技能', value: 'import' },
+            { label: '上传文件', value: 'upload' },
+          ]}
+          optionType="button"
+          buttonStyle="solid"
+        />
+
+        {/* ========== 手动新增 ========== */}
+        {createMethod === 'manual' && (
+          <Form form={skillForm} layout="vertical" preserve={false} style={{ marginTop: 12 }}>
+            <Form.Item
+              name="name"
+              label="技能名称"
+              rules={[
+                { required: true, message: '请输入技能名称' },
+                { pattern: /^[a-z0-9][a-z0-9._-]*$/, message: '仅支持小写字母、数字、点、下划线、连字符，且以字母或数字开头' },
+              ]}
+            >
+              <Input placeholder="如 pdf-exporter" maxLength={64} allowClear />
+            </Form.Item>
+            <Form.Item
+              name="category"
+              label="分类"
+              rules={[
+                { required: true, type: 'array', message: '请输入技能分类' },
+                {
+                  validator: async (rule, value: string[]) => {
+                    const v = Array.isArray(value) ? value[0] : value;
+                    if (v && !/^[a-z0-9][a-z0-9._-]*$/.test(v)) {
+                      throw new Error('分类仅支持小写字母、数字、点、下划线、连字符');
+                    }
+                  },
                 },
-              },
-            ]}
-          >
-            <Select
-              mode="tags"
-              maxCount={1}
-              placeholder="选择已有分类或输入新分类，如 custom"
-              options={[{ value: 'custom', label: 'custom' }, ...skillGroups.map((g) => ({ value: g.category, label: g.category }))]}
-              allowClear
+              ]}
+            >
+              <Select
+                mode="tags"
+                maxCount={1}
+                placeholder="选择已有分类或输入新分类，如 custom"
+                options={[{ value: 'custom', label: 'custom' }, ...skillGroups.map((g) => ({ value: g.category, label: g.category }))]}
+                allowClear
+              />
+            </Form.Item>
+            <Form.Item
+              name="description"
+              label="描述"
+              rules={[{ required: true, message: '请输入技能描述' }]}
+            >
+              <Input.TextArea
+                placeholder="简要描述技能的用途，如：将对话内容导出为 PDF 文件"
+                maxLength={500}
+                showCount
+                autoSize={{ minRows: 2, maxRows: 4 }}
+              />
+            </Form.Item>
+            <Form.Item
+              name="content"
+              label="内容"
+              tooltip="Markdown，对应 SKILL.md 正文，为空时使用默认模板"
+              style={{ marginBottom: 0 }}
+            >
+              <div
+                className="editor-body"
+                style={{ width: '100%', maxWidth: '100%', border: '1px solid rgba(128,128,128,0.2)', borderRadius: 8, overflow: 'hidden' }}
+              >
+                <MDEditor
+                  height={240}
+                  preview="edit"
+                  data-color-mode={theme === 'dark' ? 'dark' : 'light'}
+                  textareaProps={{ spellCheck: false, placeholder: '编写 SKILL.md 正文内容（Markdown），留空使用默认模板' }}
+                />
+              </div>
+            </Form.Item>
+          </Form>
+        )}
+
+        {/* ========== 从 SKILL 管理库导入 ========== */}
+        {createMethod === 'import' && (
+          <Form form={skillForm} layout="vertical" preserve={false} style={{ marginTop: 12 }}>
+            <Form.Item
+              name="from_library"
+              label="选择技能"
+              rules={[{ required: true, message: '请从 SKILL 库中选择要导入的技能' }]}
+            >
+              <Select
+                showSearch
+                loading={importSkillLoading}
+                placeholder="选择 SKILL 管理库中的技能"
+                allowClear
+                optionFilterProp="label"
+                options={importSkillOptions.map((s) => ({
+                  value: JSON.stringify({ name: s.name, directory: s.directory, description: s.description || '' }),
+                  label: `${s.name}${s.description ? ` - ${s.description}` : ''}`,
+                }))}
+              />
+            </Form.Item>
+            <Form.Item
+              name="category"
+              label="分类"
+              rules={[
+                { required: true, type: 'array', message: '请输入技能分类' },
+                {
+                  validator: async (rule, value: string[]) => {
+                    const v = Array.isArray(value) ? value[0] : value;
+                    if (v && !/^[a-z0-9][a-z0-9._-]*$/.test(v)) {
+                      throw new Error('分类仅支持小写字母、数字、点、下划线、连字符');
+                    }
+                  },
+                },
+              ]}
+            >
+              <Select
+                mode="tags"
+                maxCount={1}
+                placeholder="选择已有分类或输入新分类，如 custom"
+                options={[{ value: 'custom', label: 'custom' }, ...skillGroups.map((g) => ({ value: g.category, label: g.category }))]}
+                allowClear
+              />
+            </Form.Item>
+          </Form>
+        )}
+
+        {/* ========== 上传文件（压缩包 / 目录） ========== */}
+        {createMethod === 'upload' && (
+          <div style={{ marginTop: 12 }}>
+            <Form form={skillForm} layout="vertical" preserve={false}>
+              <Form.Item
+                name="category"
+                label="分类"
+                rules={[
+                  { required: true, type: 'array', message: '请输入技能分类' },
+                  {
+                    validator: async (rule, value: string[]) => {
+                      const v = Array.isArray(value) ? value[0] : value;
+                      if (v && !/^[a-z0-9][a-z0-9._-]*$/.test(v)) {
+                        throw new Error('分类仅支持小写字母、数字、点、下划线、连字符');
+                      }
+                    },
+                  },
+                ]}
+              >
+                <Select
+                  mode="tags"
+                  maxCount={1}
+                  placeholder="选择已有分类或输入新分类，如 custom"
+                  options={[{ value: 'custom', label: 'custom' }, ...skillGroups.map((g) => ({ value: g.category, label: g.category }))]}
+                  allowClear
+                />
+              </Form.Item>
+            </Form>
+
+            <Radio.Group
+              value={uploadArchive ? 'archive' : 'directory'}
+              onChange={(e) => {
+                if (e.target.value === 'archive') setUploadDirFiles([]);
+                else setUploadArchive(null);
+              }}
+              style={{ width: '100%', marginBottom: 12 }}
+              options={[{ label: '上传压缩包（.zip / .rar）', value: 'archive' }, { label: '上传目录', value: 'directory' }]}
+              optionType="button"
             />
-          </Form.Item>
-          <Form.Item
-            name="description"
-            label="描述"
-            rules={[{ required: true, message: '请输入技能描述' }]}
-          >
-            <Input.TextArea
-              placeholder="简要描述技能的用途，如：将对话内容导出为 PDF 文件"
-              maxLength={500}
-              showCount
-              autoSize={{ minRows: 2, maxRows: 4 }}
-            />
-          </Form.Item>
-        </Form>
+
+            {uploadArchive ? (
+              <Upload.Dragger
+                accept=".zip,.rar"
+                maxCount={1}
+                multiple={false}
+                beforeUpload={(file) => {
+                  setUploadArchive(file);
+                  return false; // 阻止自动上传，仅本地预览
+                }}
+                onRemove={() => setUploadArchive(null)}
+                fileList={uploadArchive ? [{ uid: '-1', name: uploadArchive.name, status: 'done' } as any] : []}
+              >
+                <p className="ant-upload-drag-icon"><InboxOutlined /></p>
+                <p className="ant-upload-text">点击或拖拽 {uploadArchive?.name || '选择 .zip / .rar 压缩包'}</p>
+                <p className="ant-upload-hint">包内根目录必须包含 SKILL.md（从其中解析 name / description）</p>
+              </Upload.Dragger>
+            ) : (
+              <Upload.Dragger
+                multiple
+                directory
+                maxCount={100}
+                beforeUpload={(file) => {
+                  // 目录上传时，把 FileList 转为带相对路径的 File 数组
+                  setUploadDirFiles((prev) => {
+                    const incoming = Array.from((file as any).getFiles ? (file as any).getFiles() : [file]);
+                    // 使用 webkitRelativePath 恢复目录层级
+                    return [...prev, ...incoming];
+                  });
+                  return false;
+                }}
+                onRemove={(file) => {
+                  setUploadDirFiles((prev) => prev.filter((f) => f.webkitRelativePath !== (file as any).webkitRelativePath && f.uid !== (file as any).uid));
+                }}
+                fileList={uploadDirFiles.map((f, i) => ({ uid: String(i), name: f.webkitRelativePath || f.name, status: 'done' as const }))}
+              >
+                <p className="ant-upload-drag-icon"><InboxOutlined /></p>
+                <p className="ant-upload-text">点击或拖拽目录（目录中需包含 SKILL.md）</p>
+                <p className="ant-upload-hint">将保留目录结构上传，已选择 {uploadDirFiles.length} 个文件</p>
+              </Upload.Dragger>
+            )}
+          </div>
+        )}
       </Modal>
 
       {/* 工具详情弹窗（名称、描述、所需参数等） */}

@@ -37,6 +37,7 @@ const SkillDetailPage: React.FC = () => {
 
   // 技能内容字段编辑
   const [name, setName] = useState('');
+  const [directoryName, setDirectoryName] = useState('');
   const [description, setDescription] = useState('');
   const [metadataRows, setMetadataRows] = useState<{ key: string; value: string }[]>([]);
   const [hasNestBlock, setHasNestBlock] = useState(false);
@@ -68,6 +69,7 @@ const SkillDetailPage: React.FC = () => {
   // 不再比较重新序列化的 md 文本（前端序列化格式与后端 build_skill_md 输出格式存在差异，会导致误报）
   const [baseline, setBaseline] = useState<{
     name: string;
+    directoryName: string;
     description: string;
     rows: { key: string; value: string }[];
     body: string;
@@ -115,9 +117,9 @@ const SkillDetailPage: React.FC = () => {
   };
 
   /** 记录脏检测基线（字段级快照） */
-  const setBaselineFromMd = (md: string) => {
+  const setBaselineFromMd = (md: string, dirName: string) => {
     const f = parseMdToFields(md);
-    setBaseline({ name: f.name, description: f.description, rows: f.rows, body: f.body });
+    setBaseline({ name: f.name, directoryName: dirName, description: f.description, rows: f.rows, body: f.body });
   };
 
   const fetchSkill = async (skillId: string, silent = false) => {
@@ -125,10 +127,12 @@ const SkillDetailPage: React.FC = () => {
     try {
       const data = await skillService.getSkill(skillId, true);
       setSkill(data);
+      const dirName = data.directory_name || data.directory || '';
+      setDirectoryName(dirName);
       const md = data.skill_md_content ?? '';
       setInitialMd(md);
       applyMdToState(md);
-      setBaselineFromMd(md);
+      setBaselineFromMd(md, dirName);
       setShowDiff(false);
     } catch (e: any) {
       message.error(e && e.message || '加载技能详情失败');
@@ -162,6 +166,7 @@ const SkillDetailPage: React.FC = () => {
       .filter(r => r.key && r.value)
       .sort((a, b) => a.key.localeCompare(b.key));
     return name.trim() !== baseline.name.trim()
+      || directoryName.trim() !== baseline.directoryName.trim()
       || description.trim() !== baseline.description.trim()
       || (body || '').trim() !== baseline.body
       || JSON.stringify(curRows) !== JSON.stringify(baseRows);
@@ -206,6 +211,16 @@ const SkillDetailPage: React.FC = () => {
       message.error('名称不能为空');
       return;
     }
+    // 校验目录名称（必填 + 格式合法）
+    const dn = directoryName.trim();
+    if (!dn) {
+      message.error('目录名称不能为空');
+      return;
+    }
+    if (!/^[a-z0-9][a-z0-9._-]*$/.test(dn)) {
+      message.error('目录名称只能使用小写字母/数字/点/下划线/连字符，且需以字母或数字开头');
+      return;
+    }
     // 校验 metadata key 合法性
     for (const row of metadataRows) {
       const k = row.key.trim();
@@ -232,6 +247,7 @@ const SkillDetailPage: React.FC = () => {
       await skillService.updateSkill(skill.id, {
         name: name.trim(),
         title: name.trim(),
+        directory_name: dn || undefined,
         description: description.trim(),
         metadata: Object.keys(metaDict).length > 0 ? metaDict : null,
         content: body,
@@ -239,9 +255,11 @@ const SkillDetailPage: React.FC = () => {
       // 拉取最新详情并重置基线
       const updated = await skillService.getSkill(skill.id, true);
       setSkill(updated);
+      const updatedDir = updated.directory_name || updated.directory || '';
+      setDirectoryName(updatedDir);
       const updatedMd = updated.skill_md_content ?? '';
       setInitialMd(updatedMd);
-      setBaselineFromMd(updatedMd);
+      setBaselineFromMd(updatedMd, updatedDir);
       message.success('保存成功');
     } catch (e: any) {
       message.error(e && e.message || '保存失败');
@@ -299,7 +317,7 @@ const SkillDetailPage: React.FC = () => {
             onClick={goHome}>返回</Button>
           <FileTextOutlined style={{ fontSize: 18, color: '#1677ff' }} />
           <span style={{ fontSize: 15, fontWeight: 600 }}>
-            {name || skill.title || skill.name}
+            {skill.directory || name || skill.title || skill.name}
           </span>
           <Tag color={skill.status ? 'green' : 'red'}>{skill.status ? '启用' : '停用'}</Tag>
         </div>
@@ -363,7 +381,19 @@ const SkillDetailPage: React.FC = () => {
                 colon
                 labelAlign="right"
               >
-                <Form.Item label={<span>名称 <Tooltip title="技能唯一标识，修改后目录名同步变更"><QuestionCircleOutlined /></Tooltip></span>} required
+                <Form.Item label={<span>目录名称 <Tooltip title="技能所在目录名（对应 data/skill 下的目录），只能使用小写字母/数字/点/下划线/连字符，需以字母或数字开头"><QuestionCircleOutlined /></Tooltip></span>} required
+                  rules={[
+                    { required: true, message: '请输入目录名称' },
+                    { pattern: /^[a-z0-9][a-z0-9._-]*$/, message: '只能使用小写字母/数字/点/下划线/连字符，且需以字母或数字开头' },
+                  ]}>
+                  <Input
+                    value={directoryName}
+                    onChange={(e) => setDirectoryName(e.target.value)}
+                    placeholder="技能目录名，如 my-skill"
+                  />
+                </Form.Item>
+
+                <Form.Item label={<span>名称 <Tooltip title="技能展示名称，可含中文"><QuestionCircleOutlined /></Tooltip></span>} required
                   rules={[
                     { required: true, message: '请输入名称' },
                     { pattern: /^\S+$/, message: '名称不能包含空格' },
@@ -371,7 +401,7 @@ const SkillDetailPage: React.FC = () => {
                   <Input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="为技能填写名称，将作为技能所属目录名称"
+                    placeholder="为技能填写名称（技能展示名称，可含中文）"
                   />
                 </Form.Item>
 

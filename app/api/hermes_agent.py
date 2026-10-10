@@ -2,12 +2,12 @@
 Hermes 智能体控制器，提供基于 hermes CLI 的智能体管理 API 接口
 """
 
-from fastapi import APIRouter, Query, UploadFile, File
+from fastapi import APIRouter, Query, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from pathlib import Path
 from starlette.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import List, Optional
 
 from app.core.agent.hermes_agent import HermesAgentService, HermesAgentError
 from app.utils.response import ResponseUtil, ApiResponse
@@ -74,6 +74,17 @@ class HermesSkillCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=64, description="技能名称（作为目录名与 frontmatter name）")
     category: Optional[str] = Field(None, max_length=64, description="技能分类（skills 下的一级目录名，空则使用 custom）")
     description: Optional[str] = Field(None, max_length=500, description="技能描述")
+    content: Optional[str] = Field(None, description="技能正文内容（Markdown），为空时使用默认模板")
+
+
+class HermesSkillImport(BaseModel):
+    """从 SKILL 管理库导入技能 DTO（保留库中目录结构）"""
+    name: str = Field(..., min_length=1, max_length=64,
+                      description="目标 hermes 技能目录名（建议传 SKILL 库中的 name 字段，需符合 ^[a-z0-9][a-z0-9._-]*$）")
+    directory: str = Field(..., min_length=1, max_length=512,
+                            description="SKILL 管理库中的技能目录名（对应 data/skill 下的目录名）")
+    description: Optional[str] = Field(None, max_length=1024, description="展示用技能描述（可选）")
+    category: Optional[str] = Field(None, max_length=64, description="目标分类目录名（空则使用 custom）")
 
 
 class HermesConversationCreate(BaseModel):
@@ -315,8 +326,63 @@ def create_hermes_skill(agent_name: str, body: HermesSkillCreate):
             skill_dir=body.name,
             category=body.category,
             description=body.description,
+            content=body.content or "",
         )
         return ResponseUtil.success(data=data, message="技能创建成功")
+    except Exception as e:
+        return _handle_error(e)
+
+
+@router.post("/hermes/agents/{agent_name}/skills/import", response_model=ApiResponse)
+def import_hermes_skill(agent_name: str, body: HermesSkillImport):
+    """
+    从 SKILL 管理库导入技能（复制库中目录，保留 references/scripts 等结构）
+    """
+    try:
+        data = hermes_service.import_skill_from_library(
+            name=agent_name,
+            skill_name=body.name,
+            directory=body.directory,
+            category=body.category,
+            description=body.description,
+        )
+        return ResponseUtil.success(data=data, message="技能导入成功")
+    except Exception as e:
+        return _handle_error(e)
+
+
+@router.post("/hermes/agents/{agent_name}/skills/upload", response_model=ApiResponse)
+async def upload_hermes_skill(agent_name: str,
+                              category: str = Form("", description="目标分类目录名，空则使用 custom"),
+                              files: List[UploadFile] = File(..., description="压缩包或目录内文件（含 SKILL.md）")):
+    """
+    上传技能（根目录必须含 SKILL.md，从其中解析 name/description）
+
+    - 上传压缩包（.zip / .rar）：单个文件，按压缩包解压
+    - 上传目录：多个文件，按相对路径保留文件夹结构
+    """
+    try:
+        # 先全部读出为 (filename, rel_path, bytes)
+        items = [(f.filename or "", getattr(f, "filename", "") or "", await f.read()) for f in files]
+        items = [it for it in items if it[0]]
+        if not items:
+            return ResponseUtil.error(message="未收到任何上传文件")
+        # 单个 .zip/.rar 文件 → 压缩包上传
+        filename = items[0][0]
+        if len(items) == 1 and filename.lower().endswith((".zip", ".rar")):
+            data = hermes_service.import_skill_from_archive(
+                name=agent_name,
+                archive_content=items[0][2],
+                archive_name=filename,
+                category=category,
+            )
+        else:
+            data = hermes_service.import_skill_from_files(
+                name=agent_name,
+                category=category,
+                files=items,
+            )
+        return ResponseUtil.success(data=data, message="技能上传成功")
     except Exception as e:
         return _handle_error(e)
 

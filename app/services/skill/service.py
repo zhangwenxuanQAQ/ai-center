@@ -123,12 +123,25 @@ class SkillService:
     # ==================== 创建 ====================
 
     @staticmethod
+    def _resolve_directory_name(directory_name: str, name: str) -> str:
+        """
+        解析目录名：
+        - directory_name 有值时直接使用（前端已保证格式合法）
+        - directory_name 为空时回退为 sanitize_dir_name(name)（兼容旧流程 / 上传目录临时名）
+        """
+        dn = (directory_name or '').strip()
+        if dn:
+            return dn
+        return sanitize_dir_name(name)
+
+    @staticmethod
     @handle_transaction
     def create_skill(skill_data: SkillCreate):
         """
         手动创建技能
         - 校验名称不能有空格
-        - 目录名 = 技能名称净化后的结果，并检查是否被占用
+        - 目录名 = directory_name（用户指定），为空时回退为技能名称净化后的结果
+        - 检查目录是否被占用
         - 按标准模板生成 SKILL.md
         - 入库
         """
@@ -136,7 +149,7 @@ class SkillService:
             raise ValueError("技能名称不能包含空格")
 
         ensure_skill_root()
-        relative_dir = sanitize_dir_name(skill_data.name)
+        relative_dir = SkillService._resolve_directory_name(skill_data.directory_name, skill_data.name)
 
         # 检查目录是否已被其他技能占用
         existing = Skill.select().where(
@@ -180,11 +193,30 @@ class SkillService:
         """
         从上传的文件/文件夹创建技能（目录已存在，仅入库）
         若 SKILL.md 不存在则按标准模板生成
+        若 skill_data.directory_name 有值，则重命名上传的临时目录
         """
         if ' ' in skill_data.name:
             raise ValueError("技能名称不能包含空格")
 
-        abs_dir = get_skill_abs_dir(directory_name)
+        # 若用户指定了目录名称，将临时上传目录重命名
+        final_dir = directory_name
+        if (skill_data.directory_name or '').strip():
+            final_dir = skill_data.directory_name.strip()
+            if final_dir != directory_name:
+                old_abs = get_skill_abs_dir(directory_name)
+                new_abs = get_skill_abs_dir(final_dir)
+                # 检查新目录是否已存在
+                existing = Skill.select().where(
+                    (Skill.directory == final_dir) & (Skill.deleted == False)
+                ).first()
+                if existing:
+                    raise ValueError(f"已存在同名技能目录 '{final_dir}'，请使用其他目录名称")
+                if os.path.exists(new_abs) and os.path.isdir(new_abs):
+                    raise ValueError(f"目录 '{final_dir}' 已存在，无法重命名")
+                if os.path.exists(old_abs):
+                    shutil.move(old_abs, new_abs)
+
+        abs_dir = get_skill_abs_dir(final_dir)
         skill_md_path = os.path.join(abs_dir, SKILL_MD_FILENAME)
         if not os.path.exists(skill_md_path):
             body_content = (skill_data.content or "").strip()
@@ -207,7 +239,7 @@ class SkillService:
             metadata=serialize_metadata(skill_data.metadata),
             content=skill_data.content,
             category_id=category_id,
-            directory=directory_name,
+            directory=final_dir,
             status=skill_data.status if skill_data.status is not None else True,
         )
         db_skill.save(force_insert=True)
@@ -237,17 +269,26 @@ class SkillService:
             update_data['metadata'] = serialize_metadata(update_data['metadata'])
 
         # name 变更时重命名目录，保证技能名称和目录名称一致
+        # 若同时传入了 directory_name，优先使用 directory_name 作为新目录名
+        new_dir = None
         if 'name' in update_data and update_data['name'] and update_data['name'] != db_skill.name:
             new_name = update_data['name']
             if ' ' in new_name:
                 raise ValueError("技能名称不能包含空格")
             new_dir = sanitize_dir_name(new_name)
+
+        if 'directory_name' in update_data and update_data['directory_name']:
+            new_dir = update_data['directory_name'].strip()
+            # 排除原始参数中不包含 directory_name 的情况
+            update_data.pop('directory_name', None)
+
+        if new_dir and new_dir != db_skill.directory:
             # 检查新目录是否已被其他技能占用
             existing = Skill.select().where(
                 (Skill.directory == new_dir) & (Skill.deleted == False) & (Skill.id != skill_id)
             ).first()
             if existing:
-                raise ValueError(f"已存在同名技能目录 '{new_dir}'，请使用其他名称")
+                raise ValueError(f"已存在同名技能目录 '{new_dir}'，请使用其他目录名称")
             old_dir = db_skill.directory
             old_abs = get_skill_abs_dir(old_dir)
             new_abs = get_skill_abs_dir(new_dir)

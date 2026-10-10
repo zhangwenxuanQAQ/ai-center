@@ -453,6 +453,7 @@ const SkillManagement: React.FC = () => {
       setSkillTags(skill.tags || []);
       skillForm.setFieldsValue({
         name: skill.name, description: skill.description,
+        directory_name: skill.directory_name || skill.directory || '',
         tags: skill.tags || [],
         avatar: skill.avatar,
         status: !!skill.status,
@@ -463,7 +464,7 @@ const SkillManagement: React.FC = () => {
       setEditingSkill(null);
       setSkillTags([]);
       skillForm.setFieldsValue({
-        name: '', description: '', tags: [], avatar: '', content: '', metadata: [], status: true,
+        name: '', description: '', directory_name: '', tags: [], avatar: '', content: '', metadata: [], status: true,
       });
     }
     setNewTag('');
@@ -523,7 +524,7 @@ const SkillManagement: React.FC = () => {
       const result = await skillService.prepareUpload();
       setUploadDirectory(result.directory);
       uploadForm.setFieldsValue({
-        name: '', description: '', tags: [], avatar: '', content: '', metadata: [], status: true,
+        name: '', description: '', directory_name: '', tags: [], avatar: '', content: '', metadata: [], status: true,
       });
       setUploadModalOpen(true);
     } catch (e: any) {
@@ -597,12 +598,19 @@ const SkillManagement: React.FC = () => {
   /** 技能配置项表单（公共渲染，供新建/编辑弹窗和上传弹窗复用） */
   const renderSkillFields = (mdHeight: number) => (
     <>
+      <Form.Item label="目录名称" name="directory_name"
+        rules={[
+          { required: true, message: '请输入目录名称' },
+          { pattern: /^[a-z0-9][a-z0-9._-]*$/, message: '只能使用小写字母/数字/点/下划线/连字符，且需以字母或数字开头' },
+        ]}>
+        <Input placeholder="技能目录名（对应 data/skill 下的目录），如 my-skill" />
+      </Form.Item>
       <Form.Item label="名称" name="name"
         rules={[
           { required: true, message: '请输入名称' },
           { pattern: /^\S+$/, message: '名称不能包含空格' },
         ]}>
-        <Input placeholder="为技能填写名称，将作为技能所属目录名称" />
+        <Input placeholder="为技能填写名称（技能展示名称，可含中文）" />
       </Form.Item>
       <Form.Item label="描述" name="description" rules={[{ required: true, message: '请输入描述' }]}>
         <TextArea rows={4} placeholder="技能是什么，应该在何时使用。" />

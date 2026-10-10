@@ -104,12 +104,13 @@ def save_uploaded_file(relative_dir: str, file_name: str, file_content: bytes, s
 
 def extract_archive(abs_target_dir: str, archive_path: str, archive_name: str) -> int:
     """
-    解压 zip/tar/tar.gz/tar.bz2 到指定目录
+    解压 zip/tar/tar.gz/tar.bz2/rar 到指定目录
 
     特性：
     - 跳过 __MACOSX 等隐藏目录
     - 自动检测到顶层单一文件夹时进行扁平化（去掉前缀）
     - 解压 tar 时重命名文件以剥离顶层前缀
+    - .rar 需要 rarfile 库
 
     返回：成功提取的文件数量
     """
@@ -134,6 +135,29 @@ def extract_archive(abs_target_dir: str, archive_path: str, archive_name: str) -
                     else:
                         os.makedirs(os.path.dirname(target_path) or abs_target_dir, exist_ok=True)
                         with zf.open(member) as src, open(target_path, 'wb') as dst:
+                            shutil.copyfileobj(src, dst)
+                        extracted_count += 1
+        elif archive_name.endswith('.rar'):
+            try:
+                import rarfile
+            except ImportError as e:
+                raise ValueError(f"缺少 rarfile 库，无法解压 .rar：{e}") from e
+            with rarfile.RarFile(archive_path, 'r') as rf:
+                members = rf.infolist()
+                names = [m.filename for m in members]
+                common_prefix = _detect_common_prefix(names)
+                for member in members:
+                    if _is_hidden_entry(member.filename):
+                        continue
+                    target_name = _strip_prefix(member.filename, common_prefix)
+                    if not target_name:
+                        continue
+                    target_path = os.path.join(abs_target_dir, target_name)
+                    if member.filename.endswith('/'):
+                        os.makedirs(target_path, exist_ok=True)
+                    else:
+                        os.makedirs(os.path.dirname(target_path) or abs_target_dir, exist_ok=True)
+                        with rf.open(member) as src, open(target_path, 'wb') as dst:
                             shutil.copyfileobj(src, dst)
                         extracted_count += 1
         elif archive_name.endswith(('.tar', '.tar.gz', '.tgz', '.tar.bz2')):

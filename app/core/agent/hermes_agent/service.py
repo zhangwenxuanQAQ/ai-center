@@ -927,12 +927,13 @@ class HermesAgentService:
     # 技能目录名规则（与 hermes CLI 的 VALID_NAME_RE 一致）
     SKILL_NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 
-    def create_skill(self, name: str, skill_dir: str, category: str, description: str) -> dict:
+    def create_skill(self, name: str, skill_dir: str, category: str, description: str, content: str = "") -> dict:
         """
         新增技能（创建 skills/<category>/<skill_dir>/SKILL.md）
 
         目录名按 hermes CLI 规则校验（小写字母、数字、点、下划线、连字符）；
-        SKILL.md 写入 name/description frontmatter 与正文模板。
+        SKILL.md 写入 name/description frontmatter；
+        content 为正文内容（Markdown），为空时使用默认模板。
         """
         self._check_agent_exists(name)
         skill_dir = (skill_dir or "").strip()
@@ -958,19 +959,15 @@ class HermesAgentService:
             raise HermesAgentError(f"同名技能已存在：{(category or 'custom')}/{skill_dir}")
 
         description = (description or "").strip()
-        skill_md = [
-            "---",
-            f"name: {skill_dir}",
-            f"description: {description or skill_dir}",
-            "---",
-            "",
-            f"# {skill_dir}",
-            "",
-            description or "在此编写技能的具体指令与流程。",
-            "",
-        ]
+        body = (content or "").strip()
+        if not body:
+            body = f"# {skill_dir}\n\n{description or '在此编写技能的具体指令与流程。'}"
+        # 使用 yaml 安全序列化 frontmatter，避免 description 中含特殊字符导致解析失败
+        fm = yaml.safe_dump({"name": skill_dir, "description": description or skill_dir},
+                            allow_unicode=True, sort_keys=False, default_flow_style=False).rstrip()
+        skill_md = f"---\n{fm}\n---\n\n{body}\n"
         skill_root.mkdir(parents=True, exist_ok=True)
-        (skill_root / "SKILL.md").write_text("\n".join(skill_md), encoding="utf-8")
+        (skill_root / "SKILL.md").write_text(skill_md, encoding="utf-8")
         return {
             "name": skill_dir,
             "dir_name": skill_dir,
@@ -1004,6 +1001,285 @@ class HermesAgentService:
                 target = self.get_agent_dir(name) / "config.yaml"
                 target.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
         return {"name": display_name, "category": category, "deleted": True}
+
+    # ==================== 技能导入（从 SKILL 管理库 / 上传） ====================
+
+    # 临时上传目录前缀（用于存放解压/收集的多文件）
+    _UPLOAD_TMP_PREFIX = "hermes_skill_upload_"
+
+    def import_skill_from_library(self, name: str, skill_name: str, directory: str,
+                                  category: str, description: str = "") -> dict:
+        """
+        从 SKILL 管理库（data/skill）导入技能到智能体
+
+        将 SKILL 库中目录 data/skill/<directory> 整个复制到
+        智能体的 skills/<category>/<skill_name> 下，保持目录结构（含 references/scripts 等）。
+
+        目录名（skill_name）优先使用传入的 skill_name，若缺省或等于 directory 则使用 SKILL 库的
+        directory（目录名称，即 data/skill 下的目录名）。该目录名称必须是合法的
+        hermes 技能目录名（小写字母/数字/点/下划线/连字符，字母或数字开头），
+        不合规则自动净化；净化失败时报错。
+
+        复制完成后，补齐目标 SKILL.md 的 frontmatter，使 name 与目录名一致（保持 hermes 加载语义）。
+
+        Args:
+            name: 智能体名称
+            skill_name: 目标 hermes 技能目录名；缺省时使用 SKILL 库的目录名称
+            directory: SKILL 管理库中的技能目录名（对应 data/skill 下的目录名，src_dir）
+            category: 目标分类目录名（skills 下一级），空则使用 custom
+            description: 展示用技能描述（可选）
+        """
+        self._check_agent_exists(name)
+        from app.core.skill.skill_builder import get_skill_abs_dir
+        from app.constants.skill_constants import SKILL_MD_FILENAME
+
+        directory = (directory or "").strip()
+        if not directory:
+            raise HermesAgentError("SKILL 库技能目录名（directory）不能为空")
+        src_dir = Path(get_skill_abs_dir(directory))
+        if not src_dir.is_dir():
+            raise HermesAgentError(f"SKILL 库中不存在技能目录：{directory}")
+
+        description = (description or "").strip()
+
+        # 目标 hermes 目录名：统一使用 SKILL 库的目录名称（directory）。
+        # 传入的 skill_name 是技能显示名（可能含中文），不用于目录命名。
+        skill_name = directory
+
+        # 目录名必须合规（与 hermes CLI 命名规则一致），不合规则净化
+        if not self.SKILL_NAME_PATTERN.match(skill_name):
+            sanitized = self._sanitize_skill_dir_name(skill_name)
+            if not sanitized:
+                raise HermesAgentError(
+                    f"SKILL 库技能的目录名称「{skill_name}」不合法，"
+                    f"且无法净化为合法的 hermes 技能目录名。请在 SKILL 库中将目录名称修改为"
+                    f"小写字母/数字/点/下划线/连字符（字母或数字开头，如 zhouyi-zhihui）。"
+                )
+            skill_name = sanitized
+        category = (category or "").strip() or "custom"
+        if "/" in category or "\\" in category:
+            raise HermesAgentError("技能分类必须是单个目录名")
+        if not self.SKILL_NAME_PATTERN.match(category):
+            raise HermesAgentError(f"技能分类不合法：{category}")
+
+        dest_root = self.get_agent_dir(name) / "skills" / category / skill_name
+        if dest_root.exists():
+            raise HermesAgentError(f"同名技能已存在：{category}/{skill_name}")
+
+        import shutil
+        shutil.copytree(src_dir, dest_root)
+        # 仅复制目录，文件内容（含 SKILL.md frontmatter）保持原样，不改写
+
+        return {
+            "name": skill_name,
+            "dir_name": skill_name,
+            "category": category,
+            "description": description,
+            "from_directory": directory,
+        }
+
+    def _sanitize_skill_dir_name(self, name: str) -> str:
+        """将任意名称转为合法的 hermes 技能目录名（小写字母/数字/点/下划线/连字符，字母或数字开头）"""
+        n = (name or "").strip().lower()
+        n = re.sub(r"[^a-z0-9._-]+", "-", n)
+        n = n.strip("._-")
+        if n:
+            return n
+        return ""
+
+    def _resolve_import_skill(self, name: str, raw_skill_dir: str, category: str) -> Path:
+        """
+        确定上传导入的技能落地目录，并做存在性校验。
+
+        返回 (category, skill_dir, dest_root)。
+        spec 三类共用：zip 解压、目录上传。
+        """
+        skill_dir = (raw_skill_dir or "").strip()
+        if not skill_dir:
+            raise HermesAgentError("技能名称不能为空")
+        if len(skill_dir) > 64:
+            raise HermesAgentError("技能名称超过 64 个字符")
+        sanitized = skill_dir if self.SKILL_NAME_PATTERN.match(skill_dir) \
+            else self._sanitize_skill_dir_name(skill_dir)
+        if not sanitized:
+            raise HermesAgentError(f"技能名称不合法且无法净化：{skill_dir}")
+        category = (category or "custom").strip() or "custom"
+        if "/" in category or "\\" in category:
+            raise HermesAgentError("技能分类必须是单个目录名")
+        if not self.SKILL_NAME_PATTERN.match(category):
+            raise HermesAgentError(f"技能分类不合法：{category}")
+        dest_root = self.get_agent_dir(name) / "skills" / category / sanitized
+        if dest_root.exists():
+            raise HermesAgentError(f"同名技能已存在：{category}/{sanitized}")
+        return dest_root, category, sanitized
+
+    def import_skill_from_archive(self, name: str, archive_content: bytes,
+                                  archive_name: str, category: str,
+                                  skill_dir_hint: str = "") -> dict:
+        """
+        从上传的压缩包（.zip/.rar）创建技能
+
+        解压后将顶层内容放入 skills/<category>/<skill_dir>，
+        解压根目录下必须存在 SKILL.md，其 frontmatter 解析出 name/description 作为展示信息。
+
+        Args:
+            archive_name: 原始压缩包文件名（.zip / .rar）
+            skill_dir_hint: 可选目录名提示（默认从 SKILL.md frontmatter name 解析）
+        """
+        self._check_agent_exists(name)
+        from app.core.skill.file_manager import extract_archive
+        import tempfile
+
+        low = (archive_name or "").lower()
+        if not (low.endswith(".zip") or low.endswith(".rar")):
+            raise HermesAgentError("仅支持 .zip 或 .rar 压缩包")
+        if low.endswith(".rar"):
+            try:
+                import rarfile
+                rarfile.RarFile
+            except ImportError:
+                raise HermesAgentError("服务端未安装 rarfile，无法解压 .rar 文件")
+
+        # 解压到临时目录，根目录下（或顶层单文件夹扁平化后）应直接是 SKILL.md
+        tmp_root = Path(tempfile.mkdtemp(prefix=self._UPLOAD_TMP_PREFIX))
+        try:
+            archive_path = tmp_root / (archive_name or "archive.zip")
+            archive_path.write_bytes(archive_content)
+            extract_archive(str(tmp_root), str(archive_path), archive_name)
+
+            # 收集解压后的顶层内容到一个临时目标目录
+            extracted_root = self._find_extracted_root(tmp_root)
+            if extracted_root is None:
+                raise HermesAgentError("压缩包内容为空")
+
+            skill_md = extracted_root / "SKILL.md"
+            if not skill_md.is_file():
+                raise HermesAgentError("压缩包根目录下必须包含 SKILL.md 文件")
+            meta = self._parse_skill_meta(skill_md)
+            src_name = (meta.get("name") or "").strip()
+            description = (meta.get("description") or "").strip()
+            if not src_name:
+                raise HermesAgentError("SKILL.md 的 frontmatter 缺少必填字段 name（技能名称）")
+            if not description:
+                raise HermesAgentError("SKILL.md 的 frontmatter 缺少必填字段 description（技能描述）")
+
+            skill_dir = skill_dir_hint.strip()
+            if not skill_dir or not self.SKILL_NAME_PATTERN.match(skill_dir):
+                skill_dir = src_name if self.SKILL_NAME_PATTERN.match(src_name) \
+                    else self._sanitize_skill_dir_name(src_name)
+            if not skill_dir:
+                raise HermesAgentError(f"无法确定合法的技能目录名：{src_name}")
+
+            dest_root, category, skill_dir = self._resolve_import_skill(name, skill_dir, category)
+            dest_root.parent.mkdir(parents=True, exist_ok=True)
+            import shutil
+            shutil.move(str(extracted_root), str(dest_root))
+
+            return self._describe_skill(dest_root, category, skill_dir, src_name, description)
+        finally:
+            import shutil
+            try:
+                shutil.rmtree(tmp_root, ignore_errors=True)
+            except Exception:
+                pass
+
+    def import_skill_from_files(self, name: str, category: str, files: list,
+                                skill_dir_hint: str = "") -> dict:
+        """
+        从上传的目录创建技能（浏览器按相对路径逐文件上传）
+
+        files: [(filename, rel_in_upload, content_bytes), ...]
+        写入临时目录后，根目录下必须存在 SKILL.md，解析 name/description。
+
+        与 import_skill_from_archive 共享收集与校验逻辑。
+        """
+        self._check_agent_exists(name)
+        import tempfile
+
+        tmp_root = Path(tempfile.mkdtemp(prefix=self._UPLOAD_TMP_PREFIX))
+        try:
+            # 遍历上传文件，按相对路径写入临时目录（保留文件夹结构）
+            rel_parts_map = []
+            for filename, rel_in_upload, content in files:
+                if not filename:
+                    continue
+                parts = [p for p in (rel_in_upload or "").replace("\\", "/").split("/") if p and p not in (".", "..")]
+                if not parts:
+                    parts = [filename]
+                rel_parts_map.append((parts, content))
+            if not rel_parts_map:
+                raise HermesAgentError("上传内容为空")
+
+            for parts, content in rel_parts_map:
+                target = tmp_root / Path(*parts)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(content)
+
+            # 收集有效根目录（若顶层为单一文件夹则下钻一层）
+            root = self._find_extracted_root(tmp_root)
+            if root is None:
+                raise HermesAgentError("上传内容为空")
+
+            skill_md = root / "SKILL.md"
+            if not skill_md.is_file():
+                raise HermesAgentError("上传根目录下必须包含 SKILL.md 文件")
+            meta = self._parse_skill_meta(skill_md)
+            src_name = (meta.get("name") or "").strip()
+            description = (meta.get("description") or "").strip()
+            if not src_name:
+                raise HermesAgentError("SKILL.md 的 frontmatter 缺少必填字段 name（技能名称）")
+            if not description:
+                raise HermesAgentError("SKILL.md 的 frontmatter 缺少必填字段 description（技能描述）")
+
+            skill_dir = skill_dir_hint.strip()
+            if not skill_dir or not self.SKILL_NAME_PATTERN.match(skill_dir):
+                skill_dir = src_name if self.SKILL_NAME_PATTERN.match(src_name) \
+                    else self._sanitize_skill_dir_name(src_name)
+            if not skill_dir:
+                raise HermesAgentError(f"无法确定合法的技能目录名：{src_name}")
+
+            dest_root, category, skill_dir = self._resolve_import_skill(name, skill_dir, category)
+            dest_root.parent.mkdir(parents=True, exist_ok=True)
+            import shutil
+            shutil.move(str(root), str(dest_root))
+
+            return self._describe_skill(dest_root, category, skill_dir, src_name, description)
+        finally:
+            import shutil
+            try:
+                shutil.rmtree(tmp_root, ignore_errors=True)
+            except Exception:
+                pass
+
+    def _find_extracted_root(self, base: Path) -> Optional[Path]:
+        """
+        从临时根目录中定位实际技能根目录：
+        - 若根目录直接含 SKILL.md（或含多个文件夹/文件），则根目录本身就是技能根
+        - 若根目录仅含单一子文件夹且该子文件夹内含 SKILL.md，下钻一层
+        找不到时返回 None。
+        """
+        entries = [e for e in base.iterdir() if not e.name.startswith((".", "__"))]
+        if not entries:
+            return None
+        # 根目录直接含 SKILL.md → 就是技能根
+        if (base / "SKILL.md").is_file():
+            return base
+        # 顶层只剩下一个子文件夹，尝试下钻
+        if len(entries) == 1 and entries[0].is_dir():
+            if (entries[0] / "SKILL.md").is_file():
+                return entries[0]
+        # 否则视为已扁平化的根目录（多个文件并列）
+        return base
+
+    def _describe_skill(self, dest_root: Path, category: str, skill_dir: str,
+                        src_name: str, description: str) -> dict:
+        """构造返回的技能描述信息"""
+        return {
+            "name": src_name,
+            "dir_name": skill_dir,
+            "category": category,
+            "description": description,
+        }
 
     # ==================== 文件内容读写 ====================
 

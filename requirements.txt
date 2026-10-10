@@ -51,6 +51,9 @@ markdown>=3.10.2
 pdfplumber>=0.11.9
 pypdf>=6.10.2
 
+# 压缩包解压（.rar 上传技能）
+rarfile>=4.0.0
+
 # 机器学习
 scikit-learn>=1.7.2
 xgboost==3.0.0

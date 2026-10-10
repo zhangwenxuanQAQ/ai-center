@@ -71,6 +71,7 @@ def skill_to_dict(skill: Skill, with_md: bool = False, category_map: dict = None
 
     data['tags'] = _parse_json_field(data.get('tags'), [])
     data['metadata'] = _parse_json_field(data.get('metadata'), {})
+    data['directory_name'] = data.get('directory', '') or ''
 
     if category_map and data.get('category_id'):
         data['category_name'] = category_map.get(data['category_id'])

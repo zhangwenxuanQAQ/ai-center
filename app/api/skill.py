@@ -1,4 +1,4 @@
-﻿"""
+"""
 SKILL API控制器，包含SKILL管理和文件操作
 
 controller 仅做参数解析 + 路由分发
@@ -136,6 +136,7 @@ async def upload_zip(
 def create_skill_with_directory(
     name: str = Form(...),
     directory: str = Form(...),
+    directory_name: Optional[str] = Form(None),
     title: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),  # JSON array
@@ -168,6 +169,7 @@ def create_skill_with_directory(
 
         dto = SkillCreateWithUpload(
             name=name,
+            directory_name=directory_name,
             title=title,
             description=description,
             tags=parsed_tags,

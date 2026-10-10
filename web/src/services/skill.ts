@@ -29,6 +29,7 @@ export interface Skill {
   category_id?: string;
   category_name?: string;
   directory: string;
+  directory_name?: string;
   status: boolean;
   skill_md_content?: string;
   created_at: string;
@@ -136,6 +137,7 @@ export const skillService = {
     name: string;
     code: string;
     directory: string;
+    directory_name?: string;
     description?: string;
     category_id?: string;
     status?: boolean;
@@ -144,6 +146,7 @@ export const skillService = {
     form.append('name', params.name);
     form.append('code', params.code);
     form.append('directory', params.directory);
+    if (params.directory_name) form.append('directory_name', params.directory_name);
     if (params.description) form.append('description', params.description);
     if (params.category_id) form.append('category_id', params.category_id);
     if (params.status !== undefined) form.append('status', String(params.status));
