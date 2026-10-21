@@ -1700,6 +1700,12 @@ class HermesAgentService:
 
         with self._with_agent_home(agent_dir):
             from run_agent import AIAgent
+            # 先确保内置工具与插件都被加载（用户/agent 自带的 MCP / 本地 tools 等
+            # 只有在 discover_plugins 之后才会被注册到 tools.registry）
+            from hermes_cli.plugins import discover_plugins
+            from tools.registry import discover_builtin_tools
+            discover_builtin_tools()
+            discover_plugins(force=True)
 
             db = self._open_conversation_db(name)
             resolved = db.resolve_session_id(session_id) or session_id
