@@ -164,6 +164,8 @@ const ToolkitManagement: React.FC = () => {
   const [agentChatLoadingHistory, setAgentChatLoadingHistory] = useState(false);
   const agentChatAbortRef = useRef<AbortController | null>(null);
   const agentChatContainerRef = useRef<HTMLDivElement>(null);
+  // 同步最新 agentChatInput，Button onClick 闭包里的 handleAgentChatSend 可能读到旧值
+  const agentChatInputRef = useRef('');
 
   // 智能体工具调用（hermes_agent_tool_call）参数测试：智能体/工具/schema 动态加载
   const [toolCallAgents, setToolCallAgents] = useState<{ name: string; description?: string }[]>([]);
@@ -1054,6 +1056,7 @@ const ToolkitManagement: React.FC = () => {
     if (tool.name === 'hermes_agent_chat') {
       setAgentChatMessages([]);
       setAgentChatInput('');
+      agentChatInputRef.current = '';
       setAgentChatGenerating(false);
     }
     // 智能体工具调用：重置并加载 agents 列表
@@ -1086,13 +1089,32 @@ const ToolkitManagement: React.FC = () => {
       const res = await fetch(`/aicenter/v1/agent/hermes/agents/${encodeURIComponent(agent)}/conversations/${encodeURIComponent(sessionId)}/messages`);
       const result = await res.json();
       if (result.code === 200 && result.data) {
-        const list = (result.data.data || []) as { id: any; role: string; content: string; timestamp?: string }[];
-        setAgentChatMessages(list.map((m, idx) => ({
-          id: `history-${m.id ?? idx}`,
-          role: m.role === 'user' ? 'user' : 'assistant',
-          content: m.content || '',
-          timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
-        })));
+        const list = (result.data.data || []) as {
+          id: any; role: string; content: string; timestamp?: string;
+          tool_calls?: { id?: string; name: string; arguments?: any; result?: any }[];
+        }[];
+        setAgentChatMessages(list.map((m, idx) => {
+          const base = {
+            id: `history-${m.id ?? idx}`,
+            role: m.role === 'user' ? 'user' as const : 'assistant' as const,
+            content: m.content || '',
+            timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
+          };
+          // assistant 消息：把后端聚合后的 tool_calls 渲染为工具步骤（历史已完成，状态一律 done）
+          if (m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
+            return {
+              ...base,
+              toolEvents: m.tool_calls.map((tc) => ({
+                id: tc.id || `tc-${idx}`,
+                name: tc.name,
+                arguments: tc.arguments,
+                result: tc.result ?? null,
+                status: 'done' as const,
+              })),
+            };
+          }
+          return base;
+        }));
         if (list.length === 0) message.info('该会话暂无历史消息');
       } else {
         message.error(result.message || '加载历史消息失败');
@@ -1303,7 +1325,8 @@ const ToolkitManagement: React.FC = () => {
 
   // 发送消息并流式接收智能体回答（presetText 用于澄清场景直接发送选定选项）
   const handleAgentChatSend = async (presetText?: string) => {
-    const text = (presetText ?? agentChatInput).trim();
+    // 优先用 ref，避免 Button onClick 闭包拿到旧值
+    const text = (presetText ?? agentChatInputRef.current).trim();
     if (!text || agentChatGenerating) return;
     const agent = paramValues['agent'] || 'default';
     let sessionId = (paramValues['session_id'] || '').trim();
@@ -1316,6 +1339,7 @@ const ToolkitManagement: React.FC = () => {
       { id: userMsgId, role: 'user', content: text, timestamp: new Date() },
       { id: assistantMsgId, role: 'assistant', content: '', timestamp: new Date() },
     ]);
+    agentChatInputRef.current = '';
     setAgentChatInput('');
     setAgentChatGenerating(true);
 
@@ -2463,21 +2487,40 @@ const ToolkitManagement: React.FC = () => {
                   <TextArea
                     placeholder="输入消息... (Ctrl/Shift+Enter换行，Enter发送)"
                     value={agentChatInput}
-                    onChange={(e) => setAgentChatInput(e.target.value)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      agentChatInputRef.current = v;
+                      setAgentChatInput(v);
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
                         e.preventDefault();
-                        handleAgentChatSend();
+                        if (!agentChatGenerating && agentChatInputRef.current.trim()) handleAgentChatSend();
                       }
                     }}
                     autoSize={{ minRows: 2, maxRows: 6 }}
                     className={`chat-input ${theme === 'dark' ? 'dark' : 'light'}`}
-                    style={{ background: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff', color: theme === 'dark' ? '#fff' : '#000', borderRadius: 12, resize: 'none', paddingRight: 50, paddingBottom: 32 }}
+                    style={{ background: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff', color: theme === 'dark' ? '#fff' : '#000', borderRadius: 12, resize: 'none', paddingRight: 64, paddingBottom: 32 }}
                   />
                   {agentChatGenerating ? (
-                    <Button type="primary" icon={<StopOutlined />} onClick={handleAgentChatStop} style={{ position: 'absolute', right: 8, bottom: 24, borderRadius: 8 }} title="停止回答" />
+                    <Button
+                      type="primary"
+                      icon={<StopOutlined />}
+                      onClick={handleAgentChatStop}
+                      style={{ position: 'absolute', right: 12, bottom: 24, borderRadius: 8, zIndex: 10 }}
+                      title="停止回答"
+                    />
                   ) : (
-                    <Button type="primary" icon={<SendOutlined />} onClick={handleAgentChatSend} disabled={!agentChatInput.trim()} style={{ position: 'absolute', right: 8, bottom: 24, borderRadius: 8 }} />
+                    <Button
+                      type="primary"
+                      icon={<SendOutlined />}
+                      onClick={() => {
+                        if (!agentChatInput.trim() || agentChatGenerating) return;
+                        handleAgentChatSend();
+                      }}
+                      disabled={!agentChatInput.trim() || agentChatGenerating}
+                      style={{ position: 'absolute', right: 12, bottom: 24, borderRadius: 8, zIndex: 10 }}
+                    />
                   )}
                 </div>
               </div>

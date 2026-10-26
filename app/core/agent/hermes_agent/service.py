@@ -1626,6 +1626,8 @@ class HermesAgentService:
         查询会话历史消息
 
         返回指定会话的消息列表（仅 user/assistant 展示用内容）。
+        assistant 消息会附带其实际发起过的 tool_calls，便于前端加载历史后
+        仍能看到"工具步骤"（参数/结果折叠块）。
         """
         self._check_agent_exists(name)
         db_path = self.get_agent_dir(name) / "state.db"
@@ -1637,16 +1639,45 @@ class HermesAgentService:
             messages = db.get_messages(resolved, limit=limit, offset=offset)
         finally:
             db.close()
-        data = [
-            {
+
+        # 按 tool_call_id 聚合 tool 行（role=tool）的结果，回填到 assistant.tool_calls
+        tool_result_by_id: dict = {}
+        for msg in messages:
+            if msg.get("role") == "tool":
+                tcid = msg.get("tool_call_id") or ""
+                if tcid:
+                    tool_result_by_id[tcid] = msg.get("content") or ""
+
+        data = []
+        for msg in messages:
+            role = msg.get("role")
+            if role not in ("user", "assistant"):
+                continue
+            item = {
                 "id": msg.get("id"),
-                "role": msg.get("role"),
+                "role": role,
                 "content": msg.get("content") or "",
                 "timestamp": msg.get("timestamp"),
             }
-            for msg in messages
-            if msg.get("role") in ("user", "assistant")
-        ]
+            # assistant 附带其实际发起过的 tool_calls
+            tcs = msg.get("tool_calls") or []
+            if isinstance(tcs, list):
+                enriched = []
+                for tc in tcs:
+                    if not isinstance(tc, dict):
+                        continue
+                    tcid = tc.get("id") or tc.get("tool_call_id") or ""
+                    fn = tc.get("function") or {}
+                    fn_name = fn.get("name") or tc.get("name") or ""
+                    enriched.append({
+                        "id": tcid,
+                        "name": fn_name,
+                        "arguments": fn.get("arguments"),
+                        "result": tool_result_by_id.get(tcid),
+                    })
+                if enriched:
+                    item["tool_calls"] = enriched
+            data.append(item)
         return {"data": data, "total": len(data)}
 
     def delete_conversation(self, name: str, session_id: str) -> dict:

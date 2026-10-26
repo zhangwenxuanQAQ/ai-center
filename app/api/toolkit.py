@@ -2,10 +2,14 @@
 工具箱控制器，提供工具箱分类相关的API接口
 """
 
+import asyncio
+import json
+import logging
+import queue as queue_mod
+
 from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel
 from starlette.responses import StreamingResponse
-import json
 
 from app.services.toolkit.service import ToolkitCategoryService
 from app.services.toolkit.dto import ToolkitCategoryCreate, ToolkitCategoryUpdate, ToolkitCategory
@@ -13,6 +17,12 @@ from app.constants.toolkit_constants import TOOL_TYPE, TOOL_TYPE_NAME
 from app.utils.response import ResponseUtil, ApiResponse
 from app.core.tools.tool_registry import ToolRegistry
 from app.core.tools.base_tool import ToolResult
+
+logger = logging.getLogger(__name__)
+
+# 单次工具调用 chunk 的超时时间（秒）
+# 超过此时间没有新数据则视为模型/工具卡死，主动终止流
+CHUNK_TIMEOUT = 300
 
 router = APIRouter()
 
@@ -256,31 +266,60 @@ async def run_builtin_tool_stream(tool_name: str, request: Request):
     """
     流式执行内置工具（SSE 逐段返回执行分片）
 
-    响应格式：
-        data: {"content": "...", "session_id": "...", "done": false}
-        data: {"error": "..."}
-        data: [DONE]
-
-    Args:
-        tool_name: 工具名称
-        request: 包含工具参数的请求体
-
-    Returns:
-        StreamingResponse: text/event-stream 流式响应
+    使用线程跑同步工具 generator，async 侧 queue.get_nowait + sleep 轮询，
+    超时 CHUNK_TIMEOUT 秒无新数据则推送 error + [DONE]。
     """
     tool = ToolRegistry.get_tool(tool_name)
     if tool is None:
         return ResponseUtil.not_found(message=f"内置工具 {tool_name} 不存在")
 
     body = await request.json()
-    # 校验必填参数
     error = tool.validate_params(**body)
     if error:
         return ResponseUtil.error(message=error)
 
-    def generate():
+    sentinel = object()
+    loop = asyncio.get_running_loop()
+    # 线程安全的 queue，worker 线程 put，async 侧 take_nowait 是阻塞调用需要丢到线程池执行
+    work_q: "queue_mod.Queue" = queue_mod.Queue()
+
+    def _worker() -> None:
         try:
             for chunk in tool.run_stream(**body):
+                work_q.put(chunk)
+        except Exception as e:
+            logger.exception("工具 %s 流式执行异常", tool_name)
+            work_q.put(e)
+        finally:
+            work_q.put(sentinel)
+            work_q.join()
+
+    import threading
+    worker = threading.Thread(target=_worker, daemon=True)
+    worker.start()
+
+    async def generate():
+        try:
+            while True:
+                # 关键：把阻塞的 queue.get(timeout=...) 丢到线程池执行，
+                # 避免 async 事件循环被 worker 没产出时的长阻塞挂死（镜像/uvicorn 下常见）
+                try:
+                    chunk = await asyncio.wait_for(
+                        loop.run_in_executor(None, work_q.get, True),
+                        timeout=CHUNK_TIMEOUT,
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning("工具 %s 流式调用超时（%ds 无新数据）", tool_name, CHUNK_TIMEOUT)
+                    yield f"data: {json.dumps({'error': f'工具调用超时（{CHUNK_TIMEOUT}秒无响应），请重试'}, ensure_ascii=False)}\n\n"
+                    break
+
+                if chunk is sentinel:
+                    break
+
+                if isinstance(chunk, Exception):
+                    yield f"data: {json.dumps({'error': str(chunk)}, ensure_ascii=False)}\n\n"
+                    break
+
                 if isinstance(chunk, ToolResult):
                     if not chunk.success:
                         yield f"data: {json.dumps({'error': chunk.error or chunk.message}, ensure_ascii=False)}\n\n"
@@ -294,9 +333,25 @@ async def run_builtin_tool_stream(tool_name: str, request: Request):
                     yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
                 else:
                     yield f"data: {json.dumps({'content': chunk if isinstance(chunk, str) else '', 'done': False}, ensure_ascii=False)}\n\n"
+
+                # 微让事件循环处理到期任务 + 检查客户端是否断开
+                await asyncio.sleep(0)
+                if await request.is_disconnected():
+                    logger.info("SSE 客户端已断开 tool=%s，提前结束流", tool_name)
+                    break
+
         except Exception as e:
+            logger.exception("SSE stream 内部异常: %s", e)
             yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
         finally:
+            # 客户端断开或流结束后，排空队列防止 worker 线程阻塞在 put
+            try:
+                while True:
+                    work_q.get_nowait()
+            except queue_mod.Empty:
+                pass
+            except Exception:
+                pass
             yield "data: [DONE]\n\n"
 
     return StreamingResponse(
@@ -306,6 +361,5 @@ async def run_builtin_tool_stream(tool_name: str, request: Request):
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
-            "Transfer-Encoding": "chunked",
         },
     )
