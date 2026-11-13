@@ -24,11 +24,12 @@ from app.constants.knowledgebase_document_constants import MetadataFilterType
 
 try:
     from elasticsearch import Elasticsearch
-    from elasticsearch.helpers import bulk
+    from elasticsearch.helpers import bulk, BulkIndexError
     ELASTICSEARCH_AVAILABLE = True
 except ImportError:
     Elasticsearch = None
     bulk = None
+    BulkIndexError = None
     ELASTICSEARCH_AVAILABLE = False
 
 from app.configs.config import config as app_config
@@ -421,7 +422,17 @@ class ESUtils:
             }
             for doc in docs
         ]
-        success, failed = bulk(self._es_client, actions, refresh=True)
+        try:
+            success, failed = bulk(self._es_client, actions, refresh=True)
+        except BulkIndexError as e:
+            # 输出失败明细，避免批量写入静默失败
+            for err in e.errors[:5]:
+                error_info = err.get("index", {}).get("error", {})
+                logger.error(
+                    f"批量插入失败明细: doc_id={err.get('index', {}).get('_source', {}).get('doc_id')}, "
+                    f"type={error_info.get('type')}, reason={error_info.get('reason')}"
+                )
+            raise
         logger.info(f"批量插入完成, 成功: {success}, 失败: {len(failed)}")
         return success
 

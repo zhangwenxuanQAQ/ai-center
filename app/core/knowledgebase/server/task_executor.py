@@ -1428,6 +1428,10 @@ class TaskExecutor:
                 del doc["image"]
 
             doc.pop("embedding", None)
+            # _original_fields/_field_name_map 仅用于元数据关联，属于中间数据；
+            # 写入ES会因值类型（如 'nan'）与动态mapping推断冲突导致整批写入失败
+            doc.pop("_original_fields", None)
+            doc.pop("_field_name_map", None)
 
             # 调试日志：检查doc中的向量字段
             if i == 0:
@@ -1439,6 +1443,10 @@ class TaskExecutor:
         if docs_to_insert:
             success_count = es_utils.batch_insert_documents(task.kb_id, docs_to_insert)
             logger.info(f"ES写入完成: {success_count}/{len(docs_to_insert)} 个切片")
+            if success_count < len(docs_to_insert):
+                raise RuntimeError(
+                    f"ES切片写入不完整: 成功 {success_count}/{len(docs_to_insert)}，请检查ES索引映射与切片字段是否冲突"
+                )
 
             # 如果是自定义模版知识，更新数据库中的metadatas字段
             if task.doc and task.doc.source_type == 'custom_template' and metadatas:
