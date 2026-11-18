@@ -200,7 +200,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
         callback(0.8, "Excel解析完成")
 
     # TXT/代码文件处理
-    elif re.search(r"\.(txt|py|js|java|c|cpp|h|php|go|ts|sh|cs|kt|sql)$", filename, re.IGNORECASE):
+    elif re.search(r"\.(txt|py|js|java|c|cpp|h|php|go|ts|sh|cs|kt|sql|yml|yaml)$", filename, re.IGNORECASE):
         callback(0.1, "开始解析文本文件")
         sections = _parse_txt(binary, filename, parser_config)
         callback(0.8, "文本文件解析完成")

@@ -153,7 +153,7 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
         callback(0.8, "Excel解析完成")
         
     # Markdown/TXT文件处理
-    elif re.search(r"\.(txt|md|markdown|mdx)$", filename, re.IGNORECASE):
+    elif re.search(r"\.(txt|md|markdown|mdx|yml|yaml)$", filename, re.IGNORECASE):
         callback(0.1, "开始解析文本文件")
         text = _read_text_file(filename, binary)
         sections = text.split("\n")
